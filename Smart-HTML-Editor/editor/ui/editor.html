@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart HTML Editor</title>
+  <link rel="stylesheet" href="/ui/editor.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="logo">✦</span> Smart HTML Editor <span class="file" id="file-name"></span></div>
+    <div class="seg" role="tablist" aria-label="Mode">
+      <button id="mode-edit" class="on" title="Click to select, double-click text to type (E)">Select &amp; edit</button>
+      <button id="mode-interact" title="Use the page normally: links, tabs, buttons (I)">Interact</button>
+    </div>
+    <label class="toggle" title="Blur tables, charts, images and numbers on the page"><input type="checkbox" id="hide-data"> Hide data</label>
+    <div class="spacer"></div>
+    <span class="status" id="status">No changes</span>
+    <button id="undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button id="discard" title="Drop every unsaved change" disabled>Discard</button>
+    <button id="save" class="primary" title="Save to the file (Ctrl+S)" disabled>Save</button>
+  </header>
+
+  <div class="disk-banner" id="disk-banner" hidden>
+    The file changed on disk (another program or Claude Code edited it).
+    <button id="reload-disk">Reload from disk</button> <span class="muted">Unsaved changes here would be lost.</span>
+  </div>
+
+  <main class="work">
+    <div class="frame-wrap">
+      <iframe id="page" title="Page being edited"></iframe>
+      <div class="frame-hint" id="frame-hint">Click anything to select it · double-click text to type · Esc to stop</div>
+    </div>
+
+    <aside class="panel">
+      <section class="selection" id="selection">
+        <div class="sel-empty" id="sel-empty">Nothing selected. Click part of the page, then change it here or ask the assistant.</div>
+        <div id="sel-body" hidden>
+          <div class="crumbs" id="crumbs"></div>
+          <div class="sel-actions">
+            <button id="step-out" title="Select the element around this one">⤴ Step out</button>
+            <button id="edit-text" title="Type into this text (or double-click it)">✎ Edit text</button>
+          </div>
+          <div class="quick" id="quick">
+            <label title="Text color">Text <input type="color" id="q-color"></label>
+            <label title="Background color">Fill <input type="color" id="q-bg"></label>
+            <span class="group" title="Font size"><button id="q-smaller">A−</button><button id="q-bigger">A+</button></span>
+            <span class="group"><button id="q-bold" title="Bold"><b>B</b></button><button id="q-italic" title="Italic"><i>I</i></button></span>
+            <span class="group" title="Align text"><button data-align="left">⯇</button><button data-align="center">≡</button><button data-align="right">⯈</button></span>
+            <button id="q-hide" title="Hide this element (Undo brings it back)">Hide</button>
+          </div>
+          <div class="sel-note" id="sel-note" hidden></div>
+        </div>
+      </section>
+
+      <nav class="tabs">
+        <button class="on" data-tab="assistant">Assistant</button>
+        <button data-tab="theme">Theme</button>
+      </nav>
+
+      <section class="tab assistant" id="tab-assistant">
+        <div class="health" id="health" hidden></div>
+        <div class="messages" id="messages">
+          <div class="msg sys">Select part of the page and ask for a change: <em>"make this heading teal"</em>,
+            <em>"bold the region name"</em>, <em>"use a darker theme"</em>. The assistant never sees the page's data:
+            numbers, tables, charts and scripts are hidden from it.</div>
+        </div>
+        <form class="ask" id="ask">
+          <textarea id="prompt" rows="2" placeholder="Ask for a change to the selection or the page…"></textarea>
+          <div class="ask-row">
+            <button type="button" id="new-chat" class="link">New chat</button>
+            <span class="muted" id="cost"></span>
+            <button type="submit" class="primary" id="send">Send</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="tab theme" id="tab-theme" hidden>
+        <h3>Theme variables</h3>
+        <div id="vars"></div>
+        <h3>Page rules</h3>
+        <p class="muted small">Rules the assistant added for the whole page (placed last, so they win).</p>
+        <div id="rules"></div>
+        <h3>Page</h3>
+        <p class="muted small" id="summary"></p>
+      </section>
+    </aside>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/ui/editor.js"></script>
+</body>
+</html>

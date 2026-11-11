@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.smart-html-editor/
+*.she-tmp
