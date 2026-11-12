@@ -1,0 +1,1 @@
+Ask the user about material, scope or decisions you cannot settle yourself (e.g. which period, which data, what the goal is). Not for permission to run commands. Batch every open question into one call. Each question: short id, the question, why it blocks you, 2-4 options if natural, your recommended answer. Calling this ends your turn; answers arrive in the next message.
