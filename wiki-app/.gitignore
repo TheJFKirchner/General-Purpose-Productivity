@@ -1,0 +1,16 @@
+# Made on each computer by setup.py, or by running the app.
+.venv/
+__pycache__/
+*.pyc
+# Output of make_share.py.
+Share/
+# Shortcuts hold this computer's paths.
+*.lnk
+# Wiki content kept next to the app: it's data, not part of the app.
+Sample Wikis/
+# WikiApp's private folder (settings, prompts, progress), suggested right here on the first start.
+# It belongs to one person: never committed, and a git pull never touches it.
+.wiki/
+# Environment files and local Claude Code settings.
+.env*
+.claude/settings.local.json
