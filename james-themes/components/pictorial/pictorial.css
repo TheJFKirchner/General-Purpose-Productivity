@@ -1,0 +1,19 @@
+.jt-atlas { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+.jt-tilegrid { flex:3 1 520px; display:grid; grid-template-columns:repeat(11, minmax(0, 1fr)); gap:5px; max-width:760px; }
+.jt-st { font:inherit; aspect-ratio:1 / 0.82; min-height:44px; border:1.5px solid transparent; border-radius:5px; cursor:pointer; padding:0; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1; }
+.jt-st b { font-size:14px; } .jt-st span { font-size:11px; font-variant-numeric:tabular-nums; }
+.jt-st:hover { border-color:var(--ink); } .jt-st.on { outline:4px solid var(--amber); outline-offset:1px; border-color:var(--ink); } .jt-st.dim { opacity:.3; }
+.jt-readout { flex:1 1 240px; min-width:0; }
+.jt-readout h3 { margin:4px 0 0; font-size:22px; } .jt-readout .big { font-size:56px; line-height:1; font-weight:700; font-variant-numeric:tabular-nums; margin:6px 0 8px; } .jt-readout p { margin:0 0 6px; font-size:14px; color:var(--muted); }
+.jt-ramp { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin-top:14px; } .jt-ramp i { display:block; width:150px; height:10px; }
+.jt-bodylens { display:flex; flex-wrap:wrap; gap:18px; align-items:center; } .jt-bodylens svg { flex:0 0 240px; width:240px; height:auto; }
+.jt-syslist { flex:1 1 240px; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.jt-sys { font:inherit; text-align:left; display:grid; grid-template-columns:26px minmax(112px, 1fr) 64px 56px; gap:8px; align-items:center; min-height:44px; padding:4px 8px; background:#fff; border:1.5px solid transparent; border-radius:5px; cursor:pointer; color:var(--ink); }
+.jt-sys:hover, .jt-sys.on { background:var(--rowTint); border-color:var(--ink); }
+.jt-sys .n { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+.jt-sys .nm { font-size:14px; font-weight:600; } .jt-sys .bar { height:10px; background:var(--track); } .jt-sys .bar i { display:block; height:10px; } .jt-sys .v { font-size:14px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+.jt-spot { cursor:pointer; } .jt-spot.on { stroke:var(--amber); stroke-width:5; }
+.jt-caps { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:22px; } .jt-caps h3 { margin:0 0 8px; font-size:14px; font-weight:700; }
+.jt-waffle { display:grid; grid-template-columns:repeat(10, 1fr); gap:4px 5px; } .jt-waffle i { display:block; height:11px; border-radius:6px; }
+.jt-capnote { font-size:15px; margin:10px 0 0; } .jt-capnote b { font-size:26px; font-variant-numeric:tabular-nums; }
+.jt-capkey { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:13px; color:var(--muted); margin-top:14px; } .jt-capkey i { display:inline-block; width:18px; height:9px; border-radius:5px; margin-right:6px; vertical-align:middle; }

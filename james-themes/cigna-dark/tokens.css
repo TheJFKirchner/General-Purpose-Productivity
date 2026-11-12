@@ -1,0 +1,25 @@
+/* Cigna Dark: page colors. Load with components/css/base.css */
+body[data-theme="cigna-dark"] {
+  --ink:#0A1F5C;
+  --primary:#0033FF;
+  --muted:#3F4B6E;
+  --hair:#D5DBE8;
+  --track:#E3E8F2;
+  --prior:#8D99B8;
+  --page:#F3F6FC;
+  --menuBg:#0033FF;
+  --menuFg:#FFFFFF;
+  --menuSub:#DCE3FF;
+  --menuEdge:#0033FF;
+  --actBg:#FFFFFF;
+  --actFg:#0A1F5C;
+  --band:#0A1F5C;
+  --tick:#03CC54;
+  --menuHover:rgba(255,255,255,0.18);
+  --leadTint:#EAF0FF;
+  --leadTrack:#CDD6EE;
+  --rowTint:#E6ECFF;
+  --shadow:#B9C3DD;
+  --bandSoft:#DCE3FF;
+  --cat1:#0A1F5C; --cat2:#0033FF; --cat3:#5C7CFF; --cat4:#9DB0FF; --cat5:#D0D9FF; /* = chart.js cat */
+}

@@ -1,0 +1,27 @@
+.jt-btn { font:inherit; font-size:14px; font-weight:600; min-height:44px; padding:8px 18px; border-radius:var(--r-ctl); border:1.5px solid; cursor:pointer; transition:background .12s, color .12s; }
+.jt-btn.solid { background:#fff; color:var(--ink); border-color:#fff; }
+.jt-btn.solid:hover { background:var(--leadTint); border-color:var(--leadTint); }
+.jt-btn.line { background:transparent; color:#fff; border-color:#fff; }
+.jt-btn.line:hover { background:rgba(255,255,255,.16); }
+.jt-btn.pri { background:var(--primary); color:#fff; border-color:var(--primary); }
+.jt-btn.pri:hover { background:var(--ink); border-color:var(--ink); }
+.jt-btn.sec { background:#fff; color:var(--primary); border-color:var(--primary); }
+.jt-btn.sec:hover { background:var(--rowTint); }
+
+.jt-seg { display:inline-flex; flex-wrap:wrap; row-gap:4px; margin-bottom:6px; }
+.jt-seg button { font:inherit; font-size:13px; font-weight:600; min-height:44px; padding:6px 14px; cursor:pointer; background:#fff; color:var(--ink); border:1.5px solid var(--ink); }
+.jt-seg button + button { margin-left:-1.5px; }
+.jt-seg button[aria-pressed="true"] { background:var(--ink); color:#fff; }
+.jt-gate { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin:0 0 12px; font-size:13px; color:var(--muted); }
+.jt-gate label { display:inline-flex; align-items:center; gap:8px; min-height:44px; font-weight:600; color:var(--ink); }
+.jt-gate input[type="range"] { width:150px; accent-color:var(--primary); }
+.jt-gate output { min-width:52px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
+.jt-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.jt-chip { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 6px 0 14px; border:1.5px solid currentColor; border-radius:var(--r-ctl); font-size:14px; font-weight:600; }
+.jt-chip button { font:inherit; font-size:16px; line-height:1; width:32px; height:32px; border:none; background:transparent; color:inherit; cursor:pointer; border-radius:var(--r-ctl); }
+.jt-chip button:hover { background:rgba(127,127,127,.2); }
+
+.jt-mini { font:inherit; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; min-height:32px; padding:4px 10px; border-radius:var(--r-ctl); border:1.5px solid var(--primary); background:#fff; color:var(--primary); cursor:pointer; white-space:nowrap; }
+.jt-mini:hover { background:var(--rowTint); }
+.jt-pick { display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--ink); min-height:44px; }
+.jt-pick select { font:inherit; font-size:14px; min-height:36px; padding:4px 8px; border:1.5px solid var(--ink); border-radius:var(--r-ctl); background:#fff; color:var(--ink); }

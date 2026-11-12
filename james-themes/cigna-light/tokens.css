@@ -1,0 +1,25 @@
+/* Cigna Light: page colors. Load with components/css/base.css */
+body[data-theme="cigna-light"] {
+  --ink:#0A1F5C;
+  --primary:#0033FF;
+  --muted:#3F4B6E;
+  --hair:#D5DBE8;
+  --track:#E3E8F2;
+  --prior:#8D99B8;
+  --page:#EEF2FB;
+  --menuBg:#FFFFFF;
+  --menuFg:#0A1F5C;
+  --menuSub:#3F4B6E;
+  --menuEdge:#0A1F5C;
+  --actBg:#0033FF;
+  --actFg:#FFFFFF;
+  --band:#0033FF;
+  --tick:#FFB020;
+  --menuHover:rgba(0,51,255,0.10);
+  --leadTint:#EAF0FF;
+  --leadTrack:#CDD6EE;
+  --rowTint:#E6ECFF;
+  --shadow:#B9C3DD;
+  --bandSoft:#DCE3FF;
+  --cat1:#0A1F5C; --cat2:#0033FF; --cat3:#00C2E8; --cat4:#03CC54; --cat5:#FFB020; /* = chart.js cat */
+}

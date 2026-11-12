@@ -1,0 +1,25 @@
+/* Evernorth Light: page colors. Load with components/css/base.css */
+body[data-theme="evernorth-light"] {
+  --ink:#06363D;
+  --primary:#007F8C;
+  --muted:#3F5A5E;
+  --hair:#D2E0E1;
+  --track:#DFEBEC;
+  --prior:#8FA6A8;
+  --page:#EEF6F6;
+  --menuBg:#FFFFFF;
+  --menuFg:#06363D;
+  --menuSub:#3F5A5E;
+  --menuEdge:#06363D;
+  --actBg:#007F8C;
+  --actFg:#FFFFFF;
+  --band:#007F8C;
+  --tick:#FFB020;
+  --menuHover:rgba(0,127,140,0.12);
+  --leadTint:#E3F4F3;
+  --leadTrack:#C4DDDD;
+  --rowTint:#DDF1F0;
+  --shadow:#B5CFD1;
+  --bandSoft:#DDF5F5;
+  --cat1:#06363D; --cat2:#007F8C; --cat3:#33C2B0; --cat4:#8BD24A; --cat5:#FFB020; /* = chart.js cat */
+}

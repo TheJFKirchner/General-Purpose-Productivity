@@ -1,0 +1,25 @@
+/* Evernorth Dark: page colors. Load with components/css/base.css */
+body[data-theme="evernorth-dark"] {
+  --ink:#06363D;
+  --primary:#007F8C;
+  --muted:#3F5A5E;
+  --hair:#D2E0E1;
+  --track:#DFEBEC;
+  --prior:#8FA6A8;
+  --page:#F1F7F7;
+  --menuBg:#007F8C;
+  --menuFg:#FFFFFF;
+  --menuSub:#DDF5F5;
+  --menuEdge:#007F8C;
+  --actBg:#FFFFFF;
+  --actFg:#06363D;
+  --band:#06363D;
+  --tick:#5FE3C8;
+  --menuHover:rgba(255,255,255,0.18);
+  --leadTint:#E3F4F3;
+  --leadTrack:#C4DDDD;
+  --rowTint:#DDF1F0;
+  --shadow:#B5CFD1;
+  --bandSoft:#CFEDEC;
+  --cat1:#06363D; --cat2:#007F8C; --cat3:#3FB3B8; --cat4:#8FD6D6; --cat5:#CDEDED; /* = chart.js cat */
+}

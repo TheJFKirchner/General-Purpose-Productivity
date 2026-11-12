@@ -1,0 +1,13 @@
+.jt-ledger-wrap { overflow-x:auto; }
+.jt-ledger { width:100%; min-width:640px; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.jt-ledger th { font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:10px 12px; border-bottom:2px solid var(--ink); text-align:right; }
+.jt-ledger td { font-size:15px; padding:13px 12px; border-bottom:1px solid var(--hair); text-align:right; }
+.jt-ledger th.left, .jt-ledger td.left { text-align:left; }
+.jt-ledger tbody tr { transition:background .12s; }
+.jt-ledger tbody tr:hover, .jt-ledger tbody tr.on { background:var(--rowTint); }
+.jt-ledger tbody tr.on td:first-child { box-shadow:inset 4px 0 0 var(--primary); }
+
+.jt-tablebar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+.jt-pivot th, .jt-pivot td { white-space:nowrap; }
+.jt-pivot .tot { font-weight:700; background:var(--leadTint); }
+.jt-pivot tfoot td { font-weight:700; border-top:2px solid var(--ink); border-bottom:none; background:var(--leadTint); }

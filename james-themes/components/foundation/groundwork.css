@@ -1,0 +1,8 @@
+/* Theme-independent tokens + reset. Imported by BandConsole. Self-host Barlow if the network blocks Google Fonts. */
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap');
+:root { --font:'Barlow', system-ui, sans-serif; --goodMark:#00B85C; --badMark:#FF8A00; --good:#00703C; --bad:#A84D00; --amber:#FFB020; --r-card:14px; --r-ctl:3px; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:var(--font); color:var(--ink); background:var(--page); -webkit-font-smoothing:antialiased; }
+.jt-lab { font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+:focus-visible { outline:3px solid var(--amber); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }

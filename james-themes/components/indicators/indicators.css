@@ -1,0 +1,7 @@
+.jt-tick { position:relative; height:18px; background:var(--track); }
+.jt-tick .a { position:absolute; left:0; top:4px; height:10px; transition:width .9s cubic-bezier(.2,.7,.2,1); }
+.jt-tick .p { position:absolute; top:-4px; width:3px; height:26px; background:var(--ink); }
+.jt-tick .l { position:absolute; top:4px; width:2px; height:10px; background:var(--prior); }
+.jt-meter { display:inline-block; vertical-align:middle; width:130px; height:12px; background:var(--track); margin-right:10px; }
+.jt-meter b { display:block; height:12px; }
+.jt-delta { font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
