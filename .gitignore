@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Local secrets and machine-specific settings
+.env
+.env.*
+!.env.example
+**/.claude/settings.local.json
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
