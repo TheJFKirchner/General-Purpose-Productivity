@@ -14,11 +14,22 @@
   AgentError carries .reply: the partial turn (text/tool calls so far, usage summed from the assistant
   messages seen, cost_usd 0 because cost only arrives with the final ResultMessage)
 - Session.info comes from the CLI's init SystemMessage (tools offered, MCP servers, model)
+- max_budget_usd -> --max-budget-usd (the CLI checks its running total per process, i.e. per opened session);
+  result subtype error_max_budget_usd -> Reply.error_kind "budget" (error_max_turns -> "max_turns")
+- permission_mode="never_ask" -> CLI "dontAsk" (no can_use_tool callback)
+- output_schema -> output_format json_schema (CLI --json-schema); ResultMessage.structured_output is checked again
+  with structured.check_output (falls back to parsing the reply text) -> Reply.data / error_kind "output_shape"
+- save_conversation=False -> --no-session-persistence
+- list_models(): start `claude` with nothing loaded, read get_server_info()["models"], stop; no request sent
+- Sign-in: local_setup.require("claude") (setup/local.toml, read by claude_setup.py) each time a process starts:
+  Connection.env -> process env (under the lean defaults and the caller's Agent(env=), which win);
+  Connection.engine_settings (apiKeyHelper, ...) -> settings= (CLI --settings; applies even in lean setup)
 """
 from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import sys
 import tempfile
@@ -34,9 +45,12 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import PermissionRuleValue
 
+from .. import local_setup
 from .. import skills as skills_mod
+from .. import structured
 from ..errors import AgentError, ConversationMissing
 from ..events import Done, RateLimit, Text, TextDelta, ToolCall, ToolResult
+from ..models import ModelInfo
 from ..permissions import PermissionRequest, normalize
 from ..reply import Reply, Usage
 from ..session import SessionInfo
@@ -44,6 +58,7 @@ from ..tools import full_name, short_name
 from .base import Capabilities, Engine, EngineSession, TurnState
 
 ARGV_PROMPT_LIMIT = 30_000          # chars; above this the system prompt goes through a file
+STRUCTURED_TOOL = "StructuredOutput"  # the tool the CLI adds for --json-schema (hidden from events)
 LEAN_ENV = {
     "ENABLE_TOOL_SEARCH": "false",              # few tools: load them all up front
     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
@@ -111,12 +126,60 @@ def _server_config(cfg: dict | str, base: Path | None) -> dict:
     return {"type": "stdio", "command": sys.executable, "args": [str(p)]}
 
 
+def parse_models(info: dict | None) -> list[ModelInfo]:
+    """Server-info "models" entries -> ModelInfo, one per resolved id (aliases merged), in the CLI's order.
+    An entry: {"value": "haiku", "resolvedModel": "claude-haiku-5-5", "displayName": "Haiku",
+    "description": "Haiku 5.5 · Fastest for quick answers", "supportedEffortLevels": [...]}."""
+    found: dict[str, ModelInfo] = {}
+    for m in (info or {}).get("models") or []:
+        if not isinstance(m, dict):
+            continue
+        value = str(m.get("value") or "")
+        mid = str(m.get("resolvedModel") or value)
+        if not mid:
+            continue
+        name, _, desc = str(m.get("description") or "").partition(" · ")
+        mi = found.get(mid)
+        if mi is None:
+            mi = found[mid] = ModelInfo(id=mid, name=name.strip() or str(m.get("displayName") or mid),
+                                        description=desc.strip(),
+                                        effort_levels=[str(e) for e in m.get("supportedEffortLevels") or []])
+        if value and value != mid and value not in mi.aliases:
+            mi.aliases.append(value)
+        if value == "default":
+            mi.is_default = True
+    return list(found.values())
+
+
 class ClaudeEngine(Engine):
     name = "claude"
-    capabilities = Capabilities(fork=True, permission_hook=True)
+    capabilities = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True,
+                                structured_output=True, unsaved=True, list_models=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "ClaudeSession":
         return ClaudeSession(agent, resume=resume, fork=fork, cost_base=cost_base)
+
+    async def list_models(self, *, env: dict[str, str], timeout_s: float | None) -> list[ModelInfo]:
+        """Start `claude` with nothing loaded, read its start-up handshake, stop it. No request is sent."""
+        conn = local_setup.require("claude")
+        opts = ClaudeAgentOptions(tools=[], setting_sources=[], strict_mcp_config=True, permission_mode="dontAsk",
+                                  env={**conn.env, **LEAN_ENV, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", **env},
+                                  settings=json.dumps(conn.engine_settings) if conn.engine_settings else None)
+        client = ClaudeSDKClient(opts)
+        try:
+            async with asyncio.timeout(timeout_s):
+                await client.connect()
+                info = await client.get_server_info()
+        except TimeoutError:
+            raise AgentError(f"listing models timed out after {timeout_s}s") from None
+        except Exception as e:  # noqa: BLE001
+            raise AgentError(f"could not start Claude: {error_text(e)}", repr(e)) from e
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+        return parse_models(info)
 
 
 class ClaudeSession(EngineSession):
@@ -141,6 +204,8 @@ class ClaudeSession(EngineSession):
         self._prompt_file: str | None = None
         self.model: str | None = agent.model
         self.init_info: dict = {}            # the CLI's init message: tools offered, MCP servers, model, ...
+        self._hidden_calls: set[str] = set()  # StructuredOutput tool-use ids (output_schema), kept out of events
+        self._structured_input = None         # this turn's StructuredOutput input (fallback for structured_output)
 
     @property
     def info(self) -> SessionInfo:
@@ -222,19 +287,34 @@ class ClaudeSession(EngineSession):
             hooks["PreToolUse"] = [HookMatcher(matcher="Read", hooks=[self._skill_read_hook])]
 
         add_dirs = [str(Path(d)) for d in a.add_dirs] + [str(d) for d in self._skill_dirs]
+        never_ask = a.permission_mode == "never_ask"
+        conn = local_setup.require("claude")      # this user's sign-in (setup/local.toml); SetupError if broken
         kw = dict(
             tools=tools, allowed_tools=allowed, system_prompt=self._system_prompt(), mcp_servers=mcp,
-            permission_mode="default", can_use_tool=self._can_use_tool, hooks=hooks or None,
+            # never_ask -> "dontAsk": the CLI denies anything not pre-approved itself; no permission callback
+            permission_mode="dontAsk" if never_ask else "default",
+            can_use_tool=None if never_ask else self._can_use_tool, hooks=hooks or None,
             include_partial_messages=True, add_dirs=add_dirs, model=a.model, max_turns=a.max_turns,
             disallowed_tools=list(a.disallowed_tools),
-            env={**(LEAN_ENV if lean else {}), **a.env},
+            # local sign-in first, then lean defaults, then what the caller passed explicitly (caller wins)
+            env={**conn.env, **(LEAN_ENV if lean else {}), **a.env},
         )
+        if conn.engine_settings:
+            kw["settings"] = json.dumps(conn.engine_settings)
+        extra: dict = {}
         if a.cwd:
             kw["cwd"] = str(a.cwd)
         if a.effort:
             kw["effort"] = a.effort
+        if a.max_budget_usd is not None:
+            kw["max_budget_usd"] = a.max_budget_usd
+        if a.output_schema is not None:
+            kw["output_format"] = {"type": "json_schema", "schema": a.output_schema}
+        if not a.save_conversation:
+            extra["no-session-persistence"] = None
         if lean:
-            kw.update(setting_sources=[], strict_mcp_config=True, extra_args={"disable-slash-commands": None})
+            extra["disable-slash-commands"] = None
+            kw.update(setting_sources=[], strict_mcp_config=True)
         else:
             kw.update(setting_sources=["user", "project", "local"])
             if a.skills:
@@ -245,6 +325,8 @@ class ClaudeSession(EngineSession):
                 kw["fork_session"] = True
         else:
             kw["session_id"] = self.session_id
+        if extra:
+            kw["extra_args"] = extra
         return ClaudeAgentOptions(**kw)
 
     # ------------------------------------------------------------------ hooks / permissions
@@ -381,6 +463,7 @@ class ClaudeSession(EngineSession):
             await self._connect()
         state = TurnState("claude", self.resolved.custom)
         self._state = state
+        self._structured_input = None
         res: ResultMessage | None = None
         try:
             async with asyncio.timeout(self.agent.timeout_s):
@@ -417,12 +500,33 @@ class ClaudeSession(EngineSession):
         if res.session_id:
             self.session_id = res.session_id
         self._turns_done += 1
-        error = None
-        if res.is_error and not state.stop_requested:
-            error = res.result or "; ".join(res.errors or []) or res.subtype or "error"
+        error, kind, data = self._ending(res, state)
+        if res.is_error and error:
+            await self._disconnect()       # the CLI exits after an error result; next turn reconnects with resume
         await q.put(Done(state.reply(session_id=self.session_id, usage=normalize_usage(res.usage), cost_usd=cost,
                                      total_cost_usd=total, model=self.model, stop_reason=res.stop_reason,
-                                     error=error, api_calls=len(state.message_ids) or res.num_turns)))
+                                     error=error, error_kind=kind, data=data,
+                                     api_calls=len(state.message_ids) or res.num_turns)))
+
+    def _ending(self, res: ResultMessage, state: TurnState) -> tuple[str | None, str | None, object]:
+        """ResultMessage -> (error, error_kind, data). Subtypes: error_max_budget_usd, error_max_turns,
+        error_max_structured_output_retries, error_during_execution; success may still be is_error."""
+        a = self.agent
+        sub = res.subtype or ""
+        if sub == "error_max_budget_usd":
+            return f"stopped at the spending cap (max_budget_usd={a.max_budget_usd})", "budget", None
+        if sub == "error_max_turns":
+            return f"stopped at the turn limit (max_turns={a.max_turns})", "max_turns", None
+        if "structured_output" in sub:
+            return f"reply did not match the output schema ({sub})", "output_shape", None
+        if res.is_error and not state.stop_requested:
+            return res.result or "; ".join(res.errors or []) or sub or "error", "other", None
+        if a.output_schema is None or state.stop_requested:
+            return None, None, None
+        native = res.structured_output if res.structured_output is not None else self._structured_input
+        data, problem = structured.check_output(a.output_schema, data=native,
+                                                text=res.result or "\n\n".join(state.texts))
+        return (problem, "output_shape", None) if problem else (None, None, data)
 
     def _failed_reply(self, state: TurnState, error: str) -> Reply:
         """The partial turn for AgentError.reply: what was seen so far; cost unknown (no ResultMessage)."""
@@ -451,6 +555,10 @@ class ClaudeSession(EngineSession):
                     state.record_text(b.text)
                     out.append(Text(b.text))
                 elif isinstance(b, ToolUseBlock):
+                    if self.agent.output_schema is not None and b.name == STRUCTURED_TOOL:
+                        self._hidden_calls.add(b.id)          # the CLI's own tool for output_schema: not shown
+                        self._structured_input = dict(b.input or {})
+                        continue
                     name = short_name(b.name, self.server)
                     state.record_call(b.id, name, b.input)
                     out.append(ToolCall(b.id, name, dict(b.input or {})))
@@ -461,6 +569,8 @@ class ClaudeSession(EngineSession):
             out = []
             for b in m.content:
                 if isinstance(b, ToolResultBlock):
+                    if b.tool_use_id in self._hidden_calls:
+                        continue
                     text = _content_text(b.content)
                     name = state.record_result(b.tool_use_id, text, bool(b.is_error))
                     out.append(ToolResult(b.tool_use_id, name, text, bool(b.is_error)))

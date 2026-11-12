@@ -7,6 +7,9 @@
 - setup: "lean" (default; no folder settings, only listed tools) | "project" (like Claude Code in cwd:
   CLAUDE.md, settings, native skills, all built-ins unless tools narrows them)
 - Calls: await agent.ask(msg) / agent.ask_sync(msg) -> Reply;  async with agent.session() as s: ...
+- Run limits / modes (each needs the engine capability of the same idea, checked in session()):
+  max_budget_usd (budget), permission_mode="never_ask" (never_ask), output_schema (structured_output),
+  save_conversation=False (unsaved)
 """
 from __future__ import annotations
 
@@ -19,6 +22,7 @@ from .reply import Reply
 from .tools import DEFAULT_SERVER, ResolvedTools, Tool, resolve_tools
 
 Setup = Literal["lean", "project"]
+PermissionMode = Literal["default", "never_ask"]
 
 
 @dataclass
@@ -38,6 +42,11 @@ class Agent:
     disallowed_tools: list[str] = field(default_factory=list)
     description: str = ""
     max_turns: int | None = None
+    max_budget_usd: float | None = None      # spending cap per opened session (one ask() = one run); None = no cap.
+                                             # Hitting it -> Reply.status "error", Reply.error_kind "budget"
+    permission_mode: PermissionMode = "default"   # "never_ask": tools not pre-approved are denied, nobody is asked
+    output_schema: dict | None = None        # JSON Schema: reply comes back parsed + checked in Reply.data
+    save_conversation: bool = True           # False: the engine stores nothing (no resume, not in session lists)
     timeout_s: float | None = 600            # per turn; None = no limit
     effort: str | None = None
     env: dict[str, str] = field(default_factory=dict)
@@ -50,6 +59,15 @@ class Agent:
     def __post_init__(self):
         if self.setup not in ("lean", "project"):
             raise ValueError(f"setup must be 'lean' or 'project', got {self.setup!r}")
+        if self.permission_mode not in ("default", "never_ask"):
+            raise ValueError(f"permission_mode must be 'default' or 'never_ask', got {self.permission_mode!r}")
+        if self.permission_mode == "never_ask" and self.on_permission is not None:
+            raise ValueError("permission_mode='never_ask' cannot be combined with on_permission (nobody is asked)")
+        if self.max_budget_usd is not None and not self.max_budget_usd > 0:
+            raise ValueError(f"max_budget_usd must be > 0, got {self.max_budget_usd!r}")
+        if self.output_schema is not None:
+            from .structured import check_schema
+            check_schema(self.output_schema)
         if self.cwd is not None:
             self.cwd = Path(self.cwd)
 

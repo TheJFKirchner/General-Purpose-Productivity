@@ -3,15 +3,20 @@
 - Reply.status: done | needs_input (agent called ask_user; see .questions) | error (run ended badly, see .error)
 - Usage: per-turn tokens, same field names on every engine; `a + b` adds them up
 - cost_usd is this turn only; total_cost_usd is the conversation's running total (an estimate on a subscription)
+- error_kind (only when status == "error"): why it ended badly, same values on every engine:
+  "budget" (Agent.max_budget_usd reached), "max_turns" (Agent.max_turns reached), "output_shape" (the reply did
+  not match Agent.output_schema), "other" (anything else: model/API error, a failed turn in AgentError.reply)
+- data: the parsed, schema-checked JSON reply when the agent has output_schema (None otherwise or on error)
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, fields
-from typing import Literal
+from typing import Any, Literal
 
 from .questions import Question
 
 Status = Literal["done", "needs_input", "error"]
+ErrorKind = Literal["budget", "max_turns", "output_shape", "other"]
 
 
 @dataclass
@@ -56,6 +61,8 @@ class Reply:
     model: str | None = None
     stop_reason: str | None = None
     error: str | None = None
+    error_kind: ErrorKind | None = None      # set only when status == "error" (see module docstring)
+    data: Any = None                         # parsed JSON reply when Agent.output_schema is set
 
     def to_dict(self) -> dict:
         return asdict(self)

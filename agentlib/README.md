@@ -10,6 +10,23 @@ expressed engine-neutrally, stop and tell the user.
 
 Runnable samples: [examples/](examples/README.md). All paths below are relative to this repo root.
 
+## Before the library will work
+Each person connects to their AI engine differently (a personal login at home, a company gateway at work).
+Do this once per computer:
+
+1. Read the setup guide for your engine and follow it (install, then say how you sign in):
+
+   | Engine | Setup guide |
+   |---|---|
+   | Claude | [setup/claude-setup.md](setup/claude-setup.md) |
+
+2. Run the check: `python -m agentlib.check`. It sends one tiny message on the cheapest model and prints
+   `RESULT: WORKS` or what to fix (`--status` = show the setup only, send nothing).
+
+How you sign in lives in **one local file, `setup/local.toml`** (copy it from
+[setup/local.example.toml](setup/local.example.toml)). Git ignores it, so it is never committed and library
+updates never overwrite it. No file = the ordinary Claude Code login.
+
 ## Rules (library design)
 - Agent files stay standard: `.claude/agents/*.md` (Claude Code) or `.cursor/agents/*.md` (Cursor), standard fields only
 - Library-only settings (engine, setup, cwd, tool functions, timeouts) are passed at load time, never written in the file
@@ -21,9 +38,14 @@ Runnable samples: [examples/](examples/README.md). All paths below are relative 
 - From another project: `pip install -e <path to this folder>` (for example `pip install -e ../General-Purpose-Productivity/agentlib` when the repo is cloned beside your project; editable, so library edits apply immediately)
 - Working on the library itself (from this folder): `pip install -e .[dev]` then `python -m pytest`
 - Needs Python 3.11+ (`requires-python = ">=3.11"`), Claude Code installed and signed in for real (non-fake) runs
-- Auth: agents sign in exactly like typing `claude` (your Claude Code login, or a gateway set via env vars).
+- Auth: set per person in `setup/local.toml` (see "Before the library will work"); apps do nothing.
+  `[claude] auth = "login"` (default: like typing `claude`), `"settings-file"` (only the sign-in parts of a
+  Claude Code settings file: its `env` block + `apiKeyHelper` and other credential keys) or `"env"`
+  (`[claude.env]`). Read by `agentlib/local_setup.py` + `agentlib/engines/claude_setup.py` each time a
+  `claude` process starts. A caller's `Agent(env=...)` wins over it, variable by variable.
   `use_login_only()` (`agentlib/auth.py`) removes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-  `ANTHROPIC_BASE_URL` from this process so the subscription login is used. Opt-in; call once at app start.
+  `ANTHROPIC_BASE_URL` from this process's environment (opt-in, at app start); it does not touch the local
+  setup file, which still applies
 
 ## Quick start
 ```python
@@ -77,6 +99,15 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `CLINotFoundError`, `ProcessError`, `CLIConnectionError`, ... | `AgentError` (`.short` one-line message; `.reply` = partial turn if it failed midway) | `agentlib/errors.py` |
 | "No conversation found" on resume | `ConversationMissing` | `agentlib/errors.py` |
 | `claude_agent_sdk.__version__` | `agentlib.engines.claude.sdk_version()` | `agentlib/engines/claude.py` |
+| `max_budget_usd` + `ResultMessage.subtype == "error_max_budget_usd"` | `Agent(max_budget_usd=0.05)`; a cap stop -> `Reply.status == "error"`, `Reply.error_kind == "budget"` | `agentlib/agent.py`, `agentlib/reply.py`, `agentlib/engines/claude.py` |
+| `ResultMessage.subtype == "error_max_turns"` | `Reply.error_kind == "max_turns"` (other bad endings: `"other"`) | `agentlib/reply.py` |
+| `permission_mode="dontAsk"` | `Agent(permission_mode="never_ask")`: unlisted tools denied, nobody asked (not with `on_permission`) | `agentlib/agent.py`, `agentlib/engines/claude.py` |
+| `ClaudeSDKClient.get_server_info()["models"]` | `await list_models(engine)` / `list_models_sync(engine)` -> `list[ModelInfo]`; no request, no tokens | `agentlib/models.py`, `agentlib/engines/claude.py` |
+| `output_format={"type": "json_schema", ...}` + `ResultMessage.structured_output` | `Agent(output_schema=S)` -> `Reply.data` (parsed + schema-checked); bad reply -> `Reply.error_kind == "output_shape"` | `agentlib/structured.py`, `agentlib/engines/claude.py` |
+| `claude -p --json-schema ... --tools "" --no-session-persistence` (one-shot JSON call) | `await ask_structured(msg, schema, instructions=, model=, ...)` / `ask_structured_sync(...)` -> `Reply` (`.data`, `.usage`, `.cost_usd`) | `agentlib/structured.py` |
+| `--no-session-persistence` (`extra_args`) | `Agent(save_conversation=False)` (cannot be resumed) | `agentlib/agent.py`, `agentlib/engines/claude.py` |
+| Sign-in via `env={ANTHROPIC_*...}` / `settings=` (`apiKeyHelper`) / user `settings.json` | nothing in app code: each person's `setup/local.toml` `[claude]` (`auth = "login" \| "settings-file" \| "env"`) | `agentlib/local_setup.py`, `agentlib/engines/claude_setup.py`, `setup/claude-setup.md` |
+| "Is Claude set up / does it answer?" (no SDK equivalent) | `connection_status(engine)` (free) / `check_connection_sync(engine)` (one tiny message); CLI `python -m agentlib.check` | `agentlib/connection.py`, `agentlib/check.py` |
 
 ### `ClaudeAgentOptions` field -> `Agent` field (`agentlib/agent.py`)
 
@@ -91,8 +122,12 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `mcp_servers` | `mcp_servers` | `{name: config dict \| path to .py server}`; relative paths resolve against `cwd` |
 | `cwd` | `cwd` | also where resume looks for saved conversations |
 | `add_dirs` | `add_dirs` | |
-| `env` | `env` | merged over lean defaults |
-| `max_turns` | `max_turns` | hitting it -> `Reply.status == "error"` |
+| `env` | `env` | merged over the local setup's sign-in variables and the lean defaults (caller wins) |
+| `max_turns` | `max_turns` | hitting it -> `Reply.status == "error"`, `Reply.error_kind == "max_turns"` |
+| `max_budget_usd` | `max_budget_usd` | spending cap per opened session (one `ask()` = one run); `None` = no cap. Hitting it -> `Reply.status == "error"`, `Reply.error_kind == "budget"`. Checked between model calls (can overshoot a little). Capability `budget` |
+| `permission_mode` | `permission_mode` | `"default"` (unlisted tools -> `on_permission`, else denied) or `"never_ask"` (Claude `dontAsk`: unlisted tools denied, nothing asked; `ValueError` with `on_permission`). Capability `never_ask` |
+| `output_format` | `output_schema` | a JSON Schema dict (checked when the Agent is built); reply parsed + validated into `Reply.data`. Capability `structured_output` |
+| `extra_args={"no-session-persistence": None}` | `save_conversation` | default True; False = engine stores nothing (cannot resume; not in session lists). Capability `unsaved` |
 | `effort` | `effort` | passed only if set |
 | `skills` | `skills` | lean: listed in prompt, read on demand; project: native |
 | `setting_sources` etc. | `setup` | `"lean"` (default) or `"project"` |
@@ -101,7 +136,6 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | - | `engine` | `"claude"` (default), `"fake"`, `"cursor"` (stub), or a registered name |
 | - | `tool_server` | MCP server name for custom tools, default `DEFAULT_SERVER` = `"agentlib"` (`agentlib/tools.py`) |
 | - | `name`, `description`, `source`, `extra`, `warnings` | metadata; `description` is not sent to the model |
-| `permission_mode` | - | fixed to `"default"` |
 | `include_partial_messages` | - | always on |
 
 ## Public exports (`from agentlib import ...`)
@@ -111,7 +145,10 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `Agent` | `agentlib/agent.py` | Dataclass defining an agent; `.ask()`, `.ask_sync()`, `.session(resume=, fork=, cost_base=)` |
 | `Session` | `agentlib/session.py` | One conversation: `send`, `stream`, `answer`, `answer_stream`, `interrupt`, `close`, `session_id`, `pending_questions`, `last_reply`, `info` |
 | `SessionInfo` | `agentlib/session.py` | `s.info`: `tools` (offered; custom by short name), `mcp_servers` (name -> status), `model`; `.to_dict()`. Empty until the first turn starts |
-| `Reply` | `agentlib/reply.py` | Finished turn: `status, text, questions, session_id, usage, cost_usd, total_cost_usd, tool_calls, api_calls, duration_s, engine, model, stop_reason, error`; `.to_dict()` |
+| `Reply` | `agentlib/reply.py` | Finished turn: `status, text, questions, session_id, usage, cost_usd, total_cost_usd, tool_calls, api_calls, duration_s, engine, model, stop_reason, error, error_kind, data`; `.to_dict()`. `error_kind` (only when `status == "error"`): `"budget" \| "max_turns" \| "output_shape" \| "other"`; `data`: parsed JSON when `output_schema` is set |
+| `ModelInfo` | `agentlib/models.py` | One offered model: `id` (for `Agent(model=)`), `name`, `description`, `aliases`, `is_default`, `effort_levels`; `.to_dict()` |
+| `list_models` / `list_models_sync` | `agentlib/models.py` | `await list_models(engine="claude", *, env=None, timeout_s=60) -> list[ModelInfo]`; no request sent. `CapabilityError` / `EngineUnavailable` / `AgentError` |
+| `ask_structured` / `ask_structured_sync` | `agentlib/structured.py` | `await ask_structured(message, schema, *, instructions="", model=None, engine="claude", name="structured", effort=None, max_budget_usd=None, timeout_s=600, env=None, cwd=None) -> Reply`: no tools, `never_ask`, not saved |
 | `Usage` | `agentlib/reply.py` | Per-turn token counts, same names on every engine; supports `+`; `.total_input_tokens` |
 | `ToolCallRecord` | `agentlib/reply.py` | One tool call in `Reply.tool_calls`: `id, name, input, result, is_error` |
 | `Tool` | `agentlib/tools.py` | A custom tool: `name, description, schema, handler, ends_turn, read_only`; `await t.call(args) -> (text, is_error)` |
@@ -137,10 +174,19 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `get_engine` | `agentlib/engines/__init__.py` | `get_engine(name) -> Engine` (cached instance) |
 | `register_engine` | `agentlib/engines/__init__.py` | `register_engine(name, factory)` adds or replaces an engine |
 | `use_login_only` | `agentlib/auth.py` | Strip API-key env vars so the Claude Code login is used; returns names removed |
+| `connection_status` | `agentlib/connection.py` | `connection_status(engine="claude") -> ConnectionStatus`; reads `setup/local.toml` + checks the install; sends nothing |
+| `ConnectionStatus` | `agentlib/connection.py` | `engine, ok, method, summary, env_names, setup_file, setup_doc, version, problems, notes`; `.to_dict()`. Never holds secret values |
+| `check_connection` / `check_connection_sync` | `agentlib/connection.py` | `await check_connection(engine="claude", *, model=None, timeout_s=90) -> CheckResult`: status, then one tiny message on the engine's cheapest model (Claude: haiku). Never raises for a failed connection |
+| `CheckResult` | `agentlib/connection.py` | `ok, engine, status, sent, model, reply_text, cost_usd, duration_s, error, fix`; `.report()` (plain text the CLI prints), `.to_dict()` |
+| `SetupError` | `agentlib/errors.py` | `setup/local.toml` is broken or points at something missing (raised when a session / `list_models` starts; nothing sent); message says what to fix |
 
-Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, rate_limit, fail, reset, FakeEngine`),
-`agentlib.engines` (`Capabilities, Engine, EngineSession, TurnState`; `agentlib.engines.base.requirements`),
+Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, rate_limit, fail, spend, output,
+models, reset, DEFAULT_MODELS, FakeEngine`),
+`agentlib.engines` (`Capabilities, Engine, EngineSession, TurnState, EngineSetup, Connection, get_setup,
+register_setup`; `agentlib.engines.base.requirements`), `agentlib.local_setup` (`connection, require,
+setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses; script it on the fake engine),
 `agentlib.tools.DEFAULT_SERVER`,
+`agentlib.structured` (`check_output, check_schema, validate, parse_text`: shared JSON checking for engines),
 `agentlib.engines.claude.sdk_version`.
 
 ## I want to... -> use...
@@ -165,7 +211,15 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
 | Behave like Claude Code in a folder (CLAUDE.md, settings, all built-ins) | `Agent(setup="project", cwd=...)` | - |
 | Give the agent skills | `Agent(skills=["name"])` (folder `<cwd or ~>/.claude/skills/<name>/SKILL.md` or `.cursor/skills`) | - |
 | Track spend | `reply.cost_usd`, `reply.total_cost_usd`, `reply.usage` | `examples/01_one_shot.py` |
+| Cap what a run may spend | `Agent(max_budget_usd=...)`; check `reply.error_kind == "budget"` | `examples/10_spending_cap.py` |
+| Run non-interactively (deny anything not pre-approved) | `Agent(permission_mode="never_ask")` | `examples/11_never_ask.py` |
+| Fill a model menu without spending tokens | `list_models_sync("claude")` / `await list_models("claude")` | `examples/12_list_models.py` |
+| Get a reply in a fixed JSON shape (one-shot, no tools, nothing saved) | `ask_structured_sync(msg, schema, ...)` -> `reply.data`; or `Agent(output_schema=...)` | `examples/13_structured_output.py` |
+| Run without saving the conversation | `Agent(save_conversation=False)` | `examples/13_structured_output.py` |
 | Force subscription login | `use_login_only()` at app start | - |
+| Set up how I sign in (login, company settings file, gateway variables) | `setup/local.toml` from `setup/local.example.toml`; guide `setup/claude-setup.md` | `setup/local.example.toml` |
+| Check that my engine works | `python -m agentlib.check` (`--status` = free, sends nothing) | - |
+| Show sign-in status / a "Test connection" button in an app | `connection_status(engine)`; `check_connection_sync(engine)` -> `result.ok`, `.report()` | `examples/14_connection_check.py` |
 | Check what an engine supports | `get_engine("cursor").capabilities`; `get_engine(name).check(agent)` raises before a run | - |
 | See which tools / MCP servers a session actually got | `s.info` after the first turn starts | `agentlib/tests/smoke_claude.py` |
 | Keep usage from a failed turn | `except AgentError as e: e.reply` (may be `None`) | `examples/09_test_with_fake_engine.py` |
@@ -178,7 +232,13 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
 - `tools` absent (`None`) = all given custom tools + `ask_user` (+ all built-ins in project setup). An explicit
   list gives exactly that list: add `"ask_user"` yourself if wanted
 - Tool permissions: listed tools are pre-approved; anything else -> `on_permission`, or denied if none
-  (same as headless Claude Code). In lean setup an unlisted built-in is not even offered
+  (same as headless Claude Code). In lean setup an unlisted built-in is not even offered.
+  `permission_mode="never_ask"` denies anything not pre-approved without any callback (Claude `dontAsk`)
+- Structured output (`output_schema`): Claude uses its native JSON-schema output (the CLI's internal
+  `StructuredOutput` tool is hidden from events and `tool_calls`); the value is checked again with `jsonschema`.
+  Engines without a native option would parse the reply text (`structured.check_output`). `Reply.text` may be
+  empty; the answer is in `Reply.data`
+- `list_models()` on Claude starts and stops a `claude` process (a few seconds), sends no request
 - `ask_user` = material questions (scope, data, decisions), not permissions. Calling it ends the turn:
   `Reply.status == "needs_input"`, `Reply.questions`. Answer with `s.answer(...)`; unanswered ids -> skipped
 - Answer shapes: `{id: "text"}` | `[Answer | {id, answer, kind}]` | `{"answers": [...]}`. `kind` is inferred if
@@ -189,8 +249,9 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
 - Tool return: `str`; `dict`/`list` -> JSON; `None` -> `"ok"`. Sync handlers run in a thread
 - Skills in lean setup: names + descriptions go into the prompt; `Read` is added (if not listed) but limited to
   the skill folders. Search: `<cwd>/.claude/skills`, `<cwd>/.cursor/skills`, `~/.claude/skills`, `~/.cursor/skills`
-- Infrastructure failures raise `AgentError`; a model run that ends badly (max turns) returns
-  `Reply(status="error")` so usage is not lost. A turn that fails midway (timeout, process died) puts the
+- Infrastructure failures raise `AgentError`; a model run that ends badly (spending cap, max turns, a reply that
+  does not match `output_schema`, an API error) returns `Reply(status="error")` so usage is not lost;
+  `Reply.error_kind` says which (`budget`, `max_turns`, `output_shape`, `other`). A turn that fails midway (timeout, process died) puts the
   partial turn in `AgentError.reply` (usage summed from the model calls seen; cost unknown -> `cost_usd` 0).
   After a failure the next turn reconnects with resume
 - Agent file loaders: `tools:` line absent -> not specified (see above); `model: inherit` -> loader's `model=`
@@ -216,7 +277,12 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
   wildcards and compound commands, Read/Edit paths, `WebFetch(domain:...)`, `disallowed_tools` deny) but not
   Claude's built-in read-only Bash commands that need no rule, wrapper stripping, or settings files;
   `setup="project"` with `tools=None` approves every built-in. Scripts may call built-ins the real model
-  would not be offered (they go to `on_permission`). No external MCP servers (`CapabilityError`)
+  would not be offered (they go to `on_permission`). No external MCP servers (`CapabilityError`).
+  Claude Code runs some read-only shell commands (e.g. `python --version`) with no rule even under
+  `never_ask`; the fake denies them. The fake does not enforce `max_turns`
+- Spending cap on Claude: the CLI checks its running total between model calls, per opened session (one
+  `claude` process); a run may overshoot by one call. After an error result the process is dropped and the
+  next turn reconnects with resume (and a fresh cap)
 
 ## Engines
 - Registry (`agentlib/engines/__init__.py`): `register_engine(name, factory)`; `get_engine(name)` builds and
@@ -226,18 +292,29 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
   with `start / turn(message) -> async events ending in Done / interrupt / close`; `TurnState` runs custom
   tools + `ask_user` identically for every engine and builds the `Reply`
 - `Capabilities` (frozen dataclass): `available, system_prompt, custom_tools, mcp_servers, streaming, resume,
-  fork, usage, ends_turn, permission_hook, project_setup`. `Engine.check()` runs in `agent.session()` before
+  fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
+  list_models`. `Engine.check()` runs in `agent.session()` before
   anything starts: `available` False -> `EngineUnavailable` (message lists what else it would lack); else
   `CapabilityError` naming every needed capability the engine lacks. Needs (`requirements()` in `base.py`):
   `system_prompt` (instructions set, or skills in lean setup), `custom_tools` (any `@tool` or `ask_user`),
   `ends_turn` (`ask_user` or `@tool(ends_turn=True)`), `mcp_servers`, `resume` (`resume=`), `fork`,
-  `permission_hook` (`on_permission`), `project_setup`. `streaming` and `usage` are informational only
+  `permission_hook` (`on_permission`), `project_setup`, `budget` (`max_budget_usd`), `never_ask`
+  (`permission_mode="never_ask"`), `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`).
+  `list_models` is checked by `list_models()` (`Engine.check_list_models()`). `streaming` and `usage` are
+  informational only
+- Sign-in side (`EngineSetup` in `agentlib/engines/base.py`, registry `register_setup` / `get_setup`): one per
+  engine, SDK-free so status works without the engine's package. `resolve(section)` turns the engine's
+  `[section]` of `setup/local.toml` into a `Connection(method, summary, env, engine_settings, problems,
+  notes)`; also `doc`, `check_model`, `prerequisites()`, `version()`, `fix_for(error)`. Engines call
+  `local_setup.require(name)` when they start a process (`SetupError` on problems). Claude: `ClaudeSetup`
+  (`engines/claude_setup.py`); fake: `FakeSetup` (only `[fake] auth = "none"`); others get the generic one
+  (nothing to set up)
 
 | Engine | File | State | Capabilities that differ from defaults |
 |---|---|---|---|
-| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork=True`, `permission_hook=True` |
-| `cursor` | `agentlib/engines/cursor.py` | stub: `agent.session()` raises `EngineUnavailable` | `available=False`, `system_prompt=False`, `ends_turn=False` |
-| `fake` | `agentlib/fake/engine.py` | working, tests only, zero tokens | `fork=True`, `permission_hook=True`, `mcp_servers=False` |
+| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models` all True |
+| `cursor` | `agentlib/engines/cursor.py` | stub: `agent.session()` raises `EngineUnavailable` | `available=False`, `system_prompt=False`, `ends_turn=False` (new flags False, unverified) |
+| `fake` | `agentlib/fake/engine.py` | working, tests only, zero tokens | same as claude, plus `mcp_servers=False` |
 
 - Cursor plan (stub header): Cursor Python SDK (`cursor-sdk`, beta); no app-set system prompt (AGENTS.md +
   message prefix), no live permission hook, no fork, sync API (wrap in `asyncio.to_thread`), own model names.
@@ -247,25 +324,34 @@ Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, 
   Claude-style rules. No script -> `"(fake) <message>"`. Resume works within one Python process.
   `total_cost_usd` is cumulative per conversation and `cost_usd` honours `cost_base` like the Claude engine.
   `fail()` raises `AgentError` with `.reply`. `s.info` mirrors Claude's. `fake.reset()` between tests
+- Fake run controls: `fake.spend(usd)` step adds cost; `max_budget_usd` is checked after every step against the
+  opened session's spend -> stops with `error_kind="budget"`. `permission_mode="never_ask"`: built-ins not
+  pre-approved are denied. `fake.output(data)` = the model's structured reply (else the turn's text is parsed)
+  -> `Reply.data` or `error_kind="output_shape"`. `save_conversation=False`: nothing stored (resume ->
+  `ConversationMissing`). `fake.models([...])` scripts `list_models("fake")` (ModelInfo / dict / id string),
+  `fake.models(fail="msg")` makes it raise `AgentError`; default `fake.DEFAULT_MODELS` (`fake-large`, `fake-small`)
 
 ## Not yet supported
 Do not reach for the raw SDK for these; add them via [EXTENDING.md](EXTENDING.md) (or tell the user if they
 cannot be made engine-neutral).
 - Subagents (`agents=` / `AgentDefinition`, the Task tool); subagent messages are filtered out of events
 - User-facing hooks (`hooks=`); hooks are used internally only
-- `permission_mode` (acceptEdits, plan, bypassPermissions) and `set_permission_mode()`
-- Budget/limits: `max_budget_usd`, `task_budget`
+- Other `permission_mode` values (acceptEdits, plan, bypassPermissions, auto) and `set_permission_mode()`
+  (`default` and `dontAsk` are supported, as `"default"` / `"never_ask"`)
+- Limits: `task_budget` (`max_budget_usd` is supported)
 - Model controls: `fallback_model`, `set_model()` mid-session, `thinking` / `max_thinking_tokens` (`effort` is supported), `betas`
-- Structured output (`output_format`, `ResultMessage.structured_output`)
+- Structured output extras: `output_format` types other than `json_schema` (JSON-schema output is supported via
+  `output_schema`)
 - Non-text input (images, documents); `send()` takes a string only. Streaming input
 - Thinking blocks, server tool blocks (web search), task/progress messages, non-init system messages as events
 - `ResultMessage` extras: `model_usage` (per-model usage), `permission_denials`, `duration_api_ms`
 - Session management: `list_sessions`, `get_session_messages`, rename/tag/delete, `session_store`,
   `continue_conversation`, `resume_session_at`
 - File checkpointing / `rewind_files`
-- Runtime MCP control: `get_mcp_status`, `toggle_mcp_server`, `reconnect_mcp_server`; `get_context_usage`,
-  `get_server_info` (startup info is available as `s.info`)
-- `sandbox`, `plugins`, `settings` (custom settings file), `cli_path`, `user`, `stderr` / `debug_stderr`
+- Runtime MCP control: `get_mcp_status`, `toggle_mcp_server`, `reconnect_mcp_server`; `get_context_usage`;
+  the rest of `get_server_info` (its model list is `list_models()`; startup info is `s.info`)
+- `sandbox`, `plugins`, `settings` (custom settings file; only its sign-in parts are used, via `setup/local.toml`),
+  `cli_path`, `user`, `stderr` / `debug_stderr`
 
 ## Where to edit
 Paths are inside the `agentlib/` package folder unless stated.
@@ -280,10 +366,16 @@ Paths are inside the `agentlib/` package folder unless stated.
 | Live event types | `events.py` |
 | Reply / Usage fields | `reply.py` |
 | Errors | `errors.py` |
-| Sign-in | `auth.py` |
+| Sign-in: process env stripping | `auth.py` |
+| Sign-in: finding / reading the local setup file | `local_setup.py` |
+| Sign-in: what the `[claude]` section means (settings-file keys passed through, fix hints) | `engines/claude_setup.py` (SDK-free) |
+| Status, connection check, the `python -m agentlib.check` command | `connection.py`, `check.py` (message text: `prompts/connection_check.md`) |
+| Setup guides and the local setup template (repo root) | `setup/<engine>-setup.md`, `setup/local.example.toml` |
 | Claude Code / Cursor file parsing | `loaders/claude.py`, `loaders/cursor.py` (shared: `loaders/common.py`, `loaders/frontmatter.py`) |
 | Skill lookup (lean setup) | `skills.py` |
 | Permission hook shape | `permissions.py` |
+| Structured output checking, `ask_structured` | `structured.py` |
+| Model list (`ModelInfo`, `list_models`) | `models.py` (Claude parsing: `parse_models` in `engines/claude.py`) |
 | Claude SDK options, message mapping | `engines/claude.py` |
 | Cursor engine (stub today) | `engines/cursor.py` |
 | Engine interface, Capabilities, shared turn bookkeeping | `engines/base.py` |
@@ -298,4 +390,6 @@ Paths are inside the `agentlib/` package folder unless stated.
 - Unit (free, from this folder): `python -m pytest` (collects `agentlib/` only)
 - Example test (free): `python -m pytest examples/09_test_with_fake_engine.py`
 - Live (Haiku, ~$0.01): `python -m agentlib.tests.smoke_claude`
+- Live connection check (Haiku, a fraction of a cent): `python -m agentlib.check`
+- Tests never read your `setup/local.toml`: `agentlib/conftest.py` points `AGENTLIB_SETUP_FILE` at an empty temp file
 - Needs: Claude Code installed and logged in (live test and real use)

@@ -4,7 +4,7 @@ One task per script, heavily commented. Run from the repo root (agentlib install
 
 **Cost rule: nothing spends tokens unless you pass `--live`.** Without it every script runs on the fake
 engine (zero tokens, no login). With `--live` it runs on Claude with `model="haiku"` using your Claude Code
-login (LIVE: costs tokens, roughly a cent per script). The agent code is identical on both engines; only
+login, or whatever sign-in your `setup/local.toml` says (LIVE: costs tokens, roughly a cent per script). The agent code is identical on both engines; only
 `engine=` and the fake script differ.
 
 | # | File | Shows | Free run |
@@ -18,6 +18,11 @@ login (LIVE: costs tokens, roughly a cent per script). The agent code is identic
 | 07 | `07_external_mcp_server.py` | `mcp_servers=` with a Python stdio server (`07_notes_server.py`) | **LIVE only** (`--live`); free run shows the fake engine's `CapabilityError` (no external MCP) |
 | 08 | `08_agent_file.py` | `load_claude_agent` from `.claude/agents/word_counter.md`; `load_cursor_agent` from `.cursor/agents/reviewer.md` | yes |
 | 09 | `09_test_with_fake_engine.py` | pytest tests for an agent using `agentlib.fake` (tools, ask_user, rules, `AgentError.reply`, capability checks) | `python -m pytest examples/09_test_with_fake_engine.py` |
+| 10 | `10_spending_cap.py` | `Agent(max_budget_usd=)`; a cap stop is `status == "error"`, `error_kind == "budget"`; `fake.spend()` | yes |
+| 11 | `11_never_ask.py` | `Agent(permission_mode="never_ask")`: unlisted tools denied, nobody asked | yes |
+| 12 | `12_list_models.py` | `list_models_sync(engine)` -> `ModelInfo` list for a model menu; `fake.models()` | yes (`--live` starts Claude Code but spends no tokens) |
+| 13 | `13_structured_output.py` | `ask_structured_sync(msg, schema)` -> `reply.data`; malformed -> `error_kind == "output_shape"`; `fake.output()` | yes |
+| 14 | `14_connection_check.py` | `connection_status(engine)` for a settings screen; `check_connection_sync(engine)` for a "Test connection" button (`.ok`, `.error`, `.fix`, `.report()`); `--fail` scripts a failure | yes (`--live` sends one tiny Haiku message) |
 
 ```
 python examples/01_one_shot.py          # fake, free

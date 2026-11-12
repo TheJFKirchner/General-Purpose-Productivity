@@ -1,0 +1,28 @@
+# agentlib local setup: how YOU connect to each AI engine.
+#
+# To use it: copy this file to "local.toml" in this same folder (setup/local.toml) and edit the copy.
+# local.toml is ignored by git: it is never committed and pulling library updates never overwrites it.
+# No local.toml at all = defaults (Claude: your ordinary Claude Code login).
+#
+# Guide for each engine: setup/claude-setup.md.   Test your setup:  python -m agentlib.check
+
+[claude]
+# How agentlib signs in to Claude. Pick ONE:
+#   "login"          your ordinary Claude Code login (the default; nothing else to set)
+#   "settings-file"  use the sign-in parts of your Claude Code settings file (its "env" block and credential
+#                    helpers such as "apiKeyHelper"). Use this if your company set up Claude Code's
+#                    settings.json for you
+#   "env"            use the environment variables listed under [claude.env] below
+auth = "login"
+
+# Only for auth = "settings-file": which settings file. Default: your user settings file,
+# ~/.claude/settings.json (on Windows: C:\Users\<you>\.claude\settings.json).
+# Use single quotes for Windows paths.
+# settings_file = 'C:\Users\<you>\.claude\settings.json'
+
+# Only for auth = "env" (with "settings-file" these add to / override the file's "env" block).
+# Write "${NAME}" to take a value from a variable already set on your computer, so the secret itself
+# does not have to be written in this file. Remove the leading "# " to use a line.
+# [claude.env]
+# ANTHROPIC_BASE_URL = "https://llm-gateway.example.com"
+# ANTHROPIC_AUTH_TOKEN = "${MY_GATEWAY_TOKEN}"

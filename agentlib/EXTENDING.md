@@ -39,8 +39,13 @@ TurnState(engine_name, tools)            # per-turn bookkeeping shared by all en
   message_ids: set[str]                  # distinct model calls (-> Reply.api_calls)
   usage_by_message: dict[str, Usage]     # latest usage per model call; usage_so_far() sums it
   stop_requested: bool                   # True after ask_user or an ends_turn tool: end the turn now
-  reply(session_id=, usage=, cost_usd=, total_cost_usd=, model=, stop_reason=, error=, api_calls=) -> Reply
+  reply(session_id=, usage=, cost_usd=, total_cost_usd=, model=, stop_reason=, error=, api_calls=,
+        error_kind=, data=) -> Reply      # error_kind defaults to "other" when error is set; data dropped on error
 ```
+
+Bad endings must be classified the same way on every engine: `error_kind="budget"` (spending cap),
+`"max_turns"`, `"output_shape"` (reply did not match `output_schema`: use `structured.check_output()`, which
+takes the engine's native structured value or parses the reply text), else `"other"`.
 
 When a turn fails midway, raise `AgentError(msg, reply=state.reply(..., usage=state.usage_so_far(),
 cost_usd=0.0, error=msg))` so callers keep the partial turn (`ClaudeSession._failed_reply()` does this).
@@ -52,16 +57,62 @@ routes custom tool calls through `state.run_tool()`, records text/calls/results,
 `ask_user` produced questions, else `done`.
 
 `Capabilities` (frozen dataclass, same file): `available, system_prompt, custom_tools, mcp_servers, streaming,
-resume, fork, usage, ends_turn, permission_hook, project_setup`. `requirements(agent, fork=, resume=)` (same
+resume, fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
+list_models`. `requirements(agent, fork=, resume=)` (same
 file) maps capability name -> "does this agent/call need it"; `Engine.check()` enforces every name in it:
-`system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup`.
+`system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup, budget,
+never_ask, structured_output, unsaved`. `list_models` is not per agent: `Engine.check_list_models()` enforces
+it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default raises `CapabilityError`) does it.
 `available=False` raises `EngineUnavailable` first (listing what else is missing). `streaming` and `usage`
 are informational (no request can require them).
 
 Registry (`agentlib/engines/__init__.py`): `register_engine(name, factory)`, `get_engine(name)`. Built-in
-engines are registered with lazy factories so their SDKs import only when used.
+engines are registered with lazy factories so their SDKs import only when used. The sign-in side has its own
+registry: `register_setup(name, factory)`, `get_setup(name)` (see "Engine sign-in" below).
 
-## Recipe: add an Agent option (example: a spend cap, `max_budget_usd`)
+## Engine sign-in (setup) - every engine needs this
+
+How a person connects to an engine is per person and never in app code. Callers (apps) must not change when an
+engine is added or its sign-in options grow. The pieces:
+
+```
+setup/<engine>-setup.md       # plain-language guide: install, how to sign in, the check command, where to adapt.
+                              # NEVER name it <engine>.md if that could read as CLAUDE.md on Windows (case-insensitive:
+                              # setup/claude.md == setup/CLAUDE.md, which Claude Code loads as instructions)
+setup/local.example.toml      # checked-in template: add a commented [<engine>] section
+setup/local.toml              # the person's copy: gitignored (.gitignore), never committed, survives pulls
+agentlib/local_setup.py       # finds + reads the file (AGENTLIB_SETUP_FILE overrides the location);
+                              # connection(name) -> Connection; require(name) -> Connection or SetupError
+EngineSetup (engines/base.py) # per engine, SDK-FREE module (status must work when the SDK is missing):
+  doc, section_keys, check_model
+  resolve(section, base=) -> Connection(engine, method, summary, env, engine_settings, problems, notes)
+  prerequisites() -> [problem]   version() -> str   fix_for(error) -> str | None
+```
+
+Rules: `summary`, `problems`, `notes` name variables and files but never contain secret values (`env` and
+`engine_settings` are kept out of repr). Report problems (plain language, saying what to fix) instead of
+raising. Unknown keys in the engine's section are problems (catches typos). A value the caller passes
+explicitly (`Agent(env=)`, `list_models(env=)`) wins over the local setup.
+
+Recipe for a new engine (e.g. Cursor):
+1. `agentlib/engines/<engine>_setup.py`: `class XSetup(EngineSetup)` with `doc = "setup/<engine>-setup.md"`,
+   `check_model` (cheapest model), `resolve()`, `prerequisites()` (package / program installed?), `version()`,
+   `fix_for()` (map the engine's sign-in errors to a next step). Must not import the engine SDK.
+2. Register it lazily in `agentlib/engines/__init__.py`: `register_setup("<engine>", _x_setup)`.
+3. In the engine, call `local_setup.require("<engine>")` each time it starts a process / client and apply
+   `conn.env` (under the caller's env) and `conn.engine_settings`. Claude example: `ClaudeSession.options()`
+   and `ClaudeEngine.list_models()` in `engines/claude.py`.
+4. Write `setup/<engine>-setup.md` (same shape as `setup/claude-setup.md`, including the honest "your company
+   does it differently?" section naming the file to adapt) and add a commented `[<engine>]` section to
+   `setup/local.example.toml`.
+5. Add a row to the README's "Before the library will work" table.
+6. Tests (temp files, made-up values; `agentlib/conftest.py` already isolates the setup file): each auth
+   method, caller env winning, every problem message, `connection_status("<engine>")`. The check command
+   (`connection.check_connection`) is engine-neutral and needs no change.
+7. Fake engine: `FakeSetup` (`agentlib/fake/engine.py`) mirrors the behaviour (`SetupError` on a bad `[fake]`
+   section) so apps can test their "not set up" path for free.
+
+## Recipe: add an Agent option (worked example: the spend cap, `max_budget_usd`, which now exists)
 
 1. **Agent field** - `agentlib/agent.py`: add `max_budget_usd: float | None = None` with a short comment.
    Neutral name and units (no SDK wording). Default must mean "off" so existing agents are unchanged.
@@ -126,7 +177,8 @@ From the header of `agentlib/engines/cursor.py`:
   emulates them via AGENTS.md or a "stop now" tool result, set them True, otherwise every agent with
   instructions / `ask_user` raises `CapabilityError`); add `requirements()` entries for any new capability
   agents can request; override `info` from Cursor's startup data if it has any; switch `DEFAULT_ENGINE` in `agentlib/loaders/cursor.py` to `"cursor"`;
-  add a hand-run smoke test like `agentlib/tests/smoke_claude.py`; update the README engines table
+  add a hand-run smoke test like `agentlib/tests/smoke_claude.py`; update the README engines table;
+  add its sign-in side (setup guide, `[cursor]` section, `CursorSetup`) per "Engine sign-in" above
 - The examples should then run with `engine="cursor"` unchanged, except for features the capabilities
   table says Cursor lacks (those must raise `CapabilityError`, not misbehave)
 
@@ -138,3 +190,5 @@ From the header of `agentlib/engines/cursor.py`:
 - [ ] Zero-token tests added; `python -m pytest` passes
 - [ ] README tables updated (lookup, fields, exports, I want to, Not yet supported); example added
 - [ ] If it could not be made engine-neutral: stopped and told the user
+- [ ] New engine: setup guide `setup/<engine>-setup.md`, `[<engine>]` in `setup/local.example.toml`,
+      SDK-free `EngineSetup` registered, `local_setup.require()` called by the engine, README setup table row

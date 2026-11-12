@@ -6,7 +6,8 @@ import pytest
 from agentlib import Agent, CapabilityError, EngineUnavailable, get_engine, register_engine, tool
 from agentlib.engines import Capabilities, Engine
 
-FULL = Capabilities(fork=True, permission_hook=True)
+FULL = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True, structured_output=True,
+                    unsaved=True, list_models=True)
 
 
 @tool(ends_turn=True)
@@ -51,6 +52,10 @@ CASES = [
     ("fork", {}, {"resume": "abc", "fork": True}),
     ("permission_hook", {"on_permission": lambda req: "allow"}, {}),
     ("project_setup", {"setup": "project"}, {}),
+    ("budget", {"max_budget_usd": 0.5}, {}),
+    ("never_ask", {"permission_mode": "never_ask"}, {}),
+    ("structured_output", {"output_schema": {"type": "object"}}, {}),
+    ("unsaved", {"save_conversation": False}, {}),
 ]
 
 
@@ -92,6 +97,22 @@ def test_cursor_stub_fails_at_check_time():
         get_engine("cursor").check(Agent("a", engine="cursor", instructions="hi"))
     assert "cursor" in ei.value.short and "system_prompt" in ei.value.short
     assert not isinstance(ei.value, CapabilityError)
+
+
+def test_list_models_capability():
+    from agentlib import list_models_sync
+    _engine(list_models=False)
+    with pytest.raises(CapabilityError, match="list_models"):
+        list_models_sync("probe")
+    with pytest.raises(EngineUnavailable):
+        list_models_sync("cursor")
+
+
+def test_claude_and_fake_claim_the_run_controls():
+    from agentlib import fake  # noqa: F401  (registers "fake")
+    for name in ("claude", "fake"):
+        c = get_engine(name).capabilities
+        assert c.budget and c.never_ask and c.structured_output and c.unsaved and c.list_models
 
 
 def test_missing_list_names_all_gaps():

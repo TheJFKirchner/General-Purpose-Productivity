@@ -30,6 +30,11 @@ class CapabilityError(AgentError):
     """The agent needs something its engine cannot do (see engine.capabilities)."""
 
 
+class SetupError(AgentError):
+    """The local setup file (setup/local.toml) is broken or points at something missing. The message says what
+    to fix; nothing was sent."""
+
+
 class AgentFileError(AgentError):
     """An agent .md file is missing, unreadable, or lists a tool with no implementation."""
 

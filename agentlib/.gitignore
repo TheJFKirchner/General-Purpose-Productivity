@@ -30,3 +30,7 @@ Thumbs.db
 !.env.example
 **/.claude/settings.local.json
 *.log
+
+# agentlib local setup: each person's sign-in (setup/local.example.toml is the checked-in template)
+setup/local.toml
+setup/*.local.toml

@@ -29,6 +29,11 @@ class CursorEngine(Engine):
         ends_turn=False,        # unverified: may need a tool result telling the agent to stop
         permission_hook=False,
         project_setup=True,
+        budget=False,           # unverified: may need a client-side cap from per-turn usage
+        never_ask=False,        # unverified: likely its natural mode (no live permission hook)
+        structured_output=False,    # unverified: if no native option, instruct + parse with structured.check_output
+        unsaved=False,          # unverified
+        list_models=False,      # unverified: needs a model-list call that sends no request
     )
 
     def open(self, agent, *, resume, fork, cost_base):

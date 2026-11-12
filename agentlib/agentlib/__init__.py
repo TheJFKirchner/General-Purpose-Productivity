@@ -13,15 +13,18 @@
 """
 from .agent import Agent
 from .auth import use_login_only
+from .connection import CheckResult, ConnectionStatus, check_connection, check_connection_sync, connection_status
 from .engines import get_engine, register_engine
 from .errors import (AgentError, AgentFileError, CapabilityError, ConversationMissing, EngineUnavailable,
-                     QuestionShapeError)
+                     QuestionShapeError, SetupError)
 from .events import Done, Event, RateLimit, Text, TextDelta, ToolCall, ToolResult
 from .loaders import load_claude_agent, load_cursor_agent
+from .models import ModelInfo, list_models, list_models_sync
 from .permissions import PermissionRequest
 from .questions import Answer, Question
 from .reply import Reply, ToolCallRecord, Usage
 from .session import Session, SessionInfo
+from .structured import ask_structured, ask_structured_sync
 from .tools import Tool, tool
 
 __all__ = [
@@ -30,4 +33,6 @@ __all__ = [
     "Event", "TextDelta", "Text", "ToolCall", "ToolResult", "RateLimit", "Done",
     "AgentError", "AgentFileError", "CapabilityError", "ConversationMissing", "EngineUnavailable",
     "QuestionShapeError", "get_engine", "register_engine", "use_login_only",
+    "ModelInfo", "list_models", "list_models_sync", "ask_structured", "ask_structured_sync",
+    "SetupError", "ConnectionStatus", "CheckResult", "connection_status", "check_connection", "check_connection_sync",
 ]
