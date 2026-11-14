@@ -1,9 +1,9 @@
 """LIVE smoke run (spends tokens, roughly $0.50-1.50; takes about 7 minutes). Not collected by pytest.
 
-    python tests/live_smoke.py               # from the Launchpad folder
-    python tests/live_smoke.py --part planner    # only the planner + Explorer part
-    python tests/live_smoke.py --part run        # only the approved-plan run
-    python tests/live_smoke.py --part run --quick    # same with 5 s timers (no long-wait check)
+    python tests/live/live_smoke.py               # from the Launchpad folder
+    python tests/live/live_smoke.py --part planner    # only the planner + Explorer part
+    python tests/live/live_smoke.py --part run        # only the approved-plan run
+    python tests/live/live_smoke.py --part run --quick    # same with 5 s timers (no long-wait check)
 
 What it proves on the real Claude engine, through the real server and websocket:
 - planner turn calls explore -> the Explorer (haiku) uses Read/Grep/Glob and returns structured links
@@ -27,14 +27,14 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 sys.path.insert(0, str(ROOT))
 
 import uvicorn  # noqa: E402
 import websockets  # noqa: E402
 
-from app import astronaut as astronaut_mod  # noqa: E402
-from app import run as run_mod  # noqa: E402
+from app.agents.explorer import astronaut as astronaut_mod  # noqa: E402
+from app.agents.orchestrator import run as run_mod  # noqa: E402
 from app.server import create_app  # noqa: E402
 from app.settings import Settings  # noqa: E402
 
@@ -104,7 +104,7 @@ async def main(part: str, quick: bool = False) -> int:
         explores.append({"question": question, **r})
         return r
     astronaut_mod.explore = explore_rec
-    import app.planner as planner_mod
+    import app.agents.planner.planner as planner_mod
     planner_mod.astronaut.explore = explore_rec
 
     events: list[dict] = []

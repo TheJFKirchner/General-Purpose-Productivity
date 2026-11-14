@@ -298,7 +298,7 @@ def _project_files(project: Path, k: int = 3) -> list[str]:
 
 
 def install(project: Path) -> None:
-    """Register fake scripts for the four Launchpad agents (names from their .claude/agents files)."""
+    """Register fake scripts for the four Launchpad agents (names from their app/agents/<folder>/agent.md files)."""
     project = Path(project).resolve()
     files = _project_files(project) or ["(none)"]
 

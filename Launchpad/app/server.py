@@ -2,7 +2,7 @@
 
 - Security: binds 127.0.0.1; websocket needs ?code=<access code> and Origin http://127.0.0.1:<port>
 - All agent work lives in the hub (app/hub.py); this file only moves JSON in and out
-- Websocket contract (authoritative; the prototype header follows it)
+- Websocket contract below (authoritative: the front end in frontend/ follows it)
 - Agent display names: Planner, Explorer (role astronaut), Orchestrator, Builder, Visualizer (role visual),
   Claude Code (role pilot); folder agents: their name with dashes as spaces ("copy-reviewer" -> "Copy reviewer")
   here -> UI
@@ -89,7 +89,7 @@
                gated_tools, setup: lean|project, engine_prompt, prompt_note, root, path (relative), editable,
                step_worker? (folder agents), promotion? (planner): {start_model, target_model, window_turns,
                criteria (markdown), criteria_path, root, path, editable}}]}
-      - the six built-ins first (builtin true, root "app"), then the agents of the connected folder dir_id
+      - the six built-ins first (builtin true, root "app", path "app/agents/<folder>/agent.md"), then the agents of the connected folder dir_id
         (builtin false, role null, root = dir_id, path ".claude/agents/<file>.md", purpose from the file's
         `purpose:` field, default building; a broken file is listed with its problems in warnings and
         step_worker false). Built-in purposes: Planner + Visualizer planning, Explorer exploring, Builder +
@@ -173,7 +173,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
-from . import visuals
+from .agents.visualizer import libraries
 from .hub import Hub
 from .settings import Settings
 
@@ -242,7 +242,7 @@ def create_app(port: int, code: str, settings: Settings, store=None, overridden=
     @app.get("/vendor/lib/{key}.js")
     async def vendor_lib(key: str, request: Request):
         # a visual library for the sealed frames; the page fetches it and inlines it (frames never fetch)
-        lib = visuals.LIBRARIES.get(key)
+        lib = libraries.LIBRARIES.get(key)
         if lib is None:
             raise HTTPException(status_code=404)
         headers = {"X-Content-Type-Options": "nosniff"}
@@ -260,13 +260,13 @@ def create_app(port: int, code: str, settings: Settings, store=None, overridden=
                 except ValueError:
                     raise HTTPException(status_code=404) from None
             headers.update({"Cache-Control": "private, no-store", "Cross-Origin-Resource-Policy": "same-origin"})
-        files = visuals.library_files(key, project)
+        files = libraries.library_files(key, project)
         if not files:
             raise HTTPException(status_code=404)
         if len(files) == 1:
             return FileResponse(files[0], media_type="application/javascript", headers=headers)
         # several files (Bokeh + its plotting API): one response; the page splits it into one script tag per file
-        body = visuals.LIB_PART_SEPARATOR.encode().join(f.read_bytes() for f in files)
+        body = libraries.LIB_PART_SEPARATOR.encode().join(f.read_bytes() for f in files)
         return Response(body, media_type="application/javascript", headers=headers)
 
     @app.get("/favicon.ico")

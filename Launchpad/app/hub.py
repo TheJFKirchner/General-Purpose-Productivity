@@ -3,7 +3,7 @@
 - One LaunchSession = one planning conversation (+ its run); unique id; folder <project>/.launchpad/<id>/
 - Several sessions can be in flight: new_session starts a fresh planner while earlier runs keep going
 - user_message / round_answer go to the current session's planner
-- Regular sessions (Claude Code chats: PilotChat, app/pilot.py) live beside them in `chats`
+- Regular sessions (Claude Code chats: PilotChat, app/agents/claude_code/pilot.py) live beside them in `chats`
 - UI -> here: user_message, round_answer, plan_approve, queue_response, queue_dismiss, get_crew,
   report_to_planner, run_stop, new_session, chat_new, chat_message, chat_set_mode, chat_stop,
   visual_pick, visual_tweak, visual_retry, set_autopilot, planner_promote,
@@ -22,19 +22,19 @@ import sys
 import traceback
 from collections import deque
 
-from . import crew
-from . import folderagents
 from . import plan as plan_mod
 from .activity import log_line
-from .incoming import Incoming
-from .pilot import PilotChat
-from .planner import PlannerChat
-from .run import Run
-from .sessionfiles import SessionFolder, new_session_id
+from .agents import crew, folder_agents
+from .agents.claude_code.pilot import PilotChat
+from .agents.drafter import drafter
+from .agents.orchestrator.run import Run
+from .agents.planner.planner import PlannerChat
+from .agents.visualizer.visuals import VisualBoard
 from .files import FileError, Files
+from .incoming import Incoming
+from .sessionfiles import SessionFolder, new_session_id
 from .settings import Settings
 from .store import SPECS, Store
-from .visuals import VisualBoard
 
 ACTIVITY_SNAPSHOT = 300          # recent activity events replayed to a reconnecting UI
 
@@ -52,8 +52,8 @@ class LaunchSession:
         self.approved_revision = 0                 # the draft revision the latest run was started from
         self.report_sent = False                   # run report already handed to the planner
         self.autopilot = hub.settings.autopilot_default   # approve every builder permission request (no card)
-        self.astronaut_meter = None                # one Explorer per session (app/astronaut.py)
-        self.visuals = VisualBoard(self)           # visual sidecar sets (app/visuals.py)
+        self.astronaut_meter = None                # one Explorer per session (app/agents/explorer/astronaut.py)
+        self.visuals = VisualBoard(self)           # visual sidecar sets (app/agents/visualizer/visuals.py)
         self.chat = PlannerChat(self)
 
     @property
@@ -411,17 +411,17 @@ class Hub:
             return
         try:
             if kind == "agent_draft":
-                fields = await folderagents.draft(self, path, str(msg.get("text") or ""))
+                fields = await drafter.draft(self, path, str(msg.get("text") or ""))
                 await self.emit({"type": reply, "ok": True, "dir_id": did, "fields": fields})
             elif kind == "agent_create":
-                name = folderagents.create(self.files, did, path, msg.get("fields") or {})
+                name = folder_agents.create(self.files, did, path, msg.get("fields") or {})
                 await self.emit({"type": reply, "ok": True, "dir_id": did, "name": name})
                 await self.registry_changed(did)
             else:
-                name = folderagents.remove(self.files, did, path, str(msg.get("name") or ""))
+                name = folder_agents.remove(self.files, did, path, str(msg.get("name") or ""))
                 await self.emit({"type": reply, "ok": True, "dir_id": did, "name": name})
                 await self.registry_changed(did)
-        except folderagents.AgentFormError as e:
+        except folder_agents.AgentFormError as e:
             ev = {"type": reply, "ok": False, "dir_id": did, "error": str(e)}
             if kind == "agent_create":
                 ev["problems"] = e.problems

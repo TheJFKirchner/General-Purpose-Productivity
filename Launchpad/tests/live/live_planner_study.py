@@ -1,9 +1,9 @@
 """LIVE planner cost study (planner as Launchpad runs it: Sonnet start, may promote to Opus; Haiku sub-agents). Not collected by pytest.
 
-    python tests/live_planner_study.py --conv A                 # short: request, one round, draft (~3 turns)
-    python tests/live_planner_study.py --conv B                 # longer: vague request, typed push-back, 2 lookups,
+    python tests/live/live_planner_study.py --conv A                 # short: request, one round, draft (~3 turns)
+    python tests/live/live_planner_study.py --conv B                 # longer: vague request, typed push-back, 2 lookups,
                                                                 #   a visual set + pick, draft, 2 revisions (~8 turns)
-    python tests/live_planner_study.py --conv A --turns 2 --effort low     # same, lowest effort, first 2 turns
+    python tests/live/live_planner_study.py --conv A --turns 2 --effort low     # same, lowest effort, first 2 turns
 
 Per turn: uncached input, cache read, cache write, output (thinking inferred = output minus visible text and tool
 inputs at ~3.6 chars/token), planner cost, sub-agent cost; then a breakdown by component at Opus 5.5 prices.
@@ -17,10 +17,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 sys.path.insert(0, str(ROOT))
 
-from app import crew  # noqa: E402
+from app.agents import crew  # noqa: E402
 from app.hub import Hub  # noqa: E402
 from app.meter import Meter  # noqa: E402
 from app.settings import Settings  # noqa: E402

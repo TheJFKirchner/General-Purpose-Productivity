@@ -2,11 +2,11 @@
 
 - Tools: ask_user (file) + explore, read_markdown, write_plan, edit_plan, show_visuals (Launchpad-only, handed over
   at load time)
-- Step agents: the registry's step workers (name, purpose, description; app/crew.py) reach the planner in its first
+- Step agents: the registry's step workers (name, purpose, description; app/agents/crew.py) reach the planner in its first
   message and again, as one short block before the user's next message, when the folder's agents change. The system
   prompt and the cached tool list never change for this. The planner may name an agent per step (write_plan /
   edit_plan `agent`); it never starts one: the orchestrator does, after approval
-- Visual picks (app/visuals.py) reach the planner as short lines prefixed to the user's next message
+- Visual picks (app/agents/visualizer/visuals.py) reach the planner as short lines prefixed to the user's next message
 - No shell, no write/edit, no general file reading: read_markdown only opens .md files inside the project
 - ask_user questions -> question_round cards; round_answer -> session.answer()
 - write_plan -> validated plan.md draft + plan_draft event; only the user's approval starts a run
@@ -20,12 +20,14 @@ from pathlib import Path
 from agentlib import AgentError, tool
 from agentlib.events import Done, Text
 
-from . import astronaut, crew, visuals
-from .meter import Meter
-from .sessionfiles import inside
+from ...meter import Meter
+from ...sessionfiles import inside
+from .. import crew
+from ..explorer import astronaut
+from ..visualizer import libraries
 
 READ_LIMIT = 60_000          # characters returned by read_markdown
-CRITERIA_FILE = Path(__file__).resolve().parent / "planner-promotion.md"
+CRITERIA_FILE = Path(__file__).resolve().parent / "promotion.md"     # app/agents/planner/promotion.md
 
 EDIT_PLAN_SCHEMA = {
     "type": "object",
@@ -52,7 +54,7 @@ EDIT_PLAN_SCHEMA = {
 
 
 # show_visuals: fixed text (the cached tool list never changes in a session); the folder's libraries reach the
-# planner in its first message (visuals.libraries_note)
+# planner in its first message (libraries.libraries_note)
 SHOW_VISUALS_SCHEMA = {
     "type": "object",
     "properties": {
@@ -245,7 +247,7 @@ class PlannerChat:
             lines.append("Earlier sessions (plan.md, flight-log.md, report.md readable with read_markdown): "
                          + ", ".join(earlier))
         lines.append(crew.registry_note(f.project))
-        lines.append(visuals.libraries_note(f.project))
+        lines.append(libraries.libraries_note(f.project))
         return "\n".join(lines) + "\n\n"
 
     def registry_changed(self) -> None:

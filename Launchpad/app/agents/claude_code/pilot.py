@@ -21,13 +21,13 @@ import contextlib
 from agentlib import AgentError, PermissionDecision
 from agentlib.events import Done, Text, TextDelta
 
-from . import crew
-from .activity import summarize
-from .meter import Meter
-from .sessionfiles import SessionFolder, new_session_id
+from ...activity import summarize
+from ...meter import Meter
+from ...sessionfiles import SessionFolder, new_session_id
+from .. import crew
 
 MODES = ("default", "accept_edits", "plan")
-EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+EDIT_TOOLS = set(crew.WRITE_TOOLS)                 # file edits (denied without a card in plan mode)
 FAKE_ASKING = ["Write", "Edit", "NotebookEdit", "Bash", "WebFetch", "AskUserQuestion"]
 STOP_GRACE_S = 5.0
 PLAN_EDIT_DENIED = "Plan mode is on: do not edit files until the user approves your plan."

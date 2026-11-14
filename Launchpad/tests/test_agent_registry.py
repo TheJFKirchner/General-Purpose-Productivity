@@ -8,7 +8,8 @@ import pytest
 
 from agentlib import fake
 
-from app import crew, folderagents
+from app.agents import crew, folder_agents
+from app.agents.drafter import drafter
 from app import plan as plan_mod
 from app.store import Store
 from conftest import PLAN, Client, report, script_orchestrator_sequential
@@ -134,7 +135,7 @@ def test_planner_gets_registry_in_first_message_and_hears_changes(harness, proje
 
 def test_planner_tool_list_and_prompt_do_not_depend_on_the_folder(project, tmp_path):
     """Cache-friendly: the registry is in messages, never in the system prompt or tool definitions."""
-    from app.planner import planner_tools
+    from app.agents.planner.planner import planner_tools
     other = tmp_path / "other"
     other.mkdir()
     agent_file(other, "copy-reviewer", purpose="reviewing")
@@ -276,7 +277,7 @@ def test_reviewing_and_exploring_agents_are_read_only(harness, project):
 def test_read_only_permission_hook_refuses_without_a_card(harness, project):
     """Belt and braces: even if a write reached the permission hook, a read-only agent is refused in code."""
     from agentlib import PermissionRequest
-    from app.run import StepContext
+    from app.agents.builder.builder import StepContext
     agent_file(project, "copy-reviewer", purpose="reviewing")
     h = harness()
     fake.script("launchpad-planner", [[fake.call("write_plan", ONE)]])
@@ -284,7 +285,7 @@ def test_read_only_permission_hook_refuses_without_a_card(harness, project):
     async def go():
         hub, c = await h.start()
         await hub.handle({"type": "user_message", "text": "go"})
-        from app.run import Run
+        from app.agents.orchestrator.run import Run
         run = Run(hub.current)
         entry = next(e for e in crew.registry(project) if e["name"] == "copy-reviewer")
         ctx = StepContext(run, 1, entry)
@@ -364,7 +365,7 @@ def test_agent_draft_returns_a_clean_form(harness, project):
 
 
 def test_drafter_is_lean_haiku_and_tool_free(project):
-    a = crew.load("drafter", engine="claude", project=project, output_schema=folderagents.DRAFT_SCHEMA,
+    a = crew.load("drafter", engine="claude", project=project, output_schema=drafter.DRAFT_SCHEMA,
                   save_conversation=False)
     r = a.resolved_tools()
     assert a.setup == "lean" and a.model == "haiku" and r.builtin_rules == [] and r.custom == []
@@ -495,6 +496,6 @@ def test_chat_from_plan_opens_claude_code_in_plan_mode_with_the_plan(harness, pr
 
 
 def test_folder_agent_name_cannot_clash_with_a_builtin_file_name(project):
-    with pytest.raises(folderagents.AgentFormError):
-        folderagents.create(None, "d", project, {"name": "launchpad-drafter", "description": "x", "purpose": "building",
+    with pytest.raises(folder_agents.AgentFormError):
+        folder_agents.create(None, "d", project, {"name": "launchpad-drafter", "description": "x", "purpose": "building",
                                                  "tools": [], "instructions": "y"})

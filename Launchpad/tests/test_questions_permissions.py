@@ -5,7 +5,7 @@ import pytest
 
 from agentlib import fake
 
-from app.run import deny_match
+from app.agents.builder.deny import deny_match
 from conftest import Client, PLAN, report, script_orchestrator_sequential, script_planner_writes_plan
 
 ONE_STEP = {**PLAN, "steps": PLAN["steps"][:1]}

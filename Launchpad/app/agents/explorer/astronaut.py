@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from agentlib import AgentError
 
-from . import crew
-from .meter import Meter
-from .sessionfiles import one_line
+from ...meter import Meter
+from ...sessionfiles import one_line
+from .. import crew
 
 MAX_LINKS = 8
 

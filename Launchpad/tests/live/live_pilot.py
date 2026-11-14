@@ -1,8 +1,8 @@
 """LIVE check of the regular session (Claude Code chat) on real Claude. Spends tokens (haiku, a few cents). Not collected by pytest.
 
-    python tests/live_pilot.py                 # from the Launchpad folder
-    python tests/live_pilot.py --model sonnet  # the production default model (costs more)
-    python tests/live_pilot.py --turns 5       # only some turns (1-5)
+    python tests/live/live_pilot.py                 # from the Launchpad folder
+    python tests/live/live_pilot.py --model sonnet  # the production default model (costs more)
+    python tests/live/live_pilot.py --turns 5       # only some turns (1-5)
 
 Scratch project in a new temp folder: .claude/settings.json denies editing blocked.txt; .claude/settings.local.json
 allows `mkdir` (checked-in allow rules need Claude Code's folder trust, which a temp folder never has).
@@ -23,7 +23,7 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 sys.path.insert(0, str(ROOT))
 
 import uvicorn  # noqa: E402

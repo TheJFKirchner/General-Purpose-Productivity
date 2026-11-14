@@ -119,7 +119,9 @@ def test_fake_launch_starts_clean_every_time(tmp_path, monkeypatch):
     import argparse
     import shutil
     import tempfile
-    from app import crew, launch, planner
+    from app import launch
+    from app.agents import crew
+    from app.agents.planner import planner
     from app.store import Store
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     monkeypatch.delenv("LAUNCHPAD_HOME", raising=False)

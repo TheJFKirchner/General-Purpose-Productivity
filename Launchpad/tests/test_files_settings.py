@@ -8,7 +8,7 @@ import pytest
 
 from agentlib import fake
 
-from app import crew
+from app.agents import crew
 from app import files as files_mod
 from app.hub import Hub
 from app.settings import Settings
@@ -167,7 +167,8 @@ def test_list_and_read_inside_a_root_and_refuse_outside(tmp_path):
             await hub.handle({"type": "read_file", "root": root, "path": "link.md"})
             e6 = _err(c)
         await hub.handle({"type": "list_dir", "root": "app", "path": ""})
-        await hub.handle({"type": "list_dir", "root": "app", "path": ".claude/agents"})
+        await hub.handle({"type": "list_dir", "root": "app", "path": "app/agents"})
+        await hub.handle({"type": "list_dir", "root": "app", "path": "app/agents/planner"})
         await hub.handle({"type": "read_file", "root": "app", "path": "app/hub.py"})
         e7 = _err(c)
         return c, (e1, e2, e3, e4, e5, e6, e7)
@@ -185,9 +186,12 @@ def test_list_and_read_inside_a_root_and_refuse_outside(tmp_path):
     assert e6 is None or e6["code"] == "not_allowed"
     assert e7["code"] == "not_allowed"
     app_top = {e["name"] for e in c.of("dir_listing")[1]["entries"]}
-    assert app_top == {".claude", "app"}
-    agents = c.of("dir_listing")[2]["entries"]
-    assert {e["name"] for e in agents} == {r["file"] for r in list(crew.ROLES.values()) + list(crew.HELPERS.values())} and all(e["editable"] for e in agents)
+    assert app_top == {"app"}
+    agents = c.of("dir_listing")[2]["entries"]                               # one folder per built-in, nothing else
+    assert {e["name"] for e in agents} == {r["folder"] for r in list(crew.ROLES.values()) + list(crew.HELPERS.values())}
+    assert all(e["type"] == "dir" for e in agents)
+    planner_dir = c.of("dir_listing")[3]["entries"]                          # definition + criteria, no Python code
+    assert {e["name"] for e in planner_dir} == {"agent.md", "promotion.md"} and all(e["editable"] for e in planner_dir)
 
 
 # ------------------------------------------------------------------ editing
@@ -219,7 +223,6 @@ def test_save_conflict_invalid_backups_and_view_only(tmp_path):
         await hub.handle({"type": "list_backups", "root": r, "path": "README.md"})
         items = c.of("backups")[-1]["items"]
         await hub.handle({"type": "read_file", "root": r, "path": "README.md"})
-        cur = c.of("file_content")[-1]["version"]
         await hub.handle({"type": "restore_backup", "root": r, "path": "README.md", "backup_id": items[0]["backup_id"]})
         return c, saved, conflict, av, invalid, view_only, items
 
@@ -257,13 +260,13 @@ def test_plan_file_header_validated(tmp_path):
 def test_edited_agent_file_reaches_crew_list_and_new_sessions(tmp_path, monkeypatch):
     a, b = _dirs(tmp_path)
     agents = tmp_path / "agents-copy"
-    shutil.copytree(crew.AGENTS_DIR, agents)
+    shutil.copytree(crew.AGENTS_DIR, agents, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
     monkeypatch.setattr(crew, "AGENTS_DIR", agents)
     fake.script("launchpad-planner", [[fake.say("hi")]])
 
     async def go():
         hub, c = await _hub(tmp_path, a, b)
-        rel = ".claude/agents/launchpad-planner.md"
+        rel = "app/agents/planner/agent.md"
         await hub.handle({"type": "read_file", "root": "app", "path": rel})
         fc = c.of("file_content")[-1]
         new = fc["text"].replace("You plan work with the user.", "You plan work with the user. CUSTOM LINE.")
@@ -277,10 +280,10 @@ def test_edited_agent_file_reaches_crew_list_and_new_sessions(tmp_path, monkeypa
     assert c.of("file_saved")[-1]["applies"] == "new_sessions"
     planner = next(x for x in c.of("crew_list")[-1]["agents"] if x["role"] == "planner")
     assert "CUSTOM LINE." in planner["instructions"] and planner["root"] == "app" and planner["editable"]
-    assert planner["path"].endswith("launchpad-planner.md") and planner["promotion"]["root"] == "app"
+    assert planner["path"].endswith("planner/agent.md") and planner["promotion"]["root"] == "app"
     assert "CUSTOM LINE." in hub.current.chat.agent.instructions                 # new session: new file
     assert "CUSTOM LINE." not in old.chat.agent.instructions                     # running session keeps its prompt
-    assert "CUSTOM LINE." not in (crew.ROOT / ".claude" / "agents" / "launchpad-planner.md").read_text(encoding="utf-8")
+    assert "CUSTOM LINE." not in (crew.ROOT / "app" / "agents" / "planner" / "agent.md").read_text(encoding="utf-8")
 
 
 def test_saves_keep_each_files_line_endings(tmp_path):
@@ -328,8 +331,9 @@ def test_make_default_folder_via_set_settings(tmp_path):
 
 def test_fake_demo_edits_a_copy_of_the_app_files(tmp_path, monkeypatch):
     import tempfile
-    from app import launch, planner
-    real = {p.name: p.read_bytes() for p in crew.AGENTS_DIR.glob("*.md")}
+    from app import launch
+    from app.agents.planner import planner
+    real = {p.relative_to(crew.AGENTS_DIR).as_posix(): p.read_bytes() for p in crew.AGENTS_DIR.glob("*/*.md")}
     real_criteria = planner.CRITERIA_FILE.read_bytes()
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     for name in ("APP_ROOT", "AGENTS_DIR"):
@@ -340,7 +344,7 @@ def test_fake_demo_edits_a_copy_of_the_app_files(tmp_path, monkeypatch):
 
     async def go():
         hub, c = await _hub(tmp_path, a, b)
-        for rel in (".claude/agents/launchpad-planner.md", "app/planner-promotion.md"):
+        for rel in ("app/agents/planner/agent.md", "app/agents/planner/promotion.md"):
             await hub.handle({"type": "read_file", "root": "app", "path": rel})
             fc = c.of("file_content")[-1]
             await hub.handle({"type": "save_file", "root": "app", "path": rel, "text": fc["text"] + "\nDEMO EDIT\n",
@@ -349,7 +353,9 @@ def test_fake_demo_edits_a_copy_of_the_app_files(tmp_path, monkeypatch):
 
     c = asyncio.run(go())
     assert len(c.of("file_saved")) == 2
-    assert b"DEMO EDIT" in (copy / ".claude" / "agents" / "launchpad-planner.md").read_bytes()
-    assert b"DEMO EDIT" in (copy / "app" / "planner-promotion.md").read_bytes()
-    assert {p.name: p.read_bytes() for p in (crew.ROOT / ".claude" / "agents").glob("*.md")} == real   # untouched
-    assert (crew.ROOT / "app" / "planner-promotion.md").read_bytes() == real_criteria
+    assert b"DEMO EDIT" in (copy / "app" / "agents" / "planner" / "agent.md").read_bytes()
+    assert b"DEMO EDIT" in (copy / "app" / "agents" / "planner" / "promotion.md").read_bytes()
+    assert not list(copy.rglob("*.py"))                                        # definitions + criteria only
+    real_dir = crew.ROOT / "app" / "agents"
+    assert {p.relative_to(real_dir).as_posix(): p.read_bytes() for p in real_dir.glob("*/*.md")} == real   # untouched
+    assert (real_dir / "planner" / "promotion.md").read_bytes() == real_criteria

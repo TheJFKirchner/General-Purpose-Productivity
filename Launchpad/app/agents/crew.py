@@ -1,9 +1,11 @@
-"""Launchpad's agents: standard .claude/agents files + Launchpad-only tools handed over at load time.
+"""Launchpad's agents: standard agent definition files + Launchpad-only tools handed over at load time.
 
 - Files hold standard front matter only (usable in Claude Code / agentlib elsewhere, minus our tools)
 - load(role, ...) = load_claude_agent(file) + Launchpad tools appended to the file's tool list
-- Display names are plain (Planner, Explorer, Orchestrator, Builder, Visualizer, Claude Code); role keys and file
-  names stay as they were (astronaut = the Explorer, pilot = Claude Code, visual = the Visualizer)
+- Built-in definitions: app/agents/<folder>/agent.md (ROLES / HELPERS map role -> folder); the planner's promotion
+  criteria: app/agents/planner/promotion.md
+- Display names are plain (Planner, Explorer, Orchestrator, Builder, Visualizer, Claude Code); role keys and
+  front-matter names stay as they were (astronaut = the Explorer, pilot = Claude Code, visual = the Visualizer)
 - Purposes: planning | exploring | building | reviewing (built-ins: BUILTIN_PURPOSE; folder agents: a `purpose:`
   front-matter field, default building)
 - Registry = the six built-ins + the connected folder's `.claude/agents/*.md` (folder agents). Step workers (what a
@@ -20,32 +22,54 @@ from pathlib import Path
 from agentlib import Agent, load_claude_agent
 from agentlib.loaders import frontmatter
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 APP_ROOT = ROOT                    # where the app's editable files live (a temp copy in the fake demo)
-AGENTS_DIR = ROOT / ".claude" / "agents"
+AGENTS_DIR = ROOT / "app" / "agents"
+AGENTS_REL = "app/agents"          # AGENTS_DIR relative to APP_ROOT (paths shown in the UI)
+CRITERIA_REL = f"{AGENTS_REL}/planner/promotion.md"
+DEFINITION = "agent.md"            # each built-in's definition file inside its folder
 
 
 def use_app_root(root: Path) -> None:
     """Serve the agent files and the promotion criteria from `root` (same layout) instead of the real ones."""
     global APP_ROOT, AGENTS_DIR
-    from . import planner
+    from .planner import planner
     APP_ROOT = Path(root).resolve()
-    AGENTS_DIR = APP_ROOT / ".claude" / "agents"
-    planner.CRITERIA_FILE = APP_ROOT / "app" / "planner-promotion.md"
+    AGENTS_DIR = APP_ROOT / AGENTS_REL
+    planner.CRITERIA_FILE = APP_ROOT / CRITERIA_REL
 
+
+# role -> its folder under app/agents, its front-matter name (fallback when the file is broken), display name
 ROLES = {
-    "planner": {"file": "launchpad-planner.md", "display": "Planner"},
-    "astronaut": {"file": "launchpad-astronaut.md", "display": "Explorer"},
-    "orchestrator": {"file": "launchpad-orchestrator.md", "display": "Orchestrator"},
-    "builder": {"file": "launchpad-builder.md", "display": "Builder"},
-    "pilot": {"file": "launchpad-pilot.md", "display": "Claude Code"},
-    "visual": {"file": "launchpad-visual.md", "display": "Visualizer"},
+    "planner": {"folder": "planner", "name": "launchpad-planner", "display": "Planner"},
+    "astronaut": {"folder": "explorer", "name": "launchpad-astronaut", "display": "Explorer"},
+    "orchestrator": {"folder": "orchestrator", "name": "launchpad-orchestrator", "display": "Orchestrator"},
+    "builder": {"folder": "builder", "name": "launchpad-builder", "display": "Builder"},
+    "pilot": {"folder": "claude_code", "name": "launchpad-pilot", "display": "Claude Code"},
+    "visual": {"folder": "visualizer", "name": "launchpad-visual", "display": "Visualizer"},
 }
 
 # App helpers: loaded like the crew, editable in the File Explorer, but not crew cards and not in the registry
 HELPERS = {
-    "drafter": {"file": "launchpad-drafter.md", "display": "Agent drafter"},
+    "drafter": {"folder": "drafter", "name": "launchpad-drafter", "display": "Agent drafter"},
 }
+
+
+def definition_rel(role: str) -> str:
+    """A built-in's definition path relative to the app root: 'app/agents/<folder>/agent.md'."""
+    return f"{AGENTS_REL}/{(ROLES.get(role) or HELPERS[role])['folder']}/{DEFINITION}"
+
+
+def editable_files(root: Path | None = None) -> dict[str, Path]:
+    """The app's own editable files (every built-in definition + the promotion criteria): relative posix path ->
+    absolute path under root (default APP_ROOT). The File Explorer's "app" root and the fake demo's copy use this."""
+    base = Path(root) if root is not None else APP_ROOT
+    agents = base / AGENTS_REL if root is not None else AGENTS_DIR
+    out = {definition_rel(role): (agents / (ROLES.get(role) or HELPERS[role])["folder"] / DEFINITION).resolve()
+           for role in list(ROLES) + list(HELPERS)}
+    out[CRITERIA_REL] = (base / CRITERIA_REL).resolve()
+    return out
+
 
 PURPOSES = ("planning", "exploring", "building", "reviewing")
 BUILTIN_PURPOSE = {"planner": "planning", "visual": "planning", "astronaut": "exploring",
@@ -53,12 +77,13 @@ BUILTIN_PURPOSE = {"planner": "planning", "visual": "planning", "astronaut": "ex
 STEP_PURPOSES = ("exploring", "building", "reviewing")       # folder agents with these can take plan steps
 READ_ONLY_PURPOSES = ("exploring", "reviewing")
 DEFAULT_PURPOSE = "building"                                 # folder agent file without a purpose field
-DEFAULT_STEP_AGENT = "launchpad-builder"
+DEFAULT_STEP_AGENT = ROLES["builder"]["name"]                # launchpad-builder
 
 # Tools the "new agent" form may offer (tick boxes)
 TOOL_CHOICES = ["Read", "Grep", "Glob", "Write", "Edit", "Bash", "WebFetch", "WebSearch"]
-WRITE_SHELL = ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash")      # never given to read-only agents
-GUARDED = ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash")          # gated for building agents (every call checked)
+WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")             # file writes (the Builder checks the target)
+WRITE_SHELL = WRITE_TOOLS + ("Bash",)      # never given to read-only agents; gated for building ones (every call checked)
+BUILDER_GATED = ["Write", "Edit", "Bash"]                                  # the Builder's own gated tools
 BUILDER_DEFAULT_TOOLS = ["Read", "Write", "Edit", "Grep", "Glob", "Bash"]  # building folder agent with no tools line
 READ_DEFAULT_TOOLS = ["Read", "Grep", "Glob"]                              # read-only folder agent with no tools line
 AGENT_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -95,8 +120,8 @@ def shown_path(path) -> str | None:
 def criteria_root(path, store=None) -> dict:
     """Where the File Explorer can open the criteria file: the app's own copy, a connected folder, or nowhere."""
     p = Path(path).resolve()
-    if p == (APP_ROOT / "app" / "planner-promotion.md").resolve():
-        return {"root": "app", "path": "app/planner-promotion.md", "editable": True}
+    if p == (APP_ROOT / CRITERIA_REL).resolve():
+        return {"root": "app", "path": CRITERIA_REL, "editable": True}
     for d in (store.directories() if store else []):
         try:
             rel = p.relative_to(Path(d["path"]).resolve()).as_posix()
@@ -112,7 +137,7 @@ def display(role: str) -> str:
 
 
 def agent_file(role: str) -> Path:
-    return AGENTS_DIR / (ROLES.get(role) or HELPERS[role])["file"]
+    return AGENTS_DIR / (ROLES.get(role) or HELPERS[role])["folder"] / DEFINITION
 
 
 def load(role: str, *, engine: str, project: Path, tools: list = (), model: str | None = None,
@@ -133,31 +158,31 @@ def folder_display(name: str) -> str:
 
 
 def builtin_name(role: str) -> str:
-    """The agent name (front matter) of a built-in role; the file stem if the file has none."""
-    path = agent_file(role)
+    """The agent name (front matter) of a built-in role; its registered name if the file has none."""
+    fallback = (ROLES.get(role) or HELPERS[role])["name"]
     try:
-        meta, _ = frontmatter.read(path)
-        return str(meta.get("name") or path.stem)
+        meta, _ = frontmatter.read(agent_file(role))
+        return str(meta.get("name") or fallback)
     except Exception:  # noqa: BLE001 -- a broken built-in file still has a name for the registry
-        return path.stem
+        return fallback
 
 
 def builtin_names() -> set[str]:
-    return {builtin_name(r) for r in ROLES} | {Path(r["file"]).stem for r in ROLES.values()} | \
-           {builtin_name(r) for r in HELPERS} | {Path(r["file"]).stem for r in HELPERS.values()}
+    both = {**ROLES, **HELPERS}
+    return {builtin_name(r) for r in both} | {r["name"] for r in both.values()}
 
 
 def _builtin_entries() -> list[dict]:
     out = []
     for role, r in ROLES.items():
-        path = AGENTS_DIR / r["file"]
+        path = agent_file(role)
         try:
             meta, _ = frontmatter.read(path)
         except Exception:  # noqa: BLE001
             meta = {}
-        out.append({"name": str(meta.get("name") or path.stem), "display_name": r["display"],
+        out.append({"name": str(meta.get("name") or r["name"]), "display_name": r["display"],
                     "purpose": BUILTIN_PURPOSE[role], "description": str(meta.get("description") or "").strip(),
-                    "builtin": True, "role": role, "path": path, "rel": f".claude/agents/{r['file']}",
+                    "builtin": True, "role": role, "path": path, "rel": definition_rel(role),
                     "model": None if meta.get("model") in (None, "inherit") else str(meta.get("model")),
                     "problems": [], "step_worker": role == "builder"})
     return out
@@ -166,7 +191,7 @@ def _builtin_entries() -> list[dict]:
 def folder_agents(folder: Path | None) -> list[dict]:
     """The connected folder's own agents (.claude/agents/*.md), built-in names skipped (e.g. Launchpad's own
     folder). Broken files are listed with their problems and never run."""
-    from .files import agent_problems
+    from ..files import agent_problems
     if folder is None:
         return []
     d = Path(folder) / ".claude" / "agents"
@@ -280,7 +305,7 @@ def step_worker_tools(file_tools: list | None, purpose: str) -> tuple[list[str],
             tools.append(t)
     if read_only:
         return tools, [], list(WRITE_SHELL)
-    return tools, [t for t in tools if t in GUARDED], []
+    return tools, [t for t in tools if t in WRITE_SHELL], []
 
 
 def load_step_worker(entry: dict, *, engine: str, project: Path, tools: list, **overrides) -> Agent:
@@ -313,23 +338,24 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
               dir_id: str | None = None) -> dict:
     """crew_list event: each agent as Launchpad runs it (tools built with a dummy context; nothing runs), then the
     folder's own agents. folder = the connected folder whose agents are included (default: project)."""
-    from .astronaut import ASTRONAUT_SCHEMA
-    from .pilot import pilot_overrides
-    from .planner import planner_models, planner_tools, promotion_criteria
-    from .settings import Settings
+    from ..settings import Settings
+    from .builder.builder import builder_tools
+    from .claude_code.pilot import pilot_overrides
+    from .explorer.astronaut import ASTRONAUT_SCHEMA
+    from .orchestrator.run import orchestrator_tools
+    from .planner.planner import planner_models, planner_tools, promotion_criteria
     settings = settings or Settings(project=project, engine=engine)
     folder = Path(folder or project)
     uses = store.uses() if store is not None else {}
     start, top = planner_models(settings)
     criteria, criteria_path = promotion_criteria(settings)
-    from .run import builder_tools, orchestrator_tools
     built = {
         "planner": load("planner", engine=engine, project=project, model=start,
                         tools=planner_tools(None, criteria=criteria if start != top else None)),
         "astronaut": load("astronaut", engine=engine, project=project, output_schema=ASTRONAUT_SCHEMA),
         "orchestrator": load("orchestrator", engine=engine, project=project, tools=orchestrator_tools(None)),
         "builder": load("builder", engine=engine, project=project, tools=builder_tools(None),
-                        gated_tools=["Write", "Edit", "Bash"], engine_prompt=True),
+                        gated_tools=list(BUILDER_GATED), engine_prompt=True),
         "pilot": load("pilot", engine=engine, project=project, **pilot_overrides(engine)),
         "visual": load("visual", engine=engine, project=project, save_conversation=False),
     }
@@ -360,7 +386,7 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
 
 def _folder_card(e: dict, *, engine: str, folder: Path, dir_id: str | None, uses: dict) -> dict:
     """crew_list entry for a folder agent (same fields as the built-ins where they apply)."""
-    from .run import builder_tools
+    from .builder.builder import builder_tools
     card = {"name": e["name"], "display_name": e["display_name"], "role": None, "purpose": e["purpose"],
             "uses": uses.get(e["name"], 0), "builtin": False, "description": e["description"], "model": e["model"],
             "source_path": str(e["path"]), "root": dir_id, "path": e["rel"], "editable": True,

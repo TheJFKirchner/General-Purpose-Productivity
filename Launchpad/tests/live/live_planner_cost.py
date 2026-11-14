@@ -1,7 +1,7 @@
 """LIVE cost of the Opus planner with vs without the Claude Code preset (a few tens of cents). Not collected by pytest.
 
-    python tests/live_planner_cost.py --variant lean      # as Launchpad runs it: its own prompt only
-    python tests/live_planner_cost.py --variant preset    # hypothetical: Claude Code preset + its prompt appended
+    python tests/live/live_planner_cost.py --variant lean      # as Launchpad runs it: its own prompt only
+    python tests/live/live_planner_cost.py --variant preset    # hypothetical: Claude Code preset + its prompt appended
 
 Same three-turn exchange each time in a scratch Flask project: a planning request (expects an ask_user round),
 the round answered with the recommendations, then "explore once and draft the plan" (explore + write_plan).
@@ -16,12 +16,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 sys.path.insert(0, str(ROOT))
 
 from agentlib.engines import base  # noqa: E402
 
-from app import crew  # noqa: E402
+from app.agents import crew  # noqa: E402
 from app.hub import Hub  # noqa: E402
 from app.meter import Meter  # noqa: E402
 from app.settings import Settings  # noqa: E402

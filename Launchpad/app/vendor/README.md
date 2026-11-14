@@ -28,7 +28,7 @@ and inlines it into the sealed frame (app/server.py, frontend/src/views/Visuals/
 
 - Looked for in the connected folder's `.venv` (`Lib/site-packages` or `lib/python3*/site-packages`), then in
   Launchpad's own environment (its site-packages and user site-packages); never imported or run as Python
-- Checks (app/visuals.py `library_files`): path resolved (symlinks, "..") and still inside the package folder, and for
+- Checks (app/agents/visualizer/libraries.py `library_files`): path resolved (symlinks, "..") and still inside the package folder, and for
   a `.venv` inside the connected folder too; a plain `.js` file of 1 KB to 20 MB; not HTML; names its library in its
   first 4 KB. Served only with the page's access code
 - Not installed -> left out of the set's `libraries`; a set asking for it is drawn in ECharts, styled like it

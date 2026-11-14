@@ -1,6 +1,6 @@
 """LIVE check of the visual sidecar on real Claude (planner opus turn + visual agent haiku; a few cents). Not collected by pytest.
 
-    python tests/live_visuals.py [--out <folder>]     # from the Launchpad folder
+    python tests/live/live_visuals.py [--out <folder>]     # from the Launchpad folder
 
 A real planner turn calls show_visuals; the visual agent renders three ECharts options that must pass
 validation; one tweak ("same but horizontal") revises option 1. Prints per-option timings and cost and copies
@@ -17,7 +17,7 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 sys.path.insert(0, str(ROOT))
 
 import uvicorn  # noqa: E402
