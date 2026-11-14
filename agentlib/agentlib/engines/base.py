@@ -2,6 +2,8 @@
 
 - Engine.open(agent, resume, fork, cost_base) -> EngineSession (start / turn / interrupt / close)
 - EngineSession.turn(message) is an async generator of events (events.py) ending with Done(reply)
+- EngineSession.set_permission_mode(mode) (capability mode_switch; default raises CapabilityError) and
+  .permission_mode (current mode); Session checks check_mode_switch() first
 - Capabilities: what the engine can do; Engine.check() raises EngineUnavailable (engine cannot run at all) or
   CapabilityError (agent needs something the engine lacks) before a run
 - TurnState: runs custom tools + ask_user the same way on every engine and builds the Reply
@@ -45,6 +47,11 @@ class Capabilities:
     structured_output: bool = False   # Agent.output_schema: JSON reply checked against a schema -> Reply.data
     unsaved: bool = False         # Agent.save_conversation=False: the conversation is not stored (cannot resume)
     list_models: bool = False     # Engine.list_models(): models on offer, without a request
+    accept_edits: bool = False    # permission mode "accept_edits": edits inside the working folders run unasked
+    plan_mode: bool = False       # permission mode "plan": explore + propose a plan (on_permission kind "plan")
+    mode_switch: bool = False     # Session.set_permission_mode(): change the permission mode on a live session
+    engine_prompt: bool = False   # Agent.engine_prompt: the engine's own agent prompt + instructions, in lean setup
+    model_switch: bool = False    # Session.set_model(): change the model on a live session (between turns or mid-turn)
 
 
 def requirements(agent, *, fork: bool = False, resume: bool = False) -> dict[str, bool]:
@@ -61,13 +68,32 @@ def requirements(agent, *, fork: bool = False, resume: bool = False) -> dict[str
         "project_setup": agent.setup == "project",
         "budget": agent.max_budget_usd is not None,
         "never_ask": agent.permission_mode == "never_ask",
+        "accept_edits": agent.permission_mode == "accept_edits",
+        "plan_mode": agent.permission_mode == "plan",
         "structured_output": agent.output_schema is not None,
         "unsaved": not agent.save_conversation,
+        "engine_prompt": bool(getattr(agent, "engine_prompt", False)) and agent.setup == "lean",
     }
+
+
+MODE_CAPABILITY = {"never_ask": "never_ask", "accept_edits": "accept_edits", "plan": "plan_mode"}
+
+
+def check_mode_switch(engine_name: str, caps: Capabilities, mode: str) -> None:
+    """Session.set_permission_mode(mode) guard: valid mode, engine can switch and can run that mode."""
+    from ..permissions import check_mode
+    check_mode(mode)
+    missing = [] if caps.mode_switch else ["mode_switch"]
+    need = MODE_CAPABILITY.get(mode)
+    if need and not getattr(caps, need):
+        missing.append(need)
+    if missing:
+        raise CapabilityError(f"engine '{engine_name}' cannot do: {', '.join(missing)} (set_permission_mode({mode!r}))")
 
 
 class EngineSession(ABC):
     session_id: str | None = None
+    permission_mode: str | None = None     # current permission mode (engines that track it set this)
 
     @property
     def info(self) -> SessionInfo:
@@ -82,6 +108,14 @@ class EngineSession(ABC):
 
     async def interrupt(self) -> None:
         return None
+
+    async def set_permission_mode(self, mode: str) -> None:
+        """Change the permission mode for the rest of this conversation (capability mode_switch)."""
+        raise CapabilityError(f"engine session {type(self).__name__} cannot do: mode_switch")
+
+    async def set_model(self, model: str) -> None:
+        """Change the model for the rest of this conversation (capability model_switch)."""
+        raise CapabilityError(f"engine session {type(self).__name__} cannot do: model_switch")
 
     @abstractmethod
     async def close(self) -> None: ...
@@ -216,7 +250,8 @@ class TurnState:
 
     def reply(self, *, session_id: str | None, usage: Usage, cost_usd: float = 0.0, total_cost_usd: float = 0.0,
               model: str | None = None, stop_reason: str | None = None, error: str | None = None,
-              api_calls: int | None = None, error_kind: str | None = None, data=None) -> Reply:
+              api_calls: int | None = None, error_kind: str | None = None, data=None,
+              usage_by_model: dict | None = None) -> Reply:
         status: Status = "error" if error else ("needs_input" if self.questions else "done")
         kind = (error_kind or "other") if error else None
         return Reply(status=status, text="\n\n".join(self.texts), questions=list(self.questions),
@@ -224,4 +259,6 @@ class TurnState:
                      total_cost_usd=round(total_cost_usd, 6), tool_calls=list(self.calls.values()),
                      api_calls=api_calls if api_calls is not None else len(self.message_ids),
                      duration_s=round(time.monotonic() - self.t0, 2), engine=self.engine, model=model,
-                     stop_reason=stop_reason, error=error, error_kind=kind, data=None if error else data)
+                     stop_reason=stop_reason, error=error, error_kind=kind, data=None if error else data,
+                     usage_by_model=dict(usage_by_model or ({model: {"usage": usage, "cost_usd": round(cost_usd, 6)}}
+                                                            if model else {})))

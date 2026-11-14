@@ -16,7 +16,17 @@
 - Session.info comes from the CLI's init SystemMessage (tools offered, MCP servers, model)
 - max_budget_usd -> --max-budget-usd (the CLI checks its running total per process, i.e. per opened session);
   result subtype error_max_budget_usd -> Reply.error_kind "budget" (error_max_turns -> "max_turns")
-- permission_mode="never_ask" -> CLI "dontAsk" (no can_use_tool callback)
+- permission_mode: "default" -> "default", "never_ask" -> "dontAsk" (no can_use_tool callback), "accept_edits" ->
+  "acceptEdits", "plan" -> "plan" (SDK_MODES). set_permission_mode(): client.set_permission_mode on the worker
+  (between turns, via self._ops) or directly like interrupt() while a turn runs; the current mode is kept in
+  self.permission_mode, so a reconnect (resume) starts in it. CLI "status" system messages update it too
+- Plan approval: the CLI asks can_use_tool for ExitPlanMode -> PermissionRequest(kind="plan", plan=input["plan"]);
+  allow -> PermissionUpdate setMode (decision.mode, default "default") so the session leaves plan mode; deny ->
+  stays in plan mode, the message (prompts/plan_rejected.md) tells the model to keep planning. ExitPlanMode is
+  never pre-approved (kept out of allowed_tools); with a tools list it is offered when the session starts in plan
+- Suggestions: ToolPermissionContext.suggestions -> PermissionSuggestion. always_allow -> addRules at
+  destination "session" (whole tool, unchanged) or "localSettings" (remember="project_local": the CLI's suggested
+  rules, else the whole tool; written to <cwd>/.claude/settings.local.json). decision.mode -> setMode (session)
 - output_schema -> output_format json_schema (CLI --json-schema); ResultMessage.structured_output is checked again
   with structured.check_output (falls back to parsing the reply text) -> Reply.data / error_kind "output_shape"
 - save_conversation=False -> --no-session-persistence
@@ -45,20 +55,27 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import PermissionRuleValue
 
-from .. import local_setup
+from .. import local_setup, prompt_files
 from .. import skills as skills_mod
 from .. import structured
 from ..errors import AgentError, ConversationMissing
 from ..events import Done, RateLimit, Text, TextDelta, ToolCall, ToolResult
 from ..models import ModelInfo
-from ..permissions import PermissionRequest, normalize
+from ..permissions import PLAN_APPROVED_MODE, PermissionRequest, PermissionSuggestion, resolve
 from ..reply import Reply, Usage
 from ..session import SessionInfo
-from ..tools import full_name, short_name
+from ..tools import base_tool_name, full_name, short_name
 from .base import Capabilities, Engine, EngineSession, TurnState
 
 ARGV_PROMPT_LIMIT = 30_000          # chars; above this the system prompt goes through a file
 STRUCTURED_TOOL = "StructuredOutput"  # the tool the CLI adds for --json-schema (hidden from events)
+PLAN_TOOL = "ExitPlanMode"          # the CLI's "here is my plan, may I proceed?" tool (plan mode)
+SDK_MODES = {"default": "default", "never_ask": "dontAsk", "accept_edits": "acceptEdits", "plan": "plan"}
+_FROM_SDK_MODE = {v: k for k, v in SDK_MODES.items()}
+_WHERE = {"session": "session", "localSettings": "project_local", "projectSettings": "project_shared",
+          "userSettings": "user"}
+_KINDS = {"addRules": "add_rules", "replaceRules": "replace_rules", "removeRules": "remove_rules",
+          "setMode": "set_mode", "addDirectories": "add_dirs", "removeDirectories": "remove_dirs"}
 LEAN_ENV = {
     "ENABLE_TOOL_SEARCH": "false",              # few tools: load them all up front
     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
@@ -154,7 +171,9 @@ def parse_models(info: dict | None) -> list[ModelInfo]:
 class ClaudeEngine(Engine):
     name = "claude"
     capabilities = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True,
-                                structured_output=True, unsaved=True, list_models=True)
+                                structured_output=True, unsaved=True, list_models=True,
+                                accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
+                                model_switch=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "ClaudeSession":
         return ClaudeSession(agent, resume=resume, fork=fork, cost_base=cost_base)
@@ -203,9 +222,13 @@ class ClaudeSession(EngineSession):
         self._state: TurnState | None = None
         self._prompt_file: str | None = None
         self.model: str | None = agent.model
+        self.requested_model: str | None = None     # set by set_model(); also used when a process restarts
+        self._model_totals: dict[str, tuple] = {}   # model id -> (Usage, cost) as last reported (running totals)
         self.init_info: dict = {}            # the CLI's init message: tools offered, MCP servers, model, ...
         self._hidden_calls: set[str] = set()  # StructuredOutput tool-use ids (output_schema), kept out of events
         self._structured_input = None         # this turn's StructuredOutput input (fallback for structured_output)
+        self.permission_mode: str = agent.permission_mode   # current mode; options() starts a process in it
+        self._busy = False                    # a turn is running on the worker
 
     @property
     def info(self) -> SessionInfo:
@@ -222,9 +245,9 @@ class ClaudeSession(EngineSession):
         text = self.agent.instructions.strip()
         if self.skills:
             text = (text + "\n\n" + skills_mod.index_text(self.skills)).strip()
-        if self.agent.setup == "project":
+        if self.agent.setup == "project" or self.agent.engine_prompt:     # Claude Code's own prompt + ours appended
             if len(text) > ARGV_PROMPT_LIMIT:
-                raise AgentError("instructions too long for project setup (Windows ~32K command-line limit)")
+                raise AgentError("instructions too long to append to the claude_code preset (Windows ~32K command-line limit)")
             sp = {"type": "preset", "preset": "claude_code"}
             return {**sp, "append": text} if text else sp
         if len(text) <= ARGV_PROMPT_LIMIT:
@@ -262,7 +285,9 @@ class ClaudeSession(EngineSession):
     def options(self, *, resume: str | None) -> ClaudeAgentOptions:
         a, r = self.agent, self.resolved
         lean = a.setup == "lean"
-        allowed = list(r.builtin_rules) + [full_name(t.name, self.server) for t in r.custom] + list(r.mcp_rules)
+        allowed = list(r.approved_rules) + [full_name(t.name, self.server) for t in r.custom] + list(r.mcp_rules)
+        allowed = [x for x in allowed if base_tool_name(x) != PLAN_TOOL]   # a plan always goes to the app
+        mode = self.permission_mode
         mcp: dict = {}
         if r.custom:
             mcp[self.server] = self._build_server()
@@ -278,6 +303,8 @@ class ClaudeSession(EngineSession):
                 tools = tools + ["Read"]
             if not lean and a.skills and "Skill" not in tools:
                 tools = tools + ["Skill"]
+            if mode == "plan" and PLAN_TOOL not in tools:
+                tools = tools + [PLAN_TOOL]           # plan mode needs the tool that proposes the plan
 
         hooks: dict = {}
         stoppers = [full_name(t.name, self.server) for t in r.custom if t.ends_turn]
@@ -287,14 +314,16 @@ class ClaudeSession(EngineSession):
             hooks["PreToolUse"] = [HookMatcher(matcher="Read", hooks=[self._skill_read_hook])]
 
         add_dirs = [str(Path(d)) for d in a.add_dirs] + [str(d) for d in self._skill_dirs]
-        never_ask = a.permission_mode == "never_ask"
+        never_ask = mode == "never_ask"
         conn = local_setup.require("claude")      # this user's sign-in (setup/local.toml); SetupError if broken
         kw = dict(
             tools=tools, allowed_tools=allowed, system_prompt=self._system_prompt(), mcp_servers=mcp,
             # never_ask -> "dontAsk": the CLI denies anything not pre-approved itself; no permission callback
-            permission_mode="dontAsk" if never_ask else "default",
-            can_use_tool=None if never_ask else self._can_use_tool, hooks=hooks or None,
-            include_partial_messages=True, add_dirs=add_dirs, model=a.model, max_turns=a.max_turns,
+            permission_mode=SDK_MODES[mode],
+            # (kept when a hook exists, so switching back out of never_ask mid-session still reaches it)
+            can_use_tool=None if never_ask and a.on_permission is None else self._can_use_tool,
+            hooks=hooks or None,
+            include_partial_messages=True, add_dirs=add_dirs, model=self.requested_model or a.model, max_turns=a.max_turns,
             disallowed_tools=list(a.disallowed_tools),
             # local sign-in first, then lean defaults, then what the caller passed explicitly (caller wins)
             env={**conn.env, **(LEAN_ENV if lean else {}), **a.env},
@@ -332,7 +361,10 @@ class ClaudeSession(EngineSession):
     # ------------------------------------------------------------------ hooks / permissions
     async def _stop_hook(self, inp, tool_use_id, ctx):
         if self._state is not None and self._state.stop_requested:
-            return {"continue_": False, "stopReason": "waiting for the user"}
+            # ask_user parks for the user; any other ends_turn tool just ends the turn (the model sees this
+            # reason next turn, so it must not claim a user wait that is not happening)
+            name = "stop_waiting_user" if self._state.questions else "stop_tool_ended_turn"
+            return {"continue_": False, "stopReason": prompt_files.load(name)}
         return {}
 
     def _abs(self, p: str) -> Path:
@@ -348,23 +380,78 @@ class ClaudeSession(EngineSession):
             "permissionDecisionReason": "" if ok else "This agent may only read files inside its skill folders.",
         }}
 
+    def _rule_text(self, r) -> str:
+        """SDK PermissionRuleValue -> rule in the Agent(tools=) syntax (custom tools by short name)."""
+        name = short_name(str(getattr(r, "tool_name", "") or ""), self.server)
+        content = getattr(r, "rule_content", None)
+        return f"{name}({content})" if content else name
+
+    def _rule_value(self, rule: str) -> PermissionRuleValue:
+        """'Bash(npm test:*)' -> PermissionRuleValue('Bash', 'npm test:*'); custom short names -> mcp__ names."""
+        name = base_tool_name(rule)
+        rest = rule.strip()[len(name):].strip()
+        content = rest[1:-1].strip() if rest.startswith("(") and rest.endswith(")") else None
+        if any(t.name == name for t in self.resolved.custom):
+            name = full_name(name, self.server)
+        return PermissionRuleValue(tool_name=name, rule_content=content if content not in ("", "*") else None)
+
+    def _suggestion(self, u) -> PermissionSuggestion | None:
+        """SDK PermissionUpdate -> engine-neutral PermissionSuggestion (None if it is not one)."""
+        kind = getattr(u, "type", None)
+        if not kind:
+            return None
+        mode = getattr(u, "mode", None)
+        dest = getattr(u, "destination", None) or "session"
+        return PermissionSuggestion(kind=_KINDS.get(kind, str(kind)),
+                                    rules=[self._rule_text(r) for r in getattr(u, "rules", None) or []],
+                                    behavior=getattr(u, "behavior", None),
+                                    mode=_FROM_SDK_MODE.get(mode, mode) if mode else None,
+                                    dirs=[str(d) for d in getattr(u, "directories", None) or []],
+                                    where=_WHERE.get(dest, str(dest)))
+
+    def _remember(self, tool_name: str, d, suggestions: list) -> list:
+        """always_allow -> addRules update: session (whole tool unless rules given) or project local settings
+        (rules given, else the CLI's suggested allow rules for this call, else the whole tool)."""
+        dest = "localSettings" if d.remember == "project_local" else "session"
+        if d.rules is not None:
+            values = [self._rule_value(x) for x in d.rules]
+        elif d.remember == "project_local":
+            values = [rv for s in suggestions if getattr(s, "type", None) == "addRules"
+                      and (getattr(s, "behavior", None) or "allow") == "allow" for rv in getattr(s, "rules", None) or []]
+        else:
+            values = []
+        values = values or [PermissionRuleValue(tool_name=tool_name)]
+        return [PermissionUpdate(type="addRules", rules=values, behavior="allow", destination=dest)]
+
     async def _can_use_tool(self, tool_name: str, inp: dict, ctx):
         hook = self.agent.on_permission
         if hook is None:
             return PermissionResultDeny(message=f"{tool_name} is not allowed for this agent.")
-        req = PermissionRequest(agent=self.agent.name, tool=short_name(tool_name, self.server), input=dict(inp or {}),
-                                reason=getattr(ctx, "decision_reason", None))
+        inp = dict(inp or {})
+        plan = tool_name == PLAN_TOOL
+        raw_suggestions = list(getattr(ctx, "suggestions", None) or [])
+        req = PermissionRequest(agent=self.agent.name, tool=short_name(tool_name, self.server), input=inp,
+                                reason=getattr(ctx, "decision_reason", None), kind="plan" if plan else "tool",
+                                plan=str(inp.get("plan") or "") if plan else None,
+                                suggestions=[s for s in map(self._suggestion, raw_suggestions) if s is not None],
+                                mode=self.permission_mode, call_id=getattr(ctx, "tool_use_id", None),
+                                title=getattr(ctx, "title", None))
         decision = hook(req)
         if inspect.isawaitable(decision):
             decision = await decision
-        decision = normalize(decision)
-        if decision == "allow":
-            return PermissionResultAllow()
-        if decision == "always_allow":
-            return PermissionResultAllow(updated_permissions=[PermissionUpdate(
-                type="addRules", rules=[PermissionRuleValue(tool_name=tool_name)], behavior="allow",
-                destination="session")])
-        return PermissionResultDeny(message=f"The user denied {tool_name}.")
+        d = resolve(decision)
+        if d.decision == "deny":
+            fb = " " + prompt_files.fill("plan_feedback", feedback=d.message) if d.message else ""
+            msg = prompt_files.fill("plan_rejected", feedback=fb) if plan else \
+                prompt_files.fill("permission_denied", tool=tool_name, feedback=fb)
+            return PermissionResultDeny(message=msg)
+        updates = self._remember(tool_name, d, raw_suggestions) if d.decision == "always_allow" and not plan else []
+        mode = d.mode or (PLAN_APPROVED_MODE if plan else None)
+        if mode is not None:
+            updates.append(PermissionUpdate(type="setMode", mode=SDK_MODES[mode], destination="session"))
+            self.permission_mode = mode
+        return PermissionResultAllow(updated_input=d.input if d.input is not None and not plan else None,
+                                     updated_permissions=updates or None)
 
     # ------------------------------------------------------------------ public (any task)
     def _ensure_worker(self) -> None:
@@ -397,6 +484,58 @@ class ClaudeSession(EngineSession):
             except Exception:  # noqa: BLE001
                 pass
 
+    async def set_permission_mode(self, mode: str) -> None:
+        old, self.permission_mode = self.permission_mode, mode
+        if self._client is None or self._worker is None or self._worker.done():
+            return                                  # no live process: options() starts the next one in this mode
+        try:
+            if self._busy:                          # mid-turn: a control request, sent like interrupt()
+                await self._client.set_permission_mode(SDK_MODES[mode])
+            else:                                   # between turns: on the worker that owns the client
+                fut = asyncio.get_running_loop().create_future()
+                await self._ops.put(("set_mode", mode, fut))
+                await fut
+        except Exception as e:  # noqa: BLE001
+            self.permission_mode = old
+            raise AgentError(f"could not change the permission mode: {error_text(e)}", repr(e)) from e
+
+    async def set_model(self, model: str) -> None:
+        old, self.requested_model = self.requested_model, model
+        if self._client is None or self._worker is None or self._worker.done():
+            return                                  # no live process: options() starts the next one on this model
+        try:
+            if self._busy:                          # mid-turn: a control request; the next model call uses it
+                await self._client.set_model(model)
+            else:
+                fut = asyncio.get_running_loop().create_future()
+                await self._ops.put(("set_model", model, fut))
+                await fut
+        except Exception as e:  # noqa: BLE001
+            self.requested_model = old
+            raise AgentError(f"could not change the model: {error_text(e)}", repr(e)) from e
+
+    def _turn_usage_by_model(self, res) -> dict:
+        """ResultMessage.model_usage -> this turn per model. The CLI reports running totals per process (like
+        total_cost_usd): take the difference from the last report; a smaller figure means a new process."""
+        raw = getattr(res, "model_usage", None) or {}
+        out: dict = {}
+        fields_ = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
+        for mid, v in raw.items():
+            if not isinstance(v, dict):
+                continue
+            u = Usage(input_tokens=_num(v.get("inputTokens")), output_tokens=_num(v.get("outputTokens")),
+                      cache_read_tokens=_num(v.get("cacheReadInputTokens")),
+                      cache_write_tokens=_num(v.get("cacheCreationInputTokens")))
+            cost = float(v.get("costUSD") or 0.0)
+            prev = self._model_totals.get(mid)
+            self._model_totals[mid] = (u, cost)
+            if prev is not None and cost >= prev[1]:
+                u = Usage(**{f: max(0, getattr(u, f) - getattr(prev[0], f)) for f in fields_})
+                cost -= prev[1]
+            if cost > 0 or any(getattr(u, f) for f in fields_):
+                out[mid] = {"usage": u, "cost_usd": round(cost, 6)}
+        return out
+
     async def close(self) -> None:
         if self._worker is not None and not self._worker.done():
             fut = asyncio.get_running_loop().create_future()
@@ -424,6 +563,22 @@ class ClaudeSession(EngineSession):
                 try:
                     if self._client is None:
                         await self._connect()
+                    out.set_result(None)
+                except BaseException as e:  # noqa: BLE001
+                    out.set_exception(e)
+                continue
+            if op == "set_model":
+                try:
+                    if self._client is not None:
+                        await self._client.set_model(arg)
+                    out.set_result(None)
+                except BaseException as e:  # noqa: BLE001
+                    out.set_exception(e)
+                continue
+            if op == "set_mode":
+                try:
+                    if self._client is not None:
+                        await self._client.set_permission_mode(SDK_MODES[arg])
                     out.set_result(None)
                 except BaseException as e:  # noqa: BLE001
                     out.set_exception(e)
@@ -465,6 +620,7 @@ class ClaudeSession(EngineSession):
         self._state = state
         self._structured_input = None
         res: ResultMessage | None = None
+        self._busy = True
         try:
             async with asyncio.timeout(self.agent.timeout_s):
                 await self._client.query(message)
@@ -489,6 +645,7 @@ class ClaudeSession(EngineSession):
             raise AgentError(msg, repr(e), reply=self._failed_reply(state, msg)) from e
         finally:
             self._state = None
+            self._busy = False
         if res is None:
             await self._disconnect(failed=True)
             msg = "Claude stream ended without a result"
@@ -506,6 +663,7 @@ class ClaudeSession(EngineSession):
         await q.put(Done(state.reply(session_id=self.session_id, usage=normalize_usage(res.usage), cost_usd=cost,
                                      total_cost_usd=total, model=self.model, stop_reason=res.stop_reason,
                                      error=error, error_kind=kind, data=data,
+                                     usage_by_model=self._turn_usage_by_model(res) or None,
                                      api_calls=len(state.message_ids) or res.num_turns)))
 
     def _ending(self, res: ResultMessage, state: TurnState) -> tuple[str | None, str | None, object]:
@@ -583,4 +741,8 @@ class ClaudeSession(EngineSession):
             self.init_info = dict(m.data or {})
             if self.init_info.get("session_id"):
                 self.session_id = self.init_info["session_id"]
+        elif isinstance(m, SystemMessage) and isinstance(m.data, dict):
+            pm = m.data.get("permissionMode")     # "status" message: the CLI changed mode (e.g. plan approved)
+            if pm in _FROM_SDK_MODE:
+                self.permission_mode = _FROM_SDK_MODE[pm]
         return []

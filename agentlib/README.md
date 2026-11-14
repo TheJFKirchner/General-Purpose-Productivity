@@ -74,8 +74,19 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `ToolAnnotations(readOnlyHint=True)` | `@tool(read_only=True)` | `agentlib/tools.py` |
 | Hook that stops after a tool (`continue_=False`) | `@tool(ends_turn=True)` | `agentlib/tools.py` |
 | External MCP servers: `mcp_servers={...}` + `allowed_tools` | `Agent(mcp_servers={"db": {config} or "path/server.py"})`; all its tools pre-approved | `agentlib/agent.py`, `agentlib/engines/claude.py` |
-| `can_use_tool` + `PermissionResultAllow` / `PermissionResultDeny` / `PermissionUpdate` | `Agent(on_permission=fn)`; `fn(PermissionRequest) -> "allow" \| "deny" \| "always_allow"` (or bool), sync or async | `agentlib/permissions.py` |
+| `can_use_tool` + `PermissionResultAllow` / `PermissionResultDeny` / `PermissionUpdate` | `Agent(on_permission=fn)`; `fn(PermissionRequest) -> "allow" \| "deny" \| "always_allow"` (or bool) or a `PermissionDecision`, sync or async | `agentlib/permissions.py` |
+| `tools=[...]` (offered) without the matching `allowed_tools` entry (asks every call) | `Agent(gated_tools=["Bash"])` + `on_permission` | `agentlib/agent.py`, `agentlib/tools.py` (`ResolvedTools.approved_rules`) |
 | `ToolPermissionContext.decision_reason` | `PermissionRequest.reason` | `agentlib/permissions.py` |
+| `ToolPermissionContext.suggestions` (`PermissionUpdate` list) / `.tool_use_id` / `.title` | `PermissionRequest.suggestions` (`PermissionSuggestion(kind, rules, behavior, mode, dirs, where)`) / `.call_id` / `.title`; also `.mode` (mode when asked) | `agentlib/permissions.py`, `agentlib/engines/claude.py` (`_suggestion`) |
+| `PermissionResultAllow(updated_permissions=[PermissionUpdate(addRules, destination="session" \| "localSettings")])` | `PermissionDecision("always_allow", remember="session" \| "project_local", rules=None \| [...])`; `"session"` = plain `"always_allow"` | `agentlib/permissions.py`, `agentlib/engines/claude.py` (`_remember`) |
+| `PermissionResultDeny(message=...)` | `PermissionDecision("deny", message="...")` (told to the model) | `agentlib/permissions.py` |
+| `PermissionResultAllow(updated_input=...)` (e.g. answering `AskUserQuestion`: `{questions, answers: {question: label}}`) | `PermissionDecision("allow", input={...})`: the tool runs with this input instead | `agentlib/permissions.py`, `agentlib/engines/claude.py` |
+| `permission_mode="acceptEdits"` / `"plan"` | `Agent(permission_mode="accept_edits" \| "plan")` | `agentlib/agent.py`, `agentlib/engines/claude.py` (`SDK_MODES`) |
+| `client.set_permission_mode(mode)` | `await s.set_permission_mode(mode)` (between turns or mid-turn); current mode `s.permission_mode` | `agentlib/session.py`, `agentlib/engines/claude.py` |
+| `client.set_model(model)` (mid-session model change) | `await s.set_model("opus")` (between turns or mid-turn: the next model call uses it; conversation carries over; the new model writes it to its own cache once); current `s.model`. Capability `model_switch` | `agentlib/session.py`, `agentlib/engines/claude.py` |
+| `ResultMessage.model_usage` (per-model usage) | `Reply.usage_by_model` = this turn per model id: `{"usage": Usage, "cost_usd": float}` (Claude reports running totals; agentlib turns them into per-turn figures) | `agentlib/reply.py`, `agentlib/engines/claude.py` (`_turn_usage_by_model`) |
+| `ExitPlanMode` reaching `can_use_tool` + `PermissionUpdate(type="setMode")` | `on_permission` gets `PermissionRequest(kind="plan", plan=text)`; approve: `PermissionDecision("allow", mode="accept_edits")` (plain allow -> `"default"`); reject: `PermissionDecision("deny", message=feedback)` (stays in plan mode) | `agentlib/permissions.py`, `agentlib/engines/claude.py` (`_can_use_tool`) |
+| `PermissionResultAllow(updated_permissions=[PermissionUpdate(type="setMode")])` for any tool | `PermissionDecision("allow", mode="accept_edits")` (e.g. "allow all edits from now on") | `agentlib/permissions.py` |
 | `include_partial_messages=True` + iterate messages | `async for ev in s.stream(msg)` (always on) | `agentlib/session.py` |
 | `StreamEvent` (`text_delta`) | `TextDelta(text)` | `agentlib/events.py` |
 | `AssistantMessage` -> `TextBlock` | `Text(text)` | `agentlib/events.py` |
@@ -93,8 +104,10 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `AgentDefinition` / `agents=` (subagents) | not supported (see Not yet supported) | - |
 | `.claude/agents/*.md` agent files | `load_claude_agent(name_or_path, project=..., tools=[impls], **overrides)` | `agentlib/loaders/claude.py` |
 | `.cursor/agents/*.md` agent files | `load_cursor_agent(name_or_path, project=..., tools=[impls], ask_user=True, **overrides)` | `agentlib/loaders/cursor.py` |
+| Reading an agent definition without starting it (no SDK equivalent) | `agent.describe()` -> JSON-safe dict: `name, description, model, engine, source_path, instructions, builtin_tools, custom_tools, mcp_servers` (secrets redacted)`, disallowed_tools, skills, warnings`; starts nothing, spends nothing | `agentlib/agent.py` |
 | `skills=` / `.claude/skills/<name>/SKILL.md` | `Agent(skills=["name"])` or `skills:` in the agent file | `agentlib/skills.py`, `agentlib/engines/claude.py` |
 | `setting_sources`, `strict_mcp_config`, `system_prompt` preset, `tools` preset | `Agent(setup="lean" \| "project")` | `agentlib/engines/claude.py` |
+| `system_prompt={"type": "preset", "preset": "claude_code", "append": ...}` without `setting_sources` | `Agent(engine_prompt=True)` (lean setup: the engine's own agent prompt + `instructions` appended; no folder settings, CLAUDE.md, skills or connectors) | `agentlib/agent.py`, `agentlib/engines/claude.py` (`_system_prompt`) |
 | `hooks=` | internal only (ends_turn, lean skill guard); not user-facing | `agentlib/engines/claude.py` |
 | `CLINotFoundError`, `ProcessError`, `CLIConnectionError`, ... | `AgentError` (`.short` one-line message; `.reply` = partial turn if it failed midway) | `agentlib/errors.py` |
 | "No conversation found" on resume | `ConversationMissing` | `agentlib/errors.py` |
@@ -113,19 +126,21 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 
 | Options field | `Agent` field | Notes |
 |---|---|---|
-| `system_prompt` | `instructions` | lean: the whole prompt (>30K chars goes via temp file); project: appended to the `claude_code` preset |
+| `system_prompt` | `instructions` | lean: the whole prompt (>30K chars goes via temp file); project, or lean with `engine_prompt=True`: appended to the `claude_code` preset |
+| - | `engine_prompt` | lean only: start from the engine's own agent prompt (Claude Code's) and append `instructions`; still lean (no settings, CLAUDE.md, skills, connectors). Capability `engine_prompt` (claude, fake) |
 | `model` | `model` | alias (`opus`/`sonnet`/`haiku`) or full id; `None` = engine default |
 | `tools`, `allowed_tools` | `tools` | one mixed list: `Tool` objects, built-in names/rules (`"Read"`, `"Bash(npm run build:*)"`), custom names (need `available_tools`), `"ask_user"`, `"mcp__x__y"`. Listed = offered and pre-approved |
 | (implementations) | `available_tools` | `Tool`s for custom names in `tools` (what loaders fill from `tools=`) |
 | - | `include_ask_user` | only when `tools is None`: add `ask_user` automatically (default True) |
 | `disallowed_tools` | `disallowed_tools` | passed through (deny rules: win over `tools` and `on_permission`) |
+| - | `gated_tools` | built-in names (`"Write"`, `"Bash"`) offered to the model but never pre-approved: every call goes to `on_permission` (denied if none), even if also listed in `tools`. Lets an app check paths/commands in code while the agent file stays standard. Not with `never_ask` |
 | `mcp_servers` | `mcp_servers` | `{name: config dict \| path to .py server}`; relative paths resolve against `cwd` |
 | `cwd` | `cwd` | also where resume looks for saved conversations |
 | `add_dirs` | `add_dirs` | |
 | `env` | `env` | merged over the local setup's sign-in variables and the lean defaults (caller wins) |
 | `max_turns` | `max_turns` | hitting it -> `Reply.status == "error"`, `Reply.error_kind == "max_turns"` |
 | `max_budget_usd` | `max_budget_usd` | spending cap per opened session (one `ask()` = one run); `None` = no cap. Hitting it -> `Reply.status == "error"`, `Reply.error_kind == "budget"`. Checked between model calls (can overshoot a little). Capability `budget` |
-| `permission_mode` | `permission_mode` | `"default"` (unlisted tools -> `on_permission`, else denied) or `"never_ask"` (Claude `dontAsk`: unlisted tools denied, nothing asked; `ValueError` with `on_permission`). Capability `never_ask` |
+| `permission_mode` | `permission_mode` | starting mode; change it live with `s.set_permission_mode()`. `"default"` (unlisted tools -> `on_permission`, else denied); `"never_ask"` (Claude `dontAsk`: unlisted tools denied, nothing asked; `ValueError` with `on_permission`; capability `never_ask`); `"accept_edits"` (Claude `acceptEdits`: Edit/Write/NotebookEdit and `mkdir touch rm rmdir mv cp sed` on paths inside `cwd` / `add_dirs` run unasked; capability `accept_edits`); `"plan"` (Claude `plan`: the agent explores and proposes a plan via `on_permission` `kind="plan"`; edits are never pre-approved; capability `plan_mode`). No bypass-everything mode |
 | `output_format` | `output_schema` | a JSON Schema dict (checked when the Agent is built); reply parsed + validated into `Reply.data`. Capability `structured_output` |
 | `extra_args={"no-session-persistence": None}` | `save_conversation` | default True; False = engine stores nothing (cannot resume; not in session lists). Capability `unsaved` |
 | `effort` | `effort` | passed only if set |
@@ -142,8 +157,8 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 
 | Export | Lives in | What it is |
 |---|---|---|
-| `Agent` | `agentlib/agent.py` | Dataclass defining an agent; `.ask()`, `.ask_sync()`, `.session(resume=, fork=, cost_base=)` |
-| `Session` | `agentlib/session.py` | One conversation: `send`, `stream`, `answer`, `answer_stream`, `interrupt`, `close`, `session_id`, `pending_questions`, `last_reply`, `info` |
+| `Agent` | `agentlib/agent.py` | Dataclass defining an agent; `.ask()`, `.ask_sync()`, `.session(resume=, fork=, cost_base=)`, `.describe()` (definition as a JSON-safe dict; `external MCP tool names` listed in `builtin_tools`) |
+| `Session` | `agentlib/session.py` | One conversation: `send`, `stream`, `answer`, `answer_stream`, `interrupt`, `close`, `session_id`, `pending_questions`, `last_reply`, `info`, `permission_mode`, `set_permission_mode(mode)`, `model`, `set_model(model)` (capability `model_switch`) (`ValueError` bad mode; `CapabilityError` if the engine lacks `mode_switch` or that mode; `AgentError` if the engine refused) |
 | `SessionInfo` | `agentlib/session.py` | `s.info`: `tools` (offered; custom by short name), `mcp_servers` (name -> status), `model`; `.to_dict()`. Empty until the first turn starts |
 | `Reply` | `agentlib/reply.py` | Finished turn: `status, text, questions, session_id, usage, cost_usd, total_cost_usd, tool_calls, api_calls, duration_s, engine, model, stop_reason, error, error_kind, data`; `.to_dict()`. `error_kind` (only when `status == "error"`): `"budget" \| "max_turns" \| "output_shape" \| "other"`; `data`: parsed JSON when `output_schema` is set |
 | `ModelInfo` | `agentlib/models.py` | One offered model: `id` (for `Agent(model=)`), `name`, `description`, `aliases`, `is_default`, `effort_levels`; `.to_dict()` |
@@ -157,7 +172,10 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `load_cursor_agent` | `agentlib/loaders/cursor.py` | `.cursor/agents/<name>.md` -> `Agent` (runs on claude engine for now) |
 | `Question` | `agentlib/questions.py` | An `ask_user` question: `id, question, why, options, recommended, multi_select`; `.to_dict()` |
 | `Answer` | `agentlib/questions.py` | An answer: `id, answer, kind` (`option \| recommended \| free_text \| skipped`) |
-| `PermissionRequest` | `agentlib/permissions.py` | Passed to `on_permission`: `agent, tool, input, reason` |
+| `PermissionRequest` | `agentlib/permissions.py` | Passed to `on_permission`: `agent, tool, input, reason, kind` (`"tool"` \| `"plan"`)`, plan` (plan text), `suggestions, mode, call_id` (= `ToolCall.id`)`, title`; `.to_dict()` |
+| `PermissionDecision` | `agentlib/permissions.py` | Full answer from `on_permission`: `decision` (`"allow"` \| `"deny"` \| `"always_allow"`), `remember` (`"session"` default \| `"project_local"`), `rules` (what always_allow keeps; `None` = engine default), `mode` (switch to it on allow; plan approval: next mode, default `"default"`), `message` (deny: told to the agent), `input` (allow: run the tool with this input instead; how the engine's own question tool gets its answers) |
+| `PermissionSuggestion` | `agentlib/permissions.py` | One engine "always allow" option: `kind` (`add_rules` \| `replace_rules` \| `remove_rules` \| `set_mode` \| `add_dirs` \| `remove_dirs`), `rules` (Agent `tools=` syntax), `behavior`, `mode`, `dirs`, `where` (`session` \| `project_local` \| `project_shared` \| `user`); `.to_dict()` |
+| `PERMISSION_MODES` | `agentlib/permissions.py` | `("default", "never_ask", "accept_edits", "plan")` |
 | `Event` | `agentlib/events.py` | Type alias: union of the six event classes |
 | `TextDelta` | `agentlib/events.py` | `.type == "text_delta"`: live text chunk (top-level agent only) |
 | `Text` | `agentlib/events.py` | `.type == "text"`: a finished text block |
@@ -180,10 +198,10 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `CheckResult` | `agentlib/connection.py` | `ok, engine, status, sent, model, reply_text, cost_usd, duration_s, error, fix`; `.report()` (plain text the CLI prints), `.to_dict()` |
 | `SetupError` | `agentlib/errors.py` | `setup/local.toml` is broken or points at something missing (raised when a session / `list_models` starts; nothing sent); message says what to fix |
 
-Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, rate_limit, fail, spend, output,
-models, reset, DEFAULT_MODELS, FakeEngine`),
+Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, plan, rate_limit, fail, spend, output,
+models, saved_rules, reset, DEFAULT_MODELS, PLAN_TOOL, FakeEngine`),
 `agentlib.engines` (`Capabilities, Engine, EngineSession, TurnState, EngineSetup, Connection, get_setup,
-register_setup`; `agentlib.engines.base.requirements`), `agentlib.local_setup` (`connection, require,
+register_setup`; `agentlib.engines.base.requirements`, `agentlib.engines.base.check_mode_switch`), `agentlib.local_setup` (`connection, require,
 setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses; script it on the fake engine),
 `agentlib.tools.DEFAULT_SERVER`,
 `agentlib.structured` (`check_output, check_schema, validate, parse_text`: shared JSON checking for engines),
@@ -205,14 +223,20 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 | Answer questions after a restart | `agent.session(resume=id)` then `s.answer(answers, questions=saved_dicts)` | `examples/05_ask_user.py` |
 | Approve/deny tools at run time | `Agent(on_permission=fn)` | `examples/06_permissions.py` |
 | Allow only some shell commands | `tools=["Bash(git status:*)"]` (pre-approves matching commands only) | `examples/06_permissions.py` |
+| Offer a built-in but decide every call in code (e.g. refuse writes outside a folder) | `Agent(gated_tools=["Write", "Edit", "Bash"], on_permission=fn)` | `agentlib/tests/test_gated_tools.py` |
 | Use an external MCP server | `Agent(mcp_servers={"name": config_or_path})` | `examples/07_external_mcp_server.py` |
 | Reuse an agent file from Claude Code / Cursor | `load_claude_agent(...)` / `load_cursor_agent(...)` | `examples/08_agent_file.py` |
+| Show an agent's definition in an app (prompt, tools, MCP servers) without a session | `agent.describe()` (JSON-safe dict, free) | `examples/08_agent_file.py` |
 | Test an agent without spending tokens | `from agentlib import fake`; `fake.script(...)`; `engine="fake"` | `examples/09_test_with_fake_engine.py` |
 | Behave like Claude Code in a folder (CLAUDE.md, settings, all built-ins) | `Agent(setup="project", cwd=...)` | - |
 | Give the agent skills | `Agent(skills=["name"])` (folder `<cwd or ~>/.claude/skills/<name>/SKILL.md` or `.cursor/skills`) | - |
 | Track spend | `reply.cost_usd`, `reply.total_cost_usd`, `reply.usage` | `examples/01_one_shot.py` |
 | Cap what a run may spend | `Agent(max_budget_usd=...)`; check `reply.error_kind == "budget"` | `examples/10_spending_cap.py` |
 | Run non-interactively (deny anything not pre-approved) | `Agent(permission_mode="never_ask")` | `examples/11_never_ask.py` |
+| Let edits in the working folder run without asking | `Agent(permission_mode="accept_edits")` or `await s.set_permission_mode("accept_edits")` | `examples/15_permission_modes.py` |
+| Switch permission mode mid-session (ask / accept edits / plan) | `await s.set_permission_mode(mode)`; read `s.permission_mode` | `examples/15_permission_modes.py` |
+| Plan first, then show the plan to the user and approve or reject it | `Agent(permission_mode="plan", on_permission=fn)`; in `fn`: `req.kind == "plan"` -> show `req.plan`, return `PermissionDecision("allow", mode=...)` or `PermissionDecision("deny", message=...)` | `examples/15_permission_modes.py` |
+| Offer "always allow" like Claude Code, remembered for this project | `req.suggestions`; return `PermissionDecision("always_allow", remember="project_local")` | `agentlib/fake/tests/test_fake_permission_modes.py` |
 | Fill a model menu without spending tokens | `list_models_sync("claude")` / `await list_models("claude")` | `examples/12_list_models.py` |
 | Get a reply in a fixed JSON shape (one-shot, no tools, nothing saved) | `ask_structured_sync(msg, schema, ...)` -> `reply.data`; or `Agent(output_schema=...)` | `examples/13_structured_output.py` |
 | Run without saving the conversation | `Agent(save_conversation=False)` | `examples/13_structured_output.py` |
@@ -233,7 +257,21 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   list gives exactly that list: add `"ask_user"` yourself if wanted
 - Tool permissions: listed tools are pre-approved; anything else -> `on_permission`, or denied if none
   (same as headless Claude Code). In lean setup an unlisted built-in is not even offered.
-  `permission_mode="never_ask"` denies anything not pre-approved without any callback (Claude `dontAsk`)
+  `permission_mode="never_ask"` denies anything not pre-approved without any callback (Claude `dontAsk`).
+  In `setup="project"` the user's and project's settings rules (`~/.claude/settings.json`,
+  `.claude/settings.json`, `.claude/settings.local.json`) also pre-approve / deny, so those calls never reach
+  `on_permission`
+- Permission modes: `"accept_edits"` = edits + `mkdir touch rm rmdir mv cp sed` inside `cwd` / `add_dirs` run
+  unasked (other commands still ask); `"plan"` = edit tools are never pre-approved (they reach `on_permission`,
+  denied if none; the agent is told not to edit) and the agent ends planning by proposing its plan:
+  `on_permission(PermissionRequest(kind="plan", plan=...))`. Approve -> the session switches to
+  `PermissionDecision.mode` (plain `"allow"` -> `"default"`); deny -> it stays in plan mode and the agent gets
+  `message` as feedback. No `on_permission` -> the plan is denied. `s.set_permission_mode()` works between turns
+  and mid-turn; the mode survives a reconnect (resume)
+- `"always_allow"` remembers for this session (whole tool, unchanged). `PermissionDecision("always_allow",
+  remember="project_local")` writes the engine's suggested rule (e.g. `Bash(npm test:*)`, else the whole tool;
+  or your `rules=`) to the project's local settings (Claude: `<cwd>/.claude/settings.local.json`, personal and
+  normally gitignored); later `setup="project"` sessions in that folder honour it, lean ones do not read it
 - Structured output (`output_schema`): Claude uses its native JSON-schema output (the CLI's internal
   `StructuredOutput` tool is hidden from events and `tool_calls`); the value is checked again with `jsonschema`.
   Engines without a native option would parse the reply text (`structured.check_output`). `Reply.text` may be
@@ -280,6 +318,16 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   would not be offered (they go to `on_permission`). No external MCP servers (`CapabilityError`).
   Claude Code runs some read-only shell commands (e.g. `python --version`) with no rule even under
   `never_ask`; the fake denies them. The fake does not enforce `max_turns`
+- Because the fake's `setup="project"` with `tools=None` approves every built-in, permission prompts (and
+  `accept_edits` vs `default`) only show on the fake for tools that are gated or not pre-approved: test
+  prompts with `gated_tools=[...]` or an explicit `tools` list (see `examples/15_permission_modes.py`)
+- `accept_edits` also approves edits to `gated_tools` (Claude's mode runs before the callback); an app that
+  checks paths in `on_permission` must not switch to `accept_edits` if it relies on that check
+- Plan mode with a `tools` list: `ExitPlanMode` (how the agent proposes the plan) is added only if the session
+  starts in `"plan"` (or you list `"ExitPlanMode"`; it is never pre-approved). A lean agent switched into plan
+  mode mid-session without it cannot propose a plan. `setup="project"` with `tools=None` always has it
+- `remember="project_local"` writes a file in the project folder (Claude); the fake keeps it in memory
+  (`fake.saved_rules(cwd)`)
 - Spending cap on Claude: the CLI checks its running total between model calls, per opened session (one
   `claude` process); a run may overshoot by one call. After an error result the process is dropped and the
   next turn reconnects with resume (and a fresh cap)
@@ -293,15 +341,17 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   tools + `ask_user` identically for every engine and builds the `Reply`
 - `Capabilities` (frozen dataclass): `available, system_prompt, custom_tools, mcp_servers, streaming, resume,
   fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
-  list_models`. `Engine.check()` runs in `agent.session()` before
+  list_models, accept_edits, plan_mode, mode_switch`. `Engine.check()` runs in `agent.session()` before
   anything starts: `available` False -> `EngineUnavailable` (message lists what else it would lack); else
   `CapabilityError` naming every needed capability the engine lacks. Needs (`requirements()` in `base.py`):
   `system_prompt` (instructions set, or skills in lean setup), `custom_tools` (any `@tool` or `ask_user`),
   `ends_turn` (`ask_user` or `@tool(ends_turn=True)`), `mcp_servers`, `resume` (`resume=`), `fork`,
   `permission_hook` (`on_permission`), `project_setup`, `budget` (`max_budget_usd`), `never_ask`
-  (`permission_mode="never_ask"`), `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`).
-  `list_models` is checked by `list_models()` (`Engine.check_list_models()`). `streaming` and `usage` are
-  informational only
+  (`permission_mode="never_ask"`), `accept_edits` / `plan_mode` (`permission_mode="accept_edits"` / `"plan"`),
+  `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`).
+  `list_models` is checked by `list_models()` (`Engine.check_list_models()`); `mode_switch` (plus the target
+  mode's flag) by `Session.set_permission_mode()` (`check_mode_switch()` in `base.py`; the default
+  `EngineSession.set_permission_mode` raises `CapabilityError`). `streaming` and `usage` are informational only
 - Sign-in side (`EngineSetup` in `agentlib/engines/base.py`, registry `register_setup` / `get_setup`): one per
   engine, SDK-free so status works without the engine's package. `resolve(section)` turns the engine's
   `[section]` of `setup/local.toml` into a `Connection(method, summary, env, engine_settings, problems,
@@ -312,14 +362,14 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 
 | Engine | File | State | Capabilities that differ from defaults |
 |---|---|---|---|
-| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models` all True |
+| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models`, `accept_edits`, `plan_mode`, `mode_switch` all True |
 | `cursor` | `agentlib/engines/cursor.py` | stub: `agent.session()` raises `EngineUnavailable` | `available=False`, `system_prompt=False`, `ends_turn=False` (new flags False, unverified) |
 | `fake` | `agentlib/fake/engine.py` | working, tests only, zero tokens | same as claude, plus `mcp_servers=False` |
 
 - Cursor plan (stub header): Cursor Python SDK (`cursor-sdk`, beta); no app-set system prompt (AGENTS.md +
   message prefix), no live permission hook, no fork, sync API (wrap in `asyncio.to_thread`), own model names.
   Until then `load_cursor_agent` defaults to the claude engine (`DEFAULT_ENGINE` in `agentlib/loaders/cursor.py`)
-- Fake engine: `fake.script(agent_name, turns)`; steps `say, call, ask, rate_limit, fail`; a turn may be
+- Fake engine: `fake.script(agent_name, turns)`; steps `say, call, ask, plan, rate_limit, fail`; a turn may be
   `fn(message) -> steps`. `call()` runs your real tool through `TurnState`; built-in names go through
   Claude-style rules. No script -> `"(fake) <message>"`. Resume works within one Python process.
   `total_cost_usd` is cumulative per conversation and `cost_usd` honours `cost_base` like the Claude engine.
@@ -330,21 +380,32 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   -> `Reply.data` or `error_kind="output_shape"`. `save_conversation=False`: nothing stored (resume ->
   `ConversationMissing`). `fake.models([...])` scripts `list_models("fake")` (ModelInfo / dict / id string),
   `fake.models(fail="msg")` makes it raise `AgentError`; default `fake.DEFAULT_MODELS` (`fake-large`, `fake-small`)
+- Fake permission modes: `accept_edits` approves edit tools and `mkdir touch rm rmdir mv cp sed` on paths inside
+  `cwd` / `add_dirs` (`rules.accept_edits_allows`); `plan` sends edit tools to `on_permission` even if listed.
+  `fake.plan(text)` step = the model proposes a plan (`ExitPlanMode`, `fake.PLAN_TOOL`): in plan mode it reaches
+  `on_permission` as `kind="plan"`; approve -> mode becomes `decision.mode` or `"default"`; deny -> error tool
+  result with the feedback, still in plan mode; outside plan mode -> error result. Requests carry suggestions
+  (shell: `"Bash(<first word>:*)"` project_local; edit tools: `set_mode accept_edits` session; else the whole tool;
+  `fake.call(tool, args, suggestions=[...])` overrides). `remember="project_local"` goes to an in-memory per-cwd
+  store (`fake.saved_rules(cwd)`) that later `setup="project"` sessions in that cwd honour; `fake.reset()` clears it
 
 ## Not yet supported
 Do not reach for the raw SDK for these; add them via [EXTENDING.md](EXTENDING.md) (or tell the user if they
 cannot be made engine-neutral).
 - Subagents (`agents=` / `AgentDefinition`, the Task tool); subagent messages are filtered out of events
 - User-facing hooks (`hooks=`); hooks are used internally only
-- Other `permission_mode` values (acceptEdits, plan, bypassPermissions, auto) and `set_permission_mode()`
-  (`default` and `dontAsk` are supported, as `"default"` / `"never_ask"`)
+- `permission_mode` values `bypassPermissions` (deliberately not offered) and `auto` (`default`, `dontAsk`,
+  `acceptEdits`, `plan` and `set_permission_mode()` are supported, as `"default"` / `"never_ask"` /
+  `"accept_edits"` / `"plan"` and `s.set_permission_mode()`)
+- Plan extras: editing the plan before approving (`planWasEdited`), the plan file path, `EnterPlanMode` as an
+  event (the model entering plan mode itself is only seen if the CLI reports the mode change)
 - Limits: `task_budget` (`max_budget_usd` is supported)
-- Model controls: `fallback_model`, `set_model()` mid-session, `thinking` / `max_thinking_tokens` (`effort` is supported), `betas`
+- Model controls: `fallback_model`, `thinking` / `max_thinking_tokens` (`effort` and `set_model()` are supported), `betas`
 - Structured output extras: `output_format` types other than `json_schema` (JSON-schema output is supported via
   `output_schema`)
 - Non-text input (images, documents); `send()` takes a string only. Streaming input
 - Thinking blocks, server tool blocks (web search), task/progress messages, non-init system messages as events
-- `ResultMessage` extras: `model_usage` (per-model usage), `permission_denials`, `duration_api_ms`
+- `ResultMessage` extras: `permission_denials`, `duration_api_ms` (`model_usage` is `Reply.usage_by_model`)
 - Session management: `list_sessions`, `get_session_messages`, rename/tag/delete, `session_store`,
   `continue_conversation`, `resume_session_at`
 - File checkpointing / `rewind_files`
@@ -373,7 +434,7 @@ Paths are inside the `agentlib/` package folder unless stated.
 | Setup guides and the local setup template (repo root) | `setup/<engine>-setup.md`, `setup/local.example.toml` |
 | Claude Code / Cursor file parsing | `loaders/claude.py`, `loaders/cursor.py` (shared: `loaders/common.py`, `loaders/frontmatter.py`) |
 | Skill lookup (lean setup) | `skills.py` |
-| Permission hook shape | `permissions.py` |
+| Permission hook shape, modes, `PermissionDecision` / `PermissionSuggestion` | `permissions.py` (plan / deny wording: `prompts/plan_rejected.md`, `plan_feedback.md`, `permission_denied.md`) |
 | Structured output checking, `ask_structured` | `structured.py` |
 | Model list (`ModelInfo`, `list_models`) | `models.py` (Claude parsing: `parse_models` in `engines/claude.py`) |
 | Claude SDK options, message mapping | `engines/claude.py` |

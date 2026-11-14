@@ -1,0 +1,4 @@
+# Installed packages are local only. The built dist/ folder IS committed (coworkers need Python only, never Node).
+node_modules/
+*.log
+.vite/

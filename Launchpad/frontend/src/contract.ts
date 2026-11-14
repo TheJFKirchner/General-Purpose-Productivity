@@ -1,0 +1,321 @@
+/* Websocket contract, typed. Source of truth: the header of app/server.py (do not change it here first).
+   Server -> UI events are `ServerEvent`; UI -> server messages are `UiMessage`.
+   Fields the vanilla page tolerated as optional (older servers, demo, history replays) are optional here too. */
+
+export type Id = string;
+/** Role ids (unchanged); display names: Planner, Explorer, Orchestrator, Builder, Claude Code, Visualizer; drafter = the agent drafter. */
+export type Role = 'planner' | 'astronaut' | 'orchestrator' | 'builder' | 'pilot' | 'visual' | 'drafter';
+export type StepStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'failed';
+export type RunEndStatus = 'done' | 'stopped' | 'failed' | 'blocked';
+export type ChatMode = 'default' | 'accept_edits' | 'plan';
+export type Applies = 'now' | 'new_sessions';
+export type FileKind = 'markdown' | 'text' | 'binary' | 'too_large';
+export type FileErrorCode = 'conflict' | 'invalid' | 'not_allowed' | 'not_found' | 'too_large' | 'binary';
+export type Remember = 'session' | 'project_local';
+
+export interface TokenCounts {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+}
+
+/* ---------- shared shapes ---------- */
+export interface Question { id: string; title: string; body?: string; rec?: string | null; options?: string[] }
+export interface QuestionRoundBody { id: string; round: number; questions: Question[] }
+export interface RoundAnswer { accepted: boolean; option?: string; text?: string }
+/** `agent` = the agent named for the step (null = the Builder; only the Builder or folder agents); `agent_display` = who
+    runs it (`Builder` when null); `agent_fallback` = the named agent is missing / broken / not a step worker here, so the Builder runs it. */
+export interface PlanStep { n: number; title: string; status?: StepStatus; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean;
+  /** the purpose of the agent that runs the step ("building" for the Builder): the chip colour, whatever folder Crew shows */
+  agent_purpose?: Purpose | string | null }
+
+/** What an agent is for (Crew colours, the planner's registry, permissions for added agents). */
+export type Purpose = 'planning' | 'exploring' | 'building' | 'reviewing';
+/** The fields of the "Add an agent" form (agent_draft reply, agent_create). */
+export interface AgentFields { name: string; description: string; purpose: Purpose | ''; model: string; tools: string[]; instructions: string }
+/** One validation problem from the server: usually "field: message" text (the agent-file check), or an object. */
+export type AgentProblem = string | { field?: string; message?: string; text?: string };
+
+export interface VisualOption {
+  id: string; label: string; status: 'rendering' | 'ready' | 'failed'; html?: string; error?: string; path?: string;
+  /** the library key the html needs (echarts | chartjs | d3 | plotly | bokeh); only that one is inlined in its frame */
+  drawn_with?: string;
+}
+export interface VisualSetBody {
+  set_id: string; brief: string; options: VisualOption[]; picked_id: string | null;
+  /** asked for: a library key when known, else the name the planner gave; null = not asked (ECharts) */
+  library?: string | null;
+  /** the library key actually used */
+  drawn_with?: string;
+  /** library keys available for the session's folder */
+  libraries?: string[];
+  /** "drawn in ECharts, styled like <library>" when it fell back, else null */
+  library_note?: string | null;
+}
+
+export interface Directory { dir_id: Id; path: string; name: string; exists: boolean; is_default: boolean; busy: boolean }
+export interface SettingValue { value: unknown; applies: Applies; overridden_by_launch: boolean | string }
+
+export interface DirEntry {
+  name: string; type: 'dir' | 'file'; size?: number; mtime?: number | string; kind?: FileKind | null; editable?: boolean;
+}
+export interface BackupItem { backup_id: string; saved_at: string; size: number }
+
+export interface PermissionSuggestion { label: string; remember: Remember }
+
+export interface CrewAgentDef {
+  name: string;
+  display_name?: string;
+  /** null for folder agents */
+  role?: Role | string | null;
+  description?: string;
+  model?: string;
+  source_path?: string;
+  instructions?: string;
+  builtin_tools?: string[] | null;
+  custom_tools?: { name: string; description?: string }[];
+  mcp_servers?: { name: string; config?: unknown }[];
+  disallowed_tools?: string[];
+  warnings?: string[];
+  gated_tools?: string[];
+  setup?: 'lean' | 'project' | string;
+  engine_prompt?: boolean | string;
+  prompt_note?: string;
+  root?: string;
+  path?: string;
+  editable?: boolean;
+  /** planning | exploring | building | reviewing (a folder agent with no purpose counts as building) */
+  purpose?: Purpose | string;
+  /** times this agent was started (per user, survives restarts); live updates come as agent_uses */
+  uses?: number;
+  /** one of Launchpad's six agents (false = a file in the connected folder's .claude/agents/) */
+  builtin?: boolean;
+  /** folder agents: false when the file is broken (its problems are in warnings), so plans cannot use it */
+  step_worker?: boolean;
+  promotion?: {
+    start_model?: string; target_model?: string; window_turns?: number; criteria?: string; criteria_path?: string;
+    root?: string; path?: string; editable?: boolean;
+  };
+}
+
+/* planner chat history entries (snapshot sessions[].chat, session_started.chat): plain entries or replayed events */
+export type PlannerHistoryItem =
+  | { role: 'user' | 'assistant' | 'planner' | 'system'; text?: string; markdown?: string; type?: undefined }
+  | { role: 'round'; round: QuestionRoundBody; type?: undefined }
+  | { role: 'answers'; roundId: string; answers: Record<string, RoundAnswer>; skipped?: boolean; type?: undefined }
+  | (ServerEvent & { session_id?: Id });
+
+/* Claude Code chat history entries: {role, markdown} or a tool row or a replayed event */
+export type ChatHistoryItem =
+  | { role: 'user' | 'assistant' | 'system'; markdown?: string; text?: string; tool?: undefined; type?: undefined }
+  | ({ tool: string; type?: undefined; role?: undefined } & Partial<Omit<ActivityEvent, 'type'>>)
+  | (ServerEvent & { chat_id?: Id });
+
+export interface SnapshotSession {
+  session_id: Id;
+  id?: Id;
+  dir_id?: Id;
+  cwd?: string;
+  folder?: string;
+  chat?: PlannerHistoryItem[];
+  history?: PlannerHistoryItem[];
+  report_sent?: boolean;
+  running?: boolean;
+  total_cost_usd?: number;
+  planner_cost_usd?: number;
+  visual_sets?: VisualSetBody[];
+  plan_revision?: number;
+  draft_pending?: boolean;
+  runs?: number;
+  autopilot?: boolean;
+  model?: string;
+  planner_model?: string | { model?: string; promoted?: boolean; reason?: string | null; by?: 'criteria' | 'user' | null };
+  promoted?: boolean;
+  reason?: string | null;
+  by?: 'criteria' | 'user' | null;
+}
+export interface SnapshotChat {
+  id?: Id; chat_id?: Id; dir_id?: Id; mode?: ChatMode; model?: string; cwd?: string; busy?: boolean;
+  history?: ChatHistoryItem[];
+}
+
+/* ---------- here -> UI ---------- */
+export interface SnapshotEvent { type: 'snapshot'; current_session_id?: Id | null; sessions?: SnapshotSession[]; chats?: SnapshotChat[] }
+export interface PlannerMessageEvent { type: 'planner_message'; text: string; session_id?: Id }
+export interface UserMessageEvent { type: 'user_message'; text: string; session_id?: Id }   // history replays only
+export interface TypingEvent { type: 'typing'; on: boolean; session_id?: Id }
+export interface QuestionRoundEvent extends QuestionRoundBody { type: 'question_round'; session_id?: Id }
+export interface UsageEvent extends TokenCounts { type: 'usage'; scope?: 'app'; tokens: number; cost: number }
+export interface CrewEvent { type: 'crew'; agents: { name: string; role?: Role | string; status?: string; session_id?: Id | null }[] }
+export interface PlanMetaEvent { type: 'plan_meta'; name?: string; mode?: string; status?: string; session_id?: Id }
+export interface SystemEvent { type: 'system'; text: string; session_id?: Id | null; chat_id?: Id | null }
+export interface SessionStartedEvent {
+  type: 'session_started'; session_id: Id; folder?: string; dir_id?: Id; cwd?: string;
+  chat?: PlannerHistoryItem[]; report_sent?: boolean;
+}
+export interface SettingsEvent {
+  type: 'settings'; directories: Directory[]; values: Record<string, SettingValue>; can_pick_directory: boolean;
+}
+export interface DirectoryPickedEvent { type: 'directory_picked'; path: string | null }
+export interface DirListingEvent { type: 'dir_listing'; root: string; path: string; entries: DirEntry[] }
+export interface FileContentEvent {
+  type: 'file_content'; root: string; path: string; kind: FileKind; text?: string; size: number; mtime?: number | string;
+  version: string | number; editable: boolean; applies: Applies | null; validates_as: 'agent' | 'plan' | null;
+}
+export interface FileSavedEvent { type: 'file_saved'; root: string; path: string; version: string | number; backup_id: string | null; applies?: Applies | null }
+export interface FileErrorEvent {
+  type: 'file_error'; root: string; path: string; code: FileErrorCode; message: string;
+  current?: { text: string; version: string | number };
+}
+export interface BackupsEvent { type: 'backups'; root: string; path: string; items: BackupItem[] }
+export interface PlanDraftEvent {
+  type: 'plan_draft'; session_id: Id; path: string; markdown: string; steps: PlanStep[]; revision?: number; previous_runs?: number;
+}
+export interface RunStartedEvent {
+  type: 'run_started'; session_id: Id; name: string; steps: PlanStep[]; run?: number; revision?: number; autopilot?: boolean;
+}
+export interface PlannerModelEvent {
+  type: 'planner_model'; session_id: Id; model: string; promoted: boolean; reason: string | null; by: 'criteria' | 'user' | null;
+}
+export interface AutopilotEvent { type: 'autopilot'; session_id: Id; on: boolean }
+export interface StepUpdateEvent {
+  type: 'step_update'; session_id: Id; n: number; status?: StepStatus; built?: string[]; report_path?: string;
+  agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: Purpose | string | null;
+}
+export interface QueueItemEvent {
+  type: 'queue_item';
+  id: Id;
+  session_id: Id | null;
+  chat_id?: Id | null;
+  kind: 'question' | 'permission' | 'plan' | 'info';
+  agent?: string;
+  agent_id?: Id | null;
+  step?: number | null;
+  title?: string;
+  body?: string;
+  rec?: string | null;
+  options?: string[];
+  blocking?: boolean;
+  timeout_s?: number | null;
+  expires_at?: string | null;
+  tool?: string;                               // permission
+  command?: string;                            // run permission cards
+  suggestions?: PermissionSuggestion[];        // chat permission cards
+  markdown?: string;                           // chat plan cards
+}
+export interface QueueResolvedEvent { type: 'queue_resolved'; id: Id; answer: string | null; by?: 'user' | 'timer' | 'autopilot' }
+export interface ByModel extends TokenCounts { model: string; cost_usd: number }
+export interface AgentUsageEvent extends TokenCounts {
+  type: 'agent_usage';
+  session_id: Id | null;
+  chat_id?: Id | null;
+  agent_id: Id;
+  role: Role;
+  name: string;
+  step: number | null;
+  status: 'working' | 'idle' | 'done' | string;
+  cost_usd: number;
+  tool_calls: number;
+  by_model?: ByModel[];
+}
+export interface ActivityEvent {
+  type: 'activity';
+  id: Id;
+  session_id: Id | null;
+  chat_id?: Id | null;
+  agent_id: Id;
+  role: Role | string;
+  name: string;
+  step: number | null;
+  tool: string;
+  summary: string;
+  status: 'started' | 'done' | 'denied' | 'failed';
+  ts: string;
+  auto?: boolean;
+}
+export interface RunFinishedEvent {
+  type: 'run_finished'; session_id: Id; status: RunEndStatus; report_path: string; markdown: string;
+  total_cost_usd?: number; planner_cost_usd?: number; report_sent?: boolean;
+}
+/** dir_id = the connected folder whose .claude/agents/ files are included; tool_choices = tools the Add form offers. */
+export interface CrewListEvent { type: 'crew_list'; agents: CrewAgentDef[]; dir_id?: Id | null; tool_choices?: string[] }
+/** An agent's use count changed (keyed by agent name). */
+export interface AgentUsesEvent { type: 'agent_uses'; name: string; uses: number }
+export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?: Id; fields?: Partial<AgentFields>; error?: string }
+/** ok: a fresh crew_list follows. Not ok: error + problems (the agent-file check). */
+export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id; name?: string; error?: string; problems?: AgentProblem[] }
+export interface AgentRemovedEvent { type: 'agent_removed'; ok: boolean; dir_id?: Id; name?: string; error?: string }
+export interface ChatStartedEvent {
+  type: 'chat_started'; chat_id: Id; mode?: ChatMode; model?: string; cwd?: string; dir_id?: Id | null; busy?: boolean;
+  /** set when chat_from_plan opened the chat (mode plan; the plan follows as the first user message) */
+  from_session_id?: Id | null;
+  history?: ChatHistoryItem[];
+}
+export interface ChatTypingEvent { type: 'chat_typing'; chat_id: Id; on: boolean }
+export interface ChatDeltaEvent { type: 'chat_delta'; chat_id: Id; text: string }
+export interface ChatMessageEvent { type: 'chat_message'; chat_id: Id; role: 'assistant' | 'user'; markdown?: string; text?: string }
+export interface ChatModeEvent { type: 'chat_mode'; chat_id: Id; mode: ChatMode }
+export interface ChatDoneEvent { type: 'chat_done'; chat_id: Id; status: 'ok' | 'stopped' | 'failed'; error?: string }
+export interface VisualSetEvent extends VisualSetBody { type: 'visual_set'; session_id: Id }
+
+export type ServerEvent =
+  | SnapshotEvent | PlannerMessageEvent | UserMessageEvent | TypingEvent | QuestionRoundEvent | UsageEvent | CrewEvent
+  | PlanMetaEvent | SystemEvent | SessionStartedEvent | SettingsEvent | DirectoryPickedEvent | DirListingEvent
+  | FileContentEvent | FileSavedEvent | FileErrorEvent | BackupsEvent | PlanDraftEvent | RunStartedEvent
+  | PlannerModelEvent | AutopilotEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
+  | ActivityEvent | RunFinishedEvent | CrewListEvent | ChatStartedEvent | ChatTypingEvent | ChatDeltaEvent
+  | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
+  | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent;
+
+export type ServerEventType = ServerEvent['type'];
+
+/** Every server event type, for tests and exhaustiveness checks. */
+export const SERVER_EVENT_TYPES: ServerEventType[] = [
+  'snapshot', 'planner_message', 'user_message', 'typing', 'question_round', 'usage', 'crew', 'plan_meta', 'system',
+  'session_started', 'settings', 'directory_picked', 'dir_listing', 'file_content', 'file_saved', 'file_error',
+  'backups', 'plan_draft', 'run_started', 'planner_model', 'autopilot', 'step_update', 'queue_item', 'queue_resolved',
+  'agent_usage', 'activity', 'run_finished', 'crew_list', 'chat_started', 'chat_typing', 'chat_delta', 'chat_message',
+  'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
+];
+
+/* ---------- UI -> here ---------- */
+export type UiMessage =
+  | { type: 'user_message'; text: string }
+  | { type: 'round_answer'; roundId: string; answers: Record<string, RoundAnswer>; skipped?: boolean }
+  | { type: 'plan_approve'; session_id: Id }
+  | { type: 'queue_response'; id: Id; answer: string }
+  | {
+      type: 'queue_response'; id: Id; decision: 'allow' | 'deny' | 'always'; remember?: Remember;
+      mode?: 'default' | 'accept_edits'; message?: string;
+    }
+  | { type: 'queue_dismiss'; id: Id }
+  | { type: 'get_crew'; dir_id?: Id }
+  | { type: 'report_to_planner'; session_id: Id }
+  | { type: 'run_stop'; session_id: Id }
+  | { type: 'new_session'; dir_id?: Id }
+  | { type: 'chat_new'; dir_id?: Id }
+  | { type: 'chat_message'; chat_id: Id; text: string }
+  | { type: 'chat_set_mode'; chat_id: Id; mode: ChatMode }
+  | { type: 'chat_stop'; chat_id: Id }
+  | { type: 'visual_pick'; session_id: Id; set_id: string; option_id: string | null }
+  | { type: 'visual_tweak'; session_id: Id; set_id: string; option_id: string; text: string }
+  | { type: 'visual_retry'; session_id: Id; set_id: string; option_id: string }
+  | { type: 'planner_promote'; session_id: Id }
+  | { type: 'set_autopilot'; session_id: Id; on: boolean }
+  | { type: 'get_settings' }
+  | { type: 'set_settings'; patch: Record<string, unknown> }
+  | { type: 'add_directory'; path: string }
+  | { type: 'remove_directory'; dir_id: Id }
+  | { type: 'pick_directory' }
+  | { type: 'list_dir'; root: string; path: string }
+  | { type: 'read_file'; root: string; path: string }
+  | { type: 'save_file'; root: string; path: string; text: string; base_version: string | number | null }
+  | { type: 'list_backups'; root: string; path: string }
+  | { type: 'restore_backup'; root: string; path: string; backup_id: string }
+  | { type: 'agent_draft'; dir_id: Id; text: string }
+  | { type: 'agent_create'; dir_id: Id; fields: AgentFields }
+  | { type: 'agent_remove'; dir_id: Id; name: string }
+  | { type: 'chat_from_plan'; session_id: Id };
+
+export type UiMessageType = UiMessage['type'];

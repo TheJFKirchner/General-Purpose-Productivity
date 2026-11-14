@@ -34,6 +34,9 @@ class CursorEngine(Engine):
         structured_output=False,    # unverified: if no native option, instruct + parse with structured.check_output
         unsaved=False,          # unverified
         list_models=False,      # unverified: needs a model-list call that sends no request
+        accept_edits=False,     # unverified: no live permission hook; may map to its own auto-apply setting
+        plan_mode=False,        # unverified: plan approval needs a live permission hook
+        mode_switch=False,      # unverified
     )
 
     def open(self, agent, *, resume, fork, cost_base):

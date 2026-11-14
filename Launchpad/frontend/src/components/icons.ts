@@ -1,0 +1,10 @@
+/* The one icon set: lucide-react (ISC licence), tree-shaken, so only the icons named here end up in the build.
+   Import icons from this file, never from 'lucide-react' directly, so the set stays small and consistent.
+   Size and stroke come from CSS (.lucide in theme.css: 16px, 14px inside sm / xs buttons and chips); lucide marks
+   every icon aria-hidden, so an icon-only button needs an aria-label. */
+export {
+  AlertTriangle, ArrowLeft, ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, CircleHelp, ClipboardList,
+  Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
+  MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, ShieldAlert, ShieldCheck, Sparkles, Square,
+  Telescope, Terminal, Trash, UserPlus, Users, Wallet, WandSparkles, WifiOff, X,
+} from 'lucide-react';

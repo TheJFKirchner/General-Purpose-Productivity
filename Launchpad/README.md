@@ -1,0 +1,33 @@
+# Launchpad
+
+A local desktop app for planning and running work with AI agents. You chat with a planner, approve the plan it drafts, and an orchestrator hands each step to a builder agent and writes a report. It runs on your own computer only.
+
+It is built on `agentlib`, the shared agent library in this repo, so keep the `Launchpad` and `agentlib` folders side by side.
+
+## Set up
+
+1. Do the one-time sign-in setup in [agentlib/setup/claude-setup.md](../agentlib/setup/claude-setup.md).
+2. From this folder, install what the app needs: `pip install -r app/requirements.txt`
+
+## Run
+
+- Windows: double-click `Launchpad.bat`.
+- Mac: double-click `Launchpad.command`.
+- Zero-token demo, no sign-in needed: `python -m app.launch --fake`
+
+Running the app needs Python only. The built front end is included in `frontend/dist/`.
+
+## Test
+
+`python -m pytest` runs the test suite on the fake engine and uses no tokens.
+
+## Where things are
+
+| Item | What it is |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Rules, current state and a file map for anyone (or any AI) changing the app |
+| [docs/decisions.md](docs/decisions.md) | Design decisions, newest overriding older |
+| [Features/](Features/) | One spec per feature built |
+| [app/](app/) | The Python app: server, planner, orchestrator, builders |
+| [frontend/](frontend/README.md) | The React front end; run `npm run build` there after changing it |
+| [tests/](tests/) | The test suite |

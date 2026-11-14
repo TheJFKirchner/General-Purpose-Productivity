@@ -31,6 +31,9 @@ EngineSession                            # one conversation
   async start()                          # abstract; connect (Session.__aenter__)
   turn(message) -> AsyncIterator[Event]  # abstract; async generator, MUST end with Done(reply)
   async interrupt()                      # default: no-op
+  permission_mode: str | None            # current permission mode (engines that track it set it)
+  async set_permission_mode(mode)        # default raises CapabilityError (capability mode_switch); Session
+                                         # checks check_mode_switch() first
   async close()                          # abstract (Session.__aexit__)
 
 TurnState(engine_name, tools)            # per-turn bookkeeping shared by all engines
@@ -58,11 +61,16 @@ routes custom tool calls through `state.run_tool()`, records text/calls/results,
 
 `Capabilities` (frozen dataclass, same file): `available, system_prompt, custom_tools, mcp_servers, streaming,
 resume, fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
-list_models`. `requirements(agent, fork=, resume=)` (same
+list_models, accept_edits, plan_mode, mode_switch`. `requirements(agent, fork=, resume=)` (same
 file) maps capability name -> "does this agent/call need it"; `Engine.check()` enforces every name in it:
 `system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup, budget,
-never_ask, structured_output, unsaved`. `list_models` is not per agent: `Engine.check_list_models()` enforces
-it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default raises `CapabilityError`) does it.
+never_ask, accept_edits, plan_mode, structured_output, unsaved`. `list_models` is not per agent:
+`Engine.check_list_models()` enforces it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default
+raises `CapabilityError`) does it. `mode_switch` is a session operation: `Session.set_permission_mode()` calls
+`check_mode_switch()` (needs `mode_switch` plus the target mode's flag) before `EngineSession.set_permission_mode()`.
+Permission requests: build `PermissionRequest` (with `kind="plan"` + `plan` for a plan proposal, `suggestions` as
+`PermissionSuggestion`s, `mode`, `call_id`) and turn the hook's answer into a `PermissionDecision` with
+`permissions.resolve()`; honour `remember`, `rules`, `mode`, `message` (see `ClaudeSession._can_use_tool`).
 `available=False` raises `EngineUnavailable` first (listing what else is missing). `streaming` and `usage`
 are informational (no request can require them).
 
@@ -153,7 +161,7 @@ Recipe for a new engine (e.g. Cursor):
 |---|---|
 | A new live event (e.g. thinking text) | `agentlib/events.py` (dataclass with `type: ClassVar[str]`, add to `Event` union, export in `__init__.py`); emit in `ClaudeSession._map()`; fake step; `Capabilities` flag if not every engine can produce it; README events rows; `examples/03_streaming_events.py` |
 | A new `Reply` / `Usage` field | `agentlib/reply.py` (with a default); fill it via `TurnState.reply(...)` (add a keyword) from each engine; fake gives a plausible value; README `Reply` row |
-| A new session operation (e.g. change model mid-session) | `EngineSession` in `base.py`: a method with a safe default (raise `CapabilityError` naming the engine); implement in `ClaudeSession` (must run on the worker task that owns the client: send it through `self._ops`); fake version; `Session` wrapper in `agentlib/session.py`; capability flag |
+| A new session operation (e.g. change model mid-session) | `EngineSession` in `base.py`: a method with a safe default (raise `CapabilityError` naming the engine); implement in `ClaudeSession` (must run on the worker task that owns the client: send it through `self._ops`; a control request that must also work mid-turn may be sent directly like `interrupt()`, see `set_permission_mode`); fake version; `Session` wrapper in `agentlib/session.py`; capability flag. Worked example: `set_permission_mode` |
 | A new tool flag | `Tool` + `tool()` in `agentlib/tools.py`; engine mapping in `ClaudeSession._build_server()`; shared behaviour in `TurnState.run_tool()` so every engine gets it |
 | Model-facing wording | `agentlib/prompts/<name>.md`; `prompt_files.fill()`; never inline strings |
 | A new error | subclass `AgentError` in `agentlib/errors.py`; raise it from the engine when the SDK error is recognised; export it |

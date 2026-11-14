@@ -44,6 +44,12 @@ print("tools:    ", agent.tools)                # as written in the file
 print("extra:    ", agent.extra)                # unknown front-matter fields (color) are kept, not rejected
 print("warnings: ", agent.warnings)             # e.g. body mentions files but the agent has no Read tool
 
+# describe(): the whole definition as a JSON-safe dict (for an app screen). Starts nothing, costs nothing.
+# Keys: name, description, model, engine, source_path, instructions, builtin_tools, custom_tools,
+# mcp_servers (secrets redacted), disallowed_tools, skills, warnings.
+info = agent.describe()
+print("describe: ", info["name"], "| builtin:", info["builtin_tools"], "| custom:", [t["name"] for t in info["custom_tools"]])
+
 reply = agent.ask_sync("How many words are in: the quick brown fox")
 print("reply:    ", reply.text, [(c.name, c.result) for c in reply.tool_calls])
 

@@ -138,21 +138,29 @@ class ResolvedTools:
     builtin_rules: list[str] = field(default_factory=list)  # "Read", "Bash(npm run build:*)"
     mcp_rules: list[str] = field(default_factory=list)      # external MCP names, passed through
     all_builtins: bool = False                              # tools unspecified -> engine default set
+    gated: list[str] = field(default_factory=list)          # built-in names offered but never pre-approved
 
     @property
     def builtin_names(self) -> list[str]:
-        return list(dict.fromkeys(base_tool_name(r) for r in self.builtin_rules))
+        """Built-ins offered to the model: listed ones plus gated ones."""
+        return list(dict.fromkeys([base_tool_name(r) for r in self.builtin_rules] + list(self.gated)))
+
+    @property
+    def approved_rules(self) -> list[str]:
+        """Built-in rules that are pre-approved: listed rules minus any whose tool is gated."""
+        return [r for r in self.builtin_rules if base_tool_name(r) not in self.gated]
 
 
 def resolve_tools(specs: list[str | Tool] | None, available: list[Tool] = (), *,
                   server: str = DEFAULT_SERVER, setup: str = "lean",
-                  include_ask_user: bool = True) -> ResolvedTools:
+                  include_ask_user: bool = True, gated: list[str] = ()) -> ResolvedTools:
     """specs=None means 'not specified' (like a Claude Code agent file with no tools: line):
     all given custom tools + ask_user (unless include_ask_user=False), plus all built-ins in project
-    mode / none in lean mode."""
+    mode / none in lean mode. gated: built-in names offered but never pre-approved (every call goes to
+    on_permission), even when also listed in specs."""
     pool = {t.name: t for t in available}
     pool.setdefault(ASK_USER_NAME, ask_user_tool())
-    out = ResolvedTools()
+    out = ResolvedTools(gated=list(dict.fromkeys(base_tool_name(g) for g in gated if str(g).strip())))
     if specs is None:
         out.custom = [t for t in pool.values() if include_ask_user or t.builtin != "ask_user"]
         out.all_builtins = setup == "project"

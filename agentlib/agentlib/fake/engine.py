@@ -1,7 +1,8 @@
 """Fake engine: scripted replies, real tool handlers, zero tokens. For tests and UI work.
 
 - script(agent_name, turns): each turn = list of steps, or fn(message) -> list of steps
-- steps: say(text), call(tool, args), ask(questions), rate_limit(status), fail(message), spend(usd), output(data)
+- steps: say(text), call(tool, args), ask(questions), rate_limit(status), fail(message), spend(usd), output(data),
+  plan(text)
 - call() runs the agent's real custom tool (or ask_user validation) through the shared TurnState, so
   tool errors, ends_turn and needs_input behave exactly like the real engine
 - calling a built-in name (e.g. "Bash") checks permissions like Claude (rules matched as in rules.py):
@@ -18,6 +19,16 @@
   over the cap -> the turn stops there, Reply.status "error", error_kind "budget" (same message as Claude)
 - permission_mode="never_ask": built-ins not pre-approved are denied without asking (on_permission is never
   set: Agent rejects the combination)
+- permission modes like Claude: "accept_edits" runs edit tools and mkdir/touch/rm/rmdir/mv/cp/sed on paths
+  inside cwd / add_dirs without asking (rules.accept_edits_allows); "plan" never pre-approves edit tools (they
+  go to on_permission, denied if none). s.set_permission_mode(mode) switches live; a decision's mode= too
+- plan(text) step = the model calls ExitPlanMode: in plan mode it goes to on_permission as
+  PermissionRequest(kind="plan", plan=text); allow -> mode becomes decision.mode or "default"; deny -> stays
+  in plan mode (error tool result with prompts/plan_rejected.md). Outside plan mode -> error result
+- permission requests carry suggestions (default: "Bash(<first word>:*)" project_local for shell tools,
+  set_mode accept_edits for edit tools, the whole tool otherwise; call(..., suggestions=[...]) overrides),
+  mode and call_id. always_allow remembers rules for the session, or with remember="project_local" in an
+  in-memory per-cwd store (saved_rules(cwd)) that later setup="project" sessions in that cwd honour
 - output(data): the model's structured reply (Claude's native structured output). With Agent.output_schema
   the reply is checked like Claude: output() data if given, else the turn's text parsed as JSON ->
   Reply.data, or status "error" / error_kind "output_shape". Without output_schema output() is ignored
@@ -35,17 +46,20 @@ import json
 import os
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
-from .. import local_setup, structured
+from .. import local_setup, prompt_files, structured
 from ..engines.base import Capabilities, Connection, Engine, EngineSession, EngineSetup, TurnState
 from ..errors import AgentError, ConversationMissing
 from ..events import Done, RateLimit, Text, TextDelta, ToolCall, ToolResult
 from ..models import ModelInfo
-from ..permissions import PermissionRequest, normalize
+from ..permissions import PLAN_APPROVED_MODE, PermissionRequest, PermissionSuggestion, check_mode, resolve
 from ..reply import Usage
 from ..session import SessionInfo
 from . import rules
+
+PLAN_TOOL = "ExitPlanMode"            # same name as Claude's plan-proposal tool (events show it the same way)
 
 
 @dataclass
@@ -57,6 +71,7 @@ class Say:
 class Call:
     tool: str
     args: dict = field(default_factory=dict)
+    suggestions: list | None = None   # PermissionSuggestion / dict overrides for this call's permission request
 
 
 @dataclass
@@ -111,8 +126,16 @@ def say(text: str) -> Say:
     return Say(text)
 
 
-def call(tool: str, args: dict | None = None) -> Call:
-    return Call(tool, dict(args or {}))
+def call(tool: str, args: dict | None = None, *, suggestions: list | None = None) -> Call:
+    """A tool call. suggestions= replaces the fake's default "always allow" suggestions if it asks."""
+    return Call(tool, dict(args or {}),
+                None if suggestions is None else [s if isinstance(s, PermissionSuggestion) else PermissionSuggestion(**s)
+                                                  for s in suggestions])
+
+
+def plan(text: str) -> Call:
+    """The model proposes a plan and asks to proceed (Claude: ExitPlanMode). Only works in plan mode."""
+    return Call(PLAN_TOOL, {"plan": text})
 
 
 def ask(questions: list[dict]) -> Call:
@@ -129,16 +152,28 @@ def fail(message: str) -> Fail:
 
 _SCRIPTS: dict[str, list] = {}
 _SESSIONS: dict[str, dict] = {}       # session_id -> {"turn": n, "messages": [...], "total_cost": float}
+_LOCAL_RULES: dict[str, list[str]] = {}   # resolved cwd -> allow rules "remembered" in project local settings
 
 
 def script(agent_name: str, turns: list[list | Callable[[str], list]]) -> None:
     _SCRIPTS[agent_name] = list(turns)
 
 
+def _cwd_key(cwd) -> str:
+    return str(Path(cwd or os.getcwd()).resolve())
+
+
+def saved_rules(cwd=None) -> list[str]:
+    """Allow rules that always_allow with remember="project_local" saved for this folder (Claude:
+    <cwd>/.claude/settings.local.json). In memory only; later setup="project" sessions in that cwd honour them."""
+    return list(_LOCAL_RULES.get(_cwd_key(cwd), []))
+
+
 def reset() -> None:
     _SCRIPTS.clear()
     _SESSIONS.clear()
     _MODELS.clear()
+    _LOCAL_RULES.clear()
 
 
 class FakeSetup(EngineSetup):
@@ -164,7 +199,9 @@ class FakeSetup(EngineSetup):
 class FakeEngine(Engine):
     name = "fake"
     capabilities = Capabilities(fork=True, permission_hook=True, mcp_servers=False, budget=True, never_ask=True,
-                                structured_output=True, unsaved=True, list_models=True)
+                                structured_output=True, unsaved=True, list_models=True,
+                                accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
+                                model_switch=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "FakeSession":
         local_setup.require("fake")
@@ -202,8 +239,10 @@ class FakeSession(EngineSession):
             _SESSIONS[self.session_id] = self._rec
         self._cost_base = float(cost_base or 0.0)
         self._spent = 0.0                            # this opened session's spend (for max_budget_usd)
-        self._always_allowed: set[str] = set()       # tools given "always_allow" this session
+        self._session_rules: list[str] = []          # allow rules from "always_allow" (remember="session")
         self._info = SessionInfo()
+        self.requested_model: str | None = None      # set by set_model()
+        self.permission_mode: str = agent.permission_mode
 
     @property
     def total_cost(self) -> float:
@@ -218,6 +257,12 @@ class FakeSession(EngineSession):
 
     async def close(self) -> None:
         return None
+
+    async def set_permission_mode(self, mode: str) -> None:
+        self.permission_mode = check_mode(mode)
+
+    async def set_model(self, model: str) -> None:
+        self.requested_model = model                 # the rest of the turn (and later turns) report this model
 
     def _startup_info(self) -> SessionInfo:
         """What the Claude engine would report: offered tools (custom by short name) and the tool server."""
@@ -238,27 +283,93 @@ class FakeSession(EngineSession):
         t = turns[rec["turn"]]
         return t(message) if callable(t) else list(t)
 
-    async def _builtin(self, name: str, args: dict) -> tuple[str, bool]:
-        cwd = self.agent.cwd or os.getcwd()
-        if rules.denied(list(self.agent.disallowed_tools), name, args, cwd):
+    def _remembered(self) -> list[str]:
+        """Allow rules from always_allow: this session's, plus project-local ones (read back in project setup,
+        like Claude loading .claude/settings.local.json)."""
+        local = _LOCAL_RULES.get(_cwd_key(self.agent.cwd), []) if self.agent.setup == "project" else []
+        return self._session_rules + local
+
+    @staticmethod
+    def _default_suggestions(name: str, args: dict) -> list[PermissionSuggestion]:
+        """What Claude typically offers: a command-prefix rule for shell tools (project local), "allow all edits
+        this session" (set_mode accept_edits) for edit tools, else the whole tool (project local)."""
+        if name in rules.SHELL_TOOLS:
+            first = str(args.get("command", "")).strip().split(" ")[0]
+            return [PermissionSuggestion("add_rules", [f"{name}({first}:*)" if first else name], "allow",
+                                         where="project_local")]
+        if name in rules.EDIT_TOOLS:
+            return [PermissionSuggestion("set_mode", mode="accept_edits", where="session")]
+        return [PermissionSuggestion("add_rules", [name], "allow", where="project_local")]
+
+    async def _ask(self, req: PermissionRequest):
+        d = self.agent.on_permission(req)
+        if inspect.isawaitable(d):
+            d = await d
+        return resolve(d)
+
+    async def _plan(self, args: dict, cid: str | None) -> tuple[str, bool]:
+        """ExitPlanMode: the plan goes to on_permission (kind "plan"); allow leaves plan mode, deny keeps it."""
+        if self.permission_mode != "plan":
+            return "(fake) not in plan mode: there is no plan to approve.", True
+        if self.agent.on_permission is None:
+            return f"{PLAN_TOOL} is not allowed for this agent.", True
+        d = await self._ask(PermissionRequest(agent=self.agent.name, tool=PLAN_TOOL, input=dict(args), kind="plan",
+                                              plan=str(args.get("plan") or ""), mode=self.permission_mode,
+                                              call_id=cid))
+        if d.decision == "deny":
+            fb = " " + prompt_files.fill("plan_feedback", feedback=d.message) if d.message else ""
+            return prompt_files.fill("plan_rejected", feedback=fb), True
+        self.permission_mode = d.mode or PLAN_APPROVED_MODE
+        return f"(fake) the user approved the plan; permission mode is now {self.permission_mode}", False
+
+    async def _builtin(self, name: str, args: dict, cid: str | None = None,
+                       suggestions: list | None = None) -> tuple[str, bool]:
+        if name == PLAN_TOOL:
+            return await self._plan(args, cid)
+        a, cwd = self.agent, self.agent.cwd or os.getcwd()
+        mode = self.permission_mode
+        if rules.denied(list(a.disallowed_tools), name, args, cwd):
             return f"{name} is denied for this agent.", True
-        allowed = (self.resolved.all_builtins or name in self._always_allowed
-                   or rules.allowed(self.resolved.builtin_rules, name, args, cwd))
+        gated = name in self.resolved.gated            # gated_tools: offered, never pre-approved
+        plan_edit = mode == "plan" and name in rules.EDIT_TOOLS    # plan: edits always go to on_permission
+        allowed = not plan_edit and (
+            (mode == "accept_edits" and rules.accept_edits_allows(name, args, cwd, a.add_dirs))
+            or rules.allowed(self._remembered(), name, args, cwd)
+            or (not gated and (self.resolved.all_builtins
+                               or rules.allowed(self.resolved.approved_rules, name, args, cwd))))
         if not allowed:
-            if self.agent.permission_mode == "never_ask":
+            if mode == "never_ask":
                 return f"{name} is not allowed for this agent (never_ask: not pre-approved).", True
-            hook = self.agent.on_permission
-            if hook is None:
+            if a.on_permission is None:
                 return f"{name} is not allowed for this agent.", True
-            d = hook(PermissionRequest(agent=self.agent.name, tool=name, input=dict(args)))
-            if inspect.isawaitable(d):
-                d = await d
-            d = normalize(d)
-            if d == "deny":
-                return f"The user denied {name}.", True
-            if d == "always_allow":
-                self._always_allowed.add(name)
+            offered = self._default_suggestions(name, args) if suggestions is None else list(suggestions)
+            d = await self._ask(PermissionRequest(agent=a.name, tool=name, input=dict(args), suggestions=offered,
+                                                  mode=mode, call_id=cid))
+            if d.decision == "deny":
+                fb = " " + prompt_files.fill("plan_feedback", feedback=d.message) if d.message else ""
+                return prompt_files.fill("permission_denied", tool=name, feedback=fb), True
+            if d.decision == "always_allow":
+                self._remember(name, d, offered)
+            if d.mode is not None:
+                self.permission_mode = d.mode
+            if d.input is not None:                   # allowed with a changed input: show what ran
+                return f"(fake) ran {name} with {json.dumps(d.input, ensure_ascii=False, default=str)}", False
         return f"(fake) ran {name}", False
+
+    def _remember(self, name: str, d, offered: list[PermissionSuggestion]) -> None:
+        """Same choice as the Claude engine: rules given, else (project_local) the suggested allow rules, else
+        the whole tool. Session rules apply to this session; project-local ones also to later project sessions."""
+        if d.rules is not None:
+            new = list(d.rules)
+        elif d.remember == "project_local":
+            new = [r for s in offered if s.kind == "add_rules" and (s.behavior or "allow") == "allow" for r in s.rules]
+        else:
+            new = []
+        new = new or [name]
+        if d.remember == "project_local":
+            saved = _LOCAL_RULES.setdefault(_cwd_key(self.agent.cwd), [])
+            saved.extend(r for r in new if r not in saved)
+        self._session_rules.extend(r for r in new if r not in self._session_rules)
 
     @staticmethod
     def _usage(message: str, out_chars: int) -> Usage:
@@ -272,7 +383,7 @@ class FakeSession(EngineSession):
         rec["turn"] += 1
         rec["messages"].append(message)
         state = TurnState("fake", self.resolved.custom)
-        model = self.agent.model or "fake"
+        model = self.requested_model or self.agent.model or "fake"
         cap = self.agent.max_budget_usd
         out_chars = 0
         spent = 0.0                                   # spend() steps this turn
@@ -309,13 +420,14 @@ class FakeSession(EngineSession):
                 if step.tool in state.tools:
                     text, err = await state.run_tool(step.tool, step.args)
                 elif step.tool[:1].isupper():
-                    text, err = await self._builtin(step.tool, step.args)
+                    text, err = await self._builtin(step.tool, step.args, cid, step.suggestions)
                 else:
                     text, err = f"error: unknown tool '{step.tool}'", True
                 state.record_result(cid, text, err)
                 yield ToolResult(cid, step.tool, text, err)
                 if state.stop_requested:
                     break
+        model = self.requested_model or self.agent.model or "fake"   # a mid-turn set_model counts
         usage = self._usage(message, out_chars)
         # Like Claude's ResultMessage.total_cost_usd: cumulative for the conversation; per-turn cost is the
         # delta from cost_base (the caller's last known total), the same formula as ClaudeSession._turn()

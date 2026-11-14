@@ -7,7 +7,7 @@ from agentlib import Agent, CapabilityError, EngineUnavailable, get_engine, regi
 from agentlib.engines import Capabilities, Engine
 
 FULL = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True, structured_output=True,
-                    unsaved=True, list_models=True)
+                    unsaved=True, list_models=True, accept_edits=True, plan_mode=True, mode_switch=True)
 
 
 @tool(ends_turn=True)
@@ -54,6 +54,8 @@ CASES = [
     ("project_setup", {"setup": "project"}, {}),
     ("budget", {"max_budget_usd": 0.5}, {}),
     ("never_ask", {"permission_mode": "never_ask"}, {}),
+    ("accept_edits", {"permission_mode": "accept_edits"}, {}),
+    ("plan_mode", {"permission_mode": "plan"}, {}),
     ("structured_output", {"output_schema": {"type": "object"}}, {}),
     ("unsaved", {"save_conversation": False}, {}),
 ]
@@ -113,6 +115,22 @@ def test_claude_and_fake_claim_the_run_controls():
     for name in ("claude", "fake"):
         c = get_engine(name).capabilities
         assert c.budget and c.never_ask and c.structured_output and c.unsaved and c.list_models
+        assert c.accept_edits and c.plan_mode and c.mode_switch
+    c = get_engine("cursor").capabilities
+    assert not (c.accept_edits or c.plan_mode or c.mode_switch)
+
+
+def test_engine_session_without_mode_switch_raises():
+    import asyncio
+
+    from agentlib.engines import EngineSession
+
+    class _Bare(EngineSession):
+        async def start(self): ...
+        def turn(self, message): ...
+        async def close(self): ...
+    with pytest.raises(CapabilityError, match="mode_switch"):
+        asyncio.run(_Bare().set_permission_mode("plan"))
 
 
 def test_missing_list_names_all_gaps():

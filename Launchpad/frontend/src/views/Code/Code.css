@@ -1,0 +1,37 @@
+/* Claude Code side of the chat screen (class names from the vanilla Free Flight page; sizes from the theme.css tokens). */
+#viewCode .chat-head{flex-wrap:nowrap}
+#viewCode .chat-head>div:first-child{flex:1;min-width:0}
+#codeSub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.code-comp{border-radius:var(--r-xl);padding:var(--sp-1);align-items:flex-end;margin-bottom:var(--sp-1-5)}
+.code-comp textarea{flex:1;min-width:0;min-height:var(--ctl-md);max-height:160px;border:0;background:transparent;font:inherit;font-size:var(--fs-base);color:var(--ink);resize:none;padding:var(--sp-2) var(--sp-1);line-height:var(--lh-snug)}
+.code-comp textarea:focus{outline:none}
+.modepill{flex:none;display:inline-flex;align-items:center;gap:var(--sp-1-5);min-height:var(--ctl-md);border:1.5px solid var(--line2);background:var(--card);border-radius:var(--r-pill);padding:0 var(--sp-3);font-size:var(--fs-xs);font-weight:700;cursor:pointer;white-space:nowrap;color:var(--muted);transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast)}
+.modepill .lucide{width:var(--icon-sm);height:var(--icon-sm)}
+.modepill:hover{border-color:var(--lilac)}
+.modepill[data-mode="accept_edits"]{border-color:var(--green);color:var(--green-ink);background:var(--green-soft)}
+.modepill[data-mode="plan"]{border-color:var(--indigo);color:var(--indigo-ink);background:var(--indigo-soft)}
+.code-hint{font-size:var(--fs-2xs);color:var(--muted);text-align:center;margin:0 var(--sp-5) var(--sp-3)}
+.code-hint kbd{display:inline-block;min-width:18px;padding:0 var(--sp-1);border:1px solid var(--line2);border-bottom-width:2px;border-radius:var(--r-xs);background:var(--card);font:600 10.5px var(--body);line-height:16px;color:var(--ink)}
+.toolrow{align-self:stretch;max-width:92%;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-quiet);font-size:var(--fs-sm);animation:pop var(--t-base) var(--ease)}
+/* the tool name is shown in full (AskUserQuestion, ExitPlanMode ...): its own column sizes to it */
+.toolrow summary{display:grid;grid-template-columns:max-content minmax(0,1fr) auto;gap:var(--sp-2);align-items:center;padding:var(--sp-1-5) var(--sp-2-5);cursor:pointer;list-style:none;border-radius:var(--r-md)}
+.toolrow summary:hover{background:var(--bg)}
+.toolrow .tl{min-width:52px;max-width:200px;padding:0 var(--sp-1-5)}
+.toolrow summary::-webkit-details-marker{display:none}
+.toolrow summary:focus-visible{outline-offset:-2px}
+.toolrow .stt{color:var(--green-ink)}
+.toolrow .stt .lucide{width:var(--icon-sm);height:var(--icon-sm)}
+.toolrow.denied,.toolrow.failed{border-color:var(--coral-soft)}
+.toolrow.denied .stt,.toolrow.failed .stt{color:var(--coral-ink)}
+.toolrow.denied .sm{text-decoration:line-through;color:var(--coral-ink)}
+.toolrow.denied .tl,.toolrow.failed .tl{background:var(--coral-soft);color:var(--coral-ink);box-shadow:none}
+.tooldet{padding:var(--sp-0) var(--sp-3) var(--sp-2-5) var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-0);font-size:var(--fs-xs)}
+.tooldet code{font-family:var(--mono);font-size:var(--fs-xs);word-break:break-all}
+.ccard{align-self:stretch;max-width:92%;border:1.5px solid var(--coral);border-radius:var(--r-lg);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2-5);animation:pop var(--t-base) var(--ease);background:var(--card)}
+.ccard.plan,.ccard.question{border-color:var(--indigo)}
+.ccard.settled{border-color:var(--line);background:var(--surface-settled)}
+.ccard .cc-top{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.ccard .who code{font-family:var(--mono);font-size:var(--fs-xs)}
+.ccard h3{margin:0;font-family:var(--disp);font-size:var(--fs-lg);font-weight:600;line-height:var(--lh-tight);overflow-wrap:anywhere}
+.ccard .qbody{font-size:var(--fs-sm);color:var(--muted)}
+.bubble.streaming::after{content:'\258D';color:var(--indigo);animation:blink 1s infinite;margin-left:var(--sp-0)}

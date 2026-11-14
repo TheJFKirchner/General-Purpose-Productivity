@@ -18,3 +18,11 @@ Skills for Claude Code. Copy a skill folder into your skills folder (for example
 | App | What it does |
 |---|---|
 | [wiki-app](wiki-app/README.md) | Obsidian-style desktop app for folders of Markdown notes. AI captures your notes and Claude Code sessions into a personal wiki, lets you review them, and promotes the good ones to a team wiki. It runs on `agentlib`, so download the app and `agentlib` together from this repo (keep them side by side) and complete the one-time sign-in setup in [agentlib/setup/claude-setup.md](agentlib/setup/claude-setup.md) first. Start with its README. |
+| [Launchpad](Launchpad/README.md) | Local desktop app for planning and running work with AI agents. Chat with a planner, approve its plan, and an orchestrator hands each step to a builder agent and writes a report. It runs on `agentlib`, so keep Launchpad and `agentlib` side by side in this repo. You only need Python to run it. Start with its README. |
+
+## Claude Code setup (`.claude/`)
+
+The repo's [.claude](.claude) folder holds skills and agents that load automatically in Claude Code sessions opened on this repo, including cloud and mobile sessions.
+
+- **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it) and grilling (stress-test a plan with pointed questions).
+- **Agents** ([.claude/agents](.claude/agents)): factory-builder, factory-reader, factory-ui-reviewer, security-review and git-shipper, the helpers that factory-mode and git work hand tasks to.

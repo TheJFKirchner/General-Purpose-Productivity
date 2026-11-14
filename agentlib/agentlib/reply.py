@@ -63,6 +63,8 @@ class Reply:
     error: str | None = None
     error_kind: ErrorKind | None = None      # set only when status == "error" (see module docstring)
     data: Any = None                         # parsed JSON reply when Agent.output_schema is set
+    usage_by_model: dict = field(default_factory=dict)   # this turn per model id: {"usage": Usage, "cost_usd": float}
+                                                         # (more than one entry after Session.set_model mid-turn)
 
     def to_dict(self) -> dict:
         return asdict(self)

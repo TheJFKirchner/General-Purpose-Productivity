@@ -1,0 +1,14 @@
+/* Settings dialog styles (class names from the vanilla page; sizes from the theme.css tokens). */
+.setbody{display:flex;flex-direction:column;gap:var(--sp-5)}
+.setmsg{flex-direction:row;align-items:center;gap:var(--sp-2)}
+.set-sec h3{display:flex;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-1-5);font-family:var(--disp);font-size:var(--fs-base);font-weight:600}
+.set-sec h3 .lucide{color:var(--muted)}
+.set-hint{font-size:var(--fs-xs);margin:var(--sp-1) 0 var(--sp-2)}
+#setDirs{display:flex;flex-direction:column;gap:var(--sp-1-5)}
+.dirrow{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2-5);flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--sp-2-5) var(--sp-3)}
+.dirrow.missing{background:var(--coral-soft)}
+.dr-main{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;min-width:0}
+.dr-main code{font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);word-break:break-all;flex-basis:100%}
+.set-add{margin-top:var(--sp-2)}
+.setrow{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(140px,1fr) 136px auto;gap:var(--sp-1-5) var(--sp-2-5);align-items:center;padding:var(--sp-2) 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm)}
+.setrow input[type=text],.setrow input[type=number]{min-width:0}

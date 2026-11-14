@@ -20,7 +20,7 @@ from .errors import (AgentError, AgentFileError, CapabilityError, ConversationMi
 from .events import Done, Event, RateLimit, Text, TextDelta, ToolCall, ToolResult
 from .loaders import load_claude_agent, load_cursor_agent
 from .models import ModelInfo, list_models, list_models_sync
-from .permissions import PermissionRequest
+from .permissions import PERMISSION_MODES, PermissionDecision, PermissionRequest, PermissionSuggestion
 from .questions import Answer, Question
 from .reply import Reply, ToolCallRecord, Usage
 from .session import Session, SessionInfo
@@ -30,6 +30,7 @@ from .tools import Tool, tool
 __all__ = [
     "Agent", "Session", "SessionInfo", "Reply", "Usage", "ToolCallRecord", "Tool", "tool",
     "load_claude_agent", "load_cursor_agent", "Question", "Answer", "PermissionRequest",
+    "PermissionDecision", "PermissionSuggestion", "PERMISSION_MODES",
     "Event", "TextDelta", "Text", "ToolCall", "ToolResult", "RateLimit", "Done",
     "AgentError", "AgentFileError", "CapabilityError", "ConversationMissing", "EngineUnavailable",
     "QuestionShapeError", "get_engine", "register_engine", "use_login_only",

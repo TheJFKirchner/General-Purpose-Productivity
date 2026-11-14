@@ -6,6 +6,7 @@
     reply = await s.answer({"trend_years": "Last 3 years"})   # after reply.status == "needs_input"
 - s.session_id: save it to resume later (agent.session(resume=id))
 - s.pending_questions: open ask_user questions; answer() needs them (pass questions= after a restart)
+- s.permission_mode / await s.set_permission_mode("accept_edits"): read / change the permission mode live
 - s.info: SessionInfo (tools offered, MCP server status, model) as the engine reported it at startup;
   empty until the first turn has started (the Claude CLI reports it at the start of the first turn)
 """
@@ -45,6 +46,39 @@ class Session:
     @property
     def info(self) -> SessionInfo:
         return self._es.info
+
+    @property
+    def permission_mode(self) -> str:
+        """Current permission mode: "default" | "never_ask" | "accept_edits" | "plan". Follows
+        set_permission_mode() and plan approvals (approved -> the mode the app chose)."""
+        return self._es.permission_mode or self.agent.permission_mode
+
+    async def set_permission_mode(self, mode: str) -> None:
+        """Change the permission mode for the rest of this conversation (also mid-turn; next tool call uses it).
+        ValueError for an unknown mode; CapabilityError if the engine cannot switch or cannot run that mode."""
+        from .engines import get_engine
+        from .engines.base import check_mode_switch
+        eng = get_engine(self.agent.engine)
+        check_mode_switch(eng.name or self.agent.engine, eng.capabilities, mode)
+        await self._es.set_permission_mode(mode)
+
+    @property
+    def model(self) -> str | None:
+        """The model this conversation uses now (after set_model), else the agent's."""
+        return getattr(self._es, "requested_model", None) or self.agent.model
+
+    async def set_model(self, model: str) -> None:
+        """Change the model for the rest of this conversation: between turns, or mid-turn (the next model call
+        uses it). The conversation carries over; the new model writes it to its own prompt cache once.
+        CapabilityError if the engine cannot switch models."""
+        from .engines import get_engine
+        from .errors import CapabilityError
+        eng = get_engine(self.agent.engine)
+        if not eng.capabilities.model_switch:
+            raise CapabilityError(f"engine '{eng.name}' cannot do: model_switch")
+        if not str(model or "").strip():
+            raise ValueError("give a model (alias or id)")
+        await self._es.set_model(str(model).strip())
 
     async def __aenter__(self) -> "Session":
         await self._es.start()

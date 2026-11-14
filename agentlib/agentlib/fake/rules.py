@@ -14,14 +14,18 @@ Mirrors https://code.claude.com/docs/en/permissions as far as is practical witho
 - WebFetch(domain:host): case-insensitive hostname; "*.example.com" = subdomains only; "*" = any host
 - mcp__server, mcp__server__*, mcp__server__tool, mcp__server__get_* (no parentheses)
 - deny rules only: "Tool(param:value)" on a top-level input field ("*" wildcard)
+- accept_edits_allows(): what Claude's acceptEdits mode approves unasked (edit tools, mkdir/touch/rm/rmdir/mv/
+  cp/sed) on paths inside cwd / add_dirs
 Not modelled: Claude's built-in read-only Bash commands that need no rule, wrapper stripping (timeout, xargs),
-quoting / subshells inside commands, settings-file rules.
+quoting / subshells inside commands, settings-file rules, protected paths and critical-path removals under
+acceptEdits.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -218,6 +222,47 @@ def allowed(rules: list[str], tool: str, inp: dict, cwd: str | Path | None = Non
         specs = [s for n, s in map(parse, rules) if n == tool and s is not None]
         return all(any(command_matches(s, part) for s in specs) for part in parts)
     return any(_rule_matches(r, tool, inp, cwd, deny=False) for r in rules)
+
+
+FS_COMMANDS = {"mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"}   # acceptEdits filesystem commands
+
+
+def _inside(target: str, dirs: list[Path], cwd: Path) -> bool:
+    p = Path(target).expanduser()
+    full = (p if p.is_absolute() else cwd / p).resolve()
+    return any(full == d or d in full.parents for d in dirs)
+
+
+def accept_edits_allows(tool: str, inp: dict, cwd: str | Path | None = None, add_dirs=()) -> bool:
+    """True if Claude's acceptEdits mode would approve this call without asking: Edit/Write/MultiEdit/
+    NotebookEdit on a path inside cwd or add_dirs, or a shell command whose every part is mkdir / touch / rm /
+    rmdir / mv / cp / sed with every path argument inside them (no wrappers, no touch options)."""
+    cwd = Path(cwd or os.getcwd()).resolve()
+    dirs = [cwd] + [Path(d).expanduser().resolve() for d in add_dirs]
+    if tool in EDIT_TOOLS:
+        target = inp.get("file_path") or inp.get("notebook_path")
+        return bool(target) and _inside(str(target), dirs, cwd)
+    if tool not in SHELL_TOOLS:
+        return False
+    parts = _subcommands(str(inp.get("command", "")))
+    if not parts:
+        return False
+    for part in parts:
+        try:
+            words = shlex.split(part)
+        except ValueError:
+            return False
+        if not words or words[0] not in FS_COMMANDS:
+            return False
+        args = words[1:]
+        if words[0] == "touch" and any(a.startswith("-") or any(c in a for c in "*?[") for a in args):
+            return False
+        paths = [a for a in args if not a.startswith("-")]
+        if words[0] == "sed" and paths:
+            paths = paths[1:]                          # the sed script is not a path
+        if not paths or not all(_inside(a, dirs, cwd) for a in paths):
+            return False
+    return True
 
 
 def denied(rules: list[str], tool: str, inp: dict, cwd: str | Path | None = None) -> bool:
