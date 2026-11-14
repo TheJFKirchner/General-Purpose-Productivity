@@ -23,13 +23,28 @@ Skip factory mode for small fixes, or when the user says "live" or "just do it".
 
 The model in an agent's definition is only its default; set `model` when you launch it to override.
 
+## Request records
+
+Each project keeps a `Features/` folder: one file per request, and one short list of all of them. Decisions are never recorded in a combined file (no `decisions.md`, no running log). If a project still has one, leave it as it is and put new material in a request file and the list.
+
+- **Request file**: `Features/<YYYY-MM-DD>-<short-slug>.md`. It starts with `# <Name>`, then a `Status:` line (`decided` for a conversation that only settled decisions, `approved`, `built` or `abandoned`), a `Date:` line, and a one-paragraph summary. Then the full detail: for a factory-mode feature, the assumptions list, the decisions reached in the interview (with the reasoning that mattered and the alternatives rejected), and the task blocks. Write it so that a fresh session could pick the work up from this file alone. Nothing private goes in it: no keys, personal details or machine paths.
+- **The list**: `Features/README.md`, every request, oldest first. If it does not exist, create it with a one-line introduction, a line saying that newer requests override older ones where they conflict, and a table with exactly the columns `#`, `Request`, `Summary`. Each request gets one row at the bottom:
+  - `#`: the next number after the last row, starting at 1.
+  - `Request`: the request's name, linked to its file.
+  - `Summary`: exactly two plain sentences, written for someone who has not read the file, on what was actually decided or built.
+
+  No other columns.
+
+Requests handled outside factory mode follow the same convention in a project that has a `Features/` folder: a conversation that settles a real decision (not a typo fix) gets its own request file with `Status: decided` and a row in the list.
+
 ## 1. Interview
 
 1. Work out which project the change is for. Each subfolder of Misc Claude is an independent project; work inside that project's folder and check it for a README or CLAUDE.md.
-2. Send a `factory-reader` to learn what exists today that bears on the request, so your first questions are informed.
-3. Invoke the grilling skill (`grilling` in this repo, or `anthropic-skills:grilling` where that is installed) and follow it fully. The two skills divide the interview between them: the grilling skill is how you interview (the back-and-forth, how questions are asked, when the interview is done), and factory mode is what you interview on. The agenda is set out under "What the interview must cover" below; run that agenda through the grilling skill's method.
-4. Facts are your job, not the user's. When a question depends on how the code works today, send a `factory-reader` with one pointed question instead of asking the user or reading the code yourself.
-5. Choosing a library is a design decision. Research it during the interview (use a web-reading subagent), settle it with the user, and carry the links into the plan.
+2. If the project has a `Features/README.md`, read that list of past requests and open only the request files that bear on this change, so you build on what was decided before (see "Request records" below).
+3. Send a `factory-reader` to learn what exists today that bears on the request, so your first questions are informed.
+4. Invoke the grilling skill (`grilling` in this repo, or `anthropic-skills:grilling` where that is installed) and follow it fully. The two skills divide the interview between them: the grilling skill is how you interview (the back-and-forth, how questions are asked, when the interview is done), and factory mode is what you interview on. The agenda is set out under "What the interview must cover" below; run that agenda through the grilling skill's method.
+5. Facts are your job, not the user's. When a question depends on how the code works today, send a `factory-reader` with one pointed question instead of asking the user or reading the code yourself.
+6. Choosing a library is a design decision. Research it during the interview (use a web-reading subagent), settle it with the user, and carry the links into the plan.
 
 ### Assume the obvious, ask about the rest
 
@@ -83,7 +98,7 @@ Dispatch nothing until the user explicitly approves the plan.
 Do these two things before launching any builder.
 
 1. **Feature branch.** If the project folder is a git repo, have `git-shipper` create and switch to a branch named `feature/<short-slug>` from the main branch. The feature is built on this branch so the main branch keeps working until the user accepts the result. If `git-shipper` reports uncommitted changes or that the repo is not on its main branch, take that to the user before going further. If the folder is not a git repo, skip the branch and say so.
-2. **Spec file.** Write the approved plan to `Features/<YYYY-MM-DD>-<short-slug>.md` in the project, creating the `Features/` folder if it is not there. Every feature built in factory mode gets one. It holds a one-paragraph summary of what the feature is for, the assumptions list, the task blocks, and a `Status:` line set to `approved`. Write it so that a fresh session could build the feature from this file alone. Nothing private goes in it: no keys, personal details or machine paths.
+2. **Spec file.** The spec file is this request's file, in the format under "Request records": `Features/<YYYY-MM-DD>-<short-slug>.md` in the project, creating the `Features/` folder if it is not there. Every feature built in factory mode gets one. Set `Status:` to `approved`. It must capture the conversation, not just the plan: the summary of what the feature is for, the assumptions list, the decisions reached in the interview with the reasoning that mattered and the alternatives rejected, and the task blocks. At the same time, add the request's row to `Features/README.md`, with a two-sentence summary of what was agreed. The list covers every request, so the row goes in now, not after the build.
 
 The spec is the record of what was agreed. If the scope changes during the build, update the spec to match.
 
@@ -129,14 +144,10 @@ Give the user one consolidated summary: what was built, what was checked and how
 
 Once the build and fix round are finished, and before the commit below:
 
-1. Set the spec's `Status:` line to `built`.
-2. Add the feature to the tracking file, `Features/README.md`. If the file does not exist, create it with a one-line introduction ("Features built in this project, in the order they were built.") and a table with the columns `#`, `Feature`, `Description`, `Built`. Add one row at the bottom:
-   - `#`: the next number after the last row, starting at 1.
-   - `Feature`: the feature's name, linked to its spec file.
-   - `Description`: two or three sentences on what the feature does for the person using the software, written for someone who has not seen the spec. Describe what was actually built, not what was planned, if the two differ.
-   - `Built`: today's date.
+1. Set the spec's `Status:` line to `built`, and update the spec wherever what was built differs from what was planned.
+2. In the list, `Features/README.md`, revise the request's `Summary` so its two sentences describe what was actually built, for the person using the software. Keep the columns `#`, `Request`, `Summary` as they are.
 
-Add the row only for a feature that was built. A feature abandoned before the build finished gets no row; its spec file stays, with `Status:` set to `abandoned`.
+A feature abandoned before the build finished keeps its spec file and its row: set `Status:` to `abandoned` and revise the summary to say it was abandoned and why.
 
 ### Security review before committing
 
@@ -151,7 +162,7 @@ If anything changes after the review has run, run it again before the next commi
 
 Do not run git commands yourself; hand the mechanics to `git-shipper` with the project folder, exactly what to do, what the user approved, and the commit attribution line. Decisions stay with you and the user: which repo, which branch, and what to do when `git-shipper` stops and reports a problem.
 
-- **Commit on the feature branch: no need to ask.** Once the security review has not blocked, have `git-shipper` commit the work, including the spec file and the tracking file, on the feature branch. Do not push. A commit here is local and leaves the main branch untouched, so it does not need the user's go-ahead. Later changes to the same feature (fixes the user asks for after trying it) are committed to the same branch the same way.
+- **Commit on the feature branch: no need to ask.** Once the security review has not blocked, have `git-shipper` commit the work, including the spec file and `Features/README.md`, on the feature branch. Do not push. A commit here is local and leaves the main branch untouched, so it does not need the user's go-ahead. Later changes to the same feature (fixes the user asks for after trying it) are committed to the same branch the same way.
 - **Merge into the main branch: only when the user says so.** Have `git-shipper` merge the feature branch into the main branch as its own merge commit, so the feature stays visible as one unit in the history, then delete the merged feature branch.
 - **Push: only when the user says so.** A go-ahead to merge is not a go-ahead to push.
 - **If the user rejects the feature**, have `git-shipper` switch back to the main branch and leave the feature branch in place. Deleting unmerged work is the user's call.
