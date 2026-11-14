@@ -1,6 +1,7 @@
 # React port of the front end, then a visual polish pass
 
 Status: built
+Date: 2026-11-13
 
 Built as planned, with these differences: state uses Zustand + immer; the polish pass added three small things beyond restyling (a "Go to Plan" button on the empty Missions screen, a bar shown when the connection drops, an X button on dialogs); the seven small gaps the port left were closed at the start of the polish task.
 
@@ -12,7 +13,7 @@ James approved building this while away ("plan this migration out and make the c
 
 1. The port is like-for-like: same screens, same behaviour, same websocket messages. No features added or removed in the port itself.
 2. The websocket contract in the `app/server.py` header stays authoritative and unchanged. The front end remains display + input only.
-3. Source lives in `frontend/`; the build goes to `frontend/dist/` and is kept in the project (decisions.md: built files are committed so coworkers need Python only, never Node).
+3. Source lives in `frontend/`; the build goes to `frontend/dist/` and is kept in the project ([2026-11-08-foundation.md](2026-11-08-foundation.md), App stack: built files are committed so coworkers need Python only, never Node).
 4. `GET /` serves `frontend/dist/index.html` when it exists and falls back to the vanilla file when it does not. The vanilla page stays reachable at `GET /classic` for comparison. `prototype/launchpad-orbit.html` is not edited or deleted.
 5. The page still gets its port and access code from the URL query (`?port=&code=`). No templating.
 6. The page CSP stays as it is. Nothing is fetched from the internet at run time: every library and font is bundled by Vite and served from the same origin.
@@ -40,7 +41,7 @@ James approved building this while away ("plan this migration out and make the c
 - Goal: a building, running React app shell with all state, the bridge, the demo and the shared pieces in place, and the server serving it.
 - Builder: factory-builder, Opus.
 - Owns: `frontend/` (all of it at this stage), `app/server.py` (page and asset routes only), `tests/` (new tests for the routes), `.claude/launch.json` if needed.
-- Read: `prototype/launchpad-orbit.html` (state 1031, Bridge 1046 to 1103, Demo from about 3459, CSS 8 to 622), `app/server.py` header and routes 120 to 186, `docs/decisions.md` lines 14 to 33 and 215 to 216, `tests/test_fixes.py` 80 to 93.
+- Read: `prototype/launchpad-orbit.html` (state 1031, Bridge 1046 to 1103, Demo from about 3459, CSS 8 to 622), `app/server.py` header and routes 120 to 186, the App stack and UI direction decisions (now [2026-11-08-foundation.md](2026-11-08-foundation.md) and [2026-11-08-orbit-ui-direction.md](2026-11-08-orbit-ui-direction.md)) and the ECharts and frames lines of [2026-11-13-visual-sidecar.md](2026-11-13-visual-sidecar.md), `tests/test_fixes.py` 80 to 93.
 - Done when: `npm run build` succeeds with no TypeScript errors; `python -m pytest` passes; `python -m app.launch --fake --no-window --port 8766 --code dev` serves the React shell at `/` with nav, the right-hand aside frame and placeholder views; `/classic` serves the vanilla page; `/` falls back to the vanilla page when `frontend/dist` is missing; the store handles every server event in the contract; the in-page demo drives the store.
 - Runs: first, alone.
 
@@ -75,4 +76,17 @@ Done for 2a to 2c: every control and state the vanilla screen has exists in the 
 - Runs: after 3.
 
 ### 5. Review
-- `factory-ui-reviewer` once on the fake demo, then at most one fix round. Update `CLAUDE.md` and `docs/decisions.md` to describe the new front end.
+- `factory-ui-reviewer` once on the fake demo, then at most one fix round. Update `CLAUDE.md` and the decisions (then one combined file; now the `## Decisions` section below) to describe the new front end.
+
+## Decisions
+
+Recorded in the former combined decisions file as "React front end (2026-11-13; built while the user was away, on recorded assumptions: Features/2026-11-13-react-port.md)".
+
+- The front end is now `frontend/`: React + Vite + TypeScript, built to `frontend/dist/` (kept in the project, so running the app needs Python only; run `npm run build` in `frontend/` after any front-end change)
+- Serving: `GET /` = `frontend/dist/index.html` when it exists, else the vanilla page; `GET /assets/<file>` = the build's hashed files; `GET /classic` = the vanilla page, always. Port and access code still come from the URL query. Page CSP unchanged
+- `prototype/launchpad-orbit.html` is kept as the reference and fallback and is no longer updated; new UI work goes in `frontend/`
+- State: Zustand + immer, one reducer for every server event (`src/store/`); views only read state and call actions. The in-page demo (no port / code in the URL) is ported, so `npm run dev` works without the back end
+- Visual frames: same security model as before (sandboxed srcdoc iframes, own meta CSP, ECharts inlined, navigation guard)
+- Look: same Orbit colours, fonts and layout; spacing / radius / type / shadow / motion tokens in `src/theme.css`; icons = lucide-react; dialogs = @radix-ui/react-dialog (unstyled); Sora and Inter bundled (@fontsource-variable, Latin). Nothing fetched from the internet at run time
+- Front-end tests: vitest + happy-dom (`npx vitest run` in `frontend/`)
+- Library notes: docs/research/ (vite, zustand, immer, vitest, lucide-react, radix-dialog, fontsource)

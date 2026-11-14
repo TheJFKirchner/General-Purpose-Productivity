@@ -26,8 +26,8 @@ Running the app needs Python only. The built front end is included in `frontend/
 | Item | What it is |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | Rules, current state and a file map for anyone (or any AI) changing the app |
-| [docs/](docs/README.md) | [architecture.md](docs/architecture.md) (start here), [decisions.md](docs/decisions.md), library notes, background |
-| [Features/](Features/) | One spec per feature built |
+| [docs/](docs/README.md) | [architecture.md](docs/architecture.md) (start here), library notes, background |
+| [Features/](Features/README.md) | One file per conversation or feature request (decisions and specs), listed in its README |
 | [app/](app/README.md) | The Python app: server, hub, plan and session files |
 | [app/agents/](app/agents/README.md) | The built-in agents, one folder each (definition, code, README) |
 | [frontend/](frontend/README.md) | The React front end; run `npm run build` there after changing it |

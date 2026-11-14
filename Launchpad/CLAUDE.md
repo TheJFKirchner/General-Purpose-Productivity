@@ -5,7 +5,8 @@ Local desktop app (Windows + Mac launchers): planner chat + request queue over a
 ## Rules
 - ALL planning (features, architecture, scope, trade-offs, "how should we…") → grill first (rounds of numbered questions, recommended answer each); never jump to a plan
   - Max 3 questions per round; no new round while the user has open feedback or questions
-- Decisions live in docs/decisions.md → read before planning; add new decisions there; newer overrides older
+- Each conversation / feature request = its own file `Features/<YYYY-MM-DD>-<slug>.md` (Status, Date, summary, detail) + one row in Features/README.md (#, Request, two-sentence Summary)
+  - Before planning: read Features/README.md, open only the request files that bear on the task; newer overrides older
 - All agent loops in Python; front end is display + input only
 - ALL agent building in this folder uses agentlib (shared library at ../agentlib/, editable install; never call claude_agent_sdk directly outside its engines/) → read ../agentlib/README.md first
   - Agent definitions = standard agent files: built-ins at app/agents/<agent>/agent.md, folder agents at `<folder>/.claude/agents/`; library-only settings passed at load time
@@ -30,18 +31,18 @@ Local desktop app (Windows + Mac launchers): planner chat + request queue over a
 - Planner / Claude Code switch on the Plan tab replaces the Free Flight tab (2026-11-13); "Send plan to Claude Code" on a plan draft
 - Visualizer (2026-11-13): show_visuals takes an optional library; ECharts (default), Chart.js, D3 bundled in app/vendor/ (served at /vendor/lib/{key}.js); Plotly / Bokeh served from an installed Python package when found; anything else drawn in ECharts and labelled; palettes, hero cards and layouts are first-class
 - Reorganisation (2026-11-14): built-in agents moved to app/agents/<agent>/ (agent.md + code + README.md; shared crew.py, folder_agents.py); Launchpad/.claude/agents/ removed; live scripts in tests/live/; test files renamed by topic; sample/ deleted; background docs in docs/background/; front end src/shell/ removed (Header in components/); READMEs added (docs/, app/, tests/, app/agents/, frontend/); docs/architecture.md added
+- Request records (2026-11-14): the combined decisions file was split into one file per request in Features/, listed in Features/README.md
 - Websocket contract: app/server.py header is authoritative (mirrored by frontend/src/contract.ts)
 
 ## Where things are
-- Read order for a new session: this file → docs/decisions.md → docs/architecture.md → background docs only when their topic comes up
+- Read order for a new session: this file → Features/README.md (then only the relevant request files) → docs/architecture.md → background docs only when their topic comes up
 
 ### Current (source of truth)
-- docs/decisions.md — all decisions so far, dated; newer overrides older; wins over docs/background/v1plan.md where they conflict
+- Features/ — one file per conversation / feature request (decisions + specs), dated; README.md = the list (#, Request, Summary); newer overrides older; wins over docs/background/v1plan.md where they conflict
 - docs/architecture.md — request flow, modules, state on disk; docs/README.md = index; docs/research/ = library notes
 - frontend/ — React + Vite + TypeScript ("Orbit" look); read frontend/README.md first (state, hooks, actions, components, tokens, commands)
   - dist/ — the build served by app/server.py; rebuild with `npm run build`; tests `npx vitest run`
 - prototype/launchpad-orbit.html — the earlier vanilla front end, one file; served at `/classic` and as the fallback when frontend/dist is missing; not updated any more
-- Features/ — one spec per feature built in factory mode + README.md (the list)
 - app/ — Python back end; module map in app/README.md (launch, server, hub, plan, sessionfiles, incoming, meter, activity, settings, store, files, demo)
   - launch.py — entry point: `python -m app.launch` · `--cwd <folder>` · `--browser` · `--fake` (demo) · `--question-timeout N` · `--permission-timeout N` · `--autopilot` · `--planner-start M` · `--planner-top M` · `--promotion-window N` · `--promotion-criteria FILE` · `--model M` · `--pilot-model M` · `--visual-model M` · dev: `--no-window --port 8765 --code dev`
   - server.py — header = websocket contract (authoritative)
@@ -55,7 +56,7 @@ Local desktop app (Windows + Mac launchers): planner chat + request queue over a
 - `<connected folder>/.launchpad/` — session folders written at run time (git-ignored by its own .gitignore)
 - `<home>/.launchpad/` — per-user settings.json and backups/ of hand-edited files (outside every project)
 
-### Background (docs/background/; older than decisions.md; history and reasoning)
+### Background (docs/background/; older than the Features/ request files; history and reasoning)
 - v1plan.md — original V1 design interview (2026-11-04, older "Mission Control" naming, numbered D-decisions referenced elsewhere)
 - cursor-vs-agent-sdk-research.md — answers v1plan.md §9: Claude Agent SDK vs Cursor SDK, 15 questions, risks, recommendations
 - claude-cursor-orchestrator-summary.md — short design for one Python orchestrator that picks Claude or Cursor per role; early library sketch that became agentlib

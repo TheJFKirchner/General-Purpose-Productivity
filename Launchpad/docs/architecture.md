@@ -1,6 +1,6 @@
 # Architecture: how Launchpad fits together
 
-For a new developer. Rules and history: [CLAUDE.md](../CLAUDE.md), [decisions.md](decisions.md). Details per area: [app/agents/README.md](../app/agents/README.md) (agents), [frontend/README.md](../frontend/README.md) (front end), [app/README.md](../app/README.md) (module map), [tests/README.md](../tests/README.md).
+For a new developer. Rules and history: [CLAUDE.md](../CLAUDE.md), [Features/README.md](../Features/README.md) (one file per request). Details per area: [app/agents/README.md](../app/agents/README.md) (agents), [frontend/README.md](../frontend/README.md) (front end), [app/README.md](../app/README.md) (module map), [tests/README.md](../tests/README.md).
 
 ## The idea
 

@@ -1,6 +1,7 @@
 # Code organisation and documentation
 
 Status: built
+Date: 2026-11-14
 
 A readiness pass over Launchpad so the code is easy to develop on. No behaviour changes: files move, one large module is split, small clean-ups, and documentation is added where a new developer would look for it. The headline change is that every built-in agent lives in `app/agents/<agent>/`, one folder per agent, holding its definition file, its Python code and a README.
 
@@ -56,3 +57,10 @@ Role id to folder: planner -> planner, astronaut -> explorer, orchestrator -> or
 - Owns: all `.md` outside `app/agents/` and `frontend/`.
 - Done: every path named in `README.md` and `CLAUDE.md` exists; no links to moved files are broken.
 - Runs with: after tasks 1 and 2.
+
+## Decisions
+
+Recorded in the former combined decisions file as "Code organisation: agents in app/agents/<agent>/ (2026-11-14, spec: Features/2026-11-14-code-organisation.md)".
+
+- Built-in agents live in `app/agents/<agent>/` (planner, explorer, orchestrator, builder, visualizer, claude_code, drafter): `agent.md` (standard agent file), code, README.md. Shared: `app/agents/crew.py`, `app/agents/folder_agents.py`. This overrides the earlier `.claude/agents/` location for built-ins; `Launchpad/.claude/agents/` no longer exists. Folder agents stay in `<folder>/.claude/agents/`
+- Paths in older entries above (`.claude/agents/launchpad-*.md`, `app/planner.py`, `app/run.py`, `app/crew.py`, `app/planner-promotion.md`, `tests/live_*.py`) are historical; the planner criteria are now `app/agents/planner/promotion.md`, live scripts are `tests/live/live_*.py`, background docs are in `docs/background/`. Role ids, `launchpad-*` front-matter names and websocket fields are unchanged
