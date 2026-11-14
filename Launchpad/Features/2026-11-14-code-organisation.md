@@ -1,6 +1,6 @@
 # Code organisation and documentation
 
-Status: approved
+Status: built
 
 A readiness pass over Launchpad so the code is easy to develop on. No behaviour changes: files move, one large module is split, small clean-ups, and documentation is added where a new developer would look for it. The headline change is that every built-in agent lives in `app/agents/<agent>/`, one folder per agent, holding its definition file, its Python code and a README.
 
