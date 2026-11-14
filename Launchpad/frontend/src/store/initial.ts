@@ -3,7 +3,7 @@ import type { AppState, CrewForm, EditorPane, EditorState, FxState } from './typ
 import type { AgentFields } from '../contract';
 import { LS_EDITOR_VIEW, LS_FILES, lsGet } from '../lib/storage';
 
-export const emptyAgentFields = (): AgentFields => ({ name: '', description: '', purpose: '', model: 'sonnet', tools: [], instructions: '' });
+const emptyAgentFields = (): AgentFields => ({ name: '', description: '', purpose: '', model: 'sonnet', tools: [], instructions: '' });
 
 export function initialCrewForm(): CrewForm {
   return { open: false, fields: emptyAgentFields(), problems: [], error: null, saving: false, draftText: '', drafting: false, draftError: null, drafted: false };

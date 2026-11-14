@@ -100,9 +100,9 @@ export const ECHARTS_STAND_IN = `function echartsStandIn() {
 }`;
 
 /** Library keys (server: app/visuals.py LIBRARIES) -> display names. */
-export const LIB_NAMES: Record<string, string> = { echarts: 'ECharts', chartjs: 'Chart.js', d3: 'D3', plotly: 'Plotly', bokeh: 'Bokeh' };
+const LIB_NAMES: Record<string, string> = { echarts: 'ECharts', chartjs: 'Chart.js', d3: 'D3', plotly: 'Plotly', bokeh: 'Bokeh' };
 /** Libraries found in an installed Python package: fetched with the access code and the folder. */
-export const INSTALLED_LIBS = new Set(['plotly', 'bokeh']);
+const INSTALLED_LIBS = new Set(['plotly', 'bokeh']);
 /** Between the files of one library in a /vendor/lib response (server: visuals.LIB_PART_SEPARATOR). */
 export const LIB_PART = '\n/*lp:next-script*/\n';
 export const DEFAULT_LIB = 'echarts';
@@ -231,5 +231,3 @@ export function createVisFrame(html: string, cb: VisFrameCallbacks,
   return { iframe: f, dispose: () => { dead = true; frames.delete(f); f.remove(); } };
 }
 
-/** Test hook: forget the cached libraries. */
-export function resetVisLibForTests(): void { libs.clear(); libPromises.clear(); }

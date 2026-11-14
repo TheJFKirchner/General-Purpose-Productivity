@@ -49,7 +49,7 @@ export function openArchive(sid: string): void {
 
 /** The planner chat log rendered read-only: the same PlanLog the Plan tab uses (full plan, Autopilot tag, answered
     rounds), inside .msgs.archived, whose CSS hides every button, form and action row (as the vanilla DOM copy did). */
-export function ArchivedLog({ sid }: { sid: string }) {
+function ArchivedLog({ sid }: { sid: string }) {
   const s = useLaunchpad(st => st.sessions[sid]);
   if (!s) return null;
   return (

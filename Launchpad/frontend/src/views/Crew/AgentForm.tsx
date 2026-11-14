@@ -6,8 +6,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type FormField } from '../../store';
 import type { Purpose } from '../../contract';
-import { Dialog, DialogTitle, DialogX } from '../../components/Dialog';
-import { Loading, PURPOSE_ICON, Pill } from '../../components';
+import { Dialog, DialogTitle, DialogX, Loading, PURPOSE_ICON, Pill } from '../../components';
 import { Check, WandSparkles } from '../../components/icons';
 import { ADDABLE_PURPOSES, AGENT_MODELS, PURPOSE_HINT, PURPOSE_LABEL, WRITE_TOOLS } from '../../lib/labels';
 

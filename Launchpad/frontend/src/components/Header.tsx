@@ -4,7 +4,7 @@
 import { useRef, type KeyboardEvent as RKeyboardEvent, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type View } from '../store';
 import { tokShort } from '../lib/format';
-import { FolderTree, MessagesSquare, Orbit, Settings, Users, Wallet, WifiOff } from '../components/icons';
+import { FolderTree, MessagesSquare, Orbit, Settings, Users, Wallet, WifiOff } from './icons';
 
 const TABS: { view: View; label: string; icon: ReactNode; title?: string }[] = [
   { view: 'plan', label: 'Plan', icon: <MessagesSquare />, title: 'The chat screen: the Planner and Claude Code, one switch apart' },

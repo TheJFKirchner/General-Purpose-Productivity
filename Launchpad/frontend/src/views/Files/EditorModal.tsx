@@ -6,8 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { actions, getState, sel, useComputed, useLaunchpad, type EditorBanner, type EditorPane } from '../../store';
 import { fmtBytes, fmtTime } from '../../lib/format';
-import { Loading, Markdown } from '../../components';
-import { Dialog, DialogTitle } from '../../components/Dialog';
+import { Dialog, DialogTitle, Loading, Markdown } from '../../components';
 import { AlertTriangle, Check, History, Info } from '../../components/icons';
 
 const PANES: [EditorPane, string][] = [['side', 'Side by side'], ['edit', 'Text only'], ['preview', 'Preview only']];

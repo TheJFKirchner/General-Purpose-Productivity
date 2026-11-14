@@ -11,7 +11,7 @@ export interface PillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-export function pillClass(variant: PillVariant = 'default', size: 'md' | 'sm' | 'xs' = 'md', extra = ''): string {
+function pillClass(variant: PillVariant = 'default', size: 'md' | 'sm' | 'xs' = 'md', extra = ''): string {
   return ['pill', variant !== 'default' ? variant : '', size !== 'md' ? size : '', extra].filter(Boolean).join(' ');
 }
 
