@@ -3,7 +3,7 @@ import asyncio
 
 from agentlib import fake
 
-from app import crew
+from app.agents import crew
 from app import plan as plan_mod
 from app.settings import Settings
 from conftest import PLAN, Client
@@ -137,7 +137,7 @@ def test_crew_list_shows_criteria_and_snapshot_restores_model(harness):
     planner = next(a for a in c.of("crew_list")[-1]["agents"] if a["role"] == "planner")
     promo = planner["promotion"]
     assert promo["start_model"] == "sonnet" and promo["target_model"] == "opus" and promo["window_turns"] == 2
-    assert "Stay on the cheaper model" in promo["criteria"] and promo["criteria_path"] == "app/planner-promotion.md"
+    assert "Stay on the cheaper model" in promo["criteria"] and promo["criteria_path"] == "app/agents/planner/promotion.md"
     s = next(x for x in late.events[0]["sessions"] if x["session_id"] == hub.current.id)
     assert (s["model"], s["promoted"], s["reason"], s["by"]) == ("opus", True, "conflicting goals", "criteria")
     assert late.of("planner_model")[0]["model"] == "opus"
@@ -146,7 +146,7 @@ def test_crew_list_shows_criteria_and_snapshot_restores_model(harness):
 def test_crew_list_paths_are_relative_inside_launchpad_and_absolute_outside(project):
     ev = crew.crew_list("fake", project)
     for a in ev["agents"]:
-        assert a["source_path"] == ".claude/agents/" + crew.ROLES[a["role"]]["file"]
+        assert a["source_path"] == "app/agents/" + crew.ROLES[a["role"]]["folder"] + "/agent.md"
     own = project / "my-criteria.md"
     own.write_text("Promote for anything big.", encoding="utf-8")
     s = Settings(project=project, engine="fake", promotion_criteria_path=str(own))

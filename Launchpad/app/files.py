@@ -1,11 +1,11 @@
 """File Explorer back end: browse connected directories and the app's own editable files; edit markdown by hand.
 
-- Roots: a connected directory (dir_id) or "app" (whitelist: .claude/agents/launchpad-*.md incl. the agent drafter,
-  and the promotion criteria). Every path is resolved (symlinks, "..") and must stay inside its root / be a whitelisted file
+- Roots: a connected directory (dir_id) or "app" (whitelist: app/agents/<folder>/agent.md of every built-in incl.
+  the agent drafter, and app/agents/planner/promotion.md). Every path is resolved (symlinks, "..") and must stay inside its root / be a whitelisted file
 - Kinds: markdown (.md) | text | binary (NUL bytes or not UTF-8) | too_large (> MAX_BYTES); only markdown and
   text are sent; only markdown is editable
 - Save: conflict-safe (base_version = hash of the content the page opened; changed on disk -> conflict with the
-  current content); agent files (.claude/agents/*.md) and plan files are validated first; the previous content
+  current content); agent files (.claude/agents/*.md, app/agents/<folder>/agent.md) and plan files are validated first; the previous content
   is kept as a backup in <LAUNCHPAD_HOME>/backups/<root>/<path>/<timestamp>.md (outside projects and git)
 - Agent files and the criteria apply to NEW sessions (agents load at session start)
 """
@@ -18,14 +18,16 @@ from pathlib import Path
 
 from agentlib.loaders import frontmatter
 
-from . import crew
 from . import plan as plan_mod
-from .crew import HELPERS, PURPOSES, ROLES
+from .agents import crew
+from .agents.crew import PURPOSES
 from .store import launchpad_home
 
 MAX_BYTES = 1_000_000
 MAX_ENTRIES = 2000
 MODEL_ALIASES = {"opus", "sonnet", "haiku", "inherit"}
+# agent definition files: a folder agent (.claude/agents/<name>.md) or a built-in (app/agents/<folder>/agent.md)
+AGENT_FILE = re.compile(r"(^|/)\.claude/agents/[^/]+\.md$|^app/agents/[^/]+/agent\.md$")
 _TOOL = re.compile(r"^(?:ask_user|mcp__[\w-]+(?:__[\w*-]+)?|[A-Z]\w*(?:\(.*\))?)$")
 
 
@@ -41,10 +43,7 @@ def version_of(data: bytes) -> str:
 
 def app_whitelist(settings=None) -> dict[str, Path]:
     """Relative path (posix) -> absolute path of the app's own editable files."""
-    out = {f".claude/agents/{r['file']}": (crew.AGENTS_DIR / r["file"]).resolve()
-           for r in list(ROLES.values()) + list(HELPERS.values())}
-    out["app/planner-promotion.md"] = (crew.APP_ROOT / "app" / "planner-promotion.md").resolve()
-    return out
+    return crew.editable_files()
 
 
 def kind_of(path: Path, size: int) -> str:
@@ -99,13 +98,13 @@ class Files:
 
     @staticmethod
     def _applies(root: str, rel: str) -> str:
-        if root == "app" or re.match(r"(^|/)\.claude/agents/[^/]+\.md$", rel):
+        if root == "app" or AGENT_FILE.search(rel):
             return "new_sessions"
         return "now"
 
     @staticmethod
     def _validates_as(rel: str, text: str | None) -> str | None:
-        if re.search(r"(^|/)\.claude/agents/[^/]+\.md$", rel):
+        if AGENT_FILE.search(rel):
             return "agent"
         if rel.endswith("plan.md") and (text or "").lstrip().startswith("---") and re.search(r"(?m)^plan:", text or ""):
             return "plan"

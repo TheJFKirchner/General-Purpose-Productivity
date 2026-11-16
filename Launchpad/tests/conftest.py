@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 
 from agentlib import fake  # noqa: E402  (registers the fake engine)
 
-from app import run as run_mod  # noqa: E402
+from app.agents.orchestrator import run as run_mod  # noqa: E402
 from app.hub import Hub  # noqa: E402
 from app.settings import Settings  # noqa: E402
 

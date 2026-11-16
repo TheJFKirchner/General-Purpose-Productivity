@@ -6,7 +6,7 @@ import pytest
 from agentlib import fake
 
 from app import demo
-from app.visuals import MAX_HTML, VisualError, extract_html, validate
+from app.agents.visualizer.visuals import MAX_HTML, VisualError, extract_html, validate
 from conftest import Client
 
 OPTIONS = ["Bar", "Stacked bar", "Line"]

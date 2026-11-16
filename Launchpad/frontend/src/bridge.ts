@@ -22,7 +22,6 @@ export function send(msg: UiMessage): boolean {
 }
 setTransport(send);
 
-export const isDemo = (): boolean => !!demo;
 
 /** Connect once at start-up: the websocket when the URL has port + code, else the in-page demo. */
 export function connect(): void {

@@ -4,7 +4,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { sel, useComputed, useLaunchpad, type View } from './store';
 import { DirMenu, ModalHost, TipHost, Toasts } from './components';
-import { Header, panelId, tabId } from './shell/Header';
+import { Header, panelId, tabId } from './components/Header';
 import ChatScreen from './views/Chat/Chat';
 import Missions from './views/Missions/Missions';
 import Crew from './views/Crew/Crew';

@@ -13,7 +13,7 @@ class Settings:
     planner_start_model: str = "sonnet"        # every session starts here ...
     planner_top_model: str = "opus"            # ... and may be promoted here (same value = promotion off)
     promotion_window_turns: int = 2            # the planner may promote itself only in its first N turns
-    promotion_criteria_path: str | None = None # replacement criteria file (default app/planner-promotion.md)
+    promotion_criteria_path: str | None = None # replacement criteria file (default app/agents/planner/promotion.md)
     visual_model: str | None = None            # visual agent (Visualizer); None = the agent file's model (haiku)
     pilot_model: str | None = None             # Claude Code chat; None = the agent file's model (sonnet)
     question_timeout_s: float = 180            # timed builder questions auto-answer after this

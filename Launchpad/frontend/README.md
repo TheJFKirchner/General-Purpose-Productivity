@@ -9,8 +9,8 @@ Display + input only: all agent work stays in Python. The websocket contract is 
 |---|---|
 | `npm install` | once, installs the packages (Node only on the builder's machine; coworkers never need it) |
 | `npm run dev` | dev server at http://localhost:5173 with the in-page demo (no back end needed); `?speed=4` runs it faster |
-| `npx tsc --noEmit` | type check |
-| `npm test` | store + demo tests and a DOM render smoke test of the shell (vitest + happy-dom, zero back end) |
+| `npm run typecheck` | type check (`tsc --noEmit`) |
+| `npm test` (or `npx vitest run`) | vitest, zero back end. The default environment is node; the test files that render the app opt in to happy-dom with a `// @vitest-environment happy-dom` first line |
 | `npm run build` | type check, then build to `dist/` (committed, served by Python) |
 
 Served by `app/server.py`: `GET /` = `dist/index.html` when it exists, else the vanilla page; `GET /assets/<file>` =
@@ -22,17 +22,19 @@ them); without them the page runs the demo. Nothing loads from the internet: eve
 | Path | What |
 |---|---|
 | `src/contract.ts` | types for every server event (`ServerEvent`) and UI message (`UiMessage`) |
-| `src/store/` | the whole app state (`types.ts`), the reducer for every server event (`reducer.ts`), UI actions (`actions.ts`), derived values (`selectors.ts`) |
+| `src/store/` | the whole app state (`types.ts`, starting values in `initial.ts`), the zustand store + transport + `run` recipe helper (`core.ts`), the reducer for every server event (`reducer.ts`), shared state changes used by both reducer and actions (`mutations.ts`), UI actions (`actions.ts`), derived values (`selectors.ts`), the public surface (`index.ts`) |
 | `src/bridge.ts` | `connect()` (websocket or demo), `send(msg)` |
-| `src/demo/` | the ported in-page demo (`Demo.ts`, data in `data.ts`): two runs, the planner, Claude Code chats (also from a plan), the crew with two folder agents and ticking use counts, a plan whose steps 3-4 name folder agents, agent draft / create / remove. Typing "fail" in Draft for me shows the error; a name starting `launchpad-` shows a server problem |
+| `src/demo/` | the ported in-page demo (`Demo.ts`, data in `data.ts`, the made-up visual options in `visuals.ts`; built-in agent files sit at `app/agents/<folder>/agent.md` and the planner criteria at `app/agents/planner/promotion.md`, as on the server): two runs, the planner, Claude Code chats (also from a plan), the crew with two folder agents and ticking use counts, a plan whose steps 3-4 name folder agents, agent draft / create / remove. Typing "fail" in Draft for me shows the error; a name starting `launchpad-` shows a server problem |
 | `src/lib/` | `markdown.ts` (escaped md / docHtml), `format.ts` (usd, tokens, ago, toolCat ...), `storage.ts` (localStorage), `labels.ts`, `hooks.ts` (`useNow`, `useAnimationFrame`) |
-| `src/components/` | shared pieces (below) |
+| `src/components/` | shared pieces (below); import them from the `components/index.ts` barrel. `Modal.tsx` is the generic modal host (`openModal`); `archiveModals.tsx` holds the report / plan / archive modals built on it. `Header.tsx` is the top bar. Exception: `views/Plan/PlanLog.tsx` imports its components directly, because `archiveModals.tsx` renders `PlanLog` and the barrel would become a cycle |
 | `src/theme.css` | the design tokens (see Design system) + all global / shared CSS |
 | `src/fonts.css` | the bundled Sora and Inter faces (Latin + Latin Extended woff2 from @fontsource-variable) |
 | `src/views/<Name>/` | one folder per screen, each with its own CSS (vanilla class names kept, sizes from the tokens) |
 | `src/views/Chat/` | the chat screen (header tab "Plan"): the Planner / Claude Code switch over `views/Plan` (Planner side) and `views/Code` (Claude Code side, the former Free Flight tab); both panes stay mounted |
 | `src/views/Crew/` | Crew hero cards + the definition reader (`Crew.tsx`) and the Add an agent dialog (`AgentForm.tsx`) |
-| `src/App.tsx`, `src/shell/Header.tsx` | shell: header + tabs, all views (kept mounted, `hidden` tab panels), aside, visuals slot, overlays |
+| `src/views/Aside/`, `src/views/Visuals/` | the right-hand panels shown beside the screens: Aside = Incoming queue, orbit, activity feed; Visuals = the visual options panel (`frames.ts` builds the sandboxed frames) |
+| `src/test/demoApp.tsx` | shared harness for view tests (renders `App` on the demo, helpers `q`, `click`, `sentOf` ...). Tests sit next to what they test: `*.test.ts(x)` beside the component / view / store file |
+| `src/App.tsx`, `src/components/Header.tsx` | shell: header + tabs, all views (kept mounted, `hidden` tab panels), aside, visuals slot, overlays |
 
 ## State and hooks
 
@@ -91,13 +93,13 @@ region) · `Pill` (button: `variant`, `size` md | sm | xs, `icon`; an icon with 
 `aria-label`) · `Tag` (kind tag with its icon), `Chip`, `Letter`, `Status`, `Empty` (`icon`, `title`, one line),
 `Loading` (spinner line), `Badge`, `SunIcon`, `DirChip` · `ChatBubble` (long user text folds with Show all; `plan` = the plan sent to Claude Code, folded and formatted), `SysLine`, `TypingDots` · `Card`, `ViewFrame`
 (vhead look) · `AutopilotSwitch` (role=switch) · `PenButton` (opens the editor) · `Dialog`, `DialogTitle`, `DialogX`
-(the dialog primitive, below) · `openModal`/`closeModal` (generic modal; actions may be a function for live labels and
+(the dialog primitive, below; `Modal.tsx`) · `openModal`/`closeModal` (generic modal; actions may be a function for live labels and
 may carry an `icon`) · `openReport`, `openPlan`, `openArchive` (read-only planning chat: the real `PlanLog` inside
 `.msgs.archived`, whose CSS hides buttons and forms) · `DirMenu` via `actions.chooseDir(anchorEl, dirId => ...)` · `PurposeTag` (purpose label + icon in its colours) and `StepAgent` (the agent on a plan step, or the coral Builder-fallback chip), `PURPOSE_ICON` ·
 `TipHost` (put `data-tip="planner|cursession|allagents|chat|run:<sid>|agent:<id>|step:<n>:<sid>"` on any element, or
 `data-tip="text:Short label"` for a plain label) · `data-hover-agent="<agent_id>"` sets the shared hover highlight
 `ui.hov` (feed rows, stars and ships all carry it; pinning from Missions scrolls `#feedList [data-hover-agent]` rows) ·
-`Toasts` (`actions.toast`) · `icons.ts` (the icon set).
+`Toasts` (`actions.toast`) · `Tooltip.tsx` is `TipHost` and its `tipContent` · `icons.ts` (the icon set).
 
 Two-click confirms with a 4 s window live in the store (`toggleAutopilot`, `stopRun`, `promotePlanner`); the
 "New plan → Set this plan aside?", Settings "Confirm remove" and Crew "Confirm remove" (folder agents) confirms are local to their views.
@@ -176,5 +178,3 @@ Visuals frames keep their own CSP and sandbox (`views/Visuals/frames.ts`); the p
 | Settings (2c) | (modal) | 2990-3063 | `views/Settings/Settings.css` |
 | Event handling (done, in the store) | | 1063-1103 and the on*() handlers | |
 | Demo (done, `src/demo`) | | 3458-4268 | |
-
-Each placeholder file lists the selectors and actions its screen needs in its header comment.

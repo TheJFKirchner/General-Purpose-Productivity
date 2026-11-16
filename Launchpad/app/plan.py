@@ -20,7 +20,7 @@ Format = YAML header block + markdown body:
 
 - write_plan gives structured fields -> render() builds the text -> validate() must return [] before saving
 - The header doubles as the run scoreboard: code updates step status as the run goes (set_status())
-- agent (optional, per step): the agent name that takes the step (a folder agent from the registry, app/crew.py);
+- agent (optional, per step): the agent name that takes the step (a folder agent from the registry, app/agents/crew.py);
   absent = the Builder. Only written when set, so plans without agents look exactly as before
 """
 from __future__ import annotations

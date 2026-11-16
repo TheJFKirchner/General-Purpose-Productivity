@@ -15,7 +15,6 @@ export const MODE_HINT: Record<ChatMode, string> = {
 
 export const AP_HINT = 'Autopilot approves every builder permission request without showing a card. No exceptions: that includes git push and writes outside the working folder.';
 
-export const ROLE_ORDER = ['planner', 'visual', 'orchestrator', 'astronaut', 'builder', 'pilot'];
 /** Display names of the six built-in roles (the role ids and agent file names stay as they are). */
 export const ROLE_LABEL: Record<string, string> = {
   planner: 'Planner', astronaut: 'Explorer', orchestrator: 'Orchestrator', builder: 'Builder', visual: 'Visualizer', pilot: 'Claude Code',

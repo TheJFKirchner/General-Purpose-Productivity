@@ -4,7 +4,7 @@
 import { memo, useState } from 'react';
 import type { Question, RoundAnswer } from '../../contract';
 import { actions, getState, sel, useLaunchpad, useSession, type PlannerEntry, type Round } from '../../store';
-/* direct imports (not the components index): components/modals.tsx renders PlanLog for the read-only archive */
+/* direct imports (not the components index, which would be a cycle): components/archiveModals.tsx renders PlanLog for the read-only archive */
 import { AutopilotSwitch } from '../../components/AutopilotSwitch';
 import { ChatBubble, SysLine, TypingDots } from '../../components/ChatBubble';
 import { Markdown } from '../../components/Markdown';

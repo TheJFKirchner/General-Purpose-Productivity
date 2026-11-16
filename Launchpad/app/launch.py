@@ -149,7 +149,7 @@ def demo_app_root() -> Path:
     """Fresh temporary copy of the app's editable files (agent definitions + criteria) for the fake demo."""
     import shutil
     import tempfile
-    from . import crew
+    from .agents import crew
     dest = Path(tempfile.gettempdir()) / "launchpad-demo" / "app-files"
     for old in (dest.parent.glob("app-files-*") if dest.parent.is_dir() else []):   # copies from earlier launches
         shutil.rmtree(old, ignore_errors=True)
@@ -159,9 +159,9 @@ def demo_app_root() -> Path:
         except OSError:                        # a leftover copy that cannot be removed (locked or protected): use a new folder
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest = Path(tempfile.mkdtemp(prefix="app-files-", dir=dest.parent))
-    shutil.copytree(crew.ROOT / ".claude" / "agents", dest / ".claude" / "agents")
-    (dest / "app").mkdir(parents=True)
-    shutil.copy2(crew.ROOT / "app" / "planner-promotion.md", dest / "app" / "planner-promotion.md")
+    for rel, src in crew.editable_files(crew.ROOT).items():   # the real files, same layout (app/agents/...)
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest / rel)
     crew.use_app_root(dest)
     return dest
 

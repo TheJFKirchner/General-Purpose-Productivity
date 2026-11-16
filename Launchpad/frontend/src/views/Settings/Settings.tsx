@@ -7,8 +7,7 @@ import { actions, useLaunchpad } from '../../store';
 import type { Directory } from '../../contract';
 import { baseName } from '../../lib/format';
 import { SET_LABEL } from '../../lib/labels';
-import { Loading } from '../../components';
-import { Dialog, DialogTitle, DialogX } from '../../components/Dialog';
+import { Dialog, DialogTitle, DialogX, Loading } from '../../components';
 import { Folder, FolderOpen, Info, Plus } from '../../components/icons';
 
 export default function SettingsModal() {

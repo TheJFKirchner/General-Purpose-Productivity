@@ -1,4 +1,5 @@
-"""The four agent files: standard format, minimum tools; the planner cannot read code, write or run anything."""
+"""The built-in agent files (app/agents/<folder>/agent.md): standard format, minimum tools, one folder per agent;
+the planner cannot read code, write or run anything."""
 import asyncio
 
 import pytest
@@ -6,9 +7,10 @@ import pytest
 from agentlib import fake
 from agentlib.loaders import frontmatter
 
-from app import crew
-from app.planner import planner_tools, read_markdown_file
-from app.run import builder_tools, orchestrator_tools
+from app.agents import crew
+from app.agents.builder.builder import builder_tools
+from app.agents.orchestrator.run import orchestrator_tools
+from app.agents.planner.planner import planner_tools, read_markdown_file
 
 STANDARD = {"name", "description", "tools", "model"}
 
@@ -26,6 +28,23 @@ def test_agent_files_are_standard(role, model):
         assert body.strip() and len(body) < 2500                   # lean prompt
 
 
+FOLDERS = {"planner": "planner", "astronaut": "explorer", "orchestrator": "orchestrator", "builder": "builder",
+           "visual": "visualizer", "pilot": "claude_code", "drafter": "drafter"}
+
+
+def test_each_builtin_has_its_own_folder_with_definition_code_and_readme():
+    """Shared layout: app/agents/<folder>/ holds agent.md, the agent's Python code and a README; no .claude/agents."""
+    assert {r: e["folder"] for r, e in {**crew.ROLES, **crew.HELPERS}.items()} == FOLDERS
+    for role, folder in FOLDERS.items():
+        d = crew.ROOT / "app" / "agents" / folder
+        assert crew.agent_file(role) == d / "agent.md" and crew.definition_rel(role) == f"app/agents/{folder}/agent.md"
+        assert (d / "agent.md").is_file() and (d / "README.md").is_file()
+        assert [p for p in d.glob("*.py") if p.name != "__init__.py"], f"{folder} has no Python code"
+    assert crew.CRITERIA_REL == "app/agents/planner/promotion.md" and (crew.ROOT / crew.CRITERIA_REL).is_file()
+    assert not (crew.ROOT / ".claude" / "agents").exists()
+    assert set(crew.editable_files()) == {f"app/agents/{f}/agent.md" for f in FOLDERS.values()} | {crew.CRITERIA_REL}
+
+
 def test_visual_agent_has_no_tools_and_its_own_prompt(project):
     a = crew.load("visual", engine="claude", project=project, save_conversation=False)
     r = a.resolved_tools()
@@ -34,7 +53,7 @@ def test_visual_agent_has_no_tools_and_its_own_prompt(project):
 
 
 def test_pilot_runs_like_claude_code(project):
-    from app.pilot import pilot_overrides
+    from app.agents.claude_code.pilot import pilot_overrides
     a = crew.load("pilot", engine="claude", project=project, **pilot_overrides("claude"))
     r = a.resolved_tools()
     assert a.setup == "project" and r.all_builtins and r.custom == []     # all built-ins, no ask_user added

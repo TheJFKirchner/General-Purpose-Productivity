@@ -17,7 +17,7 @@ and inlines it into the sealed frame (app/server.py, frontend/src/views/Visuals/
   `chart.js@4.6.1` sha512-hJyniucsFmq//EvXYvJ6c6mahPoI3kaxdjVH8awTaJ/fDNWeSqqqArixMJWkWNN6fcYvPU3HneSANFNYtRi61g==,
   `d3@7.9.2` sha512-ZKb/mONPVKzaO5UlcWcwN8bS4ezvQaYu+bsou+XgNABdGC800kwH651ADTbbTxMPHW13UlvbQafdmJQDk1w7Mg==
 - Served at GET /vendor/lib/<key>.js (and the older GET /vendor/echarts.min.js) by app/server.py; to upgrade, replace
-  the file and its licence and update this table and docs/decisions.md
+  the file and its licence and update this table and record the change in a Features/ request file
 
 ## Available when installed (not vendored)
 
@@ -28,7 +28,7 @@ and inlines it into the sealed frame (app/server.py, frontend/src/views/Visuals/
 
 - Looked for in the connected folder's `.venv` (`Lib/site-packages` or `lib/python3*/site-packages`), then in
   Launchpad's own environment (its site-packages and user site-packages); never imported or run as Python
-- Checks (app/visuals.py `library_files`): path resolved (symlinks, "..") and still inside the package folder, and for
+- Checks (app/agents/visualizer/libraries.py `library_files`): path resolved (symlinks, "..") and still inside the package folder, and for
   a `.venv` inside the connected folder too; a plain `.js` file of 1 KB to 20 MB; not HTML; names its library in its
   first 4 KB. Served only with the page's access code
 - Not installed -> left out of the set's `libraries`; a set asking for it is drawn in ECharts, styled like it

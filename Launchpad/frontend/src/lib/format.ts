@@ -1,7 +1,7 @@
 /* Formatting helpers (ported from the vanilla page). */
 import type { TokenCounts } from '../contract';
 
-export const kfmt = (n: unknown): string => { const v = +(n as number) || 0; return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)); };
+const kfmt = (n: unknown): string => { const v = +(n as number) || 0; return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)); };
 export const usd = (v: unknown): string => { const x = +(v as number) || 0; return x > 0 && x < 0.01 ? '<$0.01' : '$' + x.toFixed(2); };
 
 /** Token parts: i = uncached input, o = output, cr = cache read, cw = cache write. */

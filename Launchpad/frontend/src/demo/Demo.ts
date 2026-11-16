@@ -10,7 +10,7 @@ import { actions, getState, sel } from '../store';
 import { baseName } from '../lib/format';
 import { esc } from '../lib/markdown';
 import { visExtra, visJs } from './visuals';
-import { crewBase, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, START_USES, TOOL_CHOICES, type DemoFile } from './data';
+import { agentPath, crewBase, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
 
 type Ev = Record<string, any>;
 /** The agent file behind each built-in role (use counts are keyed by agent name). */
@@ -200,7 +200,7 @@ export class Demo {
   fsInit(): void {
     if (this.fs) return;
     this.fs = new Map(Object.entries(demoFiles()).map(([k, f]) => [k, { size: (f.text || '').length, mtime: Date.now() - 3600e3, version: 1, backups: [], ...f } as DemoFile]));
-    const pl = this.fs.get('app|.claude/agents/launchpad-planner.md')!;
+    const pl = this.fs.get(`app|${agentPath('planner')}`)!;
     pl.backups.push({ backup_id: 'b0', saved_at: new Date(Date.now() - 86400e3).toISOString(), size: 120, text: PLANNER_OLD_BACKUP });
   }
   fsWrite(root: string, path: string, text: string, o: Partial<DemoFile> = {}): void {
@@ -799,10 +799,10 @@ export class Demo {
     this.fsInit();
     const dir = dirId || 'd1';
     const builtins = crewBase().map(a => {
-      const p = `.claude/agents/${a.name}.md`, k = `app|${p}`, f = this.fs!.get(k);
+      const p = agentPath(a.role), k = `app|${p}`, f = this.fs!.get(k);
       const out: Ev = { ...a, root: 'app', path: p, source_path: p, editable: !!f, uses: this.uses[a.name] || 0 };
       if (f) out.instructions = this.fsBody(k);
-      if (a.promotion) out.promotion = { ...a.promotion, root: 'app', editable: true, criteria_path: 'app/planner-promotion.md', criteria: this.fsBody('app|app/planner-promotion.md') };
+      if (a.promotion) out.promotion = { ...a.promotion, root: 'app', editable: true, criteria_path: PROMOTION_PATH, criteria: this.fsBody(`app|${PROMOTION_PATH}`) };
       return out;
     });
     const d = this.fsDirs.find(x => x.dir_id === dir);

@@ -20,7 +20,7 @@ export const fsVals = (): Record<string, SettingValue> => ({
   planner_start: { value: 'sonnet', applies: 'new_sessions', overridden_by_launch: false },
   planner_top: { value: 'opus', applies: 'new_sessions', overridden_by_launch: false },
   promotion_window: { value: 2, applies: 'new_sessions', overridden_by_launch: false },
-  promotion_criteria: { value: 'app/planner-promotion.md', applies: 'new_sessions', overridden_by_launch: false },
+  promotion_criteria: { value: PROMOTION_PATH, applies: 'new_sessions', overridden_by_launch: false },
   pilot_model: { value: 'sonnet', applies: 'new_sessions', overridden_by_launch: '--pilot-model sonnet' },
   visual_model: { value: 'haiku', applies: 'new_sessions', overridden_by_launch: false } });
 
@@ -29,6 +29,11 @@ export interface DemoFile {
   applies?: 'now' | 'new_sessions' | null; validates_as?: 'agent' | 'plan' | null; backups: { backup_id: string; saved_at: string; size: number; text: string }[];
   touched?: boolean;
 }
+
+/** Built-in agent definitions live at app/agents/<folder>/agent.md (role id -> folder; the server's layout). */
+const ROLE_FOLDER: Record<string, string> = { planner: 'planner', astronaut: 'explorer', orchestrator: 'orchestrator', builder: 'builder', visual: 'visualizer', pilot: 'claude_code', drafter: 'drafter' };
+export const PROMOTION_PATH = 'app/agents/planner/promotion.md';
+export const agentPath = (role: string | null | undefined): string => `app/agents/${ROLE_FOLDER[role ?? ''] ?? role}/agent.md`;
 
 export function demoFiles(): Record<string, Partial<DemoFile>> {
   const md = (text: string, o: Partial<DemoFile> = {}): Partial<DemoFile> => ({ kind: 'markdown', text, editable: true, applies: 'now', validates_as: null, ...o });
@@ -48,11 +53,11 @@ export function demoFiles(): Record<string, Partial<DemoFile>> {
     'd2|sql/readmissions_30d.sql': tx('-- 30-day readmissions\nselect facility_id, count(*) from readmits group by 1;'),
     'd2|exports/claims_full.csv': { kind: 'too_large', size: 734003200, editable: false },
     'd2|.launchpad/S-B/plan.md': md('---\nplan: "Readmissions tab"\nstatus: "approved"\ndate: "2026-11-12"\nsession: "S-B"\nsteps:\n- {n: 1, title: "Write the 30-day readmission SQL", skill: null, after: [], status: "in_progress"}\n---\n# Readmissions tab\n\n## Steps\n\n### Step 1: Write the 30-day readmission SQL\nUse NPI facility ids.', { validates_as: 'plan', applies: 'new_sessions' }),
-    'app|.claude/agents/launchpad-planner.md': md('---\nname: launchpad-planner\ndescription: Interviews the user in rounds and writes the plan file.\nmodel: opus\n---\n# Planner\n\nYou help the user plan one piece of work. You **never** build anything yourself.\n\n- Interview in rounds of at most 3 questions\n- Use `ask_user` for every question', { validates_as: 'agent', applies: 'new_sessions' }),
-    'app|.claude/agents/launchpad-builder.md': md('---\nname: launchpad-builder\ndescription: Builds one plan step from a brief.\nmodel: sonnet\n---\n# Builder\n\nBuild exactly one plan step from the brief.', { validates_as: 'agent', applies: 'new_sessions' }),
+    [`app|${agentPath('planner')}`]: md('---\nname: launchpad-planner\ndescription: Interviews the user in rounds and writes the plan file.\nmodel: opus\n---\n# Planner\n\nYou help the user plan one piece of work. You **never** build anything yourself.\n\n- Interview in rounds of at most 3 questions\n- Use `ask_user` for every question', { validates_as: 'agent', applies: 'new_sessions' }),
+    [`app|${agentPath('builder')}`]: md('---\nname: launchpad-builder\ndescription: Builds one plan step from a brief.\nmodel: sonnet\n---\n# Builder\n\nBuild exactly one plan step from the brief.', { validates_as: 'agent', applies: 'new_sessions' }),
     'd1|.claude/agents/sql-builder.md': md(FOLDER_AGENT_FILES['sql-builder'], { validates_as: 'agent', applies: 'new_sessions' }),
     'd1|.claude/agents/sql-reviewer.md': md(FOLDER_AGENT_FILES['sql-reviewer'], { validates_as: 'agent', applies: 'new_sessions' }),
-    'app|app/planner-promotion.md': md('## Promote to Opus when\n- the work has **three or more outputs**\n- there is a sign-off point\n\n## Stay on Sonnet when\n- it is a small, single-output change', { applies: 'new_sessions' }),
+    [`app|${PROMOTION_PATH}`]: md('## Promote to Opus when\n- the work has **three or more outputs**\n- there is a sign-off point\n\n## Stay on Sonnet when\n- it is a small, single-output change', { applies: 'new_sessions' }),
   };
 }
 
@@ -93,7 +98,7 @@ export const START_USES: Record<string, number> = {
 };
 
 /** The two agents in the demo's connected folder d1 (.claude/agents/), as files. */
-export const FOLDER_AGENT_FILES: Record<string, string> = {
+const FOLDER_AGENT_FILES: Record<string, string> = {
   'sql-builder': `---\nname: sql-builder\ndescription: Writes and tests analysis SQL against the warehouse. Long house-style prompt.\npurpose: building\nmodel: sonet\ntools: Read, Write, Edit, Glob, Grep, Notebook\n---\n# SQL builder\n\nYou write analysis SQL for the claims warehouse and test it before handing over.\n\n## House rules\n${Array.from({ length: 28 }, (_, k) => `${k + 1}. ${['Read the brief and the plan step before touching any file.', 'Never write outside the session folder.', 'Use CTEs, not nested subqueries, and name every CTE for what it holds.', 'Every query gets a header comment: purpose, inputs, grain.', 'Ask the user (ask_user) before excluding more than 1% of rows.', 'Prefer `service_from_dt` for incurred month unless the brief says otherwise.', 'Log row counts before and after every join.'][k % 7]}`).join('\n')}\n\n## Hand-over\nEnd with \`report_step\` listing every file and the row counts you logged.`,
   'sql-reviewer': '---\nname: sql-reviewer\ndescription: Reviews new SQL for NULL handling, join fan-out and row-count drift before a step is marked done.\npurpose: reviewing\nmodel: haiku\ntools: Read, Glob, Grep\n---\n# SQL reviewer\n\nRead the step\'s SQL and its brief, then check:\n\n- NULL handling in every filter and join key\n- joins that multiply rows (compare counts before and after)\n- row counts against last quarter\n\nReport what you found as a short list. You never change files.',
 };
@@ -122,8 +127,8 @@ export function crewBase(): CrewAgentDef[] {
       description: 'A plain Claude Code chat with the standard tools in the connected folder (the Claude Code side of the chat screen).',
       instructions: '', prompt_note: "Uses Claude Code's own prompt and tools: this file has no body of its own.",
       builtin_tools: null, custom_tools: [], mcp_servers: [], disallowed_tools: [], warnings: [] },
-    { name: 'launchpad-planner', display_name: 'Planner', role: 'planner', purpose: 'planning', builtin: true, model: 'sonnet', source_path: 'app/agents/planner.md',
-      promotion: { start_model: 'sonnet', target_model: 'opus', window_turns: 2, criteria_path: '.claude/agents/launchpad-planner-promotion.md',
+    { name: 'launchpad-planner', display_name: 'Planner', role: 'planner', purpose: 'planning', builtin: true, model: 'sonnet', source_path: agentPath('planner'),
+      promotion: { start_model: 'sonnet', target_model: 'opus', window_turns: 2, criteria_path: PROMOTION_PATH,
         criteria: '## Promote to Opus when\n- the work has **three or more outputs** or crosses teams\n- there is a sign-off point or a data-quality risk\n- the user asks for depth\n\n## Stay on Sonnet when\n- it is a small, single-output change\n- the user wants a quick draft' },
       description: 'Interviews the user in rounds and writes the plan file. Never builds anything itself.',
       instructions: `# Planner\n\nYou help the user plan one piece of work. You **never** build anything yourself.\n\n## How you work\n- Interview in rounds of at most 3 questions, each with a recommended answer and a one-line reason\n- Use \`ask_user\` for every question; never ask in plain text\n- Send the Explorer (\`explore\`) for any file lookup\n- When the done checklist is complete, or the user says "draft now", write the plan with \`write_plan\`\n\n## Done checklist\n| Item | Required |\n|---|---|\n| Goal | yes |\n| Audience | yes |\n| Inputs and outputs | yes |\n| Done criteria per step | yes |\n| Sign-off points | if any |\n\n## Plan format\n\`\`\`\n# <name>\nstatus: draft\nsteps:\n  1. <title> | skill | depends on\n\`\`\`\n\n> Never output raw HTML such as <script> tags; write plain markdown only.`,

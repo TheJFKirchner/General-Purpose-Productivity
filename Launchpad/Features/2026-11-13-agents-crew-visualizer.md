@@ -1,6 +1,7 @@
 # Plain agent names, agent registry and user-added agents, Crew cards, Planner / Claude Code switch, wider Visualizer
 
 Status: built
+Date: 2026-11-13
 
 Built as planned, with these choices made during the build: plan steps can name only the Builder and folder agents; Planner and Claude Code uses are counted at their first turn; folder agent display names come from the file name; the tab holding the switch is still called "Plan"; editing a folder agent uses the existing file editor (no update message); step entries also carry `agent_purpose` and `agent_fallback`; the fake demo starts clean on every launch.
 
@@ -67,4 +68,17 @@ Later, not in this feature: a "run this chart script" tool behind a permission c
 - Runs: after A and B.
 
 ### Then
-- Orchestrator: build, both test suites, the fake demo; `factory-ui-reviewer` once; one fix round; update `CLAUDE.md`, `docs/decisions.md`, `Features/README.md`.
+- Orchestrator: build, both test suites, the fake demo; `factory-ui-reviewer` once; one fix round; update `CLAUDE.md`, the decisions (then one combined file; now the `## Decisions` section below), `Features/README.md`.
+
+## Decisions
+
+Recorded in the former combined decisions file as "Plain agent names, registry, folder agents, Planner / Claude Code switch, wider Visualizer (2026-11-13, decided with the user; spec: Features/2026-11-13-agents-crew-visualizer.md)".
+
+- Display names are plain: Planner, Explorer, Orchestrator, Builder, Visualizer, Claude Code (overrides the space names for agents; tab names and the space look stay). File names, `launchpad-*` names and role keys unchanged
+- Purposes: planning (Planner, Visualizer), exploring (Explorer), building (Builder, Orchestrator, Claude Code), reviewing (none built in). Crew tab = purpose-coloured cards with a per-user use count (one per agent start; Planner / Claude Code counted at their first turn)
+- Registry = built-ins + the connected folder's `.claude/agents/*.md` (`purpose:` in front matter, default building). The planner sees it and may name an agent per step (the Builder or a folder agent only); it never starts one. The orchestrator invokes: exploring / reviewing agents read-only, building agents get the Builder's guards; a missing agent falls back to the Builder and the report says so
+- Users add agents from the Crew tab: form + "Draft for me" (haiku, no tools, launchpad-drafter.md); saved in the project's `.claude/agents/`; removable with a backup; built-ins editable, not removable; planning agents cannot be added yet
+- One chat screen with a Planner / Claude Code switch: two separate conversations (overrides the separate Free Flight tab). "Send plan to Claude Code" opens the folder's chat in Plan mode with the plan as the first message. Modes: Plan, Ask before edits, Auto-accept edits; no bypass
+- Visualizer: optional `library` on show_visuals, default ECharts. Bundled: ECharts, Chart.js, D3. When installed (Launchpad's environment or the folder's `.venv`): Plotly, Bokeh, served from the package's own JavaScript file. Anything else: drawn in ECharts, labelled "Drawn in ECharts, styled like <library>". No Python is run; frames stay sealed; each frame inlines only its own library and reports its height
+- `--fake` starts clean each launch (counts, scratch folders, old temp copies)
+- Later, not built: a permissioned "run this chart script" tool for matplotlib and other Python libraries; an off-by-default setting to let frames load JavaScript libraries from the internet

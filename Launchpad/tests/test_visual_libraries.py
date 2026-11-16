@@ -9,11 +9,13 @@ from fastapi.testclient import TestClient
 
 from agentlib import fake
 
-from app import demo, visuals
-from app.planner import SHOW_VISUALS_SCHEMA, planner_tools
+from app import demo
+from app.agents.visualizer import libraries, visuals
+from app.agents.planner.planner import SHOW_VISUALS_SCHEMA, planner_tools
 from app.server import create_app
 from app.settings import Settings
-from app.visuals import LIB_PART_SEPARATOR, VisualError, available_libraries, choose_library, library_files, validate
+from app.agents.visualizer.libraries import LIB_PART_SEPARATOR, available_libraries, choose_library, library_files
+from app.agents.visualizer.visuals import VisualError, validate
 
 BUNDLED = ["echarts", "chartjs", "d3"]
 PLOTLY_JS = b"/**\n* plotly.js v9.9.9\n*/\n" + b"var Plotly={};" * 200
@@ -24,7 +26,7 @@ BOKEH_API = b"'use strict';\n/* bokeh api */\n" + b"Bokeh.Plotting={};" * 100
 @pytest.fixture
 def no_env_libs(monkeypatch):
     """Launchpad's own environment has neither Plotly nor Bokeh (whatever this machine has installed)."""
-    monkeypatch.setattr(visuals, "_launchpad_site_dirs", lambda: [])
+    monkeypatch.setattr(libraries, "_launchpad_site_dirs", lambda: [])
 
 
 def _install(site_packages, which=("plotly", "bokeh")):
@@ -44,8 +46,8 @@ def test_bundled_libraries_are_always_available(project, no_env_libs):
     assert available_libraries(project) == BUNDLED
     for key in BUNDLED:
         files = library_files(key, project)
-        assert files and all(f.is_file() and f.parent == visuals.VENDOR for f in files)
-        assert (visuals.VENDOR / f"{'CHARTJS' if key == 'chartjs' else key.upper()}-LICENSE").is_file()
+        assert files and all(f.is_file() and f.parent == libraries.VENDOR for f in files)
+        assert (libraries.VENDOR / f"{'CHARTJS' if key == 'chartjs' else key.upper()}-LICENSE").is_file()
     assert library_files("plotly", project) is None and library_files("nope", project) is None
 
 
@@ -63,7 +65,7 @@ def test_installed_in_the_folders_venv_windows_and_posix_layouts(project, tmp_pa
 def test_installed_in_launchpads_own_environment(project, tmp_path, monkeypatch):
     sp = tmp_path / "env" / "site-packages"
     _install(sp, ("plotly",))
-    monkeypatch.setattr(visuals, "_launchpad_site_dirs", lambda: [sp])
+    monkeypatch.setattr(libraries, "_launchpad_site_dirs", lambda: [sp])
     assert available_libraries(project) == BUNDLED + ["plotly"]
     assert available_libraries(None) == BUNDLED + ["plotly"]
     assert library_files("plotly", project)[0] == (sp / "plotly" / "package_data" / "plotly.min.js").resolve()
@@ -103,10 +105,10 @@ def test_installed_files_get_path_and_content_checks(project, tmp_path, no_env_l
 
 
 def test_libraries_note_for_the_planners_first_message(project, no_env_libs):
-    assert visuals.libraries_note(project) == ("Visual libraries for this folder (show_visuals library): "
+    assert libraries.libraries_note(project) == ("Visual libraries for this folder (show_visuals library): "
                                                "ECharts (default), Chart.js, D3.")
     _install(project / ".venv" / "Lib" / "site-packages", ("plotly",))
-    assert visuals.libraries_note(project).endswith("ECharts (default), Chart.js, D3, Plotly.")
+    assert libraries.libraries_note(project).endswith("ECharts (default), Chart.js, D3, Plotly.")
 
 
 # ---------------------------------------------------------------- choosing a library
@@ -139,7 +141,7 @@ def test_installed_plotly_is_used_when_asked(project, no_env_libs):
 
 def test_odd_library_names_are_cleaned(project, no_env_libs):
     c = choose_library('<b>"ggplot2"</b>' + "x" * 80, project)
-    assert "<" not in c.note and '"' not in c.note and len(c.asked) <= visuals.MAX_LIBRARY_NAME
+    assert "<" not in c.note and '"' not in c.note and len(c.asked) <= libraries.MAX_LIBRARY_NAME
 
 
 # ---------------------------------------------------------------- the planner tool and the sets

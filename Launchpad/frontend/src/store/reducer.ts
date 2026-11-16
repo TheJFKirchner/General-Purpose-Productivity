@@ -26,7 +26,7 @@ export function dispatch(ev: ServerEvent | Record<string, unknown>): void {
   run(c => handleEvent(c, ev as ServerEvent));
 }
 
-export function handleEvent(c: Ctx, ev: ServerEvent): void {
+function handleEvent(c: Ctx, ev: ServerEvent): void {
   if (!ev || typeof ev !== 'object') return;
   switch (ev.type) {
     case 'planner_message': setTyping(c, false, ev.session_id); addBubble(c, 'bot', ev.text, ev.session_id); break;
@@ -217,7 +217,7 @@ function onSnapshot(c: Ctx, ev: SnapshotEvent): void {
   if (ev.current_session_id != null) setCurrent(c, ev.current_session_id);
 }
 
-export function endReplay(c: Ctx): void {
+function endReplay(c: Ctx): void {
   if (!c.st.replaying) return;
   c.st.replaying = false; c.st.quiet = false;
 }

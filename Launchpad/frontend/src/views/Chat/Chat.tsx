@@ -13,8 +13,8 @@ const SIDES: { side: ChatSide; label: string; icon: ReactNode; hint: string }[] 
   { side: 'planner', label: 'Planner', icon: <MessagesSquare />, hint: 'Plan with the Planner: rounds of questions, then a plan you approve and launch' },
   { side: 'code', label: 'Claude Code', icon: <Terminal />, hint: 'A plain Claude Code chat in a connected folder: the standard tools, permission prompts and modes' },
 ];
-export const sideTabId = (s: ChatSide) => `chatsw-${s}`;
-export const sidePanelId = (s: ChatSide) => `chatpane-${s}`;
+const sideTabId = (s: ChatSide) => `chatsw-${s}`;
+const sidePanelId = (s: ChatSide) => `chatpane-${s}`;
 
 export default function ChatScreen() {
   const side = useLaunchpad(st => st.ui.chatSide);

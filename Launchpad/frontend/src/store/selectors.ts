@@ -27,7 +27,7 @@ export const stepsDone = (s: Session): number => ((s.run && s.run.steps) || []).
 
 /** One definition everywhere: session total = Orchestrator + step agents + Explorers + Visualizer. The planner is separate.
     (Role ids stay as they were: astronaut = Explorer, visual = Visualizer, pilot = Claude Code.) */
-export const RUN_ROLES = ['orchestrator', 'builder', 'astronaut', 'visual'];
+const RUN_ROLES = ['orchestrator', 'builder', 'astronaut', 'visual'];
 export const crewOf = (st: S, sid: string): Agent[] => agentsOf(st, sid).filter(a => RUN_ROLES.includes(a.role));
 export function sessionTotal(st: S, sid: string): number {
   const ag = crewOf(st, sid), s = st.sessions[sid];
@@ -80,7 +80,7 @@ export const anyBlocking = (st: S): boolean => st.queue.some(i => qOpen(i) && !!
 export const agentWaiting = (st: S, a: Agent | null | undefined): boolean => !!a && st.queue.some(i => qOpen(i) && i.session_id === a.session_id &&
   (i.agent_id != null ? i.agent_id === a.agent_id : cleanName(i.agent) === cleanName(a.name)));
 /** Incoming order: open cards that need the user (blocking first), then other open cards, then settled ones. */
-export const qRank = (i: QueueItem): number => i.ui !== 'open' ? 3 : qOpen(i) ? (i.blocking ? 0 : 1) : 2;
+const qRank = (i: QueueItem): number => i.ui !== 'open' ? 3 : qOpen(i) ? (i.blocking ? 0 : 1) : 2;
 export const orderedQueue = (st: S): QueueItem[] => st.queue.map((i, k) => [i, k] as const).sort((x, y) => qRank(x[0]) - qRank(y[0]) || x[1] - y[1]).map(x => x[0]);
 export const hasTimer = (i: QueueItem): boolean => ((i.kind === 'question' && !i.blocking) || i.kind === 'permission') && !!(i.expires_at || i.timeout_s);
 export function deadline(i: QueueItem): number { const t = Date.parse(i.expires_at || ''); return isNaN(t) ? (i.timeout_s ? i.at + i.timeout_s * 1000 : NaN) : t; }
@@ -136,7 +136,7 @@ export function codeAgentName(st: S): string {
   const p = Object.values(st.agents).find(a => a.role === 'pilot');
   return (p && cleanName(p.name)) || 'Claude Code';
 }
-export const openChatItems = (st: S): ChatItem[] => Object.values(st.chatItems).filter(i => i.ui === 'open');
+const openChatItems = (st: S): ChatItem[] => Object.values(st.chatItems).filter(i => i.ui === 'open');
 
 /* ---------- chat screen switch: what each side has waiting on the user ---------- */
 /** Planner side: open question rounds in the current session (or before any) plus a plan draft ready to approve. */
@@ -163,7 +163,6 @@ export function purposeOf(a: CrewAgentDef | null | undefined): Purpose {
 }
 /** Built-in = one of Launchpad's own agents (crew_list.builtin; older servers: everything listed was built in). */
 export const isBuiltin = (a: CrewAgentDef): boolean => a.builtin !== false;
-export const crewAgent = (st: S, name: string | null | undefined): CrewAgentDef | null => (name && (st.crewDefs || []).find(a => a.name === name)) || null;
 export const usesOf = (st: S, a: CrewAgentDef): number => st.crewUses[a.name] ?? (typeof a.uses === 'number' ? a.uses : 0);
 /** The folder new agents go into: crew_list.dir_id, else the default connected folder. */
 export const crewDir = (st: S): string | null => st.crewDirId ?? defaultDirId(st);
@@ -219,7 +218,7 @@ export function problemText(p: AgentProblem): string {
 }
 
 /* ---------- planner model ---------- */
-export const promoConf = (st: S) => ((st.crewDefs || []).find(a => a.role === 'planner') || {} as { promotion?: undefined }).promotion || null;
+const promoConf = (st: S) => ((st.crewDefs || []).find(a => a.role === 'planner') || {} as { promotion?: undefined }).promotion || null;
 /** Plan header model chip + Promote button (hidden once promoted or when start = target). */
 export function plannerModelView(st: S) {
   const s = curSess(st);
@@ -248,7 +247,7 @@ export function curVisSet(st: S): VisualSet | null {
 export const visShown = (st: S): boolean => st.ui.vis.open && !!curVisSet(st) && st.ui.view === 'plan' && st.ui.chatSide === 'planner';
 
 /* ---------- activity feed ---------- */
-export const runKey = (a: { chat_id?: string | null; session_id?: string | null }): string => a.chat_id != null ? 'chat:' + a.chat_id : a.session_id ?? '_none';
+const runKey = (a: { chat_id?: string | null; session_id?: string | null }): string => a.chat_id != null ? 'chat:' + a.chat_id : a.session_id ?? '_none';
 export const feedVisible = (st: S, a: { chat_id?: string | null; session_id?: string | null; agent_id: string }): boolean =>
   (!st.ui.feedRun || runKey(a) === st.ui.feedRun) && (!st.ui.feedAgent || a.agent_id === st.ui.feedAgent);
 export function feedRunOptions(st: S): { value: string; label: string }[] {
