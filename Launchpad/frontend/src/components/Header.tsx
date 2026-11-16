@@ -7,7 +7,7 @@ import { tokShort } from '../lib/format';
 import { FolderTree, MessagesSquare, Orbit, Settings, Users, Wallet, WifiOff } from './icons';
 
 const TABS: { view: View; label: string; icon: ReactNode; title?: string }[] = [
-  { view: 'plan', label: 'Plan', icon: <MessagesSquare />, title: 'The chat screen: the Planner and Claude Code, one switch apart' },
+  { view: 'plan', label: 'Plan', icon: <MessagesSquare />, title: 'The chat screen: the Planner and the CLI, one switch apart' },
   { view: 'missions', label: 'Missions', icon: <Orbit /> },
   { view: 'crew', label: 'Crew', icon: <Users /> },
   { view: 'files', label: 'Files', icon: <FolderTree /> },

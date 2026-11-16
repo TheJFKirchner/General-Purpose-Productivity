@@ -1,4 +1,4 @@
-/* The chat screen: the Planner / Claude Code switch and the two panes (sizes from the theme.css tokens). */
+/* The chat screen: the Planner / CLI switch and the two panes (sizes from the theme.css tokens). */
 .chat-screen{overflow:hidden}
 .chat-switch-bar{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4) var(--sp-7) 0;flex-wrap:wrap}
 .chat-switch{display:inline-flex;gap:var(--sp-0);padding:var(--sp-1);background:var(--bg);border-radius:var(--r-pill);flex:none}

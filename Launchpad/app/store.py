@@ -6,9 +6,13 @@
 - Values: SPECS below; launch options override them for one launch (not saved); a change from the page is saved
   and takes effect at once (also over a launch option)
 - applies: "now" = read live (next question / permission card / render); "new_sessions" = read when a planner
-  session or chat starts
+  session or chat starts (a planner session nobody has written to yet is reloaded with the new planner settings)
+- planner_harness / planner_start_model / planner_auto_promote: also set from the planner's picker
+  (app/agents/planner/choices.py)
 - Agent use counter: agent_uses {agent name: count}; +1 each time an agent is started (app/hub.py count_use);
   starts from zero, survives restarts
+- additional_dir_ids [dir_id]: folders ticked as "additional" (global; a session uses them minus its primary)
+- agent_skills {agent name: "all" | [skill names]}: per-agent skill allowlist (defaults in app/skills.py)
 """
 from __future__ import annotations
 
@@ -25,6 +29,8 @@ SPECS: dict[str, tuple[type, object, str]] = {
     "autopilot_default": (bool, False, "new_sessions"),
     "planner_start_model": (str, "sonnet", "new_sessions"),
     "planner_top_model": (str, "opus", "new_sessions"),
+    "planner_harness": (str, "claude", "new_sessions"),
+    "planner_auto_promote": (bool, True, "new_sessions"),
     "promotion_window_turns": (int, 2, "new_sessions"),
     "promotion_criteria_path": (str, None, "new_sessions"),
     "pilot_model": (str, None, "new_sessions"),
@@ -73,15 +79,17 @@ def coerce(name: str, value):
 class Store:
     def __init__(self, path: Path | None):
         self.path = Path(path) if path else None
-        self.data = {"version": 1, "directories": [], "default_dir": None, "values": {}, "agent_uses": {}}
+        self.data = {"version": 1, "directories": [], "default_dir": None, "values": {}, "agent_uses": {},
+                     "additional_dir_ids": [], "agent_skills": {}}
         if self.path and self.path.is_file():
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
-                    self.data.update({k: loaded[k] for k in ("directories", "default_dir", "values", "agent_uses")
-                                      if k in loaded})
-                    if not isinstance(self.data.get("agent_uses"), dict):
-                        self.data["agent_uses"] = {}
+                    self.data.update({k: loaded[k] for k in ("directories", "default_dir", "values", "agent_uses",
+                                                             "additional_dir_ids", "agent_skills") if k in loaded})
+                    for k, typ in (("agent_uses", dict), ("agent_skills", dict), ("additional_dir_ids", list)):
+                        if not isinstance(self.data.get(k), typ):
+                            self.data[k] = typ()
             except (OSError, ValueError):
                 pass                                        # a broken file starts fresh (and is overwritten on save)
 
@@ -131,6 +139,7 @@ class Store:
         if len(self.data["directories"]) == 1:
             raise ValueError("keep at least one folder connected")
         self.data["directories"] = [d for d in self.data["directories"] if d["dir_id"] != did]
+        self.data["additional_dir_ids"] = [x for x in self.data.get("additional_dir_ids") or [] if x != did]
         if self.data.get("default_dir") == did:
             self.data["default_dir"] = self.data["directories"][0]["dir_id"]
         self.save()
@@ -143,6 +152,34 @@ class Store:
         if self.get(did) and self.data.get("default_dir") != did:
             self.data["default_dir"] = did
             self.save()
+
+    # ---------------------------------------------------------------- additional folders
+    def additional_ids(self) -> list[str]:
+        """Connected folders ticked as additional (unknown ids dropped), in the connected-folders order."""
+        ticked = set(self.data.get("additional_dir_ids") or [])
+        return [d["dir_id"] for d in self.data["directories"] if d["dir_id"] in ticked]
+
+    def set_additional(self, ids) -> list[str]:
+        if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
+            raise ValueError("additional_dir_ids must be a list of folder ids")
+        unknown = [x for x in ids if not self.get(x)]
+        if unknown:
+            raise ValueError("that folder is not connected")
+        self.data["additional_dir_ids"] = list(dict.fromkeys(ids))
+        self.save()
+        return self.additional_ids()
+
+    # ---------------------------------------------------------------- agent skills
+    def agent_skills(self) -> dict:
+        """Agent name -> "all" | [skill names] (only agents whose setting was changed)."""
+        return dict(self.data.get("agent_skills") or {})
+
+    def set_agent_skills(self, name: str, value) -> None:
+        """value: "all" | [names] (already checked by app/skills.py clean_setting)."""
+        if not str(name or "").strip():
+            raise ValueError("give the agent name")
+        self.data.setdefault("agent_skills", {})[str(name)] = value
+        self.save()
 
     # ---------------------------------------------------------------- values
     def values(self) -> dict:

@@ -102,7 +102,7 @@ nav .navset:hover{color:var(--ink)}
 main{flex:1;min-height:0;display:flex;gap:var(--main-gap);padding:var(--sp-0) var(--main-x) var(--main-b);position:relative}
 .card{background:var(--card);border-radius:var(--r-xl);box-shadow:var(--shadow)}
 .view{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
-/* one conversation inside the chat screen (Planner or Claude Code, views/Chat) */
+/* one conversation inside the chat screen (Planner or CLI, views/Chat) */
 .chat-pane{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
 /* React shell: a wrapper per tab that does not take part in layout (each view's section stays main's flex child) */
 .view-slot{display:contents}
@@ -128,7 +128,7 @@ main{flex:1;min-height:0;display:flex;gap:var(--main-gap);padding:var(--sp-0) va
 .bubble.me{align-self:flex-end;background:var(--indigo);color:var(--on-accent);border-radius:var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);white-space:pre-wrap}
 .bubble.bot{align-self:flex-start;background:var(--bg);border-radius:var(--r-xl) var(--r-xl) var(--r-xl) var(--r-xs)}
 .bubble.bot code{background:var(--card)}
-/* long user text and the plan sent to Claude Code: folded to a few lines, "Show all" opens it */
+/* long user text and the plan sent to the CLI: folded to a few lines, "Show all" opens it */
 .bubble .fold-body{max-height:180px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 .bubble.open .fold-body{max-height:none;-webkit-mask-image:none;mask-image:none}
 .fold-btn{display:inline-flex;align-items:center;gap:var(--sp-1);margin-top:var(--sp-2);border:0;background:none;padding:0;font:inherit;font-size:var(--fs-sm);font-weight:600;color:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;border-radius:var(--r-xs)}
@@ -170,6 +170,10 @@ main{flex:1;min-height:0;display:flex;gap:var(--main-gap);padding:var(--sp-0) va
 .steps li{display:flex;gap:var(--sp-3);align-items:flex-start;font-size:var(--fs-md);line-height:var(--lh-snug)}
 .steps .n{flex:0 0 var(--chip-h);height:var(--chip-h);border-radius:50%;background:var(--indigo-soft);color:var(--indigo-ink);font-size:var(--fs-xs);font-weight:700;display:inline-flex;align-items:center;justify-content:center}
 .steps .st-t{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.steps .st-skills{display:inline-flex;flex-wrap:wrap;gap:var(--sp-1);justify-content:flex-end}
+.chip.skill{background:var(--indigo-soft);color:var(--indigo-ink)}
+.chip.skill.gone{background:var(--surface-quiet);color:var(--muted);text-decoration:line-through}
+
 .steps .stepagent{margin-left:auto}
 .pc-sent{margin:0;font-size:var(--fs-sm);color:var(--muted)}
 .pc-sent button{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--indigo-ink);text-decoration:underline;text-underline-offset:2px;cursor:pointer;border-radius:var(--r-xs)}
@@ -341,6 +345,8 @@ input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--indigo);
 /* ---------------- folder menu (role=menu) ---------------- */
 .dirmenu{position:fixed;z-index:var(--z-menu);background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow-lg),0 0 0 1px var(--line);padding:var(--sp-2);display:flex;flex-direction:column;gap:var(--sp-0);min-width:260px;max-width:380px;animation:pop var(--t-fast) var(--ease)}
 .dirmenu .dm-h{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:var(--sp-1) var(--sp-2) var(--sp-1-5)}
+.dirmenu .dm-f{font-size:var(--fs-2xs);color:var(--muted);padding:var(--sp-1-5) var(--sp-2) var(--sp-1);border-top:1px solid var(--line);margin-top:var(--sp-1)}
+
 .dirmenu button{text-align:left;border:0;background:none;border-radius:var(--r-md);padding:var(--sp-2) var(--sp-2-5);cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1-5);font-size:var(--fs-md)}
 .dirmenu button .lucide{color:var(--muted)}
 .dirmenu button:hover:not(:disabled),.dirmenu button:focus-visible{background:var(--bg)}

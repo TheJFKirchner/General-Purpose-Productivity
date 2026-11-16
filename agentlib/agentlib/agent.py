@@ -78,6 +78,9 @@ class Agent:
     cwd: str | Path | None = None
     add_dirs: list[str | Path] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
+    skill_dirs: list[str | Path] | None = None    # lean only: folders holding <name>/SKILL.md, searched in order
+                                             # (first match wins) INSTEAD of the default search; None = default
+                                             # (<cwd>/.claude|.cursor/skills, then the same under the home folder)
     mcp_servers: dict[str, dict | str] = field(default_factory=dict)   # name -> config dict, or path to a .py server
     disallowed_tools: list[str] = field(default_factory=list)
     gated_tools: list[str] = field(default_factory=list)    # built-in names offered but never pre-approved:
@@ -117,6 +120,8 @@ class Agent:
             check_schema(self.output_schema)
         if self.cwd is not None:
             self.cwd = Path(self.cwd)
+        if self.skill_dirs is not None:
+            self.skill_dirs = [Path(d) for d in self.skill_dirs]
 
     def resolved_tools(self) -> ResolvedTools:
         return resolve_tools(self.tools, self.available_tools, server=self.tool_server, setup=self.setup,

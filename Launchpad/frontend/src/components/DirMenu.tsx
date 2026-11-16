@@ -1,4 +1,6 @@
 /* "Run it in which folder?" menu, opened by actions.chooseDir(anchorEl, cb) when more than one folder is connected.
+   The picked folder is the session's primary (working directory); folders ticked as additional in Settings join it
+   (minus the picked one), and the menu says which.
    A keyboard menu (role=menu / menuitem): focus starts on the first folder, Up / Down / Home / End move, Esc or a
    click outside closes, and focus goes back to the button that opened it. */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from 'react';
@@ -13,6 +15,7 @@ export function DirMenu() {
   const opener = useRef<HTMLElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const dirs = (settings ? settings.directories : []).slice().sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0));
+  const extra = dirs.filter(d => d.is_additional).length;
 
   useLayoutEffect(() => {
     if (!anchor || !ref.current) {
@@ -67,18 +70,22 @@ export function DirMenu() {
   };
 
   return (
-    <div className="dirmenu" ref={ref} role="menu" aria-label="Run it in which folder?" hidden={!anchor} onKeyDown={onKey}
+    <div className="dirmenu" ref={ref} role="menu" aria-label={`Run it in which folder?${extra ? ' Folders marked Additional join the session too.' : ''}`} hidden={!anchor} onKeyDown={onKey}
+
       style={pos ? { top: pos.top, left: pos.left } : undefined}>
       <div className="dm-h" aria-hidden="true">Run it in which folder?</div>
       {dirs.map(d => (
         <button key={d.dir_id} type="button" role="menuitem" disabled={d.exists === false} onClick={() => pick(d.dir_id)}>
           <Folder />
           <b>{d.name || baseName(d.path)}</b>
-          {d.is_default ? <span className="chip ok">Default</span> : null}
+          {d.is_default ? <span className="chip ok">Primary</span> : null}
+          {d.is_additional ? <span className="chip">Additional</span> : null}
           {d.exists === false ? <span className="chip warnc">Missing</span> : null}
           <small>{d.path}</small>
         </button>
       ))}
+      {extra ? <div className="dm-f" aria-hidden="true">Folders marked Additional join the session too (Settings).</div> : null}
+
     </div>
   );
 }

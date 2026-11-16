@@ -8,7 +8,8 @@
   native skills, all built-ins unless tools narrows them
 - Permissions: listed tools are pre-approved; anything else -> agent.on_permission, or denied if none
 - ask_user / ends_turn: a PostToolUse hook returns continue=False after a successful call (no further API call)
-- Lean skills: Read is added if missing, and a PreToolUse hook limits it to the listed skill folders
+- Lean skills: Read is added if missing, and a PreToolUse hook limits it to the listed skill folders; skills are
+  looked up in Agent.skill_dirs when given (else the default search in skills.py); project setup ignores skill_dirs
 - Cost: ResultMessage.total_cost_usd is cumulative per conversation -> per-turn cost is the delta
 - After a failure/timeout the process is dropped; the next turn reconnects with resume=session_id. The raised
   AgentError carries .reply: the partial turn (text/tool calls so far, usage summed from the assistant
@@ -207,7 +208,7 @@ class ClaudeSession(EngineSession):
         self.server = agent.tool_server
         self.resolved = agent.resolved_tools()
         lean = agent.setup == "lean"
-        self.skills = [skills_mod.find_skill(n, agent.cwd) for n in agent.skills] if lean else []
+        self.skills = [skills_mod.find_skill(n, agent.cwd, agent.skill_dirs) for n in agent.skills] if lean else []
         self._skill_dirs = [s.folder for s in self.skills]
         self._read_for_skills_only = bool(self.skills) and "Read" not in self.resolved.builtin_names \
             and not self.resolved.all_builtins

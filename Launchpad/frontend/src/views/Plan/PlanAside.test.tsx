@@ -43,18 +43,20 @@ it('plan chat, rounds, plan card, promotion, Incoming and the feed send the vani
   const plan = host.querySelector('#viewPlan')!;
   expect(plan.querySelector('h1')?.textContent).toBe('Q3 inpatient trend refresh');
   expect(plan.querySelector('#modeLine')?.textContent).toContain('Session C');
-  expect(plan.querySelector('#pmModel')?.textContent).toBe('Sonnet');
+  /* the top of the Plan view has no New plan, model chip or promote button any more: the picker under the chat box */
+  expect(plan.querySelector('.chat-head #newPlan, #pmModel, #pmPromote')).toBeNull();
+  const pk = plan.querySelector('#pkBtn') as HTMLButtonElement;
+  expect(pk.textContent).toContain('Claude · Sonnet');
 
-  /* promotion: first click arms, second sends planner_promote */
-  const pm = plan.querySelector('#pmPromote') as HTMLButtonElement;
-  await click(pm);
-  expect(pm.textContent).toContain('Confirm: switch to Opus');
-  expect(sent.some(m => m.type === 'planner_promote')).toBe(false);
-  await click(pm);
-  expect(last()).toEqual({ type: 'planner_promote', session_id: 'S-C' });
+  /* promotion by hand: pick the top model on the running session */
+  await click(pk);
+  const opus = plan.querySelector('#pkMenu [data-option="claude:opus"]') as HTMLButtonElement;
+  expect(opus.textContent).toContain('promote this plan');
+  await click(opus);
+  expect(last()).toEqual({ type: 'planner_choose', option_id: 'claude:opus', session_id: 'S-C' });
   await step(1_000);
-  expect(plan.querySelector('#pmModel')?.textContent).toBe('Opus · promoted');
-  expect(plan.querySelector('#pmPromote')).toBeNull();
+  expect(pk.textContent).toContain('Claude · Opus');
+  expect(pk.textContent).toContain('promoted');
   expect(plan.querySelector('.sys.promo')).toBeTruthy();
 
   /* question round 1: an option per question; the round_answer goes once every question has an answer */
@@ -85,13 +87,16 @@ it('plan chat, rounds, plan card, promotion, Incoming and the feed send the vani
   /* the agent per step when it is not the Builder (folder agents, purpose colours once the crew list is in) */
   await step(500);
   expect([...card.querySelectorAll('.steps .stepagent')].map(e => [e.textContent, e.getAttribute('data-purpose')])).toEqual([['Sql builder', 'building'], ['Sql reviewer', 'reviewing']]);
-  /* Send plan to Claude Code: chat_from_plan, then the card says it went (the draft stays approvable) */
-  await click(buttons(card, 'Send plan to Claude Code')[0]);
+  /* the skills a step names (approved with the plan); one not found in the folders is greyed */
+  expect([...card.querySelectorAll('.steps .chip.skill')].map(e => [e.textContent, e.classList.contains('gone')])).toEqual(
+    [['claims-glossary', false], ['sql-style', false], ['readmission-rules', true]]);
+  /* Send plan to CLI: chat_from_plan, then the card says it went (the draft stays approvable) */
+  await click(buttons(card, 'Send plan to CLI')[0]);
   expect(last()).toEqual({ type: 'chat_from_plan', session_id: 'S-C' });
   expect(getState().ui.chatSide).toBe('code');
   await step(1_000);
-  expect(card.querySelector('.pc-sent')?.textContent).toContain('Sent to Claude Code');
-  expect(buttons(card, 'Send to Claude Code again')).toHaveLength(1);
+  expect(card.querySelector('.pc-sent')?.textContent).toContain('Sent to the CLI');
+  expect(buttons(card, 'Send to CLI again')).toHaveLength(1);
   const fromPlan = Object.values(getState().chats).find(c => c.mode === 'plan');
   expect(fromPlan).toBeTruthy();
   await click(buttons(card, 'Ask for changes')[0]);

@@ -4,10 +4,10 @@
    All records are keyed objects (not Map/Set) so the state stays plain JSON-like data. */
 import type {
   ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CrewAgentDef, DirEntry, Directory, FileContentEvent,
-  FileErrorCode, Id, PermissionSuggestion, PlanStep, Question, RoundAnswer, SettingValue, StepStatus, VisualOption,
+  FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoundAnswer, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
-/** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / Claude Code switch. */
+/** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / CLI switch. */
 export type View = 'plan' | 'missions' | 'crew' | 'files';
 /** Which side of the chat screen's switch is showing. */
 export type ChatSide = 'planner' | 'code';
@@ -37,7 +37,7 @@ export interface Round {
 }
 
 /** agent / agent_display: the agent assigned to the step (null = the Builder). */
-export interface RunStep { n: number; title: string; status: StepStatus; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null }
+export interface RunStep { n: number; title: string; status: StepStatus; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null; skills?: string[]; skills_unknown?: string[] }
 export interface Run { name: string; started: number; finished?: number; steps: RunStep[] }
 export interface Report { path: string; markdown: string; total: number | null }
 
@@ -94,7 +94,17 @@ export interface Session {
   promoReason: string | null;
   promoBy: 'criteria' | 'user' | null;
   promoting: boolean;
-  /* "Send plan to Claude Code" (chat_from_plan): waiting for its chat_started; draftV of the plan last sent */
+  /** planner_model: harness, start / top model, "<harness> · <model>" label and option id now; started = someone wrote to it
+      (harness and start model fixed); auto = it may promote itself; switchableTo = picker options it can move to now */
+  plannerHarness: string | null;
+  plannerStart: string | null;
+  plannerTop: string | null;
+  plannerLabel: string | null;
+  plannerOption: string | null;
+  plannerStarted: boolean;
+  plannerAuto: boolean;
+  switchableTo: string[];
+  /* "Send plan to CLI" (chat_from_plan): waiting for its chat_started; draftV of the plan last sent */
   codeSending: boolean;
   codeSentV: number | null;
   /* visuals */
@@ -135,7 +145,7 @@ export interface QueueItem {
 export type Agent = Omit<AgentUsageEvent, 'type'>;
 export type Activity = Omit<ActivityEvent, 'type'>;
 
-/* ---------- Claude Code chats (the chat screen's Claude Code side) ---------- */
+/* ---------- CLI chats (the chat screen's CLI side) ---------- */
 export type FlightEntry =
   /** plan = the plan sent from the Planner (chat_from_plan), with its label: shown collapsed, not as a plain bubble */
   | { kind: 'bubble'; id: string; who: 'me' | 'bot'; text: string; streaming?: boolean; plan?: string }
@@ -173,7 +183,7 @@ export interface Chat {
   streamId: string | null;
   typing: boolean;
   agentIds: Id[];
-  /** opened by "Send plan to Claude Code": the next user message is that plan (this is its label) */
+  /** opened by "Send plan to CLI": the next user message is that plan (this is its label) */
   awaitPlan?: string | null;
 }
 
@@ -246,7 +256,7 @@ export interface EditorState {
 export interface Toast { id: number; text: string }
 export interface UiState {
   view: View;
-  /** the chat screen's Planner / Claude Code switch */
+  /** the chat screen's Planner / CLI switch */
   chatSide: ChatSide;
   conn: { text: string; color: string };
   demo: boolean;
@@ -259,7 +269,8 @@ export interface UiState {
   focusScroll: boolean;
   stopConfirm: Id | null;                 // two-click confirms (4 s)
   apConfirm: Id | null;
-  pmConfirm: Id | null;
+  /** planner picker: the option sent (planner_choose), until planner_model / planner_choice answers */
+  pickerChoosing: string | null;
   newPlanBusy: boolean;
   newChatBusy: boolean;
   vis: { open: boolean; wide: boolean; width: number };
@@ -270,6 +281,26 @@ export interface UiState {
   picking: boolean;
   dirMenu: { top: number; left: number; right: number; bottom: number } | null;
   toasts: Toast[];
+}
+
+/* ---------- Repos panel (right-hand panel while the Files tab is open) ---------- */
+export interface GitState {
+  /** git_repos.available: null until the first answer, false = git is not installed */
+  available: boolean | null;
+  loaded: boolean;
+  /** git_scan sent, waiting for git_repos */
+  scanning: boolean;
+  repos: GitRepo[];
+  /** repo id -> the operation in flight */
+  busy: Record<string, GitOp>;
+  /** repo id -> git's last error text / the last success note (cleared by the next operation) */
+  error: Record<string, string>;
+  note: Record<string, string>;
+  /** repo id -> paths the user unticked (everything is ticked by default, also new files) */
+  unticked: Record<string, string[]>;
+  /** repo id -> commit message being typed; repo id -> card opened / closed by hand (default: open when it has changes) */
+  message: Record<string, string>;
+  open: Record<string, boolean>;
 }
 
 export interface AppState {
@@ -286,6 +317,8 @@ export interface AppState {
   preName: string;                        // plan_meta name before any session (header text, as the vanilla page)
   preRoundTag: string;                    // "Round N" from a question round before any session
   rounds: Record<string, Round>;
+  /** planner_choice: the picker's options, what the next new plan starts on, auto-promote, the rules text */
+  plannerChoice: Omit<PlannerChoiceEvent, 'type'> | null;
   /* agents, usage, activity */
   agents: Record<Id, Agent>;
   tokens: number;
@@ -296,13 +329,13 @@ export interface AppState {
   lastAct: Record<Id, Id>;                // agent_id -> activity id
   /* Incoming */
   queue: QueueItem[];                     // arrival order
-  /* Claude Code chats */
+  /* CLI chats */
   chats: Record<Id, Chat>;
   chatOrder: Id[];
   currentChat: Id | null;
   chatPending: string | null;             // first message, sent once chat_started arrives
   codeModePref: ChatMode | null;          // the mode picked before a chat exists (applied to the next chat)
-  chatFromPlan: Id | null;                // session whose plan was sent to Claude Code; its chat_started keeps mode plan
+  chatFromPlan: Id | null;                // session whose plan was sent to the CLI; its chat_started keeps mode plan
   chatItems: Record<Id, ChatItem>;
   /* Crew */
   crewDefs: CrewAgentDef[] | null;
@@ -310,6 +343,8 @@ export interface AppState {
   crewDirId: Id | null;                   // crew_list.dir_id: whose folder agents are listed (and where new ones go)
   crewDirPick: Id | null;                 // the folder picked in Crew (get_crew {dir_id}); null = the server's default
   toolChoices: string[];                  // crew_list.tool_choices
+  crewSkills: SkillInfo[];                // crew_list.skills: skills in the listed folder + the additional folders
+
   crewUses: Record<string, number>;       // agent name -> use count (crew_list, then live agent_uses)
   crewForm: CrewForm;
   crewRemoving: string | null;            // agent_remove sent, waiting for agent_removed
@@ -320,4 +355,5 @@ export interface AppState {
   fx: FxState;
   files: Record<string, FileView>;        // "root|path" -> file_content (or an error)
   editor: EditorState;
+  git: GitState;
 }

@@ -63,6 +63,16 @@ def test_lean_skills_add_read_with_guard(tmp_path):
     assert "memo: Writes memos" in o.system_prompt
 
 
+def test_lean_skills_from_explicit_skill_dirs(tmp_path):
+    """skill_dirs replaces the default search: a skill under .agents/skills is found, its folder readable."""
+    skill = tmp_path / "other/.agents/skills/memo"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: memo\ndescription: From agents\n---\nSteps", encoding="utf-8")
+    o = _opts(Agent("a", cwd=tmp_path, skills=["memo"], skill_dirs=[tmp_path / "other/.agents/skills"],
+                    include_ask_user=False))
+    assert str(skill.resolve()) in o.add_dirs and "memo: From agents" in o.system_prompt
+
+
 class _StubClient:
     """Stands in for ClaudeSDKClient: one assistant message (text + usage), then the process 'dies'."""
 

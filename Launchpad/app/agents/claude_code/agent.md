@@ -1,6 +1,6 @@
 ---
 name: launchpad-pilot
-description: Plain Claude Code chat in the launch folder. Claude Code's own system prompt, tools, project settings and permissions; nothing added.
+description: Plain CLI chat in the launch folder. The CLI harness's own system prompt, tools, project settings and permissions; nothing added.
 model: sonnet
-# No tools line: every Claude Code built-in. Body intentionally empty: runs on Claude Code's own system prompt.
+# No tools line: every built-in tool of the harness. Body intentionally empty: runs on the harness's own system prompt.
 ---

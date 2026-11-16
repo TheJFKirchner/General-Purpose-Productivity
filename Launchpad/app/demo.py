@@ -21,7 +21,7 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
   an edit-based revision (rename + one added step) instead of a full rewrite
 - after the run, "Send to planner" makes the planner write a revised plan (round 2) that can be approved again
 - builder permission cards are timed (45 s in the demo; unanswered = denied); the autopilot switch skips them
-- Claude Code chat: permission cards (Bash, Write, Edit), a Claude-style question, plan proposal in Plan mode
+- CLI chat: permission cards (Bash, Write, Edit), a Claude-style question, plan proposal in Plan mode
 - fake built-ins never touch disk: "(fake) ran Write" is all that happens
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ PLAN = {
             "Output: an updated page plus a short changelog entry.",
     "steps": [
         {"title": "Draft the landing page copy", "details": "Write the new headline, intro and three feature "
-         "blurbs as markdown in demo-output/landing.md.", "done_when": "landing.md has all five pieces."},
+         "blurbs as markdown in demo-output/landing.md.", "done_when": "landing.md has all five pieces.", "skills": ["house-style"]},   # a skill in the Demo shop folder
         {"title": "Wire the copy into the page", "details": "Replace the old hero text with the new copy; keep "
          "the existing styles.", "done_when": "The page shows the new copy.", "after": [1]},
         {"title": "Run checks and publish", "details": "Run the test suite, then push the change.",
@@ -297,6 +297,54 @@ def _project_files(project: Path, k: int = 3) -> list[str]:
     return picks[:k]
 
 
+def _local_identity(git, repo: Path) -> None:
+    """A neutral identity in the demo's own scratch repo only (so Commit works on a machine with none set)."""
+    git(repo, "config", "--local", "user.name", "Launchpad Demo")
+    git(repo, "config", "--local", "user.email", "demo@example.invalid")
+
+
+def make_demo_repos(base: Path, shop: Path, clinic: Path) -> None:
+    """Two small repos for the Repos panel, built in the demo's own temp folders (never a real repo): "shop-site"
+    inside Demo shop (linked to a local bare remote, one commit ahead, three changed files) and Demo clinic itself
+    (no remote: shows "Not linked", clean). Best-effort: without git installed the demo just has no repos."""
+    import shutil
+    import subprocess
+    exe = shutil.which("git")
+    if exe is None:
+        return
+    ident = ["-c", "user.name=Demo", "-c", "user.email=demo@example.invalid", "-c", "commit.gpgsign=false"]
+
+    def git(where: Path, *args: str) -> None:
+        subprocess.run([exe, "-C", str(where), *ident, *args], check=True, capture_output=True, stdin=subprocess.DEVNULL,
+                       timeout=60, env={**__import__("os").environ, "GIT_TERMINAL_PROMPT": "0"})
+
+    try:
+        site, bare = shop / "shop-site", base / "remotes" / "shop-site.git"
+        site.mkdir(parents=True)
+        bare.mkdir(parents=True)
+        git(bare, "init", "-q", "--bare", "-b", "main")
+        git(site, "init", "-q", "-b", "main")
+        _local_identity(git, site)
+        (site / "index.html").write_text("<h1>Demo shop</h1>\n<p>Welcome.</p>\n", encoding="utf-8")
+        (site / "styles.css").write_text("body { font-family: sans-serif; }\n", encoding="utf-8")
+        (site / "notes.txt").write_text("todo: pricing page\n", encoding="utf-8")
+        git(site, "add", "-A")
+        git(site, "commit", "-q", "-m", "First version of the shop page")
+        git(site, "remote", "add", "origin", str(bare))
+        git(site, "push", "-q", "-u", "origin", "main")
+        (site / "styles.css").write_text("body { font-family: sans-serif; color: #222; }\n", encoding="utf-8")
+        git(site, "commit", "-q", "-am", "Darker text")                         # one commit ahead of the remote
+        (site / "index.html").write_text("<h1>Demo shop</h1>\n<p>Welcome.</p>\n<p>Free delivery over 50.</p>\n", encoding="utf-8")
+        (site / "pricing.md").write_text("# Pricing\n\n- Small: 9.00\n- Large: 14.00\n", encoding="utf-8")
+        (site / "notes.txt").unlink()
+        git(clinic, "init", "-q", "-b", "main")
+        _local_identity(git, clinic)
+        git(clinic, "add", "-A")
+        git(clinic, "commit", "-q", "-m", "Clinic scripts")
+    except (OSError, subprocess.SubprocessError):
+        pass                                            # a half-made demo repo is fine; the panel shows what exists
+
+
 def install(project: Path) -> None:
     """Register fake scripts for the four Launchpad agents (names from their app/agents/<folder>/agent.md files)."""
     project = Path(project).resolve()
@@ -480,7 +528,7 @@ def install(project: Path) -> None:
 
     fake.script("launchpad-drafter", [drafter] * 50)
 
-    # ---------------------------------------------------------------- Claude Code chat (role key pilot)
+    # ---------------------------------------------------------------- CLI chat (role key pilot)
     question = {"question": "Which tone should the notes use?", "header": "Tone",
                 "options": [{"label": "Plain", "description": "Short sentences"},
                             {"label": "Friendly", "description": "Warmer wording"}], "multiSelect": False}

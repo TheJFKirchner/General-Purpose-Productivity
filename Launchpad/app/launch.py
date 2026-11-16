@@ -62,14 +62,16 @@ def run_server(port: int, code: str, settings: Settings, store=None, overridden=
 # setting for this launch only (not saved)
 LAUNCH_OPTIONS = {"question_timeout": "question_timeout_s", "permission_timeout": "permission_timeout_s",
                   "autopilot": "autopilot_default", "planner_start": "planner_start_model",
-                  "planner_top": "planner_top_model", "promotion_window": "promotion_window_turns",
+                  "planner_top": "planner_top_model", "planner_harness": "planner_harness",
+                  "auto_promote": "planner_auto_promote", "promotion_window": "promotion_window_turns",
                   "promotion_criteria": "promotion_criteria_path", "pilot_model": "pilot_model",
                   "visual_model": "visual_model"}
 
 
 def demo_directories() -> list[Path]:
     """Two scratch folders for the fake demo (File Explorer, sessions in either), in the temp folder. "Demo shop" has
-    one folder agent (copy-reviewer, app/demo.py) that the demo plan names for a step. Every launch restores them to
+    one folder agent (copy-reviewer, app/demo.py) that the demo plan names for a step and a skill in .claude/skills;
+    "Demo clinic" has one in .agents/skills (tick it as additional to see both). Every launch restores them to
     exactly these contents (earlier sessions, created agents and edits are removed, best-effort)."""
     import shutil
     import tempfile
@@ -79,18 +81,44 @@ def demo_directories() -> list[Path]:
     for name, files in (("Demo shop", {"README.md": "# Demo shop\nA small web shop (made up).\n",
                                        "notes/ideas.md": "# Ideas\n- CSV export on the orders page\n",
                                        "app.py": "print('shop')\n",
-                                       f".claude/agents/{FOLDER_AGENT_NAME}.md": FOLDER_AGENT_FILE}),
+                                       f".claude/agents/{FOLDER_AGENT_NAME}.md": FOLDER_AGENT_FILE,
+                                       ".claude/skills/house-style/SKILL.md": (
+                                           "---\nname: house-style\ndescription: The shop's writing and naming "
+                                           "rules (made up)\n---\n- Short sentences; prices with two decimals\n")}),
                         ("Demo clinic", {"README.md": "# Demo clinic\nClinic operations scripts (made up).\n",
                                          "data/appointments.csv": "date,clinic,booked\n2026-11-01,North,42\n",
+                                         ".agents/skills/csv-checks/SKILL.md": (
+                                             "---\nname: csv-checks\ndescription: Checks a CSV file's columns "
+                                             "and dates (made up)\n---\n- Dates as YYYY-MM-DD\n"),
                                          "logo.png": None})):
         d = base / name
-        shutil.rmtree(d, ignore_errors=True)            # a locked leftover must not stop the launch
+        _force_rmtree(d)                                # a locked leftover must not stop the launch
         for rel, text in files.items():
             f = d / rel
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00demo" if text is None else text.encode("utf-8"))
         out.append(d)
+    _force_rmtree(base / "remotes")
+    from .demo import make_demo_repos
+    make_demo_repos(base, out[0], out[1])               # the Repos panel's two demo repos (needs git; best-effort)
     return out
+
+
+def _force_rmtree(path: Path) -> None:
+    """Remove a folder best-effort; git's read-only object files are made writable first (Windows)."""
+    import shutil
+    import stat
+
+    def unlock(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except OSError:
+            pass
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=unlock)
+    else:
+        shutil.rmtree(path, onerror=unlock)
 
 
 def build_settings(args):
@@ -119,7 +147,7 @@ def build_settings(args):
         values.update(question_timeout_s=float(FAKE_QUESTION_TIMEOUT_S), permission_timeout_s=45.0)
     overridden = set()
     for opt, name in LAUNCH_OPTIONS.items():
-        v = getattr(args, opt)
+        v = getattr(args, opt, None)
         if v is not None:
             values[name] = v
             overridden.add(name)
@@ -185,10 +213,14 @@ def main() -> None:
     ap.add_argument("--planner-start", default=None, help="model every planner session starts on (setting; default sonnet)")
     ap.add_argument("--planner-top", default=None,
                     help="model the planner is promoted to (setting; default opus; same as --planner-start = no promotion)")
+    ap.add_argument("--planner-harness", default=None,
+                    help="harness new planners run on (setting; default claude; --fake still uses the fake engine)")
+    ap.add_argument("--no-auto-promote", dest="auto_promote", action="store_const", const=False, default=None,
+                    help="the planner never promotes itself (setting; promotion by hand still works)")
     ap.add_argument("--promotion-window", type=int, default=None, help="turns in which the planner may promote itself (setting; default 2)")
     ap.add_argument("--promotion-criteria", default=None, help="replacement criteria file (markdown)")
     ap.add_argument("--visual-model", default=None, help="visual agent (Visualizer) model override (default: haiku)")
-    ap.add_argument("--pilot-model", default=None, help="Claude Code chat model override (default: sonnet, from its file)")
+    ap.add_argument("--pilot-model", default=None, help="CLI chat model override (default: sonnet, from its file)")
     ap.add_argument("--fake", action="store_true", help="scripted demo on the fake engine (zero tokens)")
     ap.add_argument("--question-timeout", type=float, default=None,
                     help=f"seconds before a timed builder question auto-answers (default 180; {FAKE_QUESTION_TIMEOUT_S} with --fake)")

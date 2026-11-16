@@ -3,7 +3,7 @@
    Fields the vanilla page tolerated as optional (older servers, demo, history replays) are optional here too. */
 
 export type Id = string;
-/** Role ids (unchanged); display names: Planner, Explorer, Orchestrator, Builder, Claude Code, Visualizer; drafter = the agent drafter. */
+/** Role ids (unchanged); display names: Planner, Explorer, Orchestrator, Builder, CLI (role pilot), Visualizer; drafter = the agent drafter. */
 export type Role = 'planner' | 'astronaut' | 'orchestrator' | 'builder' | 'pilot' | 'visual' | 'drafter';
 export type StepStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'failed';
 export type RunEndStatus = 'done' | 'stopped' | 'failed' | 'blocked';
@@ -28,7 +28,16 @@ export interface RoundAnswer { accepted: boolean; option?: string; text?: string
     runs it (`Builder` when null); `agent_fallback` = the named agent is missing / broken / not a step worker here, so the Builder runs it. */
 export interface PlanStep { n: number; title: string; status?: StepStatus; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean;
   /** the purpose of the agent that runs the step ("building" for the Builder): the chip colour, whatever folder Crew shows */
-  agent_purpose?: Purpose | string | null }
+  agent_purpose?: Purpose | string | null;
+  /** skill names the plan names for the step (absent = none): its worker gets them on top of its own allowlist */
+  skills?: string[];
+  /** the step's skills not found in the session's folders (ignored at run time; shown greyed) */
+  skills_unknown?: string[] }
+
+/** One skill found in a session's folders (crew_list.skills). shadowed = an earlier folder has one of the same name. */
+export interface SkillInfo { name: string; description?: string; path?: string; folder_name?: string; dir_id?: Id | null; source?: 'claude' | 'agents' | string; shadowed?: boolean }
+/** An agent's skills (crew_list agents[].skill_setting): "all", a list of names, or "cli" (the CLI chat: the harness decides). */
+export type SkillSetting = 'all' | 'cli' | string[];
 
 /** What an agent is for (Crew colours, the planner's registry, permissions for added agents). */
 export type Purpose = 'planning' | 'exploring' | 'building' | 'reviewing';
@@ -54,7 +63,8 @@ export interface VisualSetBody {
   library_note?: string | null;
 }
 
-export interface Directory { dir_id: Id; path: string; name: string; exists: boolean; is_default: boolean; busy: boolean }
+/** is_default = the primary folder; is_additional = ticked as additional (joins every new session / chat as add_dirs, minus its primary). */
+export interface Directory { dir_id: Id; path: string; name: string; exists: boolean; is_default: boolean; is_additional?: boolean; busy: boolean }
 export interface SettingValue { value: unknown; applies: Applies; overridden_by_launch: boolean | string }
 
 export interface DirEntry {
@@ -93,8 +103,10 @@ export interface CrewAgentDef {
   builtin?: boolean;
   /** folder agents: false when the file is broken (its problems are in warnings), so plans cannot use it */
   step_worker?: boolean;
+  /** "all" | [skill names] | "cli" (defaults: Planner all, others none; names missing from crew_list.skills are ignored at run time) */
+  skill_setting?: SkillSetting;
   promotion?: {
-    start_model?: string; target_model?: string; window_turns?: number; criteria?: string; criteria_path?: string;
+    start_model?: string; target_model?: string; auto_promote?: boolean; window_turns?: number; criteria?: string; criteria_path?: string;
     root?: string; path?: string; editable?: boolean;
   };
 }
@@ -106,7 +118,7 @@ export type PlannerHistoryItem =
   | { role: 'answers'; roundId: string; answers: Record<string, RoundAnswer>; skipped?: boolean; type?: undefined }
   | (ServerEvent & { session_id?: Id });
 
-/* Claude Code chat history entries: {role, markdown} or a tool row or a replayed event */
+/* CLI chat history entries: {role, markdown} or a tool row or a replayed event */
 export type ChatHistoryItem =
   | { role: 'user' | 'assistant' | 'system'; markdown?: string; text?: string; tool?: undefined; type?: undefined }
   | ({ tool: string; type?: undefined; role?: undefined } & Partial<Omit<ActivityEvent, 'type'>>)
@@ -134,9 +146,12 @@ export interface SnapshotSession {
   promoted?: boolean;
   reason?: string | null;
   by?: 'criteria' | 'user' | null;
+  /* the other planner_model fields (harness, start_model, label, started, switchable_to ...) */
+  harness?: string; start_model?: string; top_model?: string; label?: string; option_id?: string; auto_promote?: boolean;
+  started?: boolean; switchable_to?: string[];
 }
 export interface SnapshotChat {
-  id?: Id; chat_id?: Id; dir_id?: Id; mode?: ChatMode; model?: string; cwd?: string; busy?: boolean;
+  id?: Id; chat_id?: Id; dir_id?: Id; additional_dir_ids?: Id[]; mode?: ChatMode; model?: string; cwd?: string; busy?: boolean;
   history?: ChatHistoryItem[];
 }
 
@@ -152,10 +167,13 @@ export interface PlanMetaEvent { type: 'plan_meta'; name?: string; mode?: string
 export interface SystemEvent { type: 'system'; text: string; session_id?: Id | null; chat_id?: Id | null }
 export interface SessionStartedEvent {
   type: 'session_started'; session_id: Id; folder?: string; dir_id?: Id; cwd?: string;
+  /** the additional folders this session got (fixed when it started) */
+  additional_dir_ids?: Id[];
   chat?: PlannerHistoryItem[]; report_sent?: boolean;
 }
 export interface SettingsEvent {
   type: 'settings'; directories: Directory[]; values: Record<string, SettingValue>; can_pick_directory: boolean;
+  additional_dir_ids?: Id[];
 }
 export interface DirectoryPickedEvent { type: 'directory_picked'; path: string | null }
 export interface DirListingEvent { type: 'dir_listing'; root: string; path: string; entries: DirEntry[] }
@@ -169,6 +187,17 @@ export interface FileErrorEvent {
   current?: { text: string; version: string | number };
 }
 export interface BackupsEvent { type: 'backups'; root: string; path: string; items: BackupItem[] }
+/** One changed file in a repo: M modified, A added (staged), D deleted, U unmerged, ? untracked; counts are 0 for binary files. */
+export interface GitFile { path: string; status: 'M' | 'A' | 'D' | 'U' | '?'; added: number; removed: number; binary: boolean }
+/** A repo found in a connected folder (see the git_repos header in app/server.py). linked = a remote and an upstream branch exist. */
+export interface GitRepo {
+  repo_id: string; name: string; dir_id: Id; folder_name: string; rel: string; branch: string | null; detached: boolean;
+  remote: { name: string; host: string; owner: string; repo: string } | null; upstream: string | null; linked: boolean;
+  ahead: number; behind: number; clean: boolean; files: GitFile[]; more: number; added: number; removed: number; error: string | null;
+}
+export interface GitReposEvent { type: 'git_repos'; available: boolean; repos: GitRepo[] }
+export type GitOp = 'refresh' | 'fetch' | 'commit' | 'push';
+export interface GitResultEvent { type: 'git_result'; repo_id: string; op: GitOp; ok: boolean; committed: boolean; message: string; repo: GitRepo | null }
 export interface PlanDraftEvent {
   type: 'plan_draft'; session_id: Id; path: string; markdown: string; steps: PlanStep[]; revision?: number; previous_runs?: number;
 }
@@ -177,11 +206,35 @@ export interface RunStartedEvent {
 }
 export interface PlannerModelEvent {
   type: 'planner_model'; session_id: Id; model: string; promoted: boolean; reason: string | null; by: 'criteria' | 'user' | null;
+  /** harness and models of this session; label = "<harness> · <model>" now; option_id = "<harness>:<model>" now */
+  harness?: string; start_model?: string; top_model?: string; label?: string; option_id?: string;
+  /** this session may promote itself */
+  auto_promote?: boolean;
+  /** someone wrote to it: harness and start model are fixed */
+  started?: boolean;
+  /** picker options it can move to now (all available ones before its first message; else its top model while promotable) */
+  switchable_to?: string[];
+}
+/** One harness-and-model pair of the planner picker; available = agentlib says its engine is (else note "not available yet"). */
+export interface PlannerOption { id: string; harness: string; harness_label: string; model: string; model_label: string; label: string; available: boolean; note: string | null }
+/** The planner picker: options, what the next new plan starts on (per user), auto-promote, the rules text. */
+export interface PlannerChoiceEvent {
+  type: 'planner_choice'; options: PlannerOption[];
+  choice: { option_id: string; harness: string; model: string; label: string };
+  auto_promote: boolean; top_model: string; top_label: string;
+  /** start = top: no promotion */
+  promotion_off: boolean;
+  /** --model pins the planner for this launch (no choosing) */
+  pinned: string | null;
+  /** planner settings a launch option sets */
+  overridden: string[];
+  rules: { markdown: string; path: string | null };
 }
 export interface AutopilotEvent { type: 'autopilot'; session_id: Id; on: boolean }
 export interface StepUpdateEvent {
   type: 'step_update'; session_id: Id; n: number; status?: StepStatus; built?: string[]; report_path?: string;
   agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: Purpose | string | null;
+  skills?: string[]; skills_unknown?: string[];
 }
 export interface QueueItemEvent {
   type: 'queue_item';
@@ -239,7 +292,9 @@ export interface RunFinishedEvent {
   total_cost_usd?: number; planner_cost_usd?: number; report_sent?: boolean;
 }
 /** dir_id = the connected folder whose .claude/agents/ files are included; tool_choices = tools the Add form offers. */
-export interface CrewListEvent { type: 'crew_list'; agents: CrewAgentDef[]; dir_id?: Id | null; tool_choices?: string[] }
+export interface CrewListEvent { type: 'crew_list'; agents: CrewAgentDef[]; dir_id?: Id | null; tool_choices?: string[];
+  /** skills found in dir_id (primary) + the additional folders, primary first */
+  skills?: SkillInfo[] }
 /** An agent's use count changed (keyed by agent name). */
 export interface AgentUsesEvent { type: 'agent_uses'; name: string; uses: number }
 export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?: Id; fields?: Partial<AgentFields>; error?: string }
@@ -248,6 +303,7 @@ export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id
 export interface AgentRemovedEvent { type: 'agent_removed'; ok: boolean; dir_id?: Id; name?: string; error?: string }
 export interface ChatStartedEvent {
   type: 'chat_started'; chat_id: Id; mode?: ChatMode; model?: string; cwd?: string; dir_id?: Id | null; busy?: boolean;
+  additional_dir_ids?: Id[];
   /** set when chat_from_plan opened the chat (mode plan; the plan follows as the first user message) */
   from_session_id?: Id | null;
   history?: ChatHistoryItem[];
@@ -263,10 +319,10 @@ export type ServerEvent =
   | SnapshotEvent | PlannerMessageEvent | UserMessageEvent | TypingEvent | QuestionRoundEvent | UsageEvent | CrewEvent
   | PlanMetaEvent | SystemEvent | SessionStartedEvent | SettingsEvent | DirectoryPickedEvent | DirListingEvent
   | FileContentEvent | FileSavedEvent | FileErrorEvent | BackupsEvent | PlanDraftEvent | RunStartedEvent
-  | PlannerModelEvent | AutopilotEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
+  | PlannerModelEvent | PlannerChoiceEvent | AutopilotEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
   | ActivityEvent | RunFinishedEvent | CrewListEvent | ChatStartedEvent | ChatTypingEvent | ChatDeltaEvent
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
-  | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent;
+  | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent;
 
 export type ServerEventType = ServerEvent['type'];
 
@@ -274,9 +330,10 @@ export type ServerEventType = ServerEvent['type'];
 export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'snapshot', 'planner_message', 'user_message', 'typing', 'question_round', 'usage', 'crew', 'plan_meta', 'system',
   'session_started', 'settings', 'directory_picked', 'dir_listing', 'file_content', 'file_saved', 'file_error',
-  'backups', 'plan_draft', 'run_started', 'planner_model', 'autopilot', 'step_update', 'queue_item', 'queue_resolved',
+  'backups', 'plan_draft', 'run_started', 'planner_model', 'planner_choice', 'autopilot', 'step_update', 'queue_item', 'queue_resolved',
   'agent_usage', 'activity', 'run_finished', 'crew_list', 'chat_started', 'chat_typing', 'chat_delta', 'chat_message',
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
+  'git_repos', 'git_result',
 ];
 
 /* ---------- UI -> here ---------- */
@@ -302,6 +359,7 @@ export type UiMessage =
   | { type: 'visual_tweak'; session_id: Id; set_id: string; option_id: string; text: string }
   | { type: 'visual_retry'; session_id: Id; set_id: string; option_id: string }
   | { type: 'planner_promote'; session_id: Id }
+  | { type: 'planner_choose'; option_id: string; session_id?: Id }
   | { type: 'set_autopilot'; session_id: Id; on: boolean }
   | { type: 'get_settings' }
   | { type: 'set_settings'; patch: Record<string, unknown> }
@@ -316,6 +374,13 @@ export type UiMessage =
   | { type: 'agent_draft'; dir_id: Id; text: string }
   | { type: 'agent_create'; dir_id: Id; fields: AgentFields }
   | { type: 'agent_remove'; dir_id: Id; name: string }
+  | { type: 'set_agent_skills'; name: string; skills: 'all' | string[]; dir_id?: Id }
+  | { type: 'git_scan' }
+  | { type: 'git_refresh'; repo_id: string }
+  | { type: 'git_fetch'; repo_id: string }
+  | { type: 'git_commit'; repo_id: string; message: string; paths: string[]; push?: boolean }
+  | { type: 'git_push'; repo_id: string }
+
   | { type: 'chat_from_plan'; session_id: Id };
 
 export type UiMessageType = UiMessage['type'];

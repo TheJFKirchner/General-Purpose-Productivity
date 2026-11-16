@@ -279,7 +279,7 @@ def agent_problems(text: str) -> list[str]:
     model = meta.get("model")
     if model is not None and not (str(model) in MODEL_ALIASES or re.fullmatch(r"claude-[\w.\[\]-]+", str(model))):
         problems.append(f"model: '{model}' is not opus, sonnet, haiku, inherit or a claude-... model id")
-    purpose = meta.get("purpose")                  # Launchpad's own field (Claude Code and Cursor ignore it)
+    purpose = meta.get("purpose")                  # Launchpad's own field (the CLI harnesses ignore it)
     if purpose is not None and str(purpose).strip().lower() not in PURPOSES:
         problems.append(f"purpose: '{purpose}' is not {', '.join(PURPOSES)}")
     return problems

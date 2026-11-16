@@ -6,6 +6,8 @@
 - Run holds the run's state (steps, reports, assumptions, autopilot log, meters) and emits step_update /
   run_finished / plan_meta; step agents read and update it through their StepContext
 - Code writes steps/step-NN.md, assumptions.md, operations-manual.md and report.md (report.py)
+- A step's `skills` (plan.md) go to its worker on top of the worker's allowlist (step_skills; builder.load_worker);
+  names not found in the session's folders are dropped there
 """
 from __future__ import annotations
 
@@ -62,7 +64,8 @@ class Run:
         self.plan = plan_mod.parse(self.plan_text)
         reg = crew.registry(self.folder.project)
         self.steps = {s["n"]: {"n": s["n"], "title": s["title"], "after": s["after"], "status": "todo",
-                               **crew.step_fields(s.get("agent"), self.folder.project, reg)}
+                               **crew.step_fields(s.get("agent"), self.folder.project, reg),
+                               **(ls.step_skill_fields(s) if hasattr(ls, "step_skill_fields") else {})}
                       for s in self.plan["steps"]}
         self.reports: dict[int, str] = {}          # n -> project-relative report path
         self.results: dict[int, dict] = {}         # n -> full builder report
@@ -127,13 +130,22 @@ class Run:
         await self.hub.emit(ev)
 
     def step_agent(self, n: int) -> dict:
-        """agent / agent_display (+ agent_fallback) of step n for UI events."""
+        """agent / agent_display (+ agent_fallback) and skills (+ skills_unknown) of step n for UI events."""
         s = self.steps[n]
         out = {"agent": s.get("agent"), "agent_display": s.get("agent_display") or crew.display("builder"),
                "agent_purpose": s.get("agent_purpose") or "building"}
         if s.get("agent_fallback"):
             out["agent_fallback"] = True
+        if s.get("skills"):
+            out["skills"] = list(s["skills"])
+
+        if s.get("skills_unknown"):
+            out["skills_unknown"] = list(s["skills_unknown"])
         return out
+
+    def step_skills(self, n: int) -> list[str]:
+        """The skills plan step n names (its worker gets them on top of its allowlist)."""
+        return list((self.steps.get(n) or {}).get("skills") or [])
 
     def steps_payload(self) -> list[dict]:
         """run_started steps: [{n, title, status, agent, agent_display, agent_fallback?}]."""
@@ -153,6 +165,7 @@ class Run:
         f = self.folder
         steps = "\n".join(f"{s['n']}. {s['title']}" + (f" (after {', '.join(map(str, s['after']))})" if s["after"] else "")
                           + (f" [agent: {s['agent_display']}]" if s.get("agent") and not s.get("agent_fallback") else "")
+                          + (f" [skills: {', '.join(s['skills'])}]" if s.get("skills") else "")
                           for s in self.steps.values())
         log = f.read(f.flight_log).strip() or "(empty)"
         return (f"Run the approved plan \"{self.plan['name']}\".\n"
@@ -182,7 +195,9 @@ class Run:
 
     async def _loop(self) -> str:
         agent = crew.load("orchestrator", engine=self.settings.engine, project=self.folder.project,
-                          tools=orchestrator_tools(self))
+                          tools=orchestrator_tools(self),
+                          **crew.session_kw(self.ls, crew.builtin_name("orchestrator"), role="orchestrator"))
+
         await self.hub.count_use(agent.name)
         meter = Meter(self.hub, session_id=self.ls.id, role="orchestrator", name=crew.display("orchestrator"))
         self.meters.insert(0, meter)

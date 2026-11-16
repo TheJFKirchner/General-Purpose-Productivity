@@ -47,7 +47,7 @@ export default function Files() {
                     <div className="fx-root-row">
                       <button type="button" className={`fx-node fx-root${r.exists ? '' : ' missing'}`} aria-expanded={open} title={r.full} onClick={() => actions.fxToggle(r.root, '')}>
                         <span className="tw">{open ? <ChevronDown /> : <ChevronRight />}</span>{open ? <FolderOpen className="fi" /> : <Folder className="fi" />}<span className="nm">{r.name}</span>
-                        {r.isDefault ? <span className="k">default</span> : null}{r.exists ? null : <span className="k">missing</span>}
+                        {r.isDefault ? <span className="k">Primary</span> : r.isAdditional ? <span className="k">Additional</span> : null}{r.exists ? null : <span className="k">missing</span>}
                       </button>
                       {r.app || !r.exists ? null : <button type="button" className="pill xs ghost" title="Open this folder's .launchpad session folders" onClick={() => actions.fxOpenPath(r.root, '.launchpad')}>Sessions</button>}
                     </div>

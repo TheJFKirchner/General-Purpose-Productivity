@@ -24,15 +24,18 @@ them); without them the page runs the demo. Nothing loads from the internet: eve
 | `src/contract.ts` | types for every server event (`ServerEvent`) and UI message (`UiMessage`) |
 | `src/store/` | the whole app state (`types.ts`, starting values in `initial.ts`), the zustand store + transport + `run` recipe helper (`core.ts`), the reducer for every server event (`reducer.ts`), shared state changes used by both reducer and actions (`mutations.ts`), UI actions (`actions.ts`), derived values (`selectors.ts`), the public surface (`index.ts`) |
 | `src/bridge.ts` | `connect()` (websocket or demo), `send(msg)` |
-| `src/demo/` | the ported in-page demo (`Demo.ts`, data in `data.ts`, the made-up visual options in `visuals.ts`; built-in agent files sit at `app/agents/<folder>/agent.md` and the planner criteria at `app/agents/planner/promotion.md`, as on the server): two runs, the planner, Claude Code chats (also from a plan), the crew with two folder agents and ticking use counts, a plan whose steps 3-4 name folder agents, agent draft / create / remove. Typing "fail" in Draft for me shows the error; a name starting `launchpad-` shows a server problem |
+| `src/demo/` | the ported in-page demo (`Demo.ts`, data in `data.ts`, the made-up visual options in `visuals.ts`; built-in agent files sit at `app/agents/<folder>/agent.md` and the planner criteria at `app/agents/planner/promotion.md`, as on the server): two runs, the planner and its picker (planner_choice / planner_choose: Claude options, Cursor disabled), CLI chats (also from a plan), the crew with two folder agents and ticking use counts, a plan whose steps 3-4 name folder agents (steps 1 and 3 name skills, one not found), skills in both folders (d2's `sql-style` is shadowed when d2 is ticked as additional; `DEMO_SKILLS` in data.ts), skill settings and the Additional ticks, agent draft / create / remove.
+ Typing "fail" in Draft for me shows the error; a name starting `launchpad-` shows a server problem |
 | `src/lib/` | `markdown.ts` (escaped md / docHtml), `format.ts` (usd, tokens, ago, toolCat ...), `storage.ts` (localStorage), `labels.ts`, `hooks.ts` (`useNow`, `useAnimationFrame`) |
 | `src/components/` | shared pieces (below); import them from the `components/index.ts` barrel. `Modal.tsx` is the generic modal host (`openModal`); `archiveModals.tsx` holds the report / plan / archive modals built on it. `Header.tsx` is the top bar. Exception: `views/Plan/PlanLog.tsx` imports its components directly, because `archiveModals.tsx` renders `PlanLog` and the barrel would become a cycle |
 | `src/theme.css` | the design tokens (see Design system) + all global / shared CSS |
 | `src/fonts.css` | the bundled Sora and Inter faces (Latin + Latin Extended woff2 from @fontsource-variable) |
 | `src/views/<Name>/` | one folder per screen, each with its own CSS (vanilla class names kept, sizes from the tokens) |
-| `src/views/Chat/` | the chat screen (header tab "Plan"): the Planner / Claude Code switch over `views/Plan` (Planner side) and `views/Code` (Claude Code side, the former Free Flight tab); both panes stay mounted |
-| `src/views/Crew/` | Crew hero cards + the definition reader (`Crew.tsx`) and the Add an agent dialog (`AgentForm.tsx`) |
-| `src/views/Aside/`, `src/views/Visuals/` | the right-hand panels shown beside the screens: Aside = Incoming queue, orbit, activity feed; Visuals = the visual options panel (`frames.ts` builds the sandboxed frames) |
+| `src/views/Chat/` | the chat screen (header tab "Plan"): the Planner / CLI switch over `views/Plan` (Planner side) and `views/Code` (CLI side, the former Free Flight tab); both panes stay mounted |
+| `src/views/Plan/` | the planner chat (`Plan.tsx`), its log entries (`PlanLog.tsx`) and, under the chat box, the planner picker (`PlannerPicker.tsx`): one compact button ("Claude · Sonnet") whose menu opens upward with the server's harness-and-model options (unavailable ones disabled with the server's note), "Auto-promote to <top model>" + Rules (the criteria, read-only modal), and New plan (with its "Set this plan aside?" confirm). Reads `sel.plannerPickerView`; sends through `actions.choosePlanner` / `setAutoPromote` / `newPlan` |
+| `src/views/Crew/` | Crew hero cards + the definition reader (`Crew.tsx`, with a Skills section: "All skills" / "Choose" checklist via `actions.setAgentSkills`, unknown names greyed, the CLI chat "All (handled by the CLI)") and the Add an agent dialog (`AgentForm.tsx`) |
+
+| `src/views/Aside/`, `src/views/Visuals/` | the right-hand panels shown beside the screens: Aside = Incoming queue, orbit, activity feed, and on the Files tab (`ui.view === 'files'`) `Repos.tsx` instead of orbit + Incoming: the Repos panel (one collapsible card per git repo grouped under its connected folder: branch, status chips Up to date / N ahead / N behind / Changes / Not linked, changed files with tick boxes and +/- counts, "Commit message" box, Commit / Commit and push / Push, Refresh, Check remote; clicking a file opens it in Files via `actions.gitOpenFile`) plus the `WaitingLine` ("N waiting", opens the Plan tab where Incoming shows). Reads `st.git` and `sel.gitGroups` / `gitChips` / `gitIsOpen`; sends through `actions.gitScan` / `gitRefresh` / `gitFetch` / `gitCommit` / `gitPush`; opening the Files tab sends `git_scan`. Demo data: `src/demo/gitDemo.ts`; Visuals = the visual options panel (`frames.ts` builds the sandboxed frames) |
 | `src/test/demoApp.tsx` | shared harness for view tests (renders `App` on the demo, helpers `q`, `click`, `sentOf` ...). Tests sit next to what they test: `*.test.ts(x)` beside the component / view / store file |
 | `src/App.tsx`, `src/components/Header.tsx` | shell: header + tabs, all views (kept mounted, `hidden` tab panels), aside, visuals slot, overlays |
 
@@ -54,11 +57,11 @@ Selectors that build new arrays/objects must go through `useComputed`, not `useL
 
 State shape (`src/store/types.ts`, all plain keyed objects):
 - `ui`: `view` (plan | missions | crew | files), `chatSide` (planner | code: the chat screen's switch; `actions.setChatSide`), `conn`, `demo`, `queueFilter`, `feedRun`/`feedAgent`, `hov`/`sel` (agent highlight), `focus`/`focusScroll`,
-  two-click confirms `stopConfirm`/`apConfirm`/`pmConfirm`, `newPlanBusy`, `newChatBusy`, `vis {open, wide, width}`,
+  two-click confirms `stopConfirm`/`apConfirm`, `pickerChoosing` (planner_choose sent, until planner_model / planner_choice), `newPlanBusy`, `newChatBusy`, `vis {open, wide, width}`,
   `settingsOpen`/`settingsMsg`/`settingsAddPath`/`picking`, `dirMenu`, `toasts`
 - `sessions[id]` (+ `order`, `current`): letter, folder/dirId/cwd, status, meta, roundTag, draft/draftV/draftRev,
   run {name, steps[{n,title,status,built,report_path,agent,agent_display,agent_fallback,agent_purpose}]}, runDraftV/runRev, report, approving, stopping, reportSent,
-  cleared, flash/flashN, autopilot, codeSending/codeSentV (Send plan to Claude Code), planner fields (plannerId, plannerStatus, plannerModel, promoted, promoting ...),
+  cleared, flash/flashN, autopilot, codeSending/codeSentV (Send plan to CLI), planner fields (plannerId, plannerStatus, plannerModel, promoted, promoting; from planner_model: plannerHarness, plannerStart, plannerTop, plannerLabel, plannerOption, plannerStarted, plannerAuto, switchableTo),
   visualSets[{set_id, brief, options (each with `drawn_with`), picked_id, pending, `library` (asked for; null = not asked),
   `drawn_with` (used), `libraries` (available for the folder), `library_note` ("drawn in ECharts, styled like X" on a fallback)}], visSel, visSeen, `log` (planner chat), `typing`
 - planner `log` entries: `bubble {who, text}` · `sys {text, cls?: promo|err}` · `visnote {text, setId}` (has a Show
@@ -66,20 +69,23 @@ State shape (`src/store/types.ts`, all plain keyed objects):
   (use `sel.planCardView(s, entry)` for approved / superseded / button label / status line). `preLog`/`preTyping` =
   lines before any session exists.
 - `rounds[id]`: questions, answers, sent, actionsHidden
+- `plannerChoice`: the last planner_choice (options with `available` / `note`, `choice` = what the next new plan starts on, `auto_promote`, `top_model` / `top_label`, `promotion_off`, `pinned`, `rules`). `sel.plannerPickerView` combines it with the current session: the button label, each item's hint ("promote this plan · costs more", "from your next new plan", "not available yet"), the "applies to your next new plan" note
 - `agents[agent_id]` (agent_usage records), `acts` (activity, oldest first, max 600; `sel.feedRows` = newest first),
   `lastAct`, `tokens`/`cost`/`usageEv` (server usage)
 - `queue`: Incoming cards in arrival order, `ui: open|sent|timedout|autopilot|auto|ended`, `leaving` while fading;
   kind `report` cards are added by run_finished (id `report:<session_id>`). Order with `sel.orderedQueue`.
-- Claude Code chats: `chats[id]` {mode, model, cwd, dirId, busy, log, streamId, typing, agentIds}, `chatOrder`,
+- CLI chats: `chats[id]` {mode, model, cwd, dirId, busy, log, streamId, typing, agentIds}, `chatOrder`,
   `currentChat`, `chatPending`, `codeModePref`, `chatFromPlan` (session whose plan was sent; its `chat_started` keeps Plan mode,
   also matched by `from_session_id`), `chatItems[id]` (inline cards, `ui: open|sent|done`, `result`).
   Chat `log` entries: `bubble {who, text, streaming?}` · `sys {text, cls?}` · `tool {act}` · `card {itemId}`.
-- Crew: `crewDefs` (crew_list agents with `purpose`, `uses`, `builtin`, `step_worker`), `crewLoading`, `crewDirId` (crew_list.dir_id),
+- Crew: `crewDefs` (crew_list agents with `purpose`, `uses`, `builtin`, `step_worker`, `skill_setting` "all" | [names] | "cli"), `crewSkills` (crew_list.skills: found in the folder + the additional folders, `shadowed` marked), `crewLoading`, `crewDirId` (crew_list.dir_id),
   `crewDirPick` (folder picked in Crew, sent as `get_crew {dir_id}`), `toolChoices`, `crewUses[name]` (live from `agent_uses`),
   `crewForm` {open, fields, problems, error, saving, draftText, drafting, draftError, drafted}, `crewRemoving`, `crewError`, `crewFlash`.
   Selectors: `sel.purposeOf`, `isBuiltin`, `usesOf`, `crewDir`, `stepAgent(defs, step)` (null = the Builder; `fallback` when
   `agent_fallback`; colour from the step's `agent_purpose`, else `defsForSession` = the crew list only when it lists the session's own folder), `agentFormProblems`, `problemField` / `problemText` (server problems -> form fields), `plannerWaiting` / `codeWaiting`.
-- `settings {directories, values, can_pick}`
+- `settings {directories, values, can_pick}`; each directory has `is_default` (the primary) and `is_additional` (ticked: joins new sessions and chats). Actions: `makeDefaultDir` ("Make primary"), `setAdditionalDir(dirId, on)` (sends the whole `additional_dir_ids` list)
+- Run / draft steps may carry `skills` and `skills_unknown` (plan-step skills; the plan card shows them as chips, unknown ones greyed)
+- `git` (Repos panel): `available` (null until answered, false = git not installed), `loaded`, `scanning`, `repos` (git_repos, each replaced by its git_result), `busy[repoId]` (operation in flight), `error` / `note` (git's text / success note per repo), `unticked[repoId]` (everything is ticked by default, new files too), `message[repoId]` (commit message being typed), `open[repoId]` (card opened by hand; default open while it has changes or something to report)
 - `fx` (File Explorer: cache, loading, err, open, sel, raw, collapsed, width; persisted to localStorage) · `files`
   (file_content per `root|path`) · `editor` (pen editor: text, dirty, banner, conflict, pane, backups ...)
 
@@ -91,7 +97,7 @@ Not in the store (view-local animation): orbit body positions, solar-system ship
 `Markdown` (the only `dangerouslySetInnerHTML`; `doc` for YAML-headed files; `label` = aria-label, makes it a named
 region) · `Pill` (button: `variant`, `size` md | sm | xs, `icon`; an icon with no label = round icon button, needs
 `aria-label`) · `Tag` (kind tag with its icon), `Chip`, `Letter`, `Status`, `Empty` (`icon`, `title`, one line),
-`Loading` (spinner line), `Badge`, `SunIcon`, `DirChip` · `ChatBubble` (long user text folds with Show all; `plan` = the plan sent to Claude Code, folded and formatted), `SysLine`, `TypingDots` · `Card`, `ViewFrame`
+`Loading` (spinner line), `Badge`, `SunIcon`, `DirChip` · `ChatBubble` (long user text folds with Show all; `plan` = the plan sent to the CLI, folded and formatted), `SysLine`, `TypingDots` · `Card`, `ViewFrame`
 (vhead look) · `AutopilotSwitch` (role=switch) · `PenButton` (opens the editor) · `Dialog`, `DialogTitle`, `DialogX`
 (the dialog primitive, below; `Modal.tsx`) · `openModal`/`closeModal` (generic modal; actions may be a function for live labels and
 may carry an `icon`) · `openReport`, `openPlan`, `openArchive` (read-only planning chat: the real `PlanLog` inside
@@ -101,8 +107,8 @@ may carry an `icon`) · `openReport`, `openPlan`, `openArchive` (read-only plann
 `ui.hov` (feed rows, stars and ships all carry it; pinning from Missions scrolls `#feedList [data-hover-agent]` rows) ·
 `Toasts` (`actions.toast`) · `Tooltip.tsx` is `TipHost` and its `tipContent` · `icons.ts` (the icon set).
 
-Two-click confirms with a 4 s window live in the store (`toggleAutopilot`, `stopRun`, `promotePlanner`); the
-"New plan → Set this plan aside?", Settings "Confirm remove" and Crew "Confirm remove" (folder agents) confirms are local to their views.
+Two-click confirms with a 4 s window live in the store (`toggleAutopilot`, `stopRun`); the picker's
+"New plan → Set this plan aside?", Settings "Confirm remove" and Crew "Confirm remove" (folder agents) confirms are local to their views. Promotion by hand is picking the top model in the planner picker (one click; the item says it costs more).
 
 ## Design system (polish pass, Nov 2026)
 
@@ -145,8 +151,8 @@ inside the Missions SVG systems.
   page hidden from screen readers while open). Styled only by `.scrim` / `.modal`; every dialog needs a `DialogTitle`.
 - Tabs: the header is a WAI-ARIA tablist (`role=tab`, `aria-selected`, roving tabindex, Left / Right / Home / End);
   each view slot in `App.tsx` is its `role=tabpanel`.
-- Menu: `DirMenu` is `role=menu` with `menuitem`s (Up / Down / Home / End; Esc returns focus to the opener).
-- Switch: `AutopilotSwitch` is `role=switch` with `aria-checked`. The chat screen's Planner / Claude Code switch is a two-tab `role=tablist` (Left / Right / Home / End); each tab's label says when its side is waiting on you (coral count) or working (dot).
+- Menu: `DirMenu` is `role=menu` with `menuitem`s (Up / Down / Home / End; Esc returns focus to the opener). The planner picker is `aria-haspopup=menu` on its button (Up / Down on it open the menu on the current choice) and a `role=menu` of `menuitemradio` options (unavailable ones `aria-disabled`, still focusable), a `menuitemcheckbox` (auto-promote), Rules and New plan `menuitem`s; Up / Down / Home / End and Tab / Shift+Tab reach every item, Esc or a click outside closes it and focus returns to the button.
+- Switch: `AutopilotSwitch` is `role=switch` with `aria-checked`. The chat screen's Planner / CLI switch is a two-tab `role=tablist` (Left / Right / Home / End); each tab's label says when its side is waiting on you (coral count) or working (dot).
 - Crew: cards are buttons (aria-label sums up purpose, source, model, uses); opening one moves focus to the detail heading, "All agents" returns it to the card. The Add an agent dialog marks invalid fields with `aria-invalid` + `aria-describedby` to the inline message and focuses the first one after a failed save.
 - Tooltips: `TipHost` shows on hover and on keyboard focus, sets `aria-describedby="tip"` on the focused element, Esc
   hides it; `text:` labels appear after 350 ms. Text with a tip that is not a button gets `tabIndex={0}`.
@@ -170,7 +176,7 @@ Visuals frames keep their own CSP and sandbox (`views/Visuals/frames.ts`); the p
 |---|---|---|---|
 | Plan chat (2a) | 647-670 | 1209-1616, model 1617-1667, autopilot 1669-1698 | theme.css (chat, rounds, plan cards), `views/Plan/Plan.css` |
 | Aside: Incoming, orbit, activity feed (2a) | 738-763 | queue 1700-1878, orbit 1880-1985, feed 2321-2404 | `views/Aside/Aside.css` |
-| Free Flight (2b), now the chat screen's Claude Code side | 672-698 | 2429-2676 | `views/Code/Code.css` (switch: `views/Chat/Chat.css`) |
+| Free Flight (2b), now the chat screen's CLI side | 672-698 | 2429-2676 | `views/Code/Code.css` (switch: `views/Chat/Chat.css`) |
 | Visuals panel (2b) | 764-779 | 2678-2972 | `views/Visuals/Visuals.css` |
 | Missions (2c) | 700-707 | 2109-2320, 2394-2427 | `views/Missions/Missions.css` |
 | Crew (2c), now hero cards + Add an agent | 709-723 | 3324-3400 (the reader) | `views/Crew/Crew.css` |

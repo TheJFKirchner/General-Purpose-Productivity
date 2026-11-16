@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-/* The chat screen against the in-page demo: the Planner / Claude Code switch (both sides kept, drafts survive, what
-   is waiting shows on the switch), every former Free Flight control on the Claude Code side sending the same
+/* The chat screen against the in-page demo: the Planner / CLI switch (both sides kept, drafts survive, what
+   is waiting shows on the switch), every former Free Flight control on the CLI side sending the same
    messages, and the Visuals panel. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
@@ -67,7 +67,7 @@ it('the switch flips between two kept conversations; typed drafts survive; arrow
   expect(sent.filter(m => m.type === 'user_message' || m.type === 'chat_message')).toHaveLength(0);   // flipping sends nothing
 });
 
-it('Claude Code side: starts a chat on first send, streams, answers a permission card with a Deny note; the switch shows it waiting', async () => {
+it('CLI side: starts a chat on first send, streams, answers a permission card with a Deny note; the switch shows it waiting', async () => {
   await act(async () => { actions.setChatSide('code'); });
   expect($('#codeEmpty')!.hidden).toBe(false);
   expect($('#codeModel')!.textContent).toBe('no chat yet');
@@ -87,7 +87,7 @@ it('Claude Code side: starts a chat on first send, streams, answers a permission
   expect(host.querySelectorAll('.toolrow').length).toBeGreaterThanOrEqual(2);
   const card = $('.ccard.permission')!;
   expect(card).toBeTruthy();
-  /* waiting on the user: a coral count on the Claude Code tab, seen from the Planner side */
+  /* waiting on the user: a coral count on the CLI tab, seen from the Planner side */
   await act(async () => { actions.setChatSide('planner'); });
   expect($('#chatsw-code .sw-badge')!.textContent).toBe('1');
   expect($('#chatsw-code')!.getAttribute('aria-label')).toContain('1 waiting on you');
@@ -105,7 +105,7 @@ it('Claude Code side: starts a chat on first send, streams, answers a permission
   expect($('#codeStop')!.hidden).toBe(true);
 });
 
-it('Shift+Tab cycles the three modes, Esc interrupts; both only while the Claude Code side shows', async () => {
+it('Shift+Tab cycles the three modes, Esc interrupts; both only while the CLI side shows', async () => {
   await act(async () => { actions.setChatSide('code'); });
   await act(async () => { actions.sendChat('hello'); });
   await step(1000);
@@ -133,7 +133,7 @@ it('Shift+Tab cycles the three modes, Esc interrupts; both only while the Claude
   expect(host.textContent).toContain('Interrupted.');
 });
 
-it('New chat sends chat_new and shows the Claude Code side', async () => {
+it('New chat sends chat_new and shows the CLI side', async () => {
   await act(async () => { dispatch({ type: 'settings', directories: [{ dir_id: 'd1', path: 'C:/p', name: 'p', exists: true, is_default: true, busy: false }], values: {}, can_pick_directory: false }); });
   await act(async () => { actions.setChatSide('code'); });
   await click($('#newChat')!);

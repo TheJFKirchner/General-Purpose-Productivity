@@ -1,5 +1,6 @@
 /* Demo data (ported unchanged from the vanilla page): folders, settings, files, the crew list, plan / report text. */
-import type { CrewAgentDef, Directory, SettingValue } from '../contract';
+import type { CrewAgentDef, Directory, SettingValue, SkillInfo } from '../contract';
+
 
 export const PRICE: Record<string, [number, number, number, number]> = { opus: [15, 75, 1.5, 18.75], sonnet: [3, 15, 0.3, 3.75], haiku: [1, 5, 0.1, 1.25] };   // $ per million: in, out, cache read, cache write
 
@@ -19,6 +20,8 @@ export const fsVals = (): Record<string, SettingValue> => ({
   autopilot_default: { value: false, applies: 'new_sessions', overridden_by_launch: false },
   planner_start: { value: 'sonnet', applies: 'new_sessions', overridden_by_launch: false },
   planner_top: { value: 'opus', applies: 'new_sessions', overridden_by_launch: false },
+  planner_harness: { value: 'claude', applies: 'new_sessions', overridden_by_launch: false },
+  planner_auto_promote: { value: true, applies: 'new_sessions', overridden_by_launch: false },
   promotion_window: { value: 2, applies: 'new_sessions', overridden_by_launch: false },
   promotion_criteria: { value: PROMOTION_PATH, applies: 'new_sessions', overridden_by_launch: false },
   pilot_model: { value: 'sonnet', applies: 'new_sessions', overridden_by_launch: '--pilot-model sonnet' },
@@ -91,6 +94,16 @@ Refresh last quarter's inpatient trend package with Q3 data and add a 30-day rea
 /** Tools the Add an agent form offers (crew_list.tool_choices). */
 export const TOOL_CHOICES = ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite'];
 
+/** Skills per demo folder (crew_list.skills): d1 has .claude/skills, d2 only .agents/skills (its sql-style is
+    shadowed when d1 is the primary and d2 is ticked as additional). */
+export const DEMO_SKILLS: Record<string, SkillInfo[]> = {
+  d1: [{ name: 'claims-glossary', description: 'Field names and codes used in the claims extracts', source: 'claude' },
+       { name: 'sql-style', description: 'House SQL style: CTEs, lower-case keywords, one column per line', source: 'claude' }],
+  d2: [{ name: 'readmission-rules', description: 'How 30-day readmissions are counted (index stay, exclusions)', source: 'agents' },
+       { name: 'sql-style', description: 'An older copy of the SQL style', source: 'agents' }],
+};
+
+
 /** Starting use counts (per agent name); the demo bumps them as agents start and sends agent_uses. */
 export const START_USES: Record<string, number> = {
   'launchpad-planner': 14, 'launchpad-astronaut': 37, 'launchpad-orchestrator': 9, 'launchpad-builder': 41, 'launchpad-visual': 12,
@@ -123,9 +136,9 @@ export function crewBase(): CrewAgentDef[] {
       description: 'Draws small visuals and design options on made-up data so the user can settle a design question while planning.',
       instructions: '# Visualizer\n\nDraw one small visual per option as a self-contained HTML fragment.\n\n- ECharts is available as a global `echarts`; do not add a script tag for it\n- Made-up data only; never read project data\n- No network, no external fonts or images',
       builtin_tools: [], custom_tools: [{ name: 'save_visual', description: 'Save one option as HTML for the panel.' }], mcp_servers: [], disallowed_tools: [], warnings: [] },
-    { name: 'launchpad-pilot', display_name: 'Claude Code', role: 'pilot', purpose: 'building', builtin: true, model: 'sonnet', setup: 'project',
-      description: 'A plain Claude Code chat with the standard tools in the connected folder (the Claude Code side of the chat screen).',
-      instructions: '', prompt_note: "Uses Claude Code's own prompt and tools: this file has no body of its own.",
+    { name: 'launchpad-pilot', display_name: 'CLI', role: 'pilot', purpose: 'building', builtin: true, model: 'sonnet', setup: 'project',
+      description: 'A plain CLI chat with the standard tools in the connected folder (the CLI side of the chat screen).',
+      instructions: '', prompt_note: "Uses the CLI harness's own prompt and tools: this file has no body of its own.",
       builtin_tools: null, custom_tools: [], mcp_servers: [], disallowed_tools: [], warnings: [] },
     { name: 'launchpad-planner', display_name: 'Planner', role: 'planner', purpose: 'planning', builtin: true, model: 'sonnet', source_path: agentPath('planner'),
       promotion: { start_model: 'sonnet', target_model: 'opus', window_turns: 2, criteria_path: PROMOTION_PATH,

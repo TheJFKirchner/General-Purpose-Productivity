@@ -129,11 +129,11 @@ def test_crew_list_shape(project):
             assert a["warnings"] == [] and a["setup"] == "lean"
         assert all(set(t) == {"name", "description"} for t in a["custom_tools"])
     assert {a["display_name"] for a in ev["agents"]} == {"Planner", "Explorer", "Orchestrator", "Builder",
-                                                         "Claude Code", "Visualizer"}
+                                                         "CLI", "Visualizer"}
     visual = next(a for a in ev["agents"] if a["role"] == "visual")
     assert visual["builtin_tools"] == [] and visual["custom_tools"] == [] and visual["model"] == "haiku"
     pilot = next(a for a in ev["agents"] if a["role"] == "pilot")
-    assert pilot["setup"] == "project" and "Claude Code system prompt" in pilot["prompt_note"]
+    assert pilot["setup"] == "project" and "CLI harness's own system prompt" in pilot["prompt_note"]
     assert pilot["gated_tools"] == []                              # fake-only gating is not shown
 
 
@@ -150,7 +150,7 @@ def test_planner_runs_on_its_own_prompt_without_the_claude_code_preset(project):
 
 
 def test_preset_users_are_exactly_the_builder_and_the_pilot(project):
-    """Builder: Claude Code prompt + its file text, still lean (no settings). Claude Code chat: full Claude Code."""
+    """Builder: Claude Code prompt + its file text, still lean (no settings). CLI chat: the full harness."""
     from agentlib.engines import get_engine
     ev = crew.crew_list("claude", project)
     assert {a["role"] for a in ev["agents"] if a["engine_prompt"]} == {"builder", "pilot"}

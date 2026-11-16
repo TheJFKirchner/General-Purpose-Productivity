@@ -92,3 +92,27 @@ def test_find_skill(tmp_path):
     assert "memo: Writes memos" in index_text([s])
     with pytest.raises(AgentFileError):
         find_skill("missing", tmp_path)
+
+
+def test_find_skill_in_explicit_dirs(tmp_path):
+    """skill_dirs: only those folders, in order (first wins); the default .claude/skills is not searched."""
+    _write(tmp_path / ".claude/skills/memo/SKILL.md", "---\nname: memo\ndescription: default\n---\n")
+    a, b = tmp_path / "a/.agents/skills", tmp_path / "b/.claude/skills"
+    _write(a / "memo/SKILL.md", "---\nname: memo\ndescription: from a\n---\n")
+    _write(b / "memo/SKILL.md", "---\nname: memo\ndescription: from b\n---\n")
+    _write(b / "odd-folder/SKILL.md", "---\nname: tidy\ndescription: named in front matter\n---\n")
+    assert find_skill("memo", tmp_path, [a, b]).description == "from a"
+    assert find_skill("memo", tmp_path, [b, a]).description == "from b"
+    assert find_skill("tidy", tmp_path, [a, b]).folder == (b / "odd-folder").resolve()
+    with pytest.raises(AgentFileError):
+        find_skill("memo", tmp_path, [tmp_path / "empty"])
+
+
+def test_list_skills(tmp_path):
+    from agentlib.skills import list_skills
+    root = tmp_path / "skills"
+    _write(root / "b/SKILL.md", "---\nname: bee\ndescription: B\n---\n")
+    _write(root / "a/SKILL.md", "---\ndescription: no name\n---\n")
+    (root / "not-a-skill").mkdir()
+    assert [(s.name, s.description) for s in list_skills(root)] == [("a", "no name"), ("bee", "B")]
+    assert list_skills(tmp_path / "missing") == []

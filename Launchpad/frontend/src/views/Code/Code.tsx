@@ -1,4 +1,4 @@
-/* The chat screen's Claude Code side: a plain Claude Code chat in a connected folder (was the Free Flight tab).
+/* The chat screen's CLI side: a plain CLI chat in a connected folder (was the Free Flight tab).
    Vanilla source: prototype/launchpad-orbit.html HTML 672-698; JS 2429-2676.
    Streaming replies, tool calls as compact inline rows, permission / plan / question cards inline where they occur
    (never in Incoming, never timed). Modes: default (ask before edits) -> accept_edits -> plan -> default; Shift+Tab
@@ -17,7 +17,7 @@ import { cleanName, clock, modelName, toolCat, toolShort, tokShort, usd } from '
 
 const MODE_ICON: Record<ChatMode, ReactNode> = { default: <Hand />, accept_edits: <ChevronsRight />, plan: <Pause /> };
 
-/** True when the Claude Code side of the chat screen is on screen. */
+/** True when the CLI side of the chat screen is on screen. */
 const codeShowing = () => { const st = getState(); return st.ui.view === 'plan' && st.ui.chatSide === 'code'; };
 
 export default function Code() {
@@ -33,7 +33,7 @@ export default function Code() {
       c,
       name: sel.codeAgentName(st),
       mode: c ? c.mode : st.codeModePref || 'default',
-      sub: c ? (dir ? `Chat in ${dir}` : 'Chat') : 'Claude Code in a connected folder',
+      sub: c ? (dir ? `Chat in ${dir}` : 'Chat') : 'The CLI in a connected folder',
       cost: usd(u ? u.cost : 0),
       tok: u ? tokShort({ i: u.in, o: u.out, cr: u.cr, cw: u.cw }) : '0 tokens',
       tools: u ? u.tools : 0,
@@ -84,7 +84,7 @@ export default function Code() {
   };
 
   return (
-    <div className="chat-pane" id="viewCode" aria-label="Claude Code chat">
+    <div className="chat-pane" id="viewCode" aria-label="CLI chat">
       <div className="chat-head">
         <div>
           <small id="codeSub" title={c && c.cwd ? c.cwd : ''}>{v.sub}</small>
@@ -92,7 +92,7 @@ export default function Code() {
         </div>
         <div className="head-tags">
           <div className="head-row">
-            <button className="pill sm" type="button" id="newChat" ref={newRef} title="Start a fresh Claude Code chat" disabled={newChatBusy}
+            <button className="pill sm" type="button" id="newChat" ref={newRef} title="Start a fresh CLI chat" disabled={newChatBusy}
               onClick={() => actions.chooseDir(newRef.current, dirId => actions.newChat(dirId))}>{newChatBusy ? null : <Plus />}{newChatBusy ? 'Starting…' : 'New chat'}</button>
             <span className="modelchip" id="codeModel" title={c && c.model ? `Model: ${c.model}` : undefined}>{c && c.model ? modelName(c.model) : 'no chat yet'}</span>
           </div>
@@ -100,15 +100,15 @@ export default function Code() {
         </div>
       </div>
       <div className="msgs" id="codeLog" aria-live="polite" ref={logRef}>
-        <Empty id="codeEmpty" className="log-empty" icon={<Terminal />} title="Claude Code" hidden={currentChat != null}>
-          A plain Claude Code chat in the project folder: the standard tools and Claude Code&apos;s permission prompts. Type below to start, or send a plan here from the Planner.
+        <Empty id="codeEmpty" className="log-empty" icon={<Terminal />} title="CLI" hidden={currentChat != null}>
+          A plain chat in the CLI harness, in the project folder: it behaves as the harness does in a terminal, with its standard tools and permission prompts. Type below to start, or send a plan here from the Planner.
         </Empty>
         {chatOrder.map(id => chats[id] ? <ChatLog key={id} chat={chats[id]} items={items} hidden={id !== currentChat} /> : null)}
       </div>
       <form className="composer code-comp" id="codeComposer" autoComplete="off" onSubmit={submit}>
         <button type="button" className="modepill" id="modePill" ref={modeRef} data-mode={mode} title={`${MODE_HINT[mode]}. Shift+Tab to change.`}
           onClick={() => actions.cycleMode()}>{MODE_ICON[mode]}<span>{MODE_LABEL[mode]}</span></button>
-        <label htmlFor="codeInput" className="sr">Message Claude Code</label>
+        <label htmlFor="codeInput" className="sr">Message the CLI</label>
         <textarea id="codeInput" ref={inputRef} rows={1} value={text} onChange={e => setText(e.target.value)} onKeyDown={onInputKey}
           placeholder={mode === 'plan' ? 'Ask for a plan (nothing will be changed)' : 'Ask Claude to do something in this folder'} />
         <button className="pill danger" type="button" id="codeStop" hidden={!busy} title="Interrupt the running turn (Esc)" onClick={() => actions.stopChat()}><Square />Stop</button>

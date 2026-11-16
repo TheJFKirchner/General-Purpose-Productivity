@@ -1,6 +1,6 @@
 /* App shell: header + tab views + the right-hand aside + the visuals panel slot, and the page-wide overlays
    (modal, pen editor, settings, folder menu, tooltip, toasts). Each screen lives in src/views/<Name>/. The "plan" tab
-   is the chat screen (views/Chat): the Planner / Claude Code switch over both conversations. */
+   is the chat screen (views/Chat): the Planner / CLI switch over both conversations. */
 import { useEffect, type ReactNode } from 'react';
 import { sel, useComputed, useLaunchpad, type View } from './store';
 import { DirMenu, ModalHost, TipHost, Toasts } from './components';

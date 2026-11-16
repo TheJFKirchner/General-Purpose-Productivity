@@ -12,7 +12,7 @@ import { PenButton } from '../../components/PenButton';
 import { Pill } from '../../components/Pill';
 import { StepAgent } from '../../components/Purpose';
 import { AP_HINT } from '../../lib/labels';
-import { Check, Terminal } from '../../components/icons';
+import { Check, Sparkles, Terminal } from '../../components/icons';
 
 type PlanCardEntry = Extract<PlannerEntry, { kind: 'plancard' }>;
 
@@ -102,6 +102,24 @@ function QuestionCard({ r, q, i }: { r: Round; q: Question; i: number }) {
 }
 
 /* ---------------- plan draft cards ---------------- */
+/** The skills a plan step names (its worker gets them); ones not found in the session's folders are greyed. */
+function StepSkills({ step }: { step: { n: number; skills?: string[]; skills_unknown?: string[] } }) {
+  const list = step.skills || [];
+  if (!list.length) return null;
+  const gone = new Set(step.skills_unknown || []);
+  return (
+    <span className="st-skills" aria-label={`Step ${step.n} skills: ${list.join(', ')}`}>
+      {list.map(n => (
+        <span key={n} className={`chip skill${gone.has(n) ? ' gone' : ''}`}
+          data-tip={`text:${gone.has(n) ? 'Not found in this session\'s folders: ignored when the step runs' : 'This step\'s worker gets this skill'}`}>
+          <Sparkles />{n}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+
 function PlanCard({ e, sid, onChanges }: { e: PlanCardEntry; sid: string; onChanges?: () => void }) {
   const s = useSession(sid);
   const defDir = useLaunchpad(st => sel.defaultDirId(st));
@@ -124,7 +142,7 @@ function PlanCard({ e, sid, onChanges }: { e: PlanCardEntry; sid: string; onChan
       {d.steps && d.steps.length ? (
         <ol className="steps">{d.steps.map((st, k) => {
           const ag = agentOf(st);
-          return <li key={`${st.n}-${k}`}><span className="n">{st.n}</span><span className="st-t">{st.title}</span>{ag ? <StepAgent a={ag} step={`Step ${st.n}`} /> : null}</li>;
+          return <li key={`${st.n}-${k}`}><span className="n">{st.n}</span><span className="st-t">{st.title}</span>{ag ? <StepAgent a={ag} step={`Step ${st.n}`} /> : null}<StepSkills step={st} /></li>;
         })}</ol>
       ) : null}
       <details className="full">
@@ -139,13 +157,13 @@ function PlanCard({ e, sid, onChanges }: { e: PlanCardEntry; sid: string; onChan
         <div className="row pc-actions">
           <Pill variant="primary" disabled={v.approveDisabled} onClick={() => actions.approve(s.id)}>{v.approveLabel}</Pill>
           <Pill variant="soft" icon={s.codeSending ? undefined : <Terminal />} disabled={s.codeSending} data-sendcode="1"
-            title="Open a Claude Code chat in this folder with the plan as its first message (Plan mode). An alternative to launching the run."
-            onClick={() => actions.sendPlanToCode(s.id)}>{s.codeSending ? 'Opening Claude Code…' : codeSent ? 'Send to Claude Code again' : 'Send plan to Claude Code'}</Pill>
+            title="Open a CLI chat in this folder with the plan as its first message (Plan mode). An alternative to launching the run."
+            onClick={() => actions.sendPlanToCode(s.id)}>{s.codeSending ? 'Opening the CLI…' : codeSent ? 'Send to CLI again' : 'Send plan to CLI'}</Pill>
           <Pill variant="ghost" onClick={() => onChanges && onChanges()}>Ask for changes</Pill>
         </div>
       ) : null}
       {v.status ? <p className="pc-status">{v.status}</p> : null}
-      {v.live && codeSent && !s.codeSending ? <p className="pc-sent">Sent to Claude Code. <button type="button" onClick={() => actions.setChatSide('code')}>Show the chat</button></p> : null}
+      {v.live && codeSent && !s.codeSending ? <p className="pc-sent">Sent to the CLI. <button type="button" onClick={() => actions.setChatSide('code')}>Show the chat</button></p> : null}
     </div>
   );
 }

@@ -4,7 +4,7 @@
    every icon aria-hidden, so an icon-only button needs an aria-label. */
 export {
   AlertTriangle, ArrowLeft, ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, CircleHelp, ClipboardList,
-  Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
+  CloudDownload, Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, GitBranch, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
   MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, ShieldAlert, ShieldCheck, Sparkles, Square,
   Telescope, Terminal, Trash, UserPlus, Users, Wallet, WandSparkles, WifiOff, X,
 } from 'lucide-react';
