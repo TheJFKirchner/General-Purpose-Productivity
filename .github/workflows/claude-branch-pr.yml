@@ -1,0 +1,75 @@
+# Opens a pull request whenever a cloud or phone Claude session pushes a
+# `claude/...` branch, so finished work is never left sitting on a branch.
+# It only opens the pull request and fills in a first description from the
+# commits. It never merges: the merge is a manual approval.
+#
+# One-time repo setting this needs (Settings > Actions > General >
+# Workflow permissions): "Allow GitHub Actions to create and approve pull
+# requests".
+
+name: Open pull request for Claude branches
+
+on:
+  push:
+    branches:
+      - "claude/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: claude-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Open the pull request if there is none yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          existing=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Pull request #$existing is already open for $BRANCH."
+            exit 0
+          fi
+
+          count=$(git rev-list --count "origin/$BASE..HEAD")
+          if [ "$count" = "0" ]; then
+            echo "$BRANCH has no commits that $BASE lacks. Nothing to open."
+            exit 0
+          fi
+
+          if [ "$count" = "1" ]; then
+            title=$(git log -1 --format=%s)
+          else
+            title=$(git log --reverse --format=%s "origin/$BASE..HEAD" | head -1)
+            title="$title (+$((count - 1)) more)"
+          fi
+
+          {
+            echo "## What changed"
+            echo
+            git log --reverse --format='- **%s**%n%w(0,2,2)%b' "origin/$BASE..HEAD" | sed -e '/^[[:space:]]*$/d' -e '/^[[:space:]]*Co-Authored-By:/d' -e '/^[[:space:]]*Claude-Session:/d'
+            echo
+            echo "## Files touched"
+            echo
+            echo '```'
+            git diff --stat "origin/$BASE...HEAD" | tail -40
+            echo '```'
+            echo
+            echo "_Opened automatically from the commits on \`$BRANCH\`. The session that did the work may replace this with a fuller description. Merging is a manual approval._"
+          } > "$RUNNER_TEMP/body.md"
+
+          gh pr create --base "$BASE" --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/body.md"

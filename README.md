@@ -26,3 +26,7 @@ The repo's [.claude](.claude) folder holds skills and agents that load automatic
 
 - **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it) and grilling (stress-test a plan with pointed questions).
 - **Agents** ([.claude/agents](.claude/agents)): factory-builder, factory-reader, factory-ui-reviewer, security-review and git-shipper, the helpers that factory-mode and git work hand tasks to.
+
+## Working from desktop and phone
+
+The root [CLAUDE.md](CLAUDE.md) tells Claude Code how to behave here: cloud and phone sessions finish their work as a pull request for you to review, and desktop sessions keep the repo level with GitHub. When a branch starting with `claude/` is pushed, a [GitHub workflow](.github/workflows/claude-branch-pr.yml) opens a pull request automatically. It never merges anything.

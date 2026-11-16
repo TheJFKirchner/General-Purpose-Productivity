@@ -37,6 +37,21 @@ Each project keeps a `Features/` folder: one file per request, and one short lis
 
 Requests handled outside factory mode follow the same convention in a project that has a `Features/` folder: a conversation that settles a real decision (not a typo fix) gets its own request file with `Status: decided` and a row in the list.
 
+## 0. Check git is up to date
+
+Do this before anything else: before sending a `factory-reader`, reading the project's files, or asking the first question. Work done in a cloud or mobile session, or on the work computer, reaches GitHub but not this folder until it is pulled, and a plan built on a stale copy is built on the wrong code.
+
+1. Work out which project the change is for (step 1 of the interview). If its folder is not a git repo, or has no remote, skip this section and say so.
+2. Have `git-shipper` fetch from the remote, changing nothing, and report: how many commits the local main branch is behind and ahead of the remote one, any uncommitted changes, and any remote branches that are not merged into main (cloud sessions push to `claude/...` branches).
+3. Act on the report:
+   - **Up to date**: say so in one line and carry on.
+   - **Behind**: stop and tell the user how many commits and what they are, in a line or two. Pull only on their go-ahead, then carry on. If uncommitted local changes touch the same files as the incoming commits, say that too and let the user decide what to do with them first.
+   - **Diverged** (both behind and ahead): stop and take it to the user. Do not merge or rebase on your own.
+   - **Unmerged remote branches**: name them and ask whether that work should be brought in before planning.
+   - **Ahead only, or uncommitted changes only**: mention it in one line and carry on.
+
+Do not start the interview on a copy you know to be behind unless the user says to.
+
 ## 1. Interview
 
 1. Work out which project the change is for. Each subfolder of Misc Claude is an independent project; work inside that project's folder and check it for a README or CLAUDE.md.
