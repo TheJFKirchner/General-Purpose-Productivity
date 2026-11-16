@@ -24,7 +24,7 @@ Skills for Claude Code. Copy a skill folder into your skills folder (for example
 
 The repo's [.claude](.claude) folder holds skills and agents that load automatically in Claude Code sessions opened on this repo, including cloud and mobile sessions.
 
-- **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it) and grilling (stress-test a plan with pointed questions).
+- **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it), grilling (stress-test a plan with pointed questions), and presentation (build a slide deck from an existing analysis or dashboard: interview with the grilling skill, agree a brief and storyboard, then build reveal.js slides with ECharts charts from a library of 47 sample slides; needs Node.js, and internet when a deck is opened; parts adapted from the MIT-licensed ryanbbrown/revealjs-skill).
 - **Agents** ([.claude/agents](.claude/agents)): factory-builder, factory-reader, factory-ui-reviewer, security-review and git-shipper, the helpers that factory-mode and git work hand tasks to.
 
 ## Working from desktop and phone

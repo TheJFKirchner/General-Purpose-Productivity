@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide library</title>
+
+  <!-- Reveal.js core -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- Custom styles: the whole look of the deck lives in this file -->
+  <link rel="stylesheet" href="../styles.css">
+
+  <!-- ECharts for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+<!-- SLIDES:START -->
+      <!-- GROUP: LV · Show where a number stands · One figure, or a few, and what they are measured against. -->
+
+      <!-- COMPONENT: LV-01 · stats-three
+           Looks like: Three large figures in a row, each with a label and a comparison note. No chart.
+           Good for: Landing two or three results at once; Showing results against target or prior without a chart
+           Related: DE-01 summary-stats-ask, LV-04 stats-over-bars, BD-06 stats-over-stacked-bars -->
+      <section id="stats-three" data-section="Show where a number stands" data-component="LV-01">
+        <p class="kicker">Results</p>
+        <h2>The change beat its target in the first four months</h2>
+        <div class="content middle">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;">
+            <div class="stat"><p class="stat-value">3.1%</p><p class="stat-label">early churn in October</p><p class="stat-note">Target was 3.5%; it was 5.1% before</p></div>
+            <div class="stat"><p class="stat-value">91%</p><p class="stat-label">of new West customers kept</p><p class="stat-note">Best region; the lowest was 79%</p></div>
+            <div class="stat"><p class="stat-value">9 days</p><p class="stat-label">to finish setup</p><p class="stat-note">Down from 14 on the old checklist</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPONENT: LV-02 · hero-number-line
+           Looks like: One very large figure with its meaning in plain words, a line chart beside it.
+           Good for: Making one number the whole message; Showing the figure and the path that led to it
+           Related: LV-03 hero-number-quote, BD-07 hero-number-donut -->
+      <section id="hero-number-line" data-section="Show where a number stands" data-component="LV-02">
+        <p class="kicker">The one number</p>
+        <h2>The average commercial auto claim now costs 9% more each year</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 5fr 6fr; gap: 44px; min-height: 0; min-width: 0;">
+            <div style="display: flex; flex-direction: column; justify-content: center;">
+              <div class="stat">
+                <p class="stat-value" style="font-size: 104pt;">9%</p>
+                <p class="stat-label text-lg">a year, against the 5% in our prices</p>
+              </div>
+              <p class="text-lg" style="margin-top: 24px;">A claim that cost $40,000 in 2024 costs $47,500 today. We charged for $44,100.</p>
+              <p class="text-lg" style="margin-top: 12px;"><strong>That is $3,400 short on each of about 9,000 open claims, or $31M.</strong></p>
+            </div>
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "boundaryGap": false, "data": ["2022", "2023", "2024", "2025", "2026"] },
+                "yAxis": { "type": "value", "min": 34, "max": 50, "interval": 4, "axisLabel": { "formatter": "${value}k" } },
+                "grid": { "left": 8, "right": 150, "top": 30, "bottom": 8, "containLabel": true },
+                "series": [
+                  { "type": "line", "name": "Priced", "data": [null, null, 40.0, 42.0, 44.1],
+                    "itemStyle": { "color": "var(--chart-muted)" }, "lineStyle": { "type": "dashed" }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "{a}  ${c}k", "color": "var(--muted-color)" } },
+                  { "type": "line", "name": "Actual", "data": [36.0, 37.8, 40.0, 43.6, 47.5],
+                    "itemStyle": { "color": "var(--primary-color)" }, "lineStyle": { "width": 5 }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "{a}  ${c}k", "color": "var(--primary-color)", "fontWeight": 600 } }
+                ]
+              }
+              </script>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Average cost of a closed commercial auto claim by year, in thousands of dollars. "Priced" is the 5% yearly growth built into rates since 2024. Claims data to 30 September 2026.</div>
+      </section>
+
+      <!-- COMPONENT: LV-03 · hero-number-quote
+           Looks like: One very large figure beside a one-sentence statement.
+           Good for: Closing on the one thing to remember; Pairing a figure with the sentence that explains it
+           Related: LV-02 hero-number-line, BD-07 hero-number-donut -->
+      <section id="hero-number-quote" data-section="Show where a number stands" data-component="LV-03">
+        <p class="kicker">To remember</p>
+        <h2>Commercial auto claims cost more than our prices assumed, and $42M closes the gap</h2>
+        <div class="content middle">
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 64px; align-items: center;">
+            <div class="stat">
+              <p class="stat-value" style="font-size: 104pt;">$42M</p>
+              <p class="stat-label text-lg">added to reserves in Q4 2026</p>
+              <p class="stat-note">3.4% of the $1,240M we hold today</p>
+            </div>
+            <blockquote>
+              <p>Approve the increase today, and the 6% rate filing fixes the cause from January.</p>
+              <cite>Decision for the audit committee, 21 November 2026</cite>
+            </blockquote>
+          </div>
+        </div>
+        <div class="footnote">Q3 2026 reserve review, claims data to 30 September 2026.</div>
+      </section>
+
+      <!-- COMPONENT: LV-04 · stats-over-bars
+           Looks like: Three figure cards across the top, a bar chart and two bullets under.
+           Good for: Stating a position with its two inputs and the gap between them; Showing the headline figures and how one of them has moved
+           Related: LV-01 stats-three, DE-01 summary-stats-ask, BD-06 stats-over-stacked-bars -->
+      <section id="stats-over-bars" data-section="Show where a number stands" data-component="LV-04">
+        <p class="kicker">Reserve position</p>
+        <h2>Carried reserves are $36m above our central estimate, down from $47m in June</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-rows: auto 1fr; gap: 22px; min-height: 0; min-width: 0;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px;">
+              <div class="card stat"><p class="stat-value plain">$1,248m</p><p class="stat-label">Carried reserve</p><p class="stat-note">The amount held on the balance sheet</p></div>
+              <div class="card stat"><p class="stat-value plain">$1,212m</p><p class="stat-label">Indicated reserve</p><p class="stat-note">Our central estimate of unpaid claims</p></div>
+              <div class="callout stat"><p class="stat-value">$36m</p><p class="stat-label">Margin</p><p class="stat-note">3.0% of the indicated reserve; 4.0% in June</p></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 30px; min-height: 0; min-width: 0;">
+              <div class="chart" data-echart>
+                <script type="application/json">
+                {
+                  "grid": { "left": 8, "right": 8, "top": 30, "bottom": 4, "containLabel": true },
+                  "xAxis": { "type": "category", "data": ["Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026", "Sep 2026"] },
+                  "yAxis": { "type": "value", "show": false },
+                  "series": [{
+                    "type": "bar",
+                    "barWidth": "50%",
+                    "itemStyle": { "color": "var(--chart-muted)" },
+                    "label": { "show": true, "position": "top", "formatter": "${c}m" },
+                    "data": [58, 55, 51, 47, { "value": 36, "itemStyle": { "color": "var(--primary-color)" } }]
+                  }]
+                }
+                </script>
+              </div>
+              <div class="commentary">
+                <ul>
+                  <li>The margin has narrowed at each of the last four reviews.</li>
+                  <li>This quarter's $11m fall is the largest of the four.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Margin: carried reserve less indicated reserve, at each quarterly review. $ millions, net of reinsurance, at 30 September 2026. Source: Q3 2026 reserve review.</div>
+      </section>
+
+      <!-- COMPONENT: LV-05 · bars-highlight-commentary
+           Looks like: Vertical bars with one highlighted, commentary bullets and a so-what line on the right.
+           Good for: Showing which category stands out; Comparing a handful of groups on one measure and saying why one differs
+           Related: LV-06 bars-ranked-commentary, CH-04 bars-outlier-callout, CH-05 bars-before-after -->
+      <section id="bars-highlight-commentary" data-section="Show where a number stands" data-component="LV-05">
+        <p class="kicker">Results</p>
+        <h2>The West region kept the most new customers after the change</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 36px; min-height: 0; min-width: 0;">
+          <div class="chart" data-echart>
+            <script type="application/json">
+            {
+              "xAxis": { "type": "category", "data": ["North", "South", "East", "West"] },
+              "yAxis": { "type": "value", "axisLabel": { "formatter": "{value}%" } },
+              "series": [{
+                "type": "bar",
+                "itemStyle": { "color": "var(--chart-muted)" },
+                "label": { "show": true, "position": "top", "formatter": "{c}%" },
+                "data": [81, 79, 84, { "value": 91, "itemStyle": { "color": "var(--primary-color)" } }]
+              }]
+            }
+            </script>
+          </div>
+          <div class="commentary">
+            <h3>What this shows</h3>
+            <ul>
+              <li>West kept 91% of new customers, 7 points above East, the next best region.</li>
+              <li>West was also the first region where every new customer got a setup call in week one.</li>
+              <li>North and South are still on the old checklist and sit near 80%.</li>
+            </ul>
+            <p class="so-what">The gap is the size of the prize for the two remaining regions.</p>
+          </div>
+          </div>
+        </div>
+        <div class="footnote">Share of new customers still active 90 days after joining, for customers who joined in Q3. West is 7 points above any other region. Customer accounts data.</div>
+      </section>
+
+      <!-- COMPONENT: LV-06 · bars-ranked-commentary
+           Looks like: Sorted horizontal bars with the leader highlighted, fuller commentary on the right.
+           Good for: Ranking items when the labels are long; Showing which item drives a result; A slide meant to be read without a presenter
+           Related: LV-05 bars-highlight-commentary, CH-04 bars-outlier-callout, CH-05 bars-before-after -->
+      <section id="bars-ranked-commentary" data-section="Show where a number stands" data-component="LV-06">
+        <p class="kicker">Trend by coverage</p>
+        <h2>Bodily injury is rising 7.5% a year and accounts for half of the total trend</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 5fr 4fr; gap: 36px; min-height: 0; min-width: 0;">
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "value", "show": false, "max": 9 },
+                "yAxis": { "type": "category", "inverse": true, "data": ["Bodily injury", "Comprehensive", "Collision", "Property damage"] },
+                "series": [{
+                  "type": "bar",
+                  "barWidth": "56%",
+                  "itemStyle": { "color": "var(--chart-muted)" },
+                  "label": { "show": true, "position": "right", "formatter": "+{c}%" },
+                  "data": [{ "value": 7.5, "itemStyle": { "color": "var(--primary-color)" }, "label": { "color": "var(--primary-color)", "fontWeight": 600 } }, 5.6, { "value": 5.0, "label": { "formatter": "+5.0%" } }, 4.9]
+                }]
+              }
+              </script>
+            </div>
+            <div class="commentary">
+              <h3>Reading the chart</h3>
+              <ul>
+                <li>Bodily injury loss cost rises 7.5% a year. The other coverages sit between 4.9% and 5.6%.</li>
+                <li>Bodily injury is 40% of losses, so it adds 3.0 of the 6.0 points of total trend.</li>
+                <li>Its cost per claim grows 9.5% a year: more claimants hire attorneys, and medical bills are higher.</li>
+                <li>Its claim frequency falls 1.8% a year, which offsets only a small part.</li>
+              </ul>
+              <p class="so-what">One trend for all coverages would underprice liability and overprice physical damage.</p>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Annual change in loss cost per insured car, exponential fit to accident years 2021 to 2025. Bodily injury: injuries to other people that our policyholder is liable for. Comprehensive: theft, hail and other non-crash damage. Personal auto claims data as of December 2025.</div>
+      </section>
+
+<!-- SLIDES:END -->
+    </div>
+    <a class="library-back" href="../index.html" onclick="this.href='../index.html#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--primary-color);background:var(--tint-bg);padding:6px 14px;border-radius:99px;text-decoration:none;">&larr; Library index</a>
+    <div class="section-bar is-hidden" aria-label="Progress"></div>
+  </div>
+
+  <!-- ENGINE: do not edit per deck. Slides are above; the look is in the CSS file. -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    (function () {
+      var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+      var isExport = window.location.search.includes('export');
+      if (isExport) document.documentElement.classList.add('is-export');
+
+      /* Charts: <div class="chart" data-echart> holding an ECharts option as JSON.
+         Fonts and colours come from the theme; "var(--name)" in the JSON resolves to the theme value. */
+      function resolveVars(node, depth) {
+        if (!node || typeof node !== 'object' || depth > 8) return;
+        Object.keys(node).forEach(function (key) {
+          var v = node[key];
+          if (typeof v === 'string') {
+            var m = v.match(/^var((--[w-]+))$/);
+            if (m) node[key] = css(m[1]) || v;
+          } else if (v && typeof v === 'object') {
+            resolveVars(v, depth + 1);
+          }
+        });
+      }
+      function chartTheme() {
+        var axis = {
+          axisLine: { lineStyle: { color: css('--line-color') } },
+          axisTick: { show: false },
+          axisLabel: { color: css('--muted-color'), fontSize: 15 },
+          nameTextStyle: { color: css('--muted-color'), fontSize: 14 },
+          splitLine: { lineStyle: { color: css('--chart-grid') } }
+        };
+        return {
+          color: [css('--primary-color'), css('--chart-muted'), css('--secondary-color'), css('--navy')],
+          textStyle: { fontFamily: css('--body-font'), color: css('--body-color') },
+          categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+          valueAxis: Object.assign({}, axis, { axisLine: { show: false } }),
+          legend: { bottom: 0, icon: 'roundRect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--body-color'), fontSize: 15 } },
+          bar: { itemStyle: { borderRadius: 4 }, barMaxWidth: 110, label: { color: css('--body-color'), fontSize: 16, fontWeight: 600 } },
+          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--body-color'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--body-color'), fontSize: 15 } },
+          markLine: { label: { fontSize: 14, color: css('--muted-color') } },
+          pie: { label: { color: css('--body-color'), fontSize: 15 }, itemStyle: { borderColor: css('--background-color'), borderWidth: 2 } }
+        };
+      }
+      function drawChart(box) {
+        var src = box.querySelector('script[type="application/json"]');
+        if (!window.echarts || !src) return;
+        var option;
+        try { option = JSON.parse(src.textContent); }
+        catch (e) { box.insertAdjacentText('beforeend', 'Chart data is not valid JSON: ' + e.message); return; }
+        resolveVars(option, 0);
+        var yName = option.yAxis && !Array.isArray(option.yAxis) && option.yAxis.name && option.yAxis.show !== false;
+        if (!option.grid) option.grid = { left: yName ? 46 : 8, right: 28, top: 30, bottom: option.legend ? 44 : 8, containLabel: true };
+        /* Slides are not dashboards: no hover states or tooltips (they also flicker inside a scaled slide). */
+        option.tooltip = { show: false };
+        [].concat(option.series || []).forEach(function (s) { s.silent = true; s.emphasis = { disabled: true }; });
+        if (isExport) option.animation = false;
+        if (!box._chart) {
+          var holder = document.createElement('div');
+          holder.style.cssText = 'position:absolute;inset:0;';
+          box.appendChild(holder);
+          box._chart = echarts.init(holder, 'deck', { renderer: 'svg', width: box.clientWidth, height: box.clientHeight });
+        } else {
+          box._chart.clear();
+          box._chart.resize({ width: box.clientWidth, height: box.clientHeight });
+        }
+        box._chart.setOption(option);
+      }
+      function drawCharts(slide) {
+        if (!slide) return;
+        Array.prototype.forEach.call(slide.querySelectorAll('.chart[data-echart]'), drawChart);
+      }
+      if (window.echarts) echarts.registerTheme('deck', chartTheme());
+
+      Reveal.initialize({
+        width: 1280,
+        height: 720,
+        margin: 0,
+        controls: false,
+        progress: false,
+        slideNumber: false,
+        hash: true,
+        transition: isExport ? 'none' : 'slide',
+        transitionSpeed: 'default',
+        backgroundTransition: 'fade',
+        center: false
+      });
+
+      /* Bottom section bar: built from data-section on the slides. A slide with no
+         data-section continues the previous one; data-section="" ends the sections. */
+      var bar = document.querySelector('.section-bar');
+      var slides = [], sections = [], count;
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+      function buildBar() {
+        slides = Reveal.getSlides();
+        sections = [];
+        var last = '';
+        slides.forEach(function (s) {
+          if (s.dataset.section !== undefined) last = s.dataset.section;
+          s._sec = -1;
+          if (!last) return;
+          var top = sections[sections.length - 1];
+          if (!top || top.name !== last) { top = { name: last, first: s, count: 0 }; sections.push(top); }
+          top.count++; s._sec = sections.length - 1; s._pos = top.count;
+        });
+        bar.innerHTML = '';
+        bar.appendChild(el('div', 'bar-title', document.title));
+        var list = el('div', 'bar-list');
+        sections.forEach(function (sec) {
+          var li = el('div', 'bar-item'); li.title = sec.name;
+          li.appendChild(el('span', 'bar-name', sec.name));
+          var track = el('span', 'bar-track'); sec.fill = el('i'); track.appendChild(sec.fill); li.appendChild(track);
+          li.addEventListener('click', function () { var i = Reveal.getIndices(sec.first); Reveal.slide(i.h, i.v); });
+          list.appendChild(li); sec.li = li;
+        });
+        bar.appendChild(list);
+        count = el('div', 'bar-count');
+        bar.appendChild(count);
+      }
+
+      function updateBar() {
+        var cur = Reveal.getCurrentSlide();
+        if (!cur || !count) return;
+        sections.forEach(function (sec, k) {
+          var pct = k < cur._sec ? 100 : k === cur._sec ? Math.round(100 * cur._pos / sec.count) : 0;
+          sec.fill.style.width = pct + '%';
+          sec.li.classList.toggle('is-current', k === cur._sec);
+          sec.li.classList.toggle('is-done', cur._sec > k);
+        });
+        count.textContent = (slides.indexOf(cur) + 1) + ' / ' + slides.length;
+        bar.classList.toggle('is-hidden', cur._sec === -1 || cur.dataset.bar === 'hide' || !sections.length);
+      }
+
+      /* Keep the bar on the bottom edge of the slide, whatever the window shape. */
+      function placeBar() {
+        var s = Reveal.getScale(), box = document.querySelector('.reveal');
+        bar.style.setProperty('--deck-scale', s);
+        bar.style.width = (1280 * s) + 'px';
+        bar.style.left = Math.max(0, (box.offsetWidth - 1280 * s) / 2) + 'px';
+        bar.style.bottom = Math.max(0, (box.offsetHeight - 720 * s) / 2) + 'px';
+      }
+
+      Reveal.on('ready', function () {
+        placeBar(); buildBar(); updateBar();
+        if (document.documentElement.classList.contains('print-pdf') || document.documentElement.classList.contains('reveal-print')) {
+          Reveal.getSlides().forEach(drawCharts);
+        } else {
+          drawCharts(Reveal.getCurrentSlide());
+        }
+      });
+      Reveal.on('slidechanged', function (e) { updateBar(); drawCharts(e.currentSlide); });
+      Reveal.on('resize', placeBar);
+    })();
+  </script>
+</body>
+</html>
