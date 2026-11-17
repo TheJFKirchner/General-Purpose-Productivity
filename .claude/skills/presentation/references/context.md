@@ -6,6 +6,7 @@ Goal: know what the work set out to do, what it did, and where the evidence live
 
 | Look for | Usually found in |
 | --- | --- |
+| What the project has established | `findings.md` beside `project_plan.md`. Read it first, yourself: each finding has its goal, what it means, and the section, script and table it came from. Run the `findings` skill's `findings.py check` before relying on it; a stale finding is not used |
 | Original goal, as first written | Project plan, request brief, an analysis folder's `README.md` |
 | What was done | Plan status, analysis `sections/`, hand-over notes |
 | Results, with numbers | Report output, commentary files, dashboard summary tables |
@@ -15,6 +16,7 @@ Goal: know what the work set out to do, what it did, and where the evidence live
 
 - Start from what the user named. Project plan not named: ask for its path in one line.
 - Follow links from the plan one level. Do not survey the whole project.
+- With `findings.md`: it is the list of results. Open only the deliverables its findings cite (for their visuals and commentary). "What came out" below is the findings, by id. Work that produced no finding is a candidate for "Also done, off the goal".
 - Existing commentary is checked against the numbers before it is reused. A line the figures do not support ("more than twice" when it is 1.8 times): correct it on the slide and tell the user.
 
 ## How

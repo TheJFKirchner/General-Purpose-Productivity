@@ -147,6 +147,7 @@ Always yours (you hold the gates): the interview, the storyboard, the walk-throu
 - Every visual is one fixed cut, hard-coded, chosen for a stated reason. No dropdowns, filters, tabs, toggles or links to a live dashboard on a slide.
 - Light hover only, and it is built in: a one-line tooltip on chart marks, a slight lift on cards, a tint on rows. A slide must read in full with no pointer on it.
 - Every number on a slide traces to a source listed in `plan.md`.
+- In a project with `findings.md`: takeaways and main-slide headlines come from findings, cited by id (F2) in the storyboard's Source line. A stale finding is never used. Findings the user has not confirmed, and every finding's "still to confirm" items, are listed for the user at gate 1. A figure on a slide that restates a finding uses the finding's figure; any other figure cites its own table. A point with no finding behind it: say so at the gate; do not add findings from here (a deck reads, it does not discover).
 - Text follows `references/writing.md`; the user's tone document overrides it.
 - Colours and fonts live only in `styles.css`. Slides and chart JSON use its variables, never their own colours.
 - Every storyboard block links to its pattern in the library. Planning reads the index only; the builder reads the linked slides.

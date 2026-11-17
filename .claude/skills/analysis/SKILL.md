@@ -39,6 +39,20 @@ One question in, one HTML report out. One self-contained, rerunnable folder per 
   output/       <folder>_<date>.html, exported CSVs           generated
 ```
 
+## In a project
+
+A project is a folder with `project_plan.md` (here or above). Then the `findings` skill applies; read its `SKILL.md`.
+
+| When | Do |
+| --- | --- |
+| Step 1 | `findings.py list` first: what is already known. The brief's "Where it fits" names the plan goal ids this analysis serves |
+| Step 2 | The folder goes in `<project>/analyses/`. Sources in the project's `data/` are read in place, never copied (`references/sources.md`) |
+| Gate 2 | With the storyline, fill the README table "Findings for the project": only storyline claims that pass the findings skill's four tests. Usually fewer than the claims. Check each against the sections left out of the report: one that argues against a candidate goes into the finding. The user approves them with the answer |
+| Step 8 | Add the approved findings, each citing its section file, summary table and the section's body commentary id. Set the goal's answer line. Hand-over notes list the finding ids |
+| Rerun | After `python run.py commentary`: `findings.py check` |
+
+No project plan: skip this section. Do not create one.
+
 ## Steps
 
 In order. Gate = stop until it passes.

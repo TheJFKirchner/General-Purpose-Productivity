@@ -30,6 +30,8 @@ A rerun changes `config.py` only.
 | File handed over | `inputs/` | `"claims_a": "inputs/claims_a.csv"` |
 | File the user pointed at on disk | Copy into `inputs/` | As above |
 | Same, but over about 200 MB or replaced regularly | Leave where it is | The full path |
+| File in the project's shared `data/` folder (in a project) | Leave where it is. Never copy: every deliverable reads the one file, so a refresh reaches all of them | The path from the analysis folder: `"claims": "../../data/claims.csv"`. Never a full path |
+| Database file in the project's `data/` | Leave where it is | Not listed. `run_query` opens `ROOT.parent.parent / "data" / "warehouse.db"` |
 | Query | `sql/<name>.sql`, one query per file | `"claims_b": "sql/claims_b.sql"` |
 | Database file handed over (SQLite, DuckDB) | `inputs/` | Not listed. Query it with `.sql` files; `run_query` opens it |
 | Reference documents (specs, emails) | `inputs/` | Not listed |
