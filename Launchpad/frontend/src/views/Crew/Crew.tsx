@@ -15,7 +15,6 @@ import type { CrewAgentDef, Purpose, SkillInfo } from '../../contract';
 import { Empty, Loading, Markdown, PURPOSE_ICON, PenButton, Pill, PurposeTag, ViewFrame } from '../../components';
 import { AlertTriangle, ArrowLeft, Bot, Copy, FolderOpen, Plus, RotateCw, Rocket, Search, Trash, UserPlus, Users } from '../../components/icons';
 import { ADDABLE_PURPOSES, PURPOSES, PURPOSE_HINT, PURPOSE_LABEL, roleLabel } from '../../lib/labels';
-import { modelName } from '../../lib/format';
 import AgentForm from './AgentForm';
 
 type Filter = 'all' | Purpose;
@@ -67,7 +66,7 @@ export default function Crew() {
   const back = () => { backTo.current = selName; setSelName(null); actions.clearCrewError(); };
 
   const counts = useComputed(st => {
-    const c: Record<string, number> = { all: 0, planning: 0, exploring: 0, building: 0, reviewing: 0 }, list = st.crewDefs || [];
+    const c: Record<string, number> = { all: 0, planning: 0, exploring: 0, building: 0, reviewing: 0, other: 0 }, list = st.crewDefs || [];
     for (const a of list) { c.all++; c[sel.purposeOf(a)]++; }
     return { n: c as Record<Filter, number>, folder: list.filter(a => !sel.isBuiltin(a)).length, dir: sel.dirLabelOf(st, sel.crewDir(st)) };
   });
@@ -154,12 +153,12 @@ function CrewCards({ defs, loading, query, filter, canAdd, onOpen }: {
 }
 
 function HeroCard({ a, onOpen }: { a: CrewAgentDef; onOpen: (name: string) => void }) {
-  const v = useComputed(st => ({ uses: sel.usesOf(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), flash: st.crewFlash === a.name }));
+  const v = useComputed(st => ({ uses: sel.usesOf(st, a), model: sel.crewModel(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), flash: st.crewFlash === a.name }));
   const p = sel.purposeOf(a), builtin = sel.isBuiltin(a), w = (a.warnings || []).length;
   const name = a.display_name || a.name;
   return (
     <button type="button" className={`hero${builtin ? '' : ' folder'}${v.flash ? ' flash' : ''}`} data-purpose={p} data-name={a.name} onClick={() => onOpen(a.name)}
-      aria-label={`${name}. ${PURPOSE_LABEL[p]} agent, ${builtin ? 'built in' : 'from the folder ' + v.folder}, ${modelName(a.model) || 'default model'}, ${usesText(v.uses)}. Open its definition.`}>
+      aria-label={`${name}. ${PURPOSE_LABEL[p]} agent, ${builtin ? 'built in' : 'from the folder ' + v.folder}, ${v.model || 'default model'}, ${usesText(v.uses)}. Open its definition.`}>
       <span className="hero-top">
         <span className="hero-ic" aria-hidden="true">{PURPOSE_ICON[p]}</span>
         <PurposeTag purpose={p} icon={false} />
@@ -173,11 +172,17 @@ function HeroCard({ a, onOpen }: { a: CrewAgentDef; onOpen: (name: string) => vo
       {a.display_name && a.display_name !== a.name ? <code className="hero-file">{a.name}</code> : null}
       <span className="hero-desc">{a.description || <i>No description.</i>}</span>
       <span className="hero-foot">
-        <span className="hero-model">{modelName(a.model) || 'Default model'}</span>
+        <span className="hero-model">{v.model || 'Default model'}</span>
         <span className="hero-uses" title="Times this agent was started (yours, kept across restarts)"><b key={v.uses}>{v.uses.toLocaleString()}</b> use{v.uses === 1 ? '' : 's'}</span>
       </span>
     </button>
   );
+}
+
+/** "Add an Other agent", "Add a Building agent": "an" before a vowel sound, the section's own label casing. */
+export function addAgentText(purpose: Purpose): string {
+  const label = PURPOSE_LABEL[purpose];
+  return `Add ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label} agent`;
 }
 
 function AddTile({ purpose, canAdd, first }: { purpose: Purpose; canAdd: boolean; first: boolean }) {
@@ -186,7 +191,7 @@ function AddTile({ purpose, canAdd, first }: { purpose: Purpose; canAdd: boolean
       title={canAdd ? undefined : 'Connect a folder in Settings first'}
       onClick={() => { actions.crewOpenForm(); actions.crewSetFields({ purpose }); }}>
       <span className="add-ic" aria-hidden="true"><Plus /></span>
-      <span className="add-t">Add {purpose === 'exploring' ? 'an' : 'a'} {PURPOSE_LABEL[purpose].toLowerCase()} agent</span>
+      <span className="add-t">{addAgentText(purpose)}</span>
       <span className="add-s">{first ? `None yet. ${PURPOSE_HINT[purpose]}.` : 'Saved in the project folder for the planner to use.'}</span>
     </button>
   );
@@ -194,7 +199,7 @@ function AddTile({ purpose, canAdd, first }: { purpose: Purpose; canAdd: boolean
 
 /* ---------------- one agent's full definition ---------------- */
 function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean; setRaw: (v: boolean) => void; onBack: () => void }) {
-  const v = useComputed(st => ({ uses: sel.usesOf(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), removing: st.crewRemoving === a.name, err: st.crewError }));
+  const v = useComputed(st => ({ uses: sel.usesOf(st, a), model: sel.crewModel(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), removing: st.crewRemoving === a.name, err: st.crewError }));
   const [arm, setArm] = useState(false);
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (armTimer.current) clearTimeout(armTimer.current); }, []);
@@ -215,7 +220,9 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
     setArm(false); actions.crewRemove(a.name);
   };
   const readOnly = p === 'exploring' || p === 'reviewing';
-  const tools: ReactNode = Array.isArray(a.builtin_tools)
+  const tools: ReactNode = a.role === 'pilot' && builtin
+    ? <p className="none">The CLI harness's own tools, as it offers them in this folder. The mode under the chat box (ask before edits, accept edits, plan) and its permission cards decide what runs.</p>
+    : Array.isArray(a.builtin_tools)
     ? (a.builtin_tools.length ? <div className="tools">{chips(a.builtin_tools)}</div> : <p className="none">None. This agent cannot use any built-in tools (custom tools only).</p>)
     : <p className="none">Not restricted: every built-in tool is available.</p>;
 
@@ -232,7 +239,7 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
             <PurposeTag purpose={p} icon={false} />
             <span className={`src${builtin ? '' : ' folder'}`}>{builtin ? <><Rocket />Built in</> : <><FolderOpen />From {v.folder}</>}</span>
             <code>{a.name}</code>
-            <span>model <b>{a.model || 'default'}</b></span>
+            <span>{a.role === 'pilot' ? 'CLI · model' : 'model'} <b>{a.role === 'pilot' ? (v.model || 'default') : (a.model || 'default')}</b></span>
             <span className="cd-uses"><b>{v.uses.toLocaleString()}</b> {v.uses === 1 ? 'use' : 'uses'}</span>
           </p>
         </div>
@@ -276,7 +283,7 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
       ) : null}
       <SkillsSection a={a} />
       <section className="cd-sec">
-        <h3>Built-in tools <span>{readOnly && !builtin ? 'read-only purpose: write, edit and shell tools are removed when it runs' : 'the agent is restricted to these'}</span></h3>
+        <h3>Built-in tools <span>{readOnly && !builtin ? 'read-only purpose: write, edit and shell tools are removed when it runs' : a.role === 'pilot' && builtin ? 'not restricted by Launchpad' : 'the agent is restricted to these'}</span></h3>
         {tools}
         {dis.length ? <><h4>Explicitly blocked</h4><div className="tools">{chips(dis, 'no')}</div></> : null}
       </section>

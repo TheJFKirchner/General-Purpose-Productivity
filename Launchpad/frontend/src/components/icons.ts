@@ -3,8 +3,8 @@
    Size and stroke come from CSS (.lucide in theme.css: 16px, 14px inside sm / xs buttons and chips); lucide marks
    every icon aria-hidden, so an icon-only button needs an aria-label. */
 export {
-  AlertTriangle, ArrowLeft, ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, CircleHelp, ClipboardList,
+  AlertTriangle, ArrowLeft, ArrowRight, ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, CircleHelp, ClipboardList,
   CloudDownload, Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, GitBranch, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
-  MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, ShieldAlert, ShieldCheck, Sparkles, Square,
+  MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, Shapes, ShieldAlert, ShieldCheck, Sparkles, Square,
   Telescope, Terminal, Trash, UserPlus, Users, Wallet, WandSparkles, WifiOff, X,
 } from 'lucide-react';

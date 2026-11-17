@@ -2,7 +2,8 @@
 
 - HARNESSES: harness -> the agentlib engine that runs it, its label and the models offered. A harness is available
   when agentlib says its engine is (get_engine(name).capabilities.available; the Cursor engine is still a stub, so its
-  entries are listed but disabled with "not available yet"). A new engine = one row here, no front-end change
+  entries are listed but disabled with "not available yet"). A new engine = one row here, no front-end change.
+  The CLI chat's picker uses the same table (harness_options, engine_for; app/agents/claude_code/choices.py)
 - The configured start / top models (settings planner_start_model / planner_top_model) are always listed for the
   default harness, so a launch option such as --planner-start haiku shows up as a choice
 - planner_engine(settings): the engine a new planner is loaded on = the chosen harness's engine; the fake demo
@@ -61,22 +62,44 @@ def label(harness_name: str | None, model: str | None) -> str:
     return f"{harness_label(harness_name)} · {model_label(model)}"
 
 
-def options(settings) -> list[dict]:
-    """Every harness-and-model pair, with availability (agentlib) and a note when it cannot be picked."""
-    extra = [m for m in (getattr(settings, "planner_start_model", None), getattr(settings, "planner_top_model", None)) if m]
+def launch_harness(engine: str | None) -> str:
+    """The harness whose engine this launch runs on; the default harness when none matches (the fake demo)."""
+    return next((h["harness"] for h in HARNESSES if h["engine"] == engine), DEFAULT_HARNESS)
+
+
+def engine_for(harness_name: str | None, launch_engine: str) -> str:
+    """The agentlib engine for a harness: fake in the demo (launch engine "fake" forces it for everything); else the
+    harness's engine while agentlib says it is available, otherwise the launch's engine (a stale or hand-edited choice
+    never breaks a session)."""
+    if launch_engine == "fake":
+        return "fake"
+    h = harness(harness_name)
+    return h["engine"] if h and engine_available(h["engine"]) else launch_engine
+
+
+def harness_options(extra: dict[str, list] | None = None) -> list[dict]:
+    """Every harness-and-model pair of HARNESSES, with availability (agentlib) and a note when it cannot be picked.
+    extra = {harness: [model ids]} also listed for that harness (configured models outside the table). Shared by the
+    planner picker and the CLI chat's picker (app/agents/claude_code/choices.py)."""
     out = []
     for h in HARNESSES:
         ok = engine_available(h["engine"])
         models = list(h["models"])
-        if h["harness"] == DEFAULT_HARNESS:
-            for m in extra:
-                if m not in [x[0] for x in models]:
-                    models.append((m, model_label(m)))
+        for m in (extra or {}).get(h["harness"], ()):
+            if m and m not in [x[0] for x in models]:
+                models.append((m, model_label(m)))
         for m, mlabel in models:
             out.append({"id": option_id(h["harness"], m), "harness": h["harness"], "harness_label": h["label"],
                         "model": m, "model_label": mlabel, "label": f"{h['label']} · {mlabel}", "available": ok,
                         "note": None if ok else NOT_AVAILABLE})
     return out
+
+
+def options(settings) -> list[dict]:
+    """The planner's options: every harness-and-model pair; the configured start / top models are always listed for
+    the default harness."""
+    extra = [m for m in (getattr(settings, "planner_start_model", None), getattr(settings, "planner_top_model", None)) if m]
+    return harness_options({DEFAULT_HARNESS: extra})
 
 
 def find(oid: str, settings) -> dict | None:
@@ -92,10 +115,7 @@ def chosen_harness(settings) -> str:
 def planner_engine(settings) -> str:
     """The agentlib engine a new planner runs on: fake in the demo; else the chosen harness's engine while agentlib
     says it is available, otherwise the launch's engine (a stale or hand-edited choice never breaks a session)."""
-    if settings.engine == "fake":
-        return "fake"
-    h = harness(chosen_harness(settings))
-    return h["engine"] if h and engine_available(h["engine"]) else settings.engine
+    return engine_for(chosen_harness(settings), settings.engine)
 
 
 def choice_event(settings, rules: dict | None = None, overridden=()) -> dict:

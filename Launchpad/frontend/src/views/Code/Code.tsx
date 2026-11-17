@@ -3,17 +3,18 @@
    Streaming replies, tool calls as compact inline rows, permission / plan / question cards inline where they occur
    (never in Incoming, never timed). Modes: default (ask before edits) -> accept_edits -> plan -> default; Shift+Tab
    cycles, the server's chat_mode wins. Esc interrupts a running turn. Both keys only act while this side is showing.
+   Under the box: the CLI-then-model picker (components/ModelPicker.tsx, sel.cliPickerView, actions.chooseCli).
    All chat state is in the store (chats, chatItems); this view only renders it and calls actions. It stays mounted
    when the switch shows the Planner, so a typed draft survives. */
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import './Code.css';
 import { actions, getState, sel, useComputed, useLaunchpad } from '../../store';
 import type { Activity, Chat, ChatItem, FlightEntry } from '../../store';
-import { ChatBubble, Empty, isModalOpen, Markdown, SysLine, TypingDots } from '../../components';
+import { ChatBubble, Empty, isModalOpen, Markdown, ModelPicker, SysLine, TypingDots } from '../../components';
 import { Check, ChevronsRight, Hand, Pause, Plus, Send, Square, Terminal } from '../../components/icons';
 import type { ChatMode } from '../../contract';
 import { MODE_HINT, MODE_LABEL } from '../../lib/labels';
-import { cleanName, clock, modelName, toolCat, toolShort, tokShort, usd } from '../../lib/format';
+import { cleanName, clock, toolCat, toolShort, tokShort, usd } from '../../lib/format';
 
 const MODE_ICON: Record<ChatMode, ReactNode> = { default: <Hand />, accept_edits: <ChevronsRight />, plan: <Pause /> };
 
@@ -94,7 +95,6 @@ export default function Code() {
           <div className="head-row">
             <button className="pill sm" type="button" id="newChat" ref={newRef} title="Start a fresh CLI chat" disabled={newChatBusy}
               onClick={() => actions.chooseDir(newRef.current, dirId => actions.newChat(dirId))}>{newChatBusy ? null : <Plus />}{newChatBusy ? 'Starting…' : 'New chat'}</button>
-            <span className="modelchip" id="codeModel" title={c && c.model ? `Model: ${c.model}` : undefined}>{c && c.model ? modelName(c.model) : 'no chat yet'}</span>
           </div>
           <span className="pcost" data-tip="chat" tabIndex={0}>This chat · <b>{v.cost}</b> · <span>{v.tok}</span> · <span>{`${v.tools} tool call${v.tools === 1 ? '' : 's'}`}</span></span>
         </div>
@@ -110,13 +110,23 @@ export default function Code() {
           onClick={() => actions.cycleMode()}>{MODE_ICON[mode]}<span>{MODE_LABEL[mode]}</span></button>
         <label htmlFor="codeInput" className="sr">Message the CLI</label>
         <textarea id="codeInput" ref={inputRef} rows={1} value={text} onChange={e => setText(e.target.value)} onKeyDown={onInputKey}
-          placeholder={mode === 'plan' ? 'Ask for a plan (nothing will be changed)' : 'Ask Claude to do something in this folder'} />
+          placeholder={mode === 'plan' ? 'Ask for a plan' : 'Ask the CLI to do something'} />
         <button className="pill danger" type="button" id="codeStop" hidden={!busy} title="Interrupt the running turn (Esc)" onClick={() => actions.stopChat()}><Square />Stop</button>
         <button className="pill primary" type="submit"><Send />Send</button>
       </form>
+      <CliPicker />
       <div className="code-hint"><kbd>Shift</kbd>+<kbd>Tab</kbd> changes mode · <kbd>Esc</kbd> stops a running turn · <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line</div>
     </div>
   );
+}
+
+/** The CLI chat's CLI-then-model picker under its box (the planner's picker without auto-promote and New plan). The
+    open chat takes a choice at once until its first message; after that the choice is for the next new chat (noted). */
+function CliPicker() {
+  const v = useComputed(st => sel.cliPickerView(st));
+  const chatId = useLaunchpad(st => st.currentChat);
+  if (!v) return null;
+  return <ModelPicker id="cpk" rowId="cliControls" view={v} who="CLI chat" resetKey={chatId} onPick={id => actions.chooseCli(id)} />;
 }
 
 /** One chat's log (every chat stays rendered, only the open one shows, so expanded tool rows survive). */
@@ -124,7 +134,7 @@ function ChatLog({ chat, items, hidden }: { chat: Chat; items: Record<string, Ch
   return (
     <div className="log" hidden={hidden}>
       {chat.log.map(e => <Entry key={e.id} e={e} items={items} />)}
-      {chat.typing ? <TypingDots label="Claude is working" /> : null}
+      {chat.typing ? <TypingDots label="The CLI is working" /> : null}
     </div>
   );
 }
@@ -192,7 +202,7 @@ function ChatCard({ i }: { i: ChatItem }) {
         </div>
         <form className="other" onSubmit={onOther}>
           <label className="sr" htmlFor={`dn-${i.id}`}>Optional note sent with Deny</label>
-          <input id={`dn-${i.id}`} ref={noteRef} placeholder="Optional: tell Claude what to do instead (sent with Deny)" />
+          <input id={`dn-${i.id}`} ref={noteRef} placeholder="Optional: tell the CLI what to do instead (sent with Deny)" />
         </form>
       </> : null}
     </>;

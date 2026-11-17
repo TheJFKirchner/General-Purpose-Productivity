@@ -76,8 +76,8 @@ aside{flex:0 0 var(--aside-w);min-width:0;display:flex;flex-direction:column;gap
 .recbox{border:1.5px solid var(--indigo);background:var(--indigo-soft);border-radius:var(--r-md);padding:var(--sp-2-5) var(--sp-3);display:flex;align-items:center;gap:var(--sp-2-5);flex-wrap:wrap}
 .recbox span{font-size:var(--fs-2xs);font-weight:700;color:var(--indigo-ink);text-transform:uppercase;letter-spacing:.06em}
 .recbox p{margin:0;flex:1;min-width:140px;font-size:var(--fs-md);font-weight:600;overflow-wrap:anywhere}
-/* Activity feed (Missions tab) */
-.feed{flex:1 1 0;min-height:240px;padding:var(--sp-4) var(--sp-3) var(--sp-2);display:flex;flex-direction:column;gap:var(--sp-2)}
+/* Activity feed (Missions tab): at most about a third of the panel (its list scrolls inside); Incoming gets the rest */
+.feed{flex:0 1 auto;max-height:34%;min-height:0;padding:var(--sp-4) var(--sp-3) var(--sp-2);display:flex;flex-direction:column;gap:var(--sp-2)}
 .feed .fl-head{padding:0 var(--sp-1)}
 .feed-filters{display:flex;gap:var(--sp-1-5)}
 .feed-filters select{flex:1;min-width:0;border-radius:var(--r-pill);padding:0 var(--sp-7) 0 var(--sp-3);font-size:var(--fs-xs);appearance:none;cursor:pointer;
@@ -98,7 +98,7 @@ aside{flex:0 0 var(--aside-w);min-width:0;display:flex;flex-direction:column;gap
 .act .autotag{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.04em;background:var(--ink);color:var(--on-accent);padding:var(--sp-0) var(--sp-1-5);border-radius:var(--r-xs)}
 body.v-missions .flight{display:none}
 body:not(.v-missions) .feed{display:none}
-body.v-missions .queue{flex:0 1 auto;max-height:42%}
+body.v-missions .queue{flex:1 1 auto;min-height:0}
 @media (max-height:820px) and (min-width:981px){
   #orbit{max-height:136px}
   .runs{max-height:132px}

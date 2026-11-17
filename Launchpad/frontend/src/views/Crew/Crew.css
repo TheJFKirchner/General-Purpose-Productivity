@@ -130,7 +130,7 @@
 .af-field [aria-invalid="true"]{border-color:var(--coral)}
 .af-hint{margin:0;font-size:var(--fs-xs);color:var(--muted);line-height:var(--lh-snug)}
 .af-err{margin:0;font-size:var(--fs-xs);font-weight:600;color:var(--coral-ink);line-height:var(--lh-snug)}
-.af-purposes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2)}
+.af-purposes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
 .af-pcard{position:relative;display:flex;align-items:flex-start;gap:var(--sp-2-5);padding:var(--sp-3);border:1.5px solid var(--line2);border-radius:var(--r-md);cursor:pointer;background:var(--card);transition:border-color var(--t-fast),background var(--t-fast)}
 .af-pcard:hover{border-color:var(--pc)}
 .af-pcard.on{border-color:var(--pc);background:var(--pc-soft);box-shadow:inset 0 0 0 1px var(--pc)}

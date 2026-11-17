@@ -10,15 +10,21 @@
 - In plan mode edits reach on_permission (the engine does not hard-block them): denied here without a card
 - Streaming (chat_delta), interrupt (chat_stop), activity feed + usage like any agent; activity.log in
   <project>/.launchpad/<chat-id>/
+- Questions the CLI asks are saved as files too, in the chat's own folder (<project>/.launchpad/<chat-id>/questions/);
+  Auto answers is a planner-session switch and does not apply to chats
 - Fake engine: project setup with tools=None approves every built-in, so the tools the harness would ask about
   are gated there (FAKE_ASKING) to make prompts visible; on Claude nothing is gated
 - Folders: cwd = the chat's primary folder; the folders ticked as additional go in as add_dirs (fixed at start).
   Skills: the harness's own discovery (project setup); Launchpad's per-agent skill settings do not apply
+- CLI and model (choices.py, the picker under the chat box): settings pilot_harness (default the launch engine's CLI)
+  and pilot_model (default the agent file's); fixed at the first message (started); before that configure() reloads
+  the agent with a new choice. Events carry harness, model, label, option_id, started (chat_started, chat_model)
 """
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime as dt
 
 from agentlib import AgentError, PermissionDecision
 from agentlib.events import Done, Text, TextDelta
@@ -27,6 +33,7 @@ from ...activity import summarize
 from ...meter import Meter
 from ...sessionfiles import SessionFolder, new_session_id
 from .. import crew
+from . import choices as cli_choices
 
 MODES = ("default", "accept_edits", "plan")
 EDIT_TOOLS = set(crew.WRITE_TOOLS)                 # file edits (denied without a card in plan mode)
@@ -64,19 +71,43 @@ class PilotChat:
         project = project or s.project                    # the chat's own directory (cwd, settings, records)
         self.extra_ids, extra = hub.extra_dirs(self.dir_id) if hasattr(hub, "extra_dirs") else ([], [])
         self.folder = SessionFolder(project, self.id, extra)
-        self.agent = crew.load("pilot", engine=s.engine, project=project, model=s.pilot_model,
-                               on_permission=self.permission, **pilot_overrides(s.engine),
-                               **({"add_dirs": list(self.folder.extra)} if self.folder.extra else {}))
-        self.mode = self.agent.permission_mode
-        self.meter = Meter(hub, session_id=None, chat_id=self.id, role="pilot", name=crew.display("pilot"))
+        self.mode: str | None = None
         self.session = None
         self.resume_id: str | None = None
         self.history: list[dict] = []
         self.lock = asyncio.Lock()
+        self.configure()
+        self.meter = Meter(hub, session_id=None, chat_id=self.id, role="pilot", name=crew.display("pilot"))
         self.turn_task: asyncio.Task | None = None
         self.stopping = False
         self.last_reply = None
         self.counted = False                # one use count per chat (its agent started once)
+
+    def configure(self) -> None:
+        """(Re)load the CLI agent from the current settings: CLI (-> agentlib engine) and model (choices.py). Called at
+        creation, and again while nobody has written to the chat (a picker choice applies at once); the permission
+        mode picked so far is kept."""
+        s = self.hub.settings
+        self.harness = cli_choices.cli_harness(s)
+        self.engine = cli_choices.cli_engine(s)
+        self.agent = crew.load("pilot", engine=self.engine, project=self.folder.project, model=cli_choices.cli_model(s),
+                               on_permission=self.permission, **pilot_overrides(self.engine),
+                               **({"add_dirs": list(self.folder.extra)} if self.folder.extra else {}))
+        if self.mode:
+            self.agent.permission_mode = self.mode
+        self.mode = self.agent.permission_mode
+
+    @property
+    def started(self) -> bool:
+        """Someone wrote to this chat: its CLI and model are fixed from now on."""
+        return bool(self.history) or self.session is not None or self.resume_id is not None or self.lock.locked()
+
+    def choice_fields(self) -> dict:
+        return {**cli_choices.fields(self.harness, self.agent.model), "started": self.started}
+
+    def model_event(self) -> dict:
+        """chat_model: the chat's CLI and model (after a reload of an unstarted chat, and at its first message)."""
+        return {"type": "chat_model", "chat_id": self.id, **self.choice_fields()}
 
     # ---------------------------------------------------------------- events
     async def emit(self, ev: dict) -> None:
@@ -84,13 +115,12 @@ class PilotChat:
         await self.hub.emit(ev)
 
     def started_event(self) -> dict:
-        return {"type": "chat_started", "chat_id": self.id, "mode": self.mode, "model": self.agent.model,
+        return {"type": "chat_started", "chat_id": self.id, "mode": self.mode, **self.choice_fields(),
                 "cwd": str(self.folder.project), "dir_id": self.dir_id, "additional_dir_ids": list(self.extra_ids)}
 
     def snapshot(self) -> dict:
-        return {"id": self.id, "dir_id": self.dir_id, "mode": self.mode, "model": self.agent.model,
+        return {"id": self.id, "dir_id": self.dir_id, "mode": self.mode, **self.choice_fields(),
                 "cwd": str(self.folder.project), "additional_dir_ids": list(self.extra_ids),
-
                 "busy": self.lock.locked(), "history": list(self.history)}
 
     async def _mode_changed(self, mode: str) -> None:
@@ -107,7 +137,10 @@ class PilotChat:
                                  "text": f"{self.meter.name} is still answering; your message will follow."})
         async with self.lock:
             self.turn_task = asyncio.current_task()
+            first = not self.history and self.session is None and self.resume_id is None
             self.history.append({"role": "user", "markdown": text})
+            if first:                                  # CLI and model fixed from now on (the picker says so)
+                await self.emit(self.model_event())
             if echo:
                 await self.emit({"type": "chat_message", "role": "user", "markdown": text})
             self.stopping = False
@@ -223,10 +256,17 @@ class PilotChat:
         answers = {}
         for q in qs:
             labels = [str(o.get("label", o)) if isinstance(o, dict) else str(o) for o in q.get("options") or []]
+            asked_at = dt.datetime.now()
             answer, _by, _ = await self._ask(kind="question", title=str(q.get("header") or "Question"),
                                              body=str(q.get("question", "")), options=labels or None)
             if answer is None:
                 return PermissionDecision("deny", message="The user stopped this turn.")
+            try:                                   # the chat's own folder: <project>/.launchpad/<chat-id>/questions/
+                self.folder.add_question(title=str(q.get("question") or q.get("header") or "Question"), asked_by="CLI",
+                                         asked_at=asked_at, options=labels, answer=str(answer), how="user",
+                                         reason=str(q.get("header") or ""))
+            except OSError:
+                pass
             answers[str(q.get("question", ""))] = answer
         return PermissionDecision("allow", input={**req.input, "questions": qs, "answers": answers})
 

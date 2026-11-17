@@ -3,7 +3,7 @@
    Not here (view-local animation only): orbit body positions, solar-system ships/trails/pings, frame elements.
    All records are keyed objects (not Map/Set) so the state stays plain JSON-like data. */
 import type {
-  ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CrewAgentDef, DirEntry, Directory, FileContentEvent,
+  ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CliChoiceEvent, CrewAgentDef, DirEntry, Directory, FileContentEvent,
   FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoundAnswer, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
@@ -21,6 +21,8 @@ export type PlannerEntry =
   | { kind: 'sys'; id: string; text: string; cls?: 'promo' | 'err' }
   | { kind: 'visnote'; id: string; text: string; setId: string }
   | { kind: 'round'; id: string; roundId: string }
+  /** a question the Auto answers switch answered with the recommendation (compact line) */
+  | { kind: 'auto'; id: string; agent: string; step: number | null; title: string; answer: string }
   /** a plan draft card; `draft` is the draft as it was when the card was made; state open = live (see selectors.planCardView) */
   | { kind: 'plancard'; id: string; draft: Draft; draftV: number; rev: number; state: PlanCardState };
 
@@ -86,6 +88,8 @@ export interface Session {
   flashN: number | null;
   created: number;
   autopilot: boolean;
+  /** the Auto answers switch (server state; off by default) */
+  autoAnswers: boolean;
   /* planner */
   plannerId: Id | null;
   plannerStatus: string;
@@ -174,9 +178,16 @@ export interface Chat {
   id: Id;
   mode: ChatMode;
   model: string;
+  /** the chat's CLI and model (chat_started / chat_model): harness id, "Claude · Sonnet", "claude:sonnet" */
+  harness: string | null;
+  label: string | null;
+  optionId: string | null;
+  /** someone wrote to it (server's started, or a message the page sent): its CLI and model are fixed */
+  written: boolean;
   cwd: string;
   dirId: Id | null;
   busy: boolean;
+  /** chat_started arrived */
   started: boolean;
   log: FlightEntry[];
   /** id of the bubble being streamed (chat_delta), null between replies */
@@ -271,6 +282,8 @@ export interface UiState {
   apConfirm: Id | null;
   /** planner picker: the option sent (planner_choose), until planner_model / planner_choice answers */
   pickerChoosing: string | null;
+  /** CLI chat picker: the option sent (cli_choose), until cli_choice answers */
+  cliChoosing: string | null;
   newPlanBusy: boolean;
   newChatBusy: boolean;
   vis: { open: boolean; wide: boolean; width: number };
@@ -319,6 +332,8 @@ export interface AppState {
   rounds: Record<string, Round>;
   /** planner_choice: the picker's options, what the next new plan starts on, auto-promote, the rules text */
   plannerChoice: Omit<PlannerChoiceEvent, 'type'> | null;
+  /** cli_choice: the CLI chat picker's options and what the next new chat starts on */
+  cliChoice: Omit<CliChoiceEvent, 'type'> | null;
   /* agents, usage, activity */
   agents: Record<Id, Agent>;
   tokens: number;

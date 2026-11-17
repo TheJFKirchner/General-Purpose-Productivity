@@ -8,6 +8,13 @@
     report.md             the final report (orchestrator's summary + code-added assumptions, issues, costs)
     activity.log          every finished tool call: time | status | agent | tool | one-line summary
     decisions.md          decisions the user made in the app (visual picks)
+    questions/NNN-<slug>.md  one file per answered question (planner round questions one each, builder and CLI
+                          questions, timed-out ones too): Question, Asked by + when, Step, Run, Options offered,
+                          Answer, Justification (reason, recommended answer, the user's note), How it was answered
+                          (by the user / automatically / timed out). NNN = a running number unique in the folder,
+                          found from what is on disk (survives a restart); the files stay here across runs and
+                          report.md lists the ones of its run with links. A CLI chat has its own folder of the same
+                          shape (<chat-id>/questions/)
     visuals/              every rendered visual option (<set>-<option>[-rN].html)
 
 - .launchpad/ holds a .gitignore of '*' so it ignores itself in git
@@ -21,10 +28,13 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 import secrets
 from pathlib import Path
 
 ROOT_NAME = ".launchpad"
+HOW_ANSWERED = {"user": "Answered by the user", "auto": "Answered automatically (recommended)",
+                "timer": "Timed out (no answer; the recommendation was used as an assumption)"}
 
 
 def new_session_id() -> str:
@@ -37,6 +47,12 @@ def inside(path: Path, folder: Path) -> bool:
         return True
     except (ValueError, OSError):
         return False
+
+
+def question_slug(text: str, limit: int = 40) -> str:
+    """Letters, digits and hyphens only (safe on Windows and Mac), bounded length."""
+    s = re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")[:limit].strip("-")
+    return s or "question"
 
 
 def one_line(text: str, limit: int = 300) -> str:
@@ -59,6 +75,8 @@ class SessionFolder:
         self.report = self.path / "report.md"
         self.activity = self.path / "activity.log"
         self.decisions = self.path / "decisions.md"
+        self.questions = self.path / "questions"
+        self.question_files: list[dict] = []          # {run, name, title, answer, how} written since this launch
         self._logged: set[tuple[str, int]] = set()
 
     # ------------------------------------------------------------------ helpers
@@ -157,6 +175,62 @@ class SessionFolder:
         with self.activity.open("a", encoding="utf-8", newline="\n") as f:
             f.write(line.rstrip("\n") + "\n")
 
+    # ------------------------------------------------------------------ question files
+    def _next_question_no(self) -> int:
+        best = 0
+        if self.questions.is_dir():
+            for f in self.questions.iterdir():
+                m = re.match(r"(\d+)-", f.name)
+                if m:
+                    best = max(best, int(m.group(1)))
+        return best + 1
+
+    def add_question(self, *, title: str, asked_by: str, agent: str = "", asked_at: dt.datetime | None = None,
+                     run: int | None = None, step: int | None = None, options: list[str] | None = None,
+                     answer: str | None = None, how: str = "user", reason: str = "", recommended: str = "",
+                     note: str = "", assumption: str = "", run_name: str = "",
+                     no_run: str = "Not part of a run") -> Path:
+        """Save one answered (or timed-out) question as questions/NNN-<slug>.md; -> the file. how: user | auto | timer.
+        The number is one more than the highest on disk, so it is unique and survives a restart."""
+        self.ensure()
+        self.questions.mkdir(exist_ok=True)
+        when = (asked_at or dt.datetime.now()).strftime("%Y-%m-%d %H:%M")
+        timed_out = how == "timer"
+        shown = "No answer (timed out)" if timed_out else str(answer if answer is not None else "")
+        lines = [f"# {one_line(title, 120)}", "", "## Question", one_line(title, 600), "",
+                 "## Asked by", f"{asked_by}{f' ({agent})' if agent and agent != asked_by else ''} · {when}", ""]
+        if step:
+            lines += ["## Step", f"Step {step}", ""]
+        if run:                                   # the app's own name for the run ("A"); a relaunch adds its launch number
+            run_text = (run_name or f"launch {run}") + (f" (launch {run})" if run_name and run > 1 else "")
+        else:
+            run_text = no_run
+        lines += ["## Run", run_text, "",
+                  "## Options offered", *([f"- {one_line(o, 300)}" for o in options] if options else ["None (free answer)"]), "",
+                  "## Answer", one_line(shown, 1000), "", "## Justification"]
+        lines += [f"- Reason for asking: {one_line(reason, 1000)}" if reason else "- Reason for asking: not given",
+                  f"- Recommended answer: {one_line(recommended, 600)}" if recommended else "- Recommended answer: none"]
+        if note:
+            lines.append(f"- Your note: {one_line(note, 1000)}")
+        if assumption:
+            lines.append(f"- Assumption taken: {one_line(assumption, 600)}")
+        lines += ["", "## How it was answered", HOW_ANSWERED.get(how, how), ""]
+        slug = question_slug(title)
+        for _ in range(20):                                    # another writer may take the number first: retry
+            name = f"{self._next_question_no():03d}-{slug}.md"
+            try:
+                with (self.questions / name).open("x", encoding="utf-8", newline="\n") as fh:
+                    fh.write("\n".join(lines))
+            except FileExistsError:
+                continue
+            self.question_files.append({"run": run, "name": name, "title": one_line(title, 160),
+                                        "answer": one_line(shown, 160), "how": how})
+            return self.questions / name
+        raise OSError("could not number the question file")
+
+    def questions_of_run(self, run: int) -> list[dict]:
+        return [q for q in self.question_files if q["run"] == run]
+
     # ------------------------------------------------------------------ step reports / final report
     def step_path(self, n: int) -> Path:
         return self.steps / f"step-{n:02d}.md"
@@ -195,6 +269,10 @@ class SessionFolder:
                 dest.mkdir(exist_ok=True)
                 p.rename(dest / p.name)
                 moved = True
+                if p == self.report:                    # its question links now sit one folder deeper
+                    moved_report = dest / p.name
+                    text = moved_report.read_text(encoding="utf-8")
+                    moved_report.write_text(text.replace("](questions/", "](../questions/"), encoding="utf-8", newline="\n")
         if not moved and dest.exists():
             dest.rmdir()
 

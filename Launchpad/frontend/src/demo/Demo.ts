@@ -1,6 +1,6 @@
 /* DEMO: scripted fake back end, ported from the vanilla page (two runs in flight, timed + blocking questions,
    permissions, an info card, costs, reports, the crew list with use counts and folder agents, agent draft / create /
-   remove, new sessions, CLI chats (also from a plan), the planner picker, plans with an agent per step, visuals, files).
+   remove, new sessions, CLI chats (also from a plan) and their CLI picker, the planner picker, plans with an agent per step, visuals, files).
    Talks to the UI only through emit(ev) -> the store's dispatch, and receive(msg) for UI messages, exactly like the
    websocket would. Used when the page URL has no ?port=&code= (also `npm run dev`). ?speed=N runs it N times faster.
    Loosely typed on purpose: it is a script, the store's reducer is the typed side. */
@@ -43,6 +43,8 @@ export class Demo {
   actN = 0;
   astroSince: Record<string, number> = {};
   autopilot: Record<string, boolean> = {};
+  autoAnswers: Record<string, boolean> = {};
+  openRound: { id: string; sid: string; qs: Ev[] } | null = null;
   openPerms: Record<string, string> = {};
   fsDirs = fsDirs();
   fsVals = fsVals();
@@ -67,6 +69,9 @@ export class Demo {
   /* planner picker: each session's planner (harness, models, promoted, started) and what new plans start on */
   pm: Record<string, { harness: string; start: string; top: string; model: string; promoted: boolean; by: 'criteria' | 'user' | null; reason: string | null; started: boolean }> = {};
   pkHarness = 'claude'; pkStart = 'sonnet';
+  /* CLI chat picker (cli_choice / cli_choose / chat_model): what new chats start on, and each chat's own CLI and model */
+  cliHarness = 'claude'; cliModel = 'sonnet';
+  chatOpt: Record<string, { harness: string; model: string; started: boolean }> = {};
   visMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
   private intervals: ReturnType<typeof setInterval>[] = [];
 
@@ -93,6 +98,19 @@ export class Demo {
       this.emit({ type: 'queue_resolved', id: o.id, answer: 'deny', by: 'timer' });
       const f = this.pending[o.id]; delete this.pending[o.id]; if (f) f({ timer: true }, 'deny');
     }, ms);
+  }
+  /* Auto answers: a round whose questions all have a recommendation is answered with them (lines, no card); a waiting one too when switched on */
+  autoRound(sid: string, id: string, qs: Ev[]): boolean {
+    if (!qs.length || !qs.every(q => q.rec)) return false;
+    for (const q of qs) this.emit({ type: 'auto_answer', session_id: sid, id: q.id, agent: 'Planner', step: null, title: q.title, answer: q.rec, round_id: id });
+    this.on({ type: 'round_answer', roundId: id, answers: {}, auto: true });
+    return true;
+  }
+  setAutoAnswers(sid: string, on: boolean): void {
+    this.autoAnswers[sid] = on;
+    this.emit({ type: 'auto_answers', session_id: sid, on });
+    const r = this.openRound;
+    if (on && r && r.sid === sid) { this.openRound = null; if (!this.autoRound(sid, r.id, r.qs)) this.openRound = r; }
   }
   setAutopilot(sid: string, on: boolean): void {
     this.autopilot[sid] = on;
@@ -239,6 +257,29 @@ export class Demo {
     });
   }
 
+  /* ---- CLI chat picker, as app/agents/claude_code/choices.py (same options as the planner's) ---- */
+  cliEmit(): void {
+    this.emit({ type: 'cli_choice', options: this.pkOptions(), overridden: [],
+      choice: { option_id: `${this.cliHarness}:${this.cliModel}`, harness: this.cliHarness, model: this.cliModel, label: this.pkLabel(this.cliHarness, this.cliModel) } });
+  }
+  chatFields(cid: string): Ev {
+    const o = this.chatOpt[cid];
+    return { harness: o.harness, model: o.model, label: this.pkLabel(o.harness, o.model), option_id: `${o.harness}:${o.model}`, started: o.started };
+  }
+  cliChoose(msg: Ev): void {
+    const o = this.pkOptions().find(x => x.id === msg.option_id);
+    if (!o || !o.available) { this.emit({ type: 'system', text: `CLI: ${o ? o.label + ' is not available yet' : 'unknown choice'}.` }); this.cliEmit(); return; }
+    this.cliHarness = o.harness; this.cliModel = o.model;                                                            // remembered
+    this.later(200, () => {
+      for (const [cid, q] of Object.entries(this.chatOpt)) if (!q.started) {                                            // chats nobody has written to: at once
+        Object.assign(q, { harness: o.harness, model: o.model });
+        this.agent('pilot-' + cid, { model: o.model });
+        this.emit({ type: 'chat_model', chat_id: cid, ...this.chatFields(cid) });
+      }
+      this.cliEmit();
+    });
+  }
+
   /* ---- Files demo: two connected folders + the app's own files, editable markdown, a conflict, an invalid save, backups ---- */
   fsInit(): void {
     if (this.fs) return;
@@ -342,6 +383,7 @@ export class Demo {
   start(): void {
     this.fsSettings();
     this.pkEmit();
+    this.cliEmit();
     actions.setQuiet(true);
     /* Run A: claims loader, on step 2 */
     this.session('S-A', 'runs/2026-11-12-claims-loader', 'Claims loader rebuild');
@@ -426,7 +468,10 @@ export class Demo {
     };
     const qs = rounds[this.roundNo];
     if (!qs) { this.say('That covers it. Here is the draft plan:'); this.draftC(); return; }
+    this.openRound = null;
     this.emit({ type: 'question_round', session_id: this.current, id: 'r' + this.roundNo, round: this.roundNo, questions: qs });
+    if (this.autoAnswers[this.current] && this.autoRound(this.current, 'r' + this.roundNo, qs)) return;
+    this.openRound = { id: 'r' + this.roundNo, sid: this.current, qs };
     this.emit({ type: 'crew', agents: [{ name: 'Planner', role: 'planner', status: 'waiting', session_id: this.current }] });
   }
   draftC(): void {
@@ -580,6 +625,7 @@ export class Demo {
       }
       case 'round_answer':
         if (msg.skipped) break;
+        this.openRound = null;
         this.think(700);
         this.later(1100, () => {
           this.say('Noted.');
@@ -659,12 +705,14 @@ export class Demo {
       case 'git_scan': case 'git_refresh': case 'git_fetch': case 'git_commit': case 'git_push':
         demoGitOn(msg, this.gitRepos || (this.gitRepos = demoGitRepos()), ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
       case 'set_autopilot': this.setAutopilot(msg.session_id, !!msg.on); break;
+      case 'set_auto_answers': this.setAutoAnswers(msg.session_id, !!msg.on); break;
       case 'planner_promote': {
         const pid = Object.values(this.agents).find(a => a.role === 'planner' && a.session_id === msg.session_id)?.agent_id;
         this.later(400, () => { if (pid) this.agent(pid, { model: 'opus' }); this.pmEmit(msg.session_id, { model: 'opus', promoted: true, by: 'user', reason: null }); });
         break;
       }
       case 'planner_choose': this.pkChoose(msg); break;
+      case 'cli_choose': this.cliChoose(msg); break;
       case 'visual_pick': { const vs = this.vsets[msg.set_id]; if (vs) { vs.picked_id = msg.option_id; this.visPicked = (vs.options.find((o: Ev) => o.id === msg.option_id) || {}).label || null; this.visEmit(vs.set_id); } break; }
       case 'visual_tweak': this.visRedo(msg, String(msg.text || '')); break;
       case 'visual_retry': this.visRedo(msg, ''); break;
@@ -679,8 +727,9 @@ export class Demo {
   chatStart(dirId?: string, mode = 'default', fromSession?: string): string {
     const id = 'chat-' + (++this.chatN), d = this.fsDirs.find(x => x.dir_id === dirId) || this.fsDirs.find(x => x.is_default) || this.fsDirs[0];
     this.chatMode[id] = mode; this.chatCount[id] = 0; this.chatTurns[id] = 0; this.chatCalls[id] = [];
-    this.emit({ type: 'chat_started', chat_id: id, mode, model: 'sonnet', cwd: d ? d.path : '', dir_id: d ? d.dir_id : null, ...(fromSession ? { from_session_id: fromSession } : {}) });
-    this.agent('pilot-' + id, { session_id: null, chat_id: id, role: 'pilot', name: 'CLI', model: 'sonnet', status: 'idle' });
+    this.chatOpt[id] = { harness: this.cliHarness, model: this.cliModel, started: false };
+    this.emit({ type: 'chat_started', chat_id: id, mode, ...this.chatFields(id), cwd: d ? d.path : '', dir_id: d ? d.dir_id : null, ...(fromSession ? { from_session_id: fromSession } : {}) });
+    this.agent('pilot-' + id, { session_id: null, chat_id: id, role: 'pilot', name: 'CLI', model: this.cliModel, status: 'idle' });
     this.total();
     return id;
   }
@@ -712,6 +761,8 @@ export class Demo {
   }
   chatTurnRun(cid: string, text: string, fromPlan?: { name: string; steps: Ev[] }): void {
     if (!(cid in this.chatTurns)) return;
+    const opt = this.chatOpt[cid];
+    if (opt && !opt.started) { opt.started = true; this.emit({ type: 'chat_model', chat_id: cid, ...this.chatFields(cid) }); }   // CLI and model fixed
     this.chatTurns[cid]++;
     const n = ++this.chatCount[cid], pid = 'pilot-' + cid;
     this.agent(pid, { status: 'working' });
@@ -911,14 +962,14 @@ export class Demo {
     else if (name.startsWith('launchpad-') || crewBase().some(a => a.name === name)) problems.push('name: names starting with launchpad- are kept for Launchpad\'s own agents');
     else if (this.folderAgents.some(a => a.name === name)) problems.push(`name: an agent called ${name} already exists in this folder`);
     if (!String(f.description || '').trim()) problems.push("front matter: 'description' missing");
-    if (!['exploring', 'building', 'reviewing'].includes(f.purpose)) problems.push('purpose: must be exploring, building or reviewing');
+    if (!['exploring', 'building', 'reviewing', 'other'].includes(f.purpose)) problems.push('purpose: must be exploring, building, reviewing or other');
     if (f.model && !/^(opus|sonnet|haiku|inherit|claude-.+)$/.test(f.model)) problems.push(`model: '${f.model}' is not opus, sonnet, haiku, inherit or a claude-... model id`);
     const bad = (f.tools || []).filter((x: string) => !TOOL_CHOICES.includes(x));
     if (bad.length) problems.push(`tools: not a tool name: ${bad.join(', ')}`);
     if (['exploring', 'reviewing'].includes(f.purpose) && (f.tools || []).some((x: string) => ['Write', 'Edit', 'Bash'].includes(x))) problems.push('tools: a read-only agent cannot have Write, Edit or Bash');
     this.later(700, () => {
       if (problems.length) { this.emit({ type: 'agent_saved', ok: false, dir_id: dir, error: 'Not saved: the agent file did not pass the check.', problems }); return; }
-      const tools: string[] = (f.tools && f.tools.length) ? f.tools : f.purpose === 'building' ? ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash'] : ['Read', 'Glob', 'Grep'];
+      const tools: string[] = (f.tools && f.tools.length) ? f.tools : (f.purpose === 'building' || f.purpose === 'other') ? ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash'] : ['Read', 'Glob', 'Grep'];
       const text = `---\nname: ${name}\ndescription: ${f.description}\npurpose: ${f.purpose}\nmodel: ${f.model || 'inherit'}\ntools: ${tools.join(', ')}\n---\n${f.instructions || ''}`;
       this.fsWrite(dir || 'd1', `.claude/agents/${name}.md`, text, { validates_as: 'agent', applies: 'new_sessions' });
       this.folderAgents.push({ name, display_name: name.replace(/-/g, ' ').replace(/^./, (c: string) => c.toUpperCase()), role: null, purpose: f.purpose, builtin: false, step_worker: true,

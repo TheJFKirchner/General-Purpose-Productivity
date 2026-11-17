@@ -70,7 +70,7 @@ it('the switch flips between two kept conversations; typed drafts survive; arrow
 it('CLI side: starts a chat on first send, streams, answers a permission card with a Deny note; the switch shows it waiting', async () => {
   await act(async () => { actions.setChatSide('code'); });
   expect($('#codeEmpty')!.hidden).toBe(false);
-  expect($('#codeModel')!.textContent).toBe('no chat yet');
+  expect($('#codeModel')).toBeNull();                               // the read-only chip gave way to the picker under the box
 
   const input = $<HTMLTextAreaElement>('#codeInput')!;
   await act(async () => { setValue(input, 'fix the loader'); });
@@ -79,7 +79,7 @@ it('CLI side: starts a chat on first send, streams, answers a permission card wi
   expect(input.value).toBe('');
   await step(1000);
   expect($('#codeEmpty')!.hidden).toBe(true);
-  expect($('#codeModel')!.textContent).toBe('Sonnet');
+  expect(getState().chats[getState().currentChat!].label).toBe('Claude · Sonnet');
   expect(sent.some(m => m.type === 'chat_message' && m.text === 'fix the loader')).toBe(true);
   expect($('#codeStop')!.hidden).toBe(false);
 
@@ -116,7 +116,7 @@ it('Shift+Tab cycles the three modes, Esc interrupts; both only while the CLI si
   expect($('#modePill')!.textContent).toBe('Auto-accept edits');
   await key('Tab', true);
   expect($('#modePill')!.textContent).toBe('Plan');
-  expect($<HTMLTextAreaElement>('#codeInput')!.placeholder).toContain('nothing will be changed');
+  expect($<HTMLTextAreaElement>('#codeInput')!.placeholder).toBe('Ask for a plan');
   await click($('#modePill')!);
   expect(getState().chats[cid].mode).toBe('default');
 

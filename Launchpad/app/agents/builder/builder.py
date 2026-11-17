@@ -16,12 +16,15 @@ its report back to the orchestrator.
 - Autopilot (per session, switchable during a run): every such request is approved without a card and logged
   (assumptions.md, report section "Approved by autopilot", activity auto: true); turning it on approves open cards
 - Timed questions auto-answer with the recommendation at the timeout (assumption logged by code); blocking
-  questions mark the step blocked and wait for the user
+  questions mark the step blocked and wait for the user. With the session's Auto answers switch on, a question with
+  a recommendation is answered with it at once (app/incoming.py). Every answered or timed-out question is saved as
+  a file in <session folder>/questions/ (sessionfiles.add_question)
 - The orchestrator receives only cap_result(): the report path plus short, length-capped lists
 - `run` below is the orchestrator's Run (app/agents/orchestrator/run.py): settings, folder, plan, hub, steps
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 
 from agentlib import AgentError, PermissionDecision, tool
@@ -162,6 +165,7 @@ class StepContext:
         if blocking:
             await run.set_step(self.n, "blocked")
         await self.meter.set_status("waiting")
+        asked_at = dt.datetime.now()
         answer, by, _ = await run.hub.incoming.ask(
             session_id=run.ls.id, kind="question", agent=self.agent_name, agent_id=self.meter.agent_id,
             step=self.n, title=str(title),
@@ -171,11 +175,22 @@ class StepContext:
             await run.set_step(self.n, "in_progress")
         if by == "stopped" or answer is None:
             return "The run was stopped. Call submit_report now with status blocked."
+        assumed = ""
         if by == "timer":
             secs = int(timeout)
-            run.note_assumption(f"{one_line(title, 160)} -> {one_line(recommended, 200)} "
-                                f"(no answer within {secs}s; the timer used the recommendation)",
-                                agent=self.agent_name, step=self.n, source="timer")
+            assumed = (f"{one_line(title, 160)} -> {one_line(recommended, 200)} "
+                       f"(no answer within {secs}s; the timer used the recommendation)")
+            run.note_assumption(assumed, agent=self.agent_name, step=self.n, source="timer")
+        try:                                               # one file per question in <session folder>/questions/
+            run.folder.add_question(
+                title=str(title), asked_by="Builder", agent=self.agent_name, asked_at=asked_at, run=run.ls.run_count,
+                run_name=run.ls.hub.run_name(run.ls.id), step=self.n, options=[str(o) for o in options or []], answer=str(answer), how=by, reason=str(body),
+                recommended=str(recommended), assumption=assumed)
+        except OSError:
+            pass                                           # a file that cannot be written must not stop the step
+        if by == "auto":
+            return f"Auto answers is on: your recommendation was taken as the answer: {answer}"
+        if by == "timer":
             return (f"No answer within {secs}s. Proceed on your recommendation: {recommended}. "
                     "This is logged as an assumption.")
         return f"The user answered: {answer}"

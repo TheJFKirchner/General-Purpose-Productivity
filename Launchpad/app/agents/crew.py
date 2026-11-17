@@ -6,12 +6,12 @@
   criteria: app/agents/planner/promotion.md
 - Display names are plain (Planner, Explorer, Orchestrator, Builder, Visualizer, CLI); role keys and
   front-matter names stay as they were (astronaut = the Explorer, pilot = the CLI chat, visual = the Visualizer)
-- Purposes: planning | exploring | building | reviewing (built-ins: BUILTIN_PURPOSE; folder agents: a `purpose:`
-  front-matter field, default building)
+- Purposes: planning | exploring | building | reviewing | other (built-ins: BUILTIN_PURPOSE; folder agents: a
+  `purpose:` front-matter field; missing or unknown = other, which runs guarded exactly like building)
 - Registry = the six built-ins + the connected folder's `.claude/agents/*.md` (folder agents). Step workers (what a
-  plan step may name) = the Builder + folder agents that are exploring / building / reviewing and load cleanly
+  plan step may name) = the Builder + folder agents that are exploring / building / reviewing / other and load cleanly
 - Folder agents run as step workers: exploring / reviewing are read-only (no write, edit or shell tools whatever
-  the file lists); building ones get the Builder's gated tools, permission cards, guards and shell deny list
+  the file lists); building and other ones get the Builder's gated tools, permission cards, guards and shell deny list
 - crew_list event: Agent.describe() (agentlib) + display_name, role, purpose, uses, builtin, skill_setting; plus
   folder agents; plus the skills found in the folder's session folders (app/skills.py)
 - session_kw(ls, name): what every agent of a session gets at load time: add_dirs (the additional folders) and its
@@ -77,12 +77,13 @@ def editable_files(root: Path | None = None) -> dict[str, Path]:
     return out
 
 
-PURPOSES = ("planning", "exploring", "building", "reviewing")
+PURPOSES = ("planning", "exploring", "building", "reviewing", "other")
 BUILTIN_PURPOSE = {"planner": "planning", "visual": "planning", "astronaut": "exploring",
                    "builder": "building", "orchestrator": "building", "pilot": "building"}
-STEP_PURPOSES = ("exploring", "building", "reviewing")       # folder agents with these can take plan steps
+STEP_PURPOSES = ("exploring", "building", "reviewing", "other")   # folder agents with these can take plan steps
 READ_ONLY_PURPOSES = ("exploring", "reviewing")
-DEFAULT_PURPOSE = "building"                                 # folder agent file without a purpose field
+DEFAULT_PURPOSE = "building"                                 # the Add an agent form's starting purpose
+FALLBACK_PURPOSE = "other"          # a folder agent file with a missing or unknown purpose is listed as Other (guarded like building)
 DEFAULT_STEP_AGENT = ROLES["builder"]["name"]                # launchpad-builder
 
 # Tools the "new agent" form may offer (tick boxes)
@@ -244,9 +245,9 @@ def folder_agents(folder: Path | None) -> list[dict]:
         if name in taken or name in seen:
             continue
         seen.add(name)
-        purpose = str(meta.get("purpose") or DEFAULT_PURPOSE).strip().lower()
+        purpose = str(meta.get("purpose") or "").strip().lower()
         if purpose not in PURPOSES:
-            purpose = DEFAULT_PURPOSE
+            purpose = FALLBACK_PURPOSE
         out.append({"name": name, "display_name": folder_display(name), "purpose": purpose,
                     "description": str(meta.get("description") or "").strip(), "builtin": False, "role": None,
                     "path": path.resolve(), "rel": f".claude/agents/{path.name}",
@@ -401,6 +402,9 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
     agents = []
     for role, a in built.items():
         d = a.describe()
+        if role == "pilot":          # the CLI chat runs with the harness's own tools and permission modes: not a restricted list
+            d["builtin_tools"] = None
+            d["warnings"] = [w for w in d["warnings"] if not w.startswith("tools not specified")]
         d["custom_tools"] = [{"name": t["name"], "description": t["description"]} for t in d["custom_tools"]]
         agents.append({"name": d["name"], "display_name": ROLES[role]["display"], "role": role,
                        "purpose": BUILTIN_PURPOSE[role], "uses": uses.get(d["name"], 0), "builtin": True,

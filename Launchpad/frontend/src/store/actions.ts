@@ -147,6 +147,20 @@ export const actions = {
       }), 'pickerChoosing');
     });
   },
+  /** The CLI chat's picker: one CLI-and-model option (cli_choose). The server remembers it for new chats and reloads
+      every chat nobody has written to yet; a chat in progress keeps its own. Picking what the open chat already runs,
+      with nothing pending, sends nothing. Independent of the planner's choice. */
+  chooseCli(optionId: string) {
+    run(c => {
+      const cc = c.st.cliChoice, o = cc ? cc.options.find(x => x.id === optionId) : null;
+      if (!cc || !o || !o.available || c.st.ui.cliChoosing) return;
+      const ch = curChatOf(c);
+      if ((ch ? ch.optionId === optionId : true) && cc.choice.option_id === optionId) return;
+      if (!send({ type: 'cli_choose', option_id: optionId })) return;
+      c.st.ui.cliChoosing = optionId;
+      later(c, 15000, () => run(c2 => { c2.st.ui.cliChoosing = null; }), 'cliChoosing');
+    });
+  },
   /** The picker's "Auto-promote" toggle: a per-user setting (planner_auto_promote). Off applies at once (the planner
       never promotes itself); on applies to plans nobody has written to yet. */
   setAutoPromote(on: boolean) {
@@ -169,6 +183,17 @@ export const actions = {
       if (!send({ type: 'set_autopilot', session_id: sid, on })) return;
       s.autopilot = on;
       toast(c, on ? `Autopilot ON for ${sLabel(s)}: every permission request is approved without asking` : `Autopilot off for ${sLabel(s)}: permission requests come to Incoming again`);
+    });
+  },
+
+  /** Auto answers switch (per session, separate from Autopilot): both ways take one click; the server's auto_answers event is authoritative. */
+  toggleAutoAnswers(sid: Id) {
+    run(c => {
+      const s = c.st.sessions[sid]; if (!s) return;
+      const on = !s.autoAnswers;
+      if (!send({ type: 'set_auto_answers', session_id: sid, on })) return;
+      s.autoAnswers = on;
+      toast(c, on ? `Auto answers ON for ${sLabel(s)}: questions with a recommended answer are answered with it` : `Auto answers off for ${sLabel(s)}: questions wait for you again`);
     });
   },
 

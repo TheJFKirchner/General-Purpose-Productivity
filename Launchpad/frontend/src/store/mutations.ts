@@ -17,7 +17,7 @@ export function sess(c: Ctx, id: Id | null | undefined): Session | null {
       id, letter: letterFor(c.st.order.length), folder: '', dirId: null, cwd: '', planTitle: '', status: 'planning', meta: null, roundTag: '',
       draft: null, draftV: 0, draftRev: null, runDraftV: null, runRev: null, run: null, report: null, approving: false, stopping: false,
       reportSent: false, snapReportSent: false, snapTotal: null, plannerCost: null, cleared: false, flash: 0, flashN: null, created: Date.now(),
-      autopilot: false, plannerId: null, plannerStatus: 'idle', plannerModel: null, promoted: false, promoReason: null, promoBy: null,
+      autopilot: false, autoAnswers: false, plannerId: null, plannerStatus: 'idle', plannerModel: null, promoted: false, promoReason: null, promoBy: null,
       promoting: false, plannerHarness: null, plannerStart: null, plannerTop: null, plannerLabel: null, plannerOption: null,
       plannerStarted: false, plannerAuto: false, switchableTo: [], codeSending: false, codeSentV: null, visualSets: [], visSel: null, visSeen: 0, log: [], typing: false,
     };
@@ -104,7 +104,7 @@ export function chatOf(c: Ctx, id: Id | null | undefined): Chat | null {
   if (id == null || id === '') return null;
   let ch = c.st.chats[id];
   if (!ch) {
-    c.st.chats[id] = { id, mode: 'default', model: '', cwd: '', dirId: null, busy: false, started: false, log: [], streamId: null, typing: false, agentIds: [] };
+    c.st.chats[id] = { id, mode: 'default', model: '', harness: null, label: null, optionId: null, written: false, cwd: '', dirId: null, busy: false, started: false, log: [], streamId: null, typing: false, agentIds: [] };
     c.st.chatOrder.push(id);
     ch = c.st.chats[id];
   }
@@ -131,7 +131,7 @@ export function sendChat(c: Ctx, text: string): boolean {
     return true;
   }
   if (!send({ type: 'chat_message', chat_id: ch.id, text })) return false;
-  chatBubble(c, ch.id, 'me', text); ch.busy = true; ch.typing = true;
+  chatBubble(c, ch.id, 'me', text); ch.busy = true; ch.typing = true; ch.written = true;
   return true;
 }
 

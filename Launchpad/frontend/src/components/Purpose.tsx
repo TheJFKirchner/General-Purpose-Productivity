@@ -2,10 +2,10 @@
    the --purpose-* tokens through data-purpose). Used by Crew, plan cards and Missions. */
 import type { ReactNode } from 'react';
 import { PURPOSE_LABEL } from '../lib/labels';
-import { AlertTriangle, Compass, Hammer, ShieldCheck, Telescope } from './icons';
+import { AlertTriangle, Compass, Hammer, Shapes, ShieldCheck, Telescope } from './icons';
 
 export const PURPOSE_ICON: Record<string, ReactNode> = {
-  planning: <Compass />, exploring: <Telescope />, building: <Hammer />, reviewing: <ShieldCheck />,
+  planning: <Compass />, exploring: <Telescope />, building: <Hammer />, reviewing: <ShieldCheck />, other: <Shapes />,
 };
 
 /** "Building" with its icon, in the purpose's colours. */

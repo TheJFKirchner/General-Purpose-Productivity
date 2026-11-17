@@ -8,7 +8,7 @@
 - Remove: folder agents only (built-ins are never removed); the file is backed up exactly like a hand-edited save
   (<home>/.launchpad/backups/<dir_id>/<path>/<timestamp>.md, restorable from the File Explorer) and then deleted
 - Fields: {name, description, purpose, model, tools: [..], instructions}; empty tools = the default set for the
-  purpose (no tools line: building -> the Builder's tools, read-only -> Read, Grep, Glob)
+  purpose (no tools line: building / other -> the Builder's tools, read-only -> Read, Grep, Glob)
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pathlib import Path
 from ..files import FileError, agent_problems
 from . import crew
 
-ADDABLE_PURPOSES = ("exploring", "building", "reviewing")        # planning agents cannot be added (this version)
+ADDABLE_PURPOSES = ("exploring", "building", "reviewing", "other")        # planning agents cannot be added (this version)
 MODELS = ("haiku", "sonnet", "opus")
 MAX_INSTRUCTIONS = 8000
 

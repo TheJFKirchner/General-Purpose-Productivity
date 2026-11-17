@@ -14,7 +14,7 @@ app/agents/
   orchestrator/      agent.md, run.py, report.py
   builder/           agent.md, builder.py, deny.py
   visualizer/        agent.md, visuals.py, libraries.py
-  claude_code/       agent.md, pilot.py
+  claude_code/       agent.md, pilot.py, choices.py
   drafter/           agent.md, drafter.py
 ```
 
@@ -58,5 +58,5 @@ Role ids, front-matter names and websocket fields did not change when the folder
 
 - They belong to a connected folder, not to Launchpad: written by the user or by the Crew tab's add form (`folder_agents.create`), removed with a backup (`folder_agents.remove`)
 - They have no Python code of their own. Launchpad runs them only as plan-step workers through the Builder's code (`app/agents/builder/builder.py`), loaded by `crew.load_step_worker`
-- Their front matter adds `purpose:` (planning | exploring | building | reviewing; default building). Exploring / reviewing ones are read-only (write, edit and shell tools removed and refused); building ones get the Builder's gated tools, permission cards, guards and shell deny list
+- Their front matter adds `purpose:` (planning | exploring | building | reviewing | other; a missing or unknown purpose = other, shown under "Other" in the Crew tab). Exploring / reviewing ones are read-only (write, edit and shell tools removed and refused); building and other ones get the Builder's gated tools, permission cards, guards and shell deny list
 - A file whose name matches a built-in's front-matter name is skipped; a broken file is listed with its problems and never runs

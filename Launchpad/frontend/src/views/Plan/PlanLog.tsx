@@ -12,7 +12,7 @@ import { PenButton } from '../../components/PenButton';
 import { Pill } from '../../components/Pill';
 import { StepAgent } from '../../components/Purpose';
 import { AP_HINT } from '../../lib/labels';
-import { Check, Sparkles, Terminal } from '../../components/icons';
+import { ArrowRight, Check, Sparkles, Terminal } from '../../components/icons';
 
 type PlanCardEntry = Extract<PlannerEntry, { kind: 'plancard' }>;
 
@@ -39,9 +39,23 @@ export const LogEntry = memo(function LogEntry({ e, sid, onChanges }: { e: Plann
         </SysLine>
       );
     case 'round': return <RoundView roundId={e.roundId} />;
+    case 'auto': return <AutoLine e={e} />;
     case 'plancard': return sid != null ? <PlanCard e={e} sid={sid} onChanges={onChanges} /> : null;
   }
 });
+
+/* ---------------- auto-answered questions ---------------- */
+/** One question the Auto answers switch answered: the question and the answer taken, marked automatic. */
+function AutoLine({ e }: { e: Extract<PlannerEntry, { kind: 'auto' }> }) {
+  const who = e.step ? `${e.agent}, step ${e.step}` : e.agent;
+  return (
+    <div className="autoline" title={`${who} asked: ${e.title}. Answered automatically with the recommended answer: ${e.answer}`}>
+      <span className="autotag"><Sparkles />Auto</span>
+      <span className="aa-q"><span className="sr">{who} asked: </span>{e.title}</span>
+      <span className="aa-a"><span className="sr">Answered automatically: </span><ArrowRight />{e.answer}</span>
+    </div>
+  );
+}
 
 /* ---------------- question rounds ---------------- */
 function RoundView({ roundId }: { roundId: string }) {

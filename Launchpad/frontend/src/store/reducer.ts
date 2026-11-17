@@ -2,13 +2,13 @@
    the contract (src/contract.ts), ported one-for-one from the vanilla page's handle() and its on*() functions.
    Views never handle server events themselves: they read the state this produces. */
 import type {
-  ActivityEvent, AgentDraftedEvent, AgentFields, AgentRemovedEvent, AgentSavedEvent, AgentUsageEvent, ChatHistoryItem,
-  ChatStartedEvent, FileErrorEvent, FileSavedEvent, GitReposEvent, GitResultEvent, Id, PlanDraftEvent, PlannerHistoryItem, PlannerModelEvent, QueueItemEvent,
+  ActivityEvent, AgentDraftedEvent, AgentFields, AgentRemovedEvent, AgentSavedEvent, AgentUsageEvent, AutoAnswerEvent, ChatHistoryItem,
+  ChatModelFields, ChatStartedEvent, FileErrorEvent, FileSavedEvent, GitReposEvent, GitResultEvent, Id, PlanDraftEvent, PlannerHistoryItem, PlannerModelEvent, QueueItemEvent,
   QueueResolvedEvent, QuestionRoundEvent, RunFinishedEvent, RunStartedEvent, ServerEvent, SessionStartedEvent, SettingsEvent,
   SnapshotEvent, StepUpdateEvent, SystemEvent, VisualSetEvent,
 } from '../contract';
 import { run, type Ctx } from './core';
-import type { Activity, ChatItem, Session, VisualSet } from './types';
+import type { Activity, Chat, ChatItem, Session, VisualSet } from './types';
 import {
   addBubble, addSys, addVisNote, answerQ, chatAppend, chatBubble, chatOf, chatSys, dropItem, edError, edFill, endStream,
   fxBoot, fxLoad, fxSelect, later, logFor, nextId, noteVisPick, openVis, promoLine, removeQ, requestCrew, send, sendChat,
@@ -118,8 +118,19 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'activity': onActivity(c, ev); break;
     case 'visual_set': onVisualSet(c, ev); break;
     case 'autopilot': { const s = sess(c, ev.session_id); if (s) s.autopilot = !!ev.on; break; }
+    case 'auto_answers': { const s = sess(c, ev.session_id); if (s) s.autoAnswers = !!ev.on; break; }
+    case 'auto_answer': onAutoAnswer(c, ev); break;
     case 'planner_model': onPlannerModel(c, ev); break;
     case 'planner_choice': { const { type: _t, ...data } = ev; c.st.plannerChoice = data; c.st.ui.pickerChoosing = null; break; }
+    case 'cli_choice': { const { type: _t, ...data } = ev; c.st.cliChoice = data; c.st.ui.cliChoosing = null; break; }
+    case 'chat_model': {
+      const ch = c.st.chats[ev.chat_id]; if (!ch) break;
+      const was = ch.label;
+      applyChatModel(ch, ev);
+      /* an unstarted chat reloaded on another CLI / model: say so under its "New chat" line */
+      if (!c.st.replaying && !ev.started && ch.label && was && was !== ch.label) chatSys(c, ch.id, `This chat now runs on ${ch.label}.`);
+      break;
+    }
     case 'settings': onSettings(c, ev); break;
     case 'directory_picked': {
       c.st.ui.picking = false;
@@ -223,6 +234,7 @@ function onSnapshot(c: Ctx, ev: SnapshotEvent): void {
     if (typeof x.planner_cost_usd === 'number') s.plannerCost = x.planner_cost_usd;
     if (typeof x.total_cost_usd === 'number') s.snapTotal = x.total_cost_usd;
     if (x.autopilot != null) s.autopilot = !!x.autopilot;
+    if (x.auto_answers != null) s.autoAnswers = !!x.auto_answers;
     {
       const pm = x.planner_model && typeof x.planner_model === 'object' ? x.planner_model : x;    // same fields as planner_model
       const model = typeof x.planner_model === 'string' ? x.planner_model : pm.model;
@@ -271,6 +283,15 @@ function onRound(c: Ctx, ev: QuestionRoundEvent): void {
   if (rs) rs.roundTag = `Round ${ev.round}`; else c.st.preRoundTag = `Round ${ev.round}`;
   c.st.rounds[ev.id] = { id: ev.id, sessionId: rs ? rs.id : null, round: ev.round, questions: ev.questions || [], answers: {}, sent: false, actionsHidden: false };
   logFor(c, ev.session_id).push({ kind: 'round', id: nextId(c), roundId: ev.id });
+}
+
+/** A question answered by the Auto answers switch: a compact line, and a round card that was still showing is closed. */
+function onAutoAnswer(c: Ctx, ev: AutoAnswerEvent): void {
+  logFor(c, ev.session_id).push({ kind: 'auto', id: nextId(c), agent: ev.agent || 'Agent', step: ev.step ?? null, title: ev.title, answer: ev.answer });
+  const r = ev.round_id ? c.st.rounds[ev.round_id] : null;
+  if (!r || r.sent) return;
+  r.answers[ev.id] = { accepted: true, text: ev.answer };
+  if (r.questions.every(q => r.answers[q.id])) { r.sent = true; r.actionsHidden = true; }
 }
 
 /* ---------------- plan drafts ---------------- */
@@ -437,10 +458,19 @@ function onActivity(c: Ctx, ev: ActivityEvent): void {
 }
 
 /* ---------------- CLI chats ---------------- */
+/** A chat's CLI and model from chat_started / chat_model / the snapshot (only the fields the server sent). */
+function applyChatModel(ch: Chat, ev: ChatModelFields): void {
+  if (ev.model) ch.model = ev.model;
+  if (ev.harness !== undefined) ch.harness = ev.harness || null;
+  if (ev.label !== undefined) ch.label = ev.label || null;
+  if (ev.option_id !== undefined) ch.optionId = ev.option_id || null;
+  if (ev.started) ch.written = true;
+}
+
 function onChatStarted(c: Ctx, ev: ChatStartedEvent): void {
   const ch = chatOf(c, ev.chat_id); if (!ch) return;
   if (ev.mode) ch.mode = ev.mode;
-  if (ev.model) ch.model = ev.model;
+  applyChatModel(ch, ev);
   if (ev.cwd) ch.cwd = ev.cwd;
   if (ev.dir_id != null) ch.dirId = ev.dir_id;
   if (ev.busy != null) ch.busy = !!ev.busy;
@@ -452,7 +482,7 @@ function onChatStarted(c: Ctx, ev: ChatStartedEvent): void {
   if (Array.isArray(ev.history)) {
     ch.log = []; ch.typing = false; endStream(ch);
     for (const h of ev.history) replayChatItem(c, ch.id, h);
-  } else if (fresh) chatSys(c, ch.id, `New chat${ch.model ? ' · ' + modelName(ch.model) : ''}${ch.cwd ? ' · ' + ch.cwd : ''}`);
+  } else if (fresh) chatSys(c, ch.id, `New chat${ch.label ? ' · ' + ch.label : ch.model ? ' · ' + modelName(ch.model) : ''}${ch.cwd ? ' · ' + ch.cwd : ''}`);
   showChat(c, ch.id);
   c.st.ui.newChatBusy = false;
   if (fromPlan) {

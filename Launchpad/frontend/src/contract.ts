@@ -40,7 +40,7 @@ export interface SkillInfo { name: string; description?: string; path?: string; 
 export type SkillSetting = 'all' | 'cli' | string[];
 
 /** What an agent is for (Crew colours, the planner's registry, permissions for added agents). */
-export type Purpose = 'planning' | 'exploring' | 'building' | 'reviewing';
+export type Purpose = 'planning' | 'exploring' | 'building' | 'reviewing' | 'other';
 /** The fields of the "Add an agent" form (agent_draft reply, agent_create). */
 export interface AgentFields { name: string; description: string; purpose: Purpose | ''; model: string; tools: string[]; instructions: string }
 /** One validation problem from the server: usually "field: message" text (the agent-file check), or an object. */
@@ -95,7 +95,7 @@ export interface CrewAgentDef {
   root?: string;
   path?: string;
   editable?: boolean;
-  /** planning | exploring | building | reviewing (a folder agent with no purpose counts as building) */
+  /** planning | exploring | building | reviewing | other (a folder agent with a missing or unknown purpose is other) */
   purpose?: Purpose | string;
   /** times this agent was started (per user, survives restarts); live updates come as agent_uses */
   uses?: number;
@@ -141,6 +141,7 @@ export interface SnapshotSession {
   draft_pending?: boolean;
   runs?: number;
   autopilot?: boolean;
+  auto_answers?: boolean;
   model?: string;
   planner_model?: string | { model?: string; promoted?: boolean; reason?: string | null; by?: 'criteria' | 'user' | null };
   promoted?: boolean;
@@ -150,8 +151,8 @@ export interface SnapshotSession {
   harness?: string; start_model?: string; top_model?: string; label?: string; option_id?: string; auto_promote?: boolean;
   started?: boolean; switchable_to?: string[];
 }
-export interface SnapshotChat {
-  id?: Id; chat_id?: Id; dir_id?: Id; additional_dir_ids?: Id[]; mode?: ChatMode; model?: string; cwd?: string; busy?: boolean;
+export interface SnapshotChat extends ChatModelFields {
+  id?: Id; chat_id?: Id; dir_id?: Id; additional_dir_ids?: Id[]; mode?: ChatMode; cwd?: string; busy?: boolean;
   history?: ChatHistoryItem[];
 }
 
@@ -230,7 +231,26 @@ export interface PlannerChoiceEvent {
   overridden: string[];
   rules: { markdown: string; path: string | null };
 }
+/** The CLI chat's picker: the same options as the planner's (harness = "CLI" in the UI), what the next new chat starts
+    on (settings pilot_harness + pilot_model, per user). Independent of the planner's choice. */
+export interface CliChoiceEvent {
+  type: 'cli_choice'; options: PlannerOption[];
+  choice: { option_id: string; harness: string; model: string; label: string };
+  /** CLI chat settings a launch option sets */
+  overridden: string[];
+}
+/** A CLI chat's CLI and model (as in chat_started); started = someone wrote to it (CLI and model fixed). */
+export interface ChatModelFields { harness?: string; model?: string; label?: string; option_id?: string; started?: boolean }
+/** Sent when a chat nobody has written to is reloaded with a new choice, and at its first message. */
+export interface ChatModelEvent extends ChatModelFields { type: 'chat_model'; chat_id: Id }
 export interface AutopilotEvent { type: 'autopilot'; session_id: Id; on: boolean }
+/** The Auto answers switch of a session (after set_auto_answers; also in the snapshot as sessions[].auto_answers). */
+export interface AutoAnswersEvent { type: 'auto_answers'; session_id: Id; on: boolean }
+/** One question the switch answered with the agent's recommendation: a compact line in the planner chat. id = the question's id
+    (a round question's, or the Incoming card's); round_id = the planner round it belonged to (a card still showing is closed). */
+export interface AutoAnswerEvent {
+  type: 'auto_answer'; session_id: Id; id: string; agent: string; step: number | null; title: string; answer: string; round_id: string | null;
+}
 export interface StepUpdateEvent {
   type: 'step_update'; session_id: Id; n: number; status?: StepStatus; built?: string[]; report_path?: string;
   agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: Purpose | string | null;
@@ -257,7 +277,7 @@ export interface QueueItemEvent {
   suggestions?: PermissionSuggestion[];        // chat permission cards
   markdown?: string;                           // chat plan cards
 }
-export interface QueueResolvedEvent { type: 'queue_resolved'; id: Id; answer: string | null; by?: 'user' | 'timer' | 'autopilot' }
+export interface QueueResolvedEvent { type: 'queue_resolved'; id: Id; answer: string | null; by?: 'user' | 'timer' | 'autopilot' | 'auto' }
 export interface ByModel extends TokenCounts { model: string; cost_usd: number }
 export interface AgentUsageEvent extends TokenCounts {
   type: 'agent_usage';
@@ -301,8 +321,8 @@ export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?
 /** ok: a fresh crew_list follows. Not ok: error + problems (the agent-file check). */
 export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id; name?: string; error?: string; problems?: AgentProblem[] }
 export interface AgentRemovedEvent { type: 'agent_removed'; ok: boolean; dir_id?: Id; name?: string; error?: string }
-export interface ChatStartedEvent {
-  type: 'chat_started'; chat_id: Id; mode?: ChatMode; model?: string; cwd?: string; dir_id?: Id | null; busy?: boolean;
+export interface ChatStartedEvent extends ChatModelFields {
+  type: 'chat_started'; chat_id: Id; mode?: ChatMode; cwd?: string; dir_id?: Id | null; busy?: boolean;
   additional_dir_ids?: Id[];
   /** set when chat_from_plan opened the chat (mode plan; the plan follows as the first user message) */
   from_session_id?: Id | null;
@@ -319,8 +339,8 @@ export type ServerEvent =
   | SnapshotEvent | PlannerMessageEvent | UserMessageEvent | TypingEvent | QuestionRoundEvent | UsageEvent | CrewEvent
   | PlanMetaEvent | SystemEvent | SessionStartedEvent | SettingsEvent | DirectoryPickedEvent | DirListingEvent
   | FileContentEvent | FileSavedEvent | FileErrorEvent | BackupsEvent | PlanDraftEvent | RunStartedEvent
-  | PlannerModelEvent | PlannerChoiceEvent | AutopilotEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
-  | ActivityEvent | RunFinishedEvent | CrewListEvent | ChatStartedEvent | ChatTypingEvent | ChatDeltaEvent
+  | PlannerModelEvent | PlannerChoiceEvent | CliChoiceEvent | AutopilotEvent | AutoAnswersEvent | AutoAnswerEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
+  | ActivityEvent | RunFinishedEvent | CrewListEvent | ChatStartedEvent | ChatModelEvent | ChatTypingEvent | ChatDeltaEvent
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
   | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent;
 
@@ -330,8 +350,8 @@ export type ServerEventType = ServerEvent['type'];
 export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'snapshot', 'planner_message', 'user_message', 'typing', 'question_round', 'usage', 'crew', 'plan_meta', 'system',
   'session_started', 'settings', 'directory_picked', 'dir_listing', 'file_content', 'file_saved', 'file_error',
-  'backups', 'plan_draft', 'run_started', 'planner_model', 'planner_choice', 'autopilot', 'step_update', 'queue_item', 'queue_resolved',
-  'agent_usage', 'activity', 'run_finished', 'crew_list', 'chat_started', 'chat_typing', 'chat_delta', 'chat_message',
+  'backups', 'plan_draft', 'run_started', 'planner_model', 'planner_choice', 'cli_choice', 'autopilot', 'auto_answers', 'auto_answer', 'step_update', 'queue_item', 'queue_resolved',
+  'agent_usage', 'activity', 'run_finished', 'crew_list', 'chat_started', 'chat_model', 'chat_typing', 'chat_delta', 'chat_message',
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
   'git_repos', 'git_result',
 ];
@@ -360,7 +380,9 @@ export type UiMessage =
   | { type: 'visual_retry'; session_id: Id; set_id: string; option_id: string }
   | { type: 'planner_promote'; session_id: Id }
   | { type: 'planner_choose'; option_id: string; session_id?: Id }
+  | { type: 'cli_choose'; option_id: string }
   | { type: 'set_autopilot'; session_id: Id; on: boolean }
+  | { type: 'set_auto_answers'; session_id: Id; on: boolean }
   | { type: 'get_settings' }
   | { type: 'set_settings'; patch: Record<string, unknown> }
   | { type: 'add_directory'; path: string }

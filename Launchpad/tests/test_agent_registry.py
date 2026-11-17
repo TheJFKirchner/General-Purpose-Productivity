@@ -50,7 +50,7 @@ def run_plan(h, plan: dict, *, steps: int = 1):
 # ------------------------------------------------------------------ registry and crew_list
 def test_registry_builtins_folder_agents_and_purposes(project):
     agent_file(project, "copy-reviewer", purpose="reviewing")
-    agent_file(project, "csv-maker", purpose=None, tools=None)                  # no purpose -> building
+    agent_file(project, "csv-maker", purpose=None, tools=None)                  # no purpose -> other
     agent_file(project, "idea-planner", purpose="planning")                     # listed, not a step worker
     (project / ".claude" / "agents" / "broken.md").write_text("---\nname: Broken Name\n---\nx\n", encoding="utf-8")
     (project / ".claude" / "agents" / "launchpad-builder.md").write_text(
@@ -64,7 +64,7 @@ def test_registry_builtins_folder_agents_and_purposes(project):
         "orchestrator": "building", "pilot": "building"}
     assert reg["launchpad-builder"]["description"] != "impostor"
     assert reg["copy-reviewer"]["purpose"] == "reviewing" and reg["copy-reviewer"]["display_name"] == "Copy reviewer"
-    assert reg["csv-maker"]["purpose"] == "building"
+    assert reg["csv-maker"]["purpose"] == "other"
     assert reg["idea-planner"]["step_worker"] is False
     assert reg["Broken Name"]["problems"] and reg["Broken Name"]["step_worker"] is False
     assert [e["name"] for e in crew.step_agents(project)] == ["launchpad-builder", "copy-reviewer", "csv-maker"]
@@ -173,6 +173,43 @@ def test_step_runs_on_the_named_building_agent_with_builder_guards(harness, proj
     assert "| 1 | First thing | Csv maker | done |" in c.of("run_finished")[0]["markdown"]
     usage = [e for e in c.of("agent_usage") if e["role"] == "builder"]
     assert usage and usage[-1]["name"] == "Csv maker"
+
+
+def test_other_agent_takes_a_plan_step_with_builder_guards(harness, project):
+    agent_file(project, "odd-jobs", purpose="other", tools="Read, Write, Bash")
+    h = harness(responder=lambda ev: ({"type": "queue_response", "id": ev["id"], "decision": "deny"}
+                                      if ev.get("type") == "queue_item" else None))
+    got = []
+
+    def worker(msg):
+        got.append(msg)
+        return [fake.call("Write", {"file_path": "out/x.txt", "content": "a"}),
+                fake.call("Bash", {"command": "git push origin main"}),
+                fake.call("submit_report", report())]
+    fake.script("odd-jobs", [worker])
+    fake.script("launchpad-builder", [[fake.call("submit_report", report())]])
+    plan = {**ONE, "steps": [{**ONE["steps"][0], "agent": "odd-jobs"}]}
+    hub, c = run_plan(h, plan)
+    assert next(e for e in crew.registry(project) if e["name"] == "odd-jobs")["step_worker"] is True
+    assert c.of("plan_draft")[0]["steps"][0]["agent_purpose"] == "other"
+    assert got and "read-only" not in got[0]                                     # not read-only: guarded like building
+    assert ("Write", "(fake) ran Write", False) in h.tool_results()                # inside the project: allowed
+    perm = c.of("queue_item")[0]                                                  # the deny list reaches a card
+    assert perm["kind"] == "permission" and perm["agent"] == "Odd jobs" and "git push" in perm["title"]
+    assert "other" in crew.registry_note(project)                                # the planner's registry names it
+    entry = next(e for e in crew.registry(project) if e["name"] == "odd-jobs")
+    r = crew.load_step_worker(entry, engine="fake", project=project, tools=[]).resolved_tools()
+    assert "Write" in r.builtin_names and "Bash" in r.builtin_names and r.gated
+
+
+def test_unknown_purpose_is_listed_as_other_and_other_can_be_added(project):
+    agent_file(project, "mystery", purpose="banana")
+    reg = {e["name"]: e for e in crew.registry(project)}
+    assert reg["mystery"]["purpose"] == "other" and reg["mystery"]["problems"] and reg["mystery"]["step_worker"] is False
+    assert "other" in folder_agents.ADDABLE_PURPOSES and "other" in crew.PURPOSES
+    clean, problems = folder_agents.normalise({"name": "misc-helper", "description": "Odd jobs.", "purpose": "other",
+                                               "tools": ["Read", "Write", "Bash"], "instructions": "Do it."}, strict=True)
+    assert not problems and clean["purpose"] == "other" and clean["tools"] == ["Read", "Write", "Bash"]   # not read-only
 
 
 def test_agent_purpose_on_every_step_entry_incl_reconnect(harness, project):

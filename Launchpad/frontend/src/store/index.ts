@@ -12,7 +12,7 @@ export { useLaunchpad, getState, send, onActivityPing, sel };
 export { dispatch } from './reducer';
 export { actions } from './actions';
 export type * from './types';
-export type { FormField } from './selectors';
+export type { FormField, ModelPickerView, PickerHarness, PickerItem } from './selectors';
 
 /** Derived value from the whole state, recomputed only when the state changes. */
 export function useComputed<T>(fn: (st: AppState) => T): T {

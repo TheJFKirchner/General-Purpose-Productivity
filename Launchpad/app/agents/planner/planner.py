@@ -13,7 +13,11 @@
   read_markdown may open .md files in them (absolute paths)
 - Visual picks (app/agents/visualizer/visuals.py) reach the planner as short lines prefixed to the user's next message
 - No shell, no write/edit, no general file reading: read_markdown only opens .md files inside the project
-- ask_user questions -> question_round cards; round_answer -> session.answer()
+- ask_user questions -> question_round cards; round_answer -> session.answer(); every answered question is also
+  saved as its own file in the session's questions/ folder (sessionfiles.add_question)
+- Auto answers (session switch): a round whose questions ALL have a recommendation is answered at once with them
+  (no card; one auto_answer line per question, hub.auto_answered) and the planner carries on; a round with any
+  question lacking one waits as a normal card. Turning the switch on answers a waiting round the same way
 - write_plan -> validated plan.md draft + plan_draft event; only the user's approval starts a run
 - Harness and model (choices.py, the picker): loaded on the chosen harness's engine and start model; until the first
   message the session follows settings changes (configure); afterwards only promotion moves it. Auto-promote off =
@@ -209,6 +213,9 @@ class PlannerChat:
         self.lock = asyncio.Lock()
         self.round_no = 0
         self.rounds: dict[str, list] = {}
+        self.round_meta: dict[str, dict] = {}   # round id -> {asked_at, run}: for the question files
+        self.open_round: str | None = None      # a round card waiting for the user (Auto answers may answer it)
+        self.auto_next: dict | None = None      # the auto round_answer to run as the next turn
         self.first = True
         self.registry_dirty = False             # the folder's agents changed: tell the planner before the next message
         self.history: list[dict] = []           # for the reconnect snapshot: {role: user|assistant|system|round|answers, ...}
@@ -326,7 +333,63 @@ class PlannerChat:
                 out.append({"id": qid, "answer": a["text"], "kind": "free_text"})
         return out
 
+    def run_number(self) -> int | None:
+        """The run a planner question belongs to: the one in progress; none while planning before a launch."""
+        return self.ls.run_count if self.ls.running else None
+
+    def save_answers(self, msg: dict, qs: list) -> None:
+        """One file per answered question of a round (skipped ones get none)."""
+        meta = self.round_meta.get(msg.get("roundId"), {})
+        how = "auto" if msg.get("auto") else "user"
+        answers = msg.get("answers") or {}
+        for q in qs:
+            a = answers.get(q.id)
+            if not isinstance(a, dict):
+                continue
+            note = ""
+            if a.get("accepted"):
+                answer = q.recommended
+            elif a.get("option"):
+                answer, note = a["option"], str(a.get("text") or "")
+            elif a.get("text"):
+                answer = a["text"]
+            else:
+                continue
+            try:
+                self.ls.folder.add_question(
+                    title=q.question, asked_by="Planner", asked_at=meta.get("asked_at"), run=meta.get("run"),
+                    run_name=self.ls.hub.run_name(self.ls.id), no_run="Before launch",
+                    options=list(q.options or []), answer=str(answer), how=how, reason=q.why,
+                    recommended=q.recommended or "", note=note)
+            except OSError:
+                pass                                     # a file that cannot be written must not stop the chat
+
+    async def auto_answer_waiting(self) -> None:
+        """Auto answers was just turned on: answer the waiting round when every question has a recommendation."""
+        rid = self.open_round
+        qs = self.rounds.get(rid) if rid else None
+        if not qs or not all(str(q.recommended or "").strip() for q in qs) or self.lock.locked():
+            return
+        self.open_round = None
+        for q in qs:
+            await self.ls.hub.auto_answered(self.ls.id, id=q.id, agent=self.meter.name, step=None, title=q.question,
+                                            answer=str(q.recommended), round_id=rid)
+        await self.handle(self.auto_round_answer(rid, qs))
+
+    @staticmethod
+    def auto_round_answer(rid: str, qs: list) -> dict:
+        return {"type": "round_answer", "roundId": rid, "auto": True,
+                "answers": {q.id: {"accepted": True} for q in qs}}
+
     async def handle(self, msg: dict) -> None:
+        """One UI message; a round answered automatically carries straight on with the next turn."""
+        while msg is not None:
+            self.auto_next = None
+            await self._turn(msg)
+            msg = self.auto_next
+
+    async def _turn(self, msg: dict) -> None:
+        self.open_round = None
         kind = msg.get("type")
         if self.lock.locked():
             await self.emit({"type": "system", "text": "Still working on the last message, one moment."})
@@ -341,9 +404,11 @@ class PlannerChat:
             await self.meter.set_status("working")
             try:
                 if kind == "round_answer":
-                    self.history.append({"role": "answers", "roundId": msg.get("roundId"),
-                                         "answers": msg.get("answers") or {}, "skipped": bool(msg.get("skipped"))})
                     qs = self.rounds.get(msg.get("roundId"), self.session.pending_questions)
+                    if not msg.get("auto"):          # an auto round has its own history lines (hub.auto_answered)
+                        self.history.append({"role": "answers", "roundId": msg.get("roundId"),
+                                             "answers": msg.get("answers") or {}, "skipped": bool(msg.get("skipped"))})
+                    self.save_answers(msg, qs)
                     stream = self.session.answer_stream(self.round_answers(msg), questions=[q.to_dict() for q in qs])
                 else:
                     text = str(msg.get("text", ""))
@@ -374,10 +439,19 @@ class PlannerChat:
             self.round_no += 1
             rid = f"{self.ls.id}-r{self.round_no}"
             self.rounds[rid] = list(reply.questions)
+            self.round_meta[rid] = {"asked_at": dt.datetime.now(), "run": self.run_number()}
+            if (self.ls.auto_answers and reply.questions
+                    and all(str(q.recommended or "").strip() for q in reply.questions)):
+                for q in reply.questions:                # answered at once: lines only, no card
+                    await self.ls.hub.auto_answered(self.ls.id, id=q.id, agent=self.meter.name, step=None,
+                                                    title=q.question, answer=str(q.recommended), round_id=rid)
+                self.auto_next = self.auto_round_answer(rid, list(reply.questions))
+                return
             ev = {"type": "question_round", "id": rid, "round": self.round_no, "questions": [
                 {"id": q.id, "title": q.question, "body": q.why, "rec": q.recommended, "options": q.options}
                 for q in reply.questions]}
             self.history.append({"role": "round", "round": {k: v for k, v in ev.items() if k != "type"}})
+            self.open_round = rid
             await self.emit(ev)
             await self.meter.set_status("waiting")
         else:

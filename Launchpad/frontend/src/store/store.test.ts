@@ -43,6 +43,8 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
     choice: { option_id: 'claude:sonnet', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet' }, auto_promote: true, top_model: 'opus', top_label: 'Opus',
     promotion_off: false, pinned: null, overridden: [], rules: { markdown: '# Rules', path: 'app/agents/planner/promotion.md' } },
   autopilot: { session_id: 'S1', on: true },
+  auto_answers: { session_id: 'S1', on: true },
+  auto_answer: { session_id: 'S1', id: 'q1', agent: 'Planner', step: null, title: 'Which?', answer: 'A', round_id: null },
   step_update: { session_id: 'S1', n: 1, status: 'done', built: ['x.txt'], report_path: 'step-1.md', agent: 'copy-reviewer', agent_display: 'Builder', agent_fallback: true },
   queue_item: { id: 'q1', session_id: 'S1', chat_id: null, kind: 'question', agent: 'Builder', agent_id: 'b1', step: 1, title: 'Which?', body: 'b', rec: 'A', options: ['A', 'B'], blocking: false, timeout_s: 180, expires_at: null },
   queue_resolved: { id: 'q1', answer: 'A', by: 'timer' },
@@ -58,7 +60,11 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   agent_removed: { ok: false, dir_id: 'd1', name: 'copy-reviewer', error: 'locked' },
   git_repos: { available: true, repos: [] },
   git_result: { repo_id: 'nope', op: 'refresh', ok: false, committed: false, message: 'unknown', repo: null },
-  chat_started: { chat_id: 'c1', mode: 'default', model: 'sonnet', cwd: 'C:/p', dir_id: 'd1' },
+  cli_choice: { options: [{ id: 'claude:sonnet', harness: 'claude', harness_label: 'Claude', model: 'sonnet', model_label: 'Sonnet', label: 'Claude · Sonnet', available: true, note: null },
+    { id: 'claude:opus', harness: 'claude', harness_label: 'Claude', model: 'opus', model_label: 'Opus', label: 'Claude · Opus', available: true, note: null }],
+    choice: { option_id: 'claude:opus', harness: 'claude', model: 'opus', label: 'Claude · Opus' }, overridden: [] },
+  chat_started: { chat_id: 'c1', mode: 'default', model: 'sonnet', harness: 'claude', label: 'Claude · Sonnet', option_id: 'claude:sonnet', started: false, cwd: 'C:/p', dir_id: 'd1' },
+  chat_model: { chat_id: 'c1', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet', option_id: 'claude:sonnet', started: true },
   chat_typing: { chat_id: 'c1', on: true },
   chat_delta: { chat_id: 'c1', text: 'Hel' },
   chat_message: { chat_id: 'c1', role: 'assistant', markdown: 'Hello' },
@@ -146,7 +152,8 @@ describe('reducer', () => {
     dispatch({ type: 'crew_list', ...SAMPLES.crew_list });
     const st = getState(), defs = st.crewDefs!;
     expect(defs.map(sel.purposeOf)).toEqual(['building', 'reviewing']);
-    expect(sel.purposeOf({ name: 'x', builtin: false })).toBe('building');                  // folder agent with no purpose
+    expect(sel.purposeOf({ name: 'x', builtin: false })).toBe('other');                     // folder agent with no purpose
+    expect(sel.purposeOf({ name: 'y', builtin: false, purpose: 'nonsense' })).toBe('other');
     expect(sel.purposeOf({ name: 'launchpad-astronaut', role: 'astronaut', builtin: true })).toBe('exploring');
     expect(sel.stepAgent(defs, { agent: null, agent_display: 'Builder' })).toBeNull();
     expect(sel.stepAgent(defs, { agent: 'copy-reviewer', agent_display: 'Copy reviewer' })).toMatchObject({ purpose: 'reviewing', label: 'Copy reviewer', fallback: false });
@@ -275,6 +282,32 @@ describe('reducer', () => {
     expect(getState().queue.find(i => i.id === 'report:S1')?.leaving).toBe(true);
     vi.advanceTimersByTime(300);
     expect(getState().queue.find(i => i.id === 'report:S1')).toBeUndefined();
+  });
+
+  it('pickers group the flat options by CLI; the CLI chat picker follows the open chat and notes a pending choice', () => {
+    const hs = sel.pickerHarnesses(SAMPLES.planner_choice.options as never);
+    expect(hs.map(h => [h.harness, h.label, h.available, h.disabled, h.note, h.first])).toEqual([
+      ['claude', 'Claude', true, false, '', 'claude:sonnet'], ['cursor', 'Cursor', false, true, 'not available yet', 'cursor:sonnet']]);
+    dispatch({ type: 'cli_choice', ...SAMPLES.cli_choice, choice: { option_id: 'claude:sonnet', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet' } });
+    let v = sel.cliPickerView(getState())!;
+    expect(v.label).toBe('Claude · Sonnet');                       // no chat yet: what the next chat starts on
+    expect(v.items.map(i => i.label)).toEqual(['Sonnet', 'Opus']);
+    dispatch({ type: 'chat_started', ...SAMPLES.chat_started });
+    actions.chooseCli('claude:opus');
+    expect(sent.at(-1)).toEqual({ type: 'cli_choose', option_id: 'claude:opus' });
+    expect(sel.cliPickerView(getState())!.choosing).toBe('claude:opus');
+    dispatch({ type: 'chat_model', chat_id: 'c1', harness: 'claude', model: 'opus', label: 'Claude · Opus', option_id: 'claude:opus', started: false });
+    dispatch({ type: 'cli_choice', ...SAMPLES.cli_choice });
+    v = sel.cliPickerView(getState())!;
+    expect(v.choosing).toBeNull();
+    expect(v.label).toBe('Claude · Opus'); expect(v.note).toBe('');        // unstarted: taken at once, no note
+    expect(getState().chats.c1.log.some(e => e.kind === 'sys' && e.text === 'This chat now runs on Claude · Opus.')).toBe(true);
+    actions.sendChat('go');                                         // written: CLI and model fixed
+    dispatch({ type: 'cli_choice', ...SAMPLES.cli_choice, choice: { option_id: 'claude:sonnet', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet' } });
+    v = sel.cliPickerView(getState())!;
+    expect(v.label).toBe('Claude · Opus');
+    expect(v.note).toBe('Claude · Sonnet applies to your next new chat; this chat keeps Claude · Opus.');
+    expect(v.items.find(i => i.id === 'claude:sonnet')).toMatchObject({ next: true, hint: 'your next new chat starts here' });
   });
 });
 

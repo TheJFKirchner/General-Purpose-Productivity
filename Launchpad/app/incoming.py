@@ -9,6 +9,9 @@
   every open item of one with None
 - Permission cards carry no recommendation (rec null): the page must not badge a choice
 - Builder permission cards are timed (deny on expiry); autopilot resolves open ones with "allow", by "autopilot"
+- Auto answers (per session, hub.set_auto_answers): a question WITH a recommendation is answered at once with it
+  (by "auto", no card; the hub adds the chat line); one without waits as a normal card. auto_open() does the same for
+  questions already waiting when the switch is turned on. Permission and plan items are never affected
 """
 from __future__ import annotations
 
@@ -58,8 +61,12 @@ class Incoming:
                   chat_id: str | None = None, agent_id: str | None = None, step: int | None = None,
                   rec: str | None = None, options: list[str] | None = None, timeout_s: float | None = None,
                   extra: dict | None = None, timer_answer: str | None = None) -> tuple[str | None, str, dict]:
-        """-> (answer, by, response) with by = "user" | "timer" | "autopilot" | "stopped"; response = the UI
+        """-> (answer, by, response) with by = "user" | "timer" | "autopilot" | "auto" | "stopped"; response = the UI
         message. On timer expiry the answer is timer_answer if given, else the recommendation."""
+        if kind == "question" and session_id and str(rec or "").strip() and self._auto_on(session_id):
+            qid = f"q{next(self._ids)}"
+            await self.hub.auto_answered(session_id, id=qid, agent=agent, step=step, title=title, answer=str(rec))
+            return str(rec), "auto", {}
         expires = None
         if timeout_s is not None:
             expires = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=timeout_s)).isoformat()
@@ -79,6 +86,21 @@ class Incoming:
             raise
         finally:
             self.items.pop(item.id, None)
+
+    def _auto_on(self, session_id: str) -> bool:
+        ls = getattr(self.hub, "sessions", {}).get(session_id)
+        return bool(ls is not None and getattr(ls, "auto_answers", False))
+
+    async def auto_open(self, session_id: str) -> int:
+        """Auto answers just turned on: answer every waiting question of the session that has a recommendation."""
+        n = 0
+        for item in list(self.items.values()):
+            if item.session_id == session_id and item.kind == "question" and str(item.rec or "").strip():
+                await self.hub.auto_answered(session_id, id=item.id, agent=item.agent, step=item.step,
+                                             title=item.title, answer=str(item.rec))
+                await self._resolve(item, str(item.rec), "auto")
+                n += 1
+        return n
 
     async def _resolve(self, item: Item, answer, by: str, response: dict | None = None) -> None:
         if item.future.done():

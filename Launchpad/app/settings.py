@@ -18,6 +18,7 @@ class Settings:
     promotion_criteria_path: str | None = None # replacement criteria file (default app/agents/planner/promotion.md)
     visual_model: str | None = None            # visual agent (Visualizer); None = the agent file's model (haiku)
     pilot_model: str | None = None             # CLI chat; None = the agent file's model (sonnet)
+    pilot_harness: str | None = None           # CLI chat's CLI; None = the launch engine's (app/agents/claude_code/choices.py)
     question_timeout_s: float = 180            # timed builder questions auto-answer after this
     permission_timeout_s: float = 180          # builder permission cards are DENIED after this (separate setting)
     autopilot_default: bool = False            # new sessions start with autopilot on/off

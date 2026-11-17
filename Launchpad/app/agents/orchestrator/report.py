@@ -1,5 +1,5 @@
 """report.md for a finished run (written by code, never by an agent): the orchestrator's summary, built list and
-open issues, plus the steps table, every assumption, autopilot approvals, step issues and per-agent costs.
+open issues, plus the steps table, every assumption, autopilot approvals, the run's question files, step issues and per-agent costs.
 Also refreshes run.total_cost / run.planner_cost (sent with run_finished)."""
 from __future__ import annotations
 
@@ -30,6 +30,12 @@ def render_report(run, status: str, issue: str | None) -> str:
     out += [ln for ln in logged if not ln.endswith("_(autopilot)_")] or ["- none"]
     if run.autopilot_log:
         out += ["", "## Approved by autopilot (no card shown)"] + [f"- {x}" for x in run.autopilot_log]
+    asked = f.questions_of_run(run.ls.run_count)
+    if asked:
+        out += ["", "## Questions"]
+        for q in asked:
+            how = {"auto": "answered automatically", "timer": "timed out"}.get(q["how"], "answered by the user")
+            out.append(f"- [{q['name']}](questions/{q['name']}): {one_line(q['title'], 120)} ({how}: {one_line(q['answer'], 80)})")
     issues = list(final["issues"]) + ([issue] if issue else [])
     for n in sorted(run.results):
         issues += [f"Step {n}: {i}" for i in run.results[n]["issues"]]

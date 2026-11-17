@@ -153,13 +153,23 @@ export const plannerBusy = (st: S): boolean => { const s = curSess(st); return s
 export const codeBusy = (st: S): boolean => Object.values(st.chats).some(c => c.busy);
 
 /* ---------- Crew ---------- */
+/** The model line of a crew card: the CLI chat's card shows the CLI and model actually chosen (cli_choice, e.g. "Claude · Sonnet"),
+    every other agent its own file's model. */
+export function crewModel(st: S, a: CrewAgentDef): string {
+  if (a.role === 'pilot') {
+    const c = curChat(st);
+    if (c && c.started && c.label) return `This chat: ${c.label}`;            // the running chat's own choice
+    if (st.cliChoice?.choice?.label) return `New chats: ${st.cliChoice.choice.label}`;   // saved choice, not a running chat's
+  }
+  return modelName(a.model);
+}
 const PURPOSE_SET = new Set<string>(PURPOSES);
 const ROLE_PURPOSE: Record<string, Purpose> = { planner: 'planning', visual: 'planning', astronaut: 'exploring', orchestrator: 'building', builder: 'building', pilot: 'building' };
-/** An agent's purpose: its own field when valid, else by role for built-ins; a folder agent with none counts as building. */
+/** An agent's purpose: its own field when valid, else by role for built-ins; a folder agent with a missing or unknown one is Other. */
 export function purposeOf(a: CrewAgentDef | null | undefined): Purpose {
   if (!a) return 'building';
   if (a.purpose && PURPOSE_SET.has(a.purpose)) return a.purpose as Purpose;
-  return (a.builtin !== false && ROLE_PURPOSE[String(a.role || '')]) || 'building';
+  return (a.builtin !== false && ROLE_PURPOSE[String(a.role || '')]) || 'other';
 }
 /** Built-in = one of Launchpad's own agents (crew_list.builtin; older servers: everything listed was built in). */
 export const isBuiltin = (a: CrewAgentDef): boolean => a.builtin !== false;
@@ -217,16 +227,32 @@ export function problemText(p: AgentProblem): string {
   return p.field ? `${p.field}: ${msg}` : msg;
 }
 
-/* ---------- planner picker (under the planner's chat box) ---------- */
+/* ---------- model pickers (under the planner's and the CLI chat's boxes; components/ModelPicker.tsx) ---------- */
 export interface PickerItem {
-  id: string; label: string; harness: string; model: string; available: boolean;
-  /** what the current plan runs on now */
+  id: string;
+  /** the model's own name in the list ("Sonnet"); full = "Claude · Sonnet" */
+  label: string; full: string; harness: string; model: string; available: boolean;
+  /** what the current plan / chat runs on now */
   current: boolean;
-  /** what the next new plan starts on, when that differs from what this plan started on */
+  /** what the next new plan / chat starts on, when that differs from what this one started on */
   next: boolean;
   /** one short line under the label ("not available yet", "promote this plan · costs more", "from your next new plan") */
   hint: string;
   disabled: boolean;
+}
+/** One entry of the "CLI" dropdown (a harness). Unavailable ones are listed with the server's note and cannot be picked. */
+export interface PickerHarness { harness: string; label: string; available: boolean; note: string; disabled: boolean; first: string | null }
+/** The server's flat options grouped by harness, in the server's order; first = the id of that CLI's first model. */
+export function pickerHarnesses(options: { id: string; harness: string; harness_label: string; available: boolean; note: string | null }[], locked = false): PickerHarness[] {
+  const out: PickerHarness[] = [];
+  for (const o of options) {
+    let h = out.find(x => x.harness === o.harness);
+    if (!h) out.push(h = { harness: o.harness, label: o.harness_label || o.harness, available: false, note: '', disabled: true, first: o.id });
+    if (o.available) h.available = true;
+    else if (!h.note) h.note = o.note || 'not available yet';
+  }
+  for (const h of out) { if (h.available) h.note = ''; h.disabled = !h.available || locked; }
+  return out;
 }
 /** The picker from planner_choice + the current session's planner_model. Everything it says comes from the server:
     the options and their availability, what the session can switch to now (switchable_to), what the next plan starts on. */
@@ -249,13 +275,18 @@ export function plannerPickerView(st: S) {
     else if (started) hint = 'from your next new plan';
     const next = !!pending && pending.option_id === o.id && !isCurrent;
     if (next) hint = 'your next new plan starts here';
-    return { id: o.id, label: o.label, harness: o.harness, model: o.model, available: o.available, current: isCurrent,
+    return { id: o.id, label: o.model_label || modelName(o.model), full: o.label, harness: o.harness, model: o.model, available: o.available, current: isCurrent,
       next, hint, disabled: !o.available || !!pc.pinned };
   });
   const note = pc.pinned ? `The planner model is pinned to ${modelName(pc.pinned)} for this launch.`
     : pending ? `${pending.label} applies to your next new plan; this plan keeps ${label}.` : '';
+  const curItem = items.find(i => i.current);
   return {
     label, items, note, pending, started,
+    harnesses: pickerHarnesses(pc.options, !!pc.pinned),
+    /** the CLI the dropdown shows when the menu opens: the one the current plan runs on */
+    harness: curItem ? curItem.harness : (s && s.plannerHarness) || pc.choice.harness,
+    nextLabel: 'next plan',
     promoted: !!(s && s.promoted),
     choosing: st.ui.pickerChoosing,
     auto: pc.auto_promote,
@@ -263,9 +294,44 @@ export function plannerPickerView(st: S) {
     /** start = top for new plans: nothing to promote to */
     promotionOff: pc.promotion_off,
     rules: pc.rules,
-    title: s && s.promoted ? `Promoted ${s.promoBy === 'user' ? 'by you' : 'by its criteria'}${s.promoReason ? ': ' + s.promoReason : ''}` : 'Harness and model for the planner',
+    title: s && s.promoted ? `Promoted ${s.promoBy === 'user' ? 'by you' : 'by its criteria'}${s.promoReason ? ': ' + s.promoReason : ''}` : 'CLI and model for the planner',
   };
 }
+
+/** The CLI chat's picker from cli_choice + the open chat (chat_started / chat_model). A chat nobody has written to takes
+    a choice at once; a chat in progress keeps its CLI and model, and a choice is for the next new chat (noted). With no
+    chat open, the choice is what the next chat starts on. */
+export function cliPickerView(st: S) {
+  const cc = st.cliChoice; if (!cc) return null;
+  const c = curChat(st);
+  const written = !!(c && (c.written || c.log.some(e => e.kind === 'bubble' && e.who === 'me')));
+  const own = c ? c.optionId || (c.harness && c.model ? `${c.harness}:${c.model}` : null) : null;
+  const current = own || cc.choice.option_id;
+  const pending = written && own != null && cc.choice.option_id !== own ? cc.choice : null;
+  const label = (c && c.label) || cc.choice.label;
+  const items: PickerItem[] = cc.options.map(o => {
+    const isCurrent = o.id === current;
+    let hint = '';
+    if (!o.available) hint = o.note || 'not available yet';
+    else if (written && !isCurrent) hint = 'from your next new chat';
+    const next = !!pending && pending.option_id === o.id && !isCurrent;
+    if (next) hint = 'your next new chat starts here';
+    return { id: o.id, label: o.model_label || modelName(o.model), full: o.label, harness: o.harness, model: o.model, available: o.available,
+      current: isCurrent, next, hint, disabled: !o.available };
+  });
+  const curItem = items.find(i => i.current);
+  return {
+    label, items, pending, started: written,
+    note: pending ? `${pending.label} applies to your next new chat; this chat keeps ${label}.` : '',
+    harnesses: pickerHarnesses(cc.options),
+    harness: curItem ? curItem.harness : (c && c.harness) || cc.choice.harness,
+    nextLabel: 'next chat',
+    choosing: st.ui.cliChoosing,
+    title: written ? 'CLI and model of this chat (fixed after its first message)' : 'CLI and model for the CLI chat',
+  };
+}
+/** What both pickers have in common (the props of components/ModelPicker.tsx). */
+export type ModelPickerView = Pick<NonNullable<ReturnType<typeof cliPickerView>>, 'label' | 'items' | 'note' | 'harnesses' | 'harness' | 'nextLabel' | 'choosing' | 'title'>;
 
 /* ---------- visuals ---------- */
 export function curVisSet(st: S): VisualSet | null {

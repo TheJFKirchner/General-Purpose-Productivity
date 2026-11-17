@@ -8,7 +8,7 @@
   primary), fixed when it starts (extra_dirs); the session's skills are discovered from those folders (app/skills.py)
 - UI -> here: user_message, round_answer, plan_approve, queue_response, queue_dismiss, get_crew,
   report_to_planner, run_stop, new_session, chat_new, chat_message, chat_set_mode, chat_stop,
-  visual_pick, visual_tweak, visual_retry, set_autopilot, planner_promote, planner_choose,
+  visual_pick, visual_tweak, visual_retry, set_autopilot, set_auto_answers, planner_promote, planner_choose, cli_choose,
   agent_draft, agent_create, agent_remove, chat_from_plan, set_agent_skills,
   git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py)
 - Agent use counter: count_use(name) -> store + agent_uses event (planner session, explore, step, run, visual
@@ -17,6 +17,13 @@
   available choice at once; a running one only promotion (its top model); anything else is remembered for the next
   new plan (settings planner_harness / planner_start_model, per user). planner_choice is sent on connect and after
   every change of a planner setting or of the app's files (the rules text)
+- CLI chat picker (app/agents/claude_code/choices.py, same table): cli_choose -> remembered per user (pilot_harness /
+  pilot_model); chats nobody has written to yet reload at once (chat_model), chats in progress keep theirs (the
+  choice is for the next new chat). cli_choice is sent on connect and after every change of those settings
+- Auto answers (per session, off by default, `auto_answers` on LaunchSession): set_auto_answers; while on, every
+  question WITH a recommendation (planner rounds, builder questions) is answered at once with it and shows as an
+  auto_answer line in the planner chat (auto_answered; also kept in the chat history for a reconnect); questions
+  without one wait as usual; permission cards are never touched. Turning it on answers the waiting ones too
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -33,6 +40,7 @@ from . import plan as plan_mod
 from . import skills as skills_mod
 from .activity import log_line
 from .agents import crew, folder_agents
+from .agents.claude_code import choices as cli_choices
 from .agents.claude_code.pilot import PilotChat
 from .agents.drafter import drafter
 from .agents.orchestrator.run import Run
@@ -65,6 +73,7 @@ class LaunchSession:
         self.approved_revision = 0                 # the draft revision the latest run was started from
         self.report_sent = False                   # run report already handed to the planner
         self.autopilot = hub.settings.autopilot_default   # approve every builder permission request (no card)
+        self.auto_answers = False                  # answer every question that has a recommendation with it
         self.astronaut_meter = None                # one Explorer per session (app/agents/explorer/astronaut.py)
         self.visuals = VisualBoard(self)           # visual sidecar sets (app/agents/visualizer/visuals.py)
         self.chat = PlannerChat(self)
@@ -181,7 +190,7 @@ class Hub:
         self.meters: list = []
         self.recent_activity: deque = deque(maxlen=ACTIVITY_SNAPSHOT)
         self.incoming = Incoming(self)
-        self.sessions: dict[str, LaunchSession] = {}
+        self.sessions: dict[str, LaunchSession] = {}   # in the order the front end letters them (Run A, B, ...)
         self.chats: dict[str, PilotChat] = {}       # regular sessions (Pilot), several may coexist
         self.current: LaunchSession = self._new()
 
@@ -223,6 +232,15 @@ class Hub:
                   for k, spec in SPECS.items()}
         return {"type": "settings", "directories": dirs, "values": values, "can_pick_directory": self.picker is not None,
                 "additional_dir_ids": self.store.additional_ids()}
+
+    def run_name(self, session_id: str) -> str:
+        """The app's own letter for a session's run ("A", "B", ... "AA"), as the front end shows it ("Run A")."""
+        n = list(self.sessions).index(session_id) + 1 if session_id in self.sessions else 0
+        s = ""
+        while n > 0:
+            n, r = divmod(n - 1, 26)
+            s = chr(65 + r) + s
+        return s
 
     def _new(self, did: str | None = None) -> LaunchSession:
         did, path = self.directory(did)
@@ -272,7 +290,7 @@ class Hub:
                               "planner_cost_usd": round(self.session_costs(ls.id)[1], 6),
                               "visual_sets": ls.visuals.snapshot(),
                               "plan_revision": ls.draft_revision, "draft_pending": ls.draft_pending,
-                              "runs": ls.run_count, "autopilot": ls.autopilot,
+                              "runs": ls.run_count, "autopilot": ls.autopilot, "auto_answers": ls.auto_answers,
                               **{k: v for k, v in ls.chat.model_event().items() if k not in ("type", "session_id")}}
                              for ls in self.sessions.values()],
                 "chats": [c.snapshot() for c in self.chats.values()]}
@@ -294,7 +312,7 @@ class Hub:
         """New UI connection: register and send a snapshot of everything in flight."""
         self.clients[send] = asyncio.Lock()
         engine = "fake engine (demo, zero tokens)" if self.settings.engine == "fake" else self.current.chat.agent.model
-        snapshot = [self.snapshot_event(), self.settings_event(), self.choice_event(),
+        snapshot = [self.snapshot_event(), self.settings_event(), self.choice_event(), self.cli_choice_event(),
                     {"type": "plan_meta", "name": "Launchpad", "mode": "Chat", "status": "Ready"},
                     {"type": "system", "text": f"Connected to the planner ({engine}). Project: {self.settings.project.name}."}]
         for ls in self.sessions.values():
@@ -389,8 +407,12 @@ class Hub:
                 await self.system(f"Planner: {e}", ls.id)
         elif kind == "planner_choose":
             await self.planner_choose(msg)
+        elif kind == "cli_choose":
+            await self.cli_choose(msg)
         elif kind == "set_autopilot":
             await self.set_autopilot(str(msg.get("session_id") or self.current.id), bool(msg.get("on")))
+        elif kind == "set_auto_answers":
+            await self.set_auto_answers(str(msg.get("session_id") or self.current.id), bool(msg.get("on")))
         elif kind in ("visual_pick", "visual_tweak", "visual_retry"):
             ls = self.sessions.get(str(msg.get("session_id") or ""))
             if ls is None:
@@ -503,9 +525,13 @@ class Hub:
                     self.store.set_additional(patch.pop("additional_dir_ids"))
                 if "planner_harness" in patch:
                     self._check_harness(patch["planner_harness"])
+                if patch.get("pilot_harness"):                           # empty = the launch engine's CLI
+                    self._check_harness(patch["pilot_harness"])
                 clean = self._apply_settings(patch)                      # validated + saved; live
                 if any(k in choices.PLANNER_SETTINGS for k in clean):
                     await self.planner_settings_changed()
+                if any(k in cli_choices.CLI_SETTINGS for k in clean):
+                    await self.cli_settings_changed()
             elif kind == "add_directory":
                 self.store.add(msg.get("path") or "")
             elif kind == "remove_directory":
@@ -624,6 +650,34 @@ class Hub:
         self._apply_settings({"planner_harness": opt["harness"], "planner_start_model": opt["model"]})
         await self.planner_settings_changed()
 
+    # ---------------------------------------------------------------- CLI chat picker
+    def cli_choice_event(self) -> dict:
+        """cli_choice: the CLI chat's CLI-and-model options (same table as the planner's) and what the next new chat
+        starts on (settings pilot_harness + pilot_model, per user)."""
+        return cli_choices.choice_event(self.settings, self.overridden)
+
+    async def cli_settings_changed(self) -> None:
+        """pilot_harness / pilot_model changed: chats nobody has written to yet reload with it (chat_model); chats in
+        progress keep theirs (the choice is for the next new chat); then a fresh cli_choice."""
+        for chat in self.chats.values():
+            if not chat.started:
+                chat.configure()
+                await self.emit(chat.model_event())
+        await self.emit(self.cli_choice_event())
+
+    async def cli_choose(self, msg: dict) -> None:
+        """The CLI chat's picker: option_id (choices.option_id) -> remembered per user (pilot_harness + pilot_model);
+        chats nobody has written to take it at once, a chat in progress keeps its own (the page says so). Independent
+        of the planner's choice."""
+        opt = cli_choices.find(str(msg.get("option_id") or ""), self.settings)
+        if opt is None or not opt["available"]:
+            what = opt["label"] + " is " + choices.NOT_AVAILABLE if opt else "unknown choice"
+            await self.system(f"CLI: {what}.")
+            await self.emit(self.cli_choice_event())
+            return
+        self._apply_settings({"pilot_harness": opt["harness"], "pilot_model": opt["model"]})
+        await self.cli_settings_changed()
+
     async def system(self, text: str, session_id: str | None = None) -> None:
         await self.emit({"type": "system", "text": text, **({"session_id": session_id} if session_id else {})})
 
@@ -682,6 +736,29 @@ class Hub:
         await self.emit({"type": "autopilot", "session_id": ls.id, "on": on})
         if on:
             await self.incoming.resolve_open(ls.id, kind="permission", answer="allow", by="autopilot")
+
+    async def set_auto_answers(self, session_id: str, on: bool) -> None:
+        """Per-session switch. Turning it on answers the questions already waiting that have a recommendation."""
+        ls = self.sessions.get(session_id)
+        if ls is None:
+            await self.system("That session is not open.")
+            return
+        ls.auto_answers = on
+        await self.emit({"type": "auto_answers", "session_id": ls.id, "on": on})
+        if on:
+            await self.incoming.auto_open(ls.id)
+            await ls.chat.auto_answer_waiting()
+
+    async def auto_answered(self, session_id: str, *, id: str, agent: str, step: int | None, title: str, answer: str,
+                            round_id: str | None = None) -> None:
+        """One question answered by the Auto answers switch: a compact line in the planner chat (kept in its history)."""
+        ls = self.sessions.get(session_id)
+        if ls is None:
+            return
+        ev = {"type": "auto_answer", "session_id": ls.id, "id": id, "agent": agent, "step": step, "title": title,
+              "answer": answer, "round_id": round_id}
+        ls.chat.history.append(ev)
+        await self.emit(ev)
 
     async def stop(self, session_id: str) -> None:
         ls = self.sessions.get(session_id)

@@ -13,6 +13,7 @@ export const MODE_HINT: Record<ChatMode, string> = {
   plan: 'Read-only: the CLI explores and proposes a plan, nothing is changed',
 };
 
+export const AUTO_ANSWERS_HINT = "Auto answers: while on, every question the agents ask in this plan is answered at once with the agent's recommended answer, so work carries on while you are away. A question with no recommended answer still waits for you. Permission requests are not affected (that is Autopilot).";
 export const AP_HINT = 'Autopilot approves every builder permission request without showing a card. No exceptions: that includes git push and writes outside the working folder.';
 
 /** Display names of the six built-in roles (the role ids and agent file names stay as they are). */
@@ -25,14 +26,15 @@ export const roleLabel = (r: unknown): string => ROLE_LABEL[String(r || '')] || 
 export const agentLabel = (n: unknown): string => { const t = String(n ?? ''); return ROLE_LABEL[t] || t; };
 
 /** Agent purposes, in the order Crew shows them; added agents may be any but planning. */
-export const PURPOSES = ['planning', 'exploring', 'building', 'reviewing'] as const;
-export const ADDABLE_PURPOSES = ['exploring', 'building', 'reviewing'] as const;
-export const PURPOSE_LABEL: Record<string, string> = { planning: 'Planning', exploring: 'Exploring', building: 'Building', reviewing: 'Reviewing' };
+export const PURPOSES = ['planning', 'exploring', 'building', 'reviewing', 'other'] as const;
+export const ADDABLE_PURPOSES = ['exploring', 'building', 'reviewing', 'other'] as const;
+export const PURPOSE_LABEL: Record<string, string> = { planning: 'Planning', exploring: 'Exploring', building: 'Building', reviewing: 'Reviewing', other: 'Other' };
 export const PURPOSE_HINT: Record<string, string> = {
   planning: 'Shapes the work with you before anything is built',
   exploring: 'Looks things up; read-only (no write, edit or shell tools)',
   building: 'Does a plan step; gets the Builder\'s permission cards and guards',
   reviewing: 'Checks work; read-only (no write, edit or shell tools)',
+  other: "Anything else; guarded like building (permission cards and the Builder's checks)",
 };
 /** Tools an exploring or reviewing agent never gets, whatever its file lists. */
 export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'];

@@ -7,12 +7,12 @@
   CLI (role pilot, the plain chat in the CLI harness); folder agents: their name with dashes as spaces ("copy-reviewer" -> "Copy reviewer")
   here -> UI
     snapshot {current_session_id, sessions:[{session_id, dir_id, cwd, folder, chat:[...], report_sent, running, total_cost_usd,
-              planner_cost_usd, visual_sets:[...], plan_revision, draft_pending, runs, autopilot,
-              model, promoted, reason, by, + the other planner_model fields}], chats:[{id, dir_id, additional_dir_ids, mode, model, cwd, busy,
-              history:[{role: user|assistant, markdown}]}]}
+              planner_cost_usd, visual_sets:[...], plan_revision, draft_pending, runs, autopilot, auto_answers,
+              model, promoted, reason, by, + the other planner_model fields}], chats:[{id, dir_id, additional_dir_ids, mode, model,
+              harness, label, option_id, started, cwd, busy, history:[{role: user|assistant, markdown}]}]}
              (first event on every connection; then the replay events below)
              planner chat entries: {role: user|assistant|system, text} · {role: round, round:{id, round, questions}}
-             · {role: answers, roundId, answers, skipped}
+             · {role: answers, roundId, answers, skipped} · an auto_answer event (see below; replayed as a line)
     planner_message {text, session_id} · typing {on} · question_round {id, round, questions:[{id,title,body,rec,options}]}
     usage {scope: "app", tokens, cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}
           (= the plain sum of every agent_usage, all sessions and chats incl. the planner; tokens = the four counts,
@@ -29,9 +29,10 @@
         its own primary; new sessions and chats only)
       - settings: question_timeout_s, permission_timeout_s, visual_model (now); autopilot_default,
         planner_start_model, planner_top_model, planner_harness (default claude), planner_auto_promote (default
-        true), promotion_window_turns, promotion_criteria_path, pilot_model (new_sessions; a planner nobody has
-        written to yet is reloaded with a new planner setting at once; planner_harness must be a known harness that is
-        available, else system "Settings: ..."). Stored in <home>/.launchpad/settings.json; a launch option overrides for that launch
+        true), promotion_window_turns, promotion_criteria_path, pilot_model, pilot_harness (default null = the
+        launch engine's CLI) (new_sessions; a planner nobody has written to yet is reloaded with a new planner
+        setting at once, a CLI chat nobody has written to with a new pilot setting; planner_harness / pilot_harness
+        must be a known harness that is available, else system "Settings: ..."). Stored in <home>/.launchpad/settings.json; a launch option overrides for that launch
         (overridden_by_launch) until the setting is changed from the page
     directory_picked {path: string|null}  (reply to pick_directory; the page then sends add_directory)
     dir_listing {root, path, entries:[{name, type: dir|file, size, mtime, kind: markdown|text|binary|too_large|null,
@@ -65,7 +66,7 @@
       - skills = skill names the plan names for the step (absent when none): its worker gets them on top of its own
         allowlist; skills_unknown = those not found in the session's folders (ignored at run time; show greyed)
       - agent = the step's agent name, null = the Builder; agent_display = who will run it ("Builder" when null);
-        agent_purpose = that agent's purpose (planning|exploring|building|reviewing; "building" for the Builder):
+        agent_purpose = that agent's purpose (planning|exploring|building|reviewing|other; "building" for the Builder):
         colour steps by this, not by a folder's crew_list;
         agent_fallback: true = the named agent is missing / broken / not a step worker here, so the Builder runs it
       - revision counts drafts in the session (1, 2, ...); previous_runs > 0 = a revised plan after a run (send-back).
@@ -96,6 +97,16 @@
         and that has started shows it as "applies to your next new plan". promotion_off = start = top; pinned =
         --model (no choosing); rules = the promotion criteria text (read-only in the picker)
       - sent on connect and after any change of a planner setting (picker, set_settings) or of the app's files
+      - the page groups options by harness: a "CLI" dropdown (harness = "CLI" in the UI; unavailable ones listed,
+        not selectable), then that CLI's models; changing the CLI picks its first model
+    cli_choice {options:[same shape as planner_choice options], choice: {option_id, harness, model, label},
+                overridden:[setting names]}
+      - the CLI chat's picker (under the CLI chat's box; same grouping as the planner's, no auto-promote / New
+        plan). options come from the same table (app/agents/claude_code/choices.py over planner/choices.py
+        HARNESSES), plus the configured pilot_model for the chosen CLI. choice = what the next new chat starts on
+        (settings pilot_harness + pilot_model, per user; defaults: the launch engine's CLI and the CLI agent file's
+        model); independent of the planner's choice. Sent on connect and after any change of pilot_harness /
+        pilot_model (picker, set_settings)
     autopilot {session_id, on}  (after set_autopilot; on = every builder permission request approved without a card)
     step_update {session_id, n, status: todo|in_progress|blocked|done|failed, agent, agent_display, agent_purpose,
                  agent_fallback?, skills?, skills_unknown?,
@@ -111,8 +122,25 @@
       - builder permission cards: timeout_s = the permission timeout (default 180), expires_at set, blocking false;
         raised for deny-listed shell commands and for writes outside the project / into .launchpad/ or .git/
       - plan (chats): markdown = the proposed plan
-    queue_resolved {id, answer, by: user|timer|autopilot}
-      - builder permission timer: {answer: "deny", by: "timer"}; autopilot switched on: {answer: "allow", by: "autopilot"}
+    queue_resolved {id, answer, by: user|timer|autopilot|auto}
+      - builder permission timer: {answer: "deny", by: "timer"}; autopilot switched on: {answer: "allow", by: "autopilot"};
+        a waiting question with a recommendation when Auto answers is switched on: {answer: <the recommendation>, by: "auto"}
+    auto_answers {session_id, on}  (after set_auto_answers; also snapshot sessions[].auto_answers, off by default)
+    auto_answer {session_id, id, agent, step, title, answer, round_id}
+      - one question the session's Auto answers switch answered with the agent's recommended answer (no card was shown,
+        or the waiting card was closed): the page shows a compact line (question + answer, marked automatic). id = the
+        planner round question's id or the builder card's id; step = the builder's step or null; round_id = the planner
+        round it belonged to (null for a builder question). Kept in the session's chat history (replayed in the snapshot)
+      - rules: only questions WITH a recommendation (a planner round only when every question in it has one; else the
+        whole round waits as a card, as does a builder question with none); permission cards and plan proposals are never
+        affected (that is Autopilot); the agent carries on as if the user had accepted the recommendation
+    question files (no event): every answered question (planner round questions, one file each; builder questions; CLI
+        chat questions) and every timed-out one is saved by code as <session folder>/questions/NNN-<slug>.md (number
+        unique in the session, found from disk, so it survives a restart; a CLI chat's own folder holds its questions):
+        Question, Asked by + when, Step, Run, Options offered, Answer ("No answer (timed out)" when it timed out),
+        Justification (reason, recommended answer, the user's note, the assumption taken), How it was answered (by the
+        user / "Answered automatically (recommended)" / timed out). Skipped planner questions get no file. Files stay in
+        questions/ across runs; report.md has a "Questions" section linking the files of its run
     agent_usage {session_id, chat_id, agent_id, role: planner|astronaut|orchestrator|builder|pilot|visual|drafter, name, step,
                  status: working|idle|done, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
                  cost_usd, tool_calls, by_model?: [{model, cost_usd, input_tokens, output_tokens, cache_read_tokens,
@@ -130,7 +158,7 @@
       - session total = orchestrator + builders + astronauts + visual agent; the planner is separate (planner_cost_usd), the same
         definition in report.md and the snapshot
     crew_list {dir_id, tool_choices:[tool names the new-agent form may offer], agents:[{name, display_name, role,
-               purpose: planning|exploring|building|reviewing, uses, builtin, description, model, source_path,
+               purpose: planning|exploring|building|reviewing|other, uses, builtin, description, model, source_path,
                instructions, builtin_tools, custom_tools:[{name, description}], mcp_servers, disallowed_tools, warnings,
                gated_tools, setup: lean|project, engine_prompt, prompt_note, root, path (relative), editable,
                step_worker? (folder agents), skill_setting, promotion? (planner): {start_model, target_model,
@@ -144,12 +172,12 @@
         Defaults: Planner "all", every other agent []. Stored per user (<home>/.launchpad/settings.json agent_skills)
       - the six built-ins first (builtin true, root "app", path "app/agents/<folder>/agent.md"), then the agents of the connected folder dir_id
         (builtin false, role null, root = dir_id, path ".claude/agents/<file>.md", purpose from the file's
-        `purpose:` field, default building; a broken file is listed with its problems in warnings and
+        `purpose:` field, missing or unknown = other (shown under "Other"); a broken file is listed with its problems in warnings and
         step_worker false). Built-in purposes: Planner + Visualizer planning, Explorer exploring, Builder +
         Orchestrator + CLI building
       - uses = times the agent was started (per user, survives restarts; keyed by agent name)
       - folder agents as Launchpad runs them: exploring / reviewing = read-only (no write, edit or shell tools);
-        building = the Builder's gated tools and checks; custom_tools = Launchpad's step tools
+        building and other = the Builder's gated tools and checks; custom_tools = Launchpad's step tools
       - sent again after a save of one of the app's files, after agent_create / agent_remove, and after a save of a
         folder's .claude/agents/*.md (that folder's list)
     agent_uses {name, uses}  (whenever a count changes: planner session started, explore, step, run, visual render,
@@ -158,9 +186,14 @@
                   | {ok: false, dir_id?, error}   (reply to agent_draft; fields are a suggestion the user edits)
     agent_saved {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, error, problems:[..]}
     agent_removed {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, name?, error}
-    chat_started {chat_id, mode, model, cwd, dir_id, additional_dir_ids, from_session_id?} · chat_typing {chat_id, on}
-      · chat_delta {chat_id, text}
+    chat_started {chat_id, mode, model, harness, label, option_id, started, cwd, dir_id, additional_dir_ids,
+                  from_session_id?} · chat_typing {chat_id, on} · chat_delta {chat_id, text}
       - cwd = the chat's primary folder; additional_dir_ids = the additional folders it got as add_dirs
+      - harness / model = the chat's CLI and model; label = "<CLI> · <model>" (e.g. "Claude · Sonnet"); option_id =
+        "<harness>:<model>" (a cli_choice option id); started = someone wrote to it (CLI and model fixed)
+    chat_model {chat_id, harness, model, label, option_id, started}
+      - the chat's CLI and model changed or became fixed: sent when a chat nobody has written to is reloaded with a
+        new choice, and at its first message (started true)
       - from_session_id: set when chat_from_plan opened the chat (mode "plan"); the plan follows as
         chat_message {chat_id, role: user, markdown} (also in the snapshot history), then the usual turn events
     chat_message {chat_id, role: assistant|user, markdown}  (role user only for text the page did not type: chat_from_plan) · chat_mode {chat_id, mode} (authoritative, incl. engine changes)
@@ -191,8 +224,12 @@
                   the session's top model while it runs on its start model = planner_promote (nothing remembered);
                   anything else (a step down, another harness) is remembered for the next new plan. Refused
                   (system "Planner: ..."): unknown or unavailable option, or a model pinned by --model
+    cli_choose {option_id}  (the CLI chat's picker) -> cli_choice, plus chat_model for every chat nobody has written to
+                  yet (it is reloaded on the new CLI and model at once); a chat in progress keeps its own, the choice
+                  is for the next new chat (remembered per user: pilot_harness + pilot_model). Refused (system
+                  "CLI: ..."): unknown or unavailable option
     agent_draft {dir_id, text} -> agent_drafted  (one cheap one-shot call: haiku, no tools; nothing saved)
-    agent_create {dir_id, fields: {name, description, purpose: exploring|building|reviewing, model?, tools:[..],
+    agent_create {dir_id, fields: {name, description, purpose: exploring|building|reviewing|other, model?, tools:[..],
                   instructions}} -> agent_saved  (writes <folder>/.claude/agents/<name>.md after the agent-file
                   validation; refused: planning purpose, a built-in name, an existing agent or file, read-only
                   purpose with Write / Edit / Bash; empty tools = the purpose's default set)
@@ -204,6 +241,9 @@
     chat_from_plan {session_id} -> chat_started (mode plan, from_session_id) in the session's folder, the plan sent as
                   the first message; the draft stays approvable. Refused (system) if the session has no draft
     set_autopilot {session_id, on: bool}
+    set_auto_answers {session_id, on: bool} -> auto_answers (+ auto_answer lines and queue_resolved by "auto" for the
+                  questions already waiting that have a recommendation, a waiting planner round included when every
+                  question in it has one). Per session, off by default, separate from Autopilot, state kept on the server
     get_settings {} · set_settings {patch: {<setting>: value, default_dir_id?: dir_id ("Make default" = the primary),
                   additional_dir_ids?: [dir_id] (the whole list of folders ticked as additional)}}
 

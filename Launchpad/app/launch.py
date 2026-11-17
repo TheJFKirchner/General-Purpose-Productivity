@@ -65,7 +65,7 @@ LAUNCH_OPTIONS = {"question_timeout": "question_timeout_s", "permission_timeout"
                   "planner_top": "planner_top_model", "planner_harness": "planner_harness",
                   "auto_promote": "planner_auto_promote", "promotion_window": "promotion_window_turns",
                   "promotion_criteria": "promotion_criteria_path", "pilot_model": "pilot_model",
-                  "visual_model": "visual_model"}
+                  "pilot_harness": "pilot_harness", "visual_model": "visual_model"}
 
 
 def demo_directories() -> list[Path]:
@@ -221,6 +221,8 @@ def main() -> None:
     ap.add_argument("--promotion-criteria", default=None, help="replacement criteria file (markdown)")
     ap.add_argument("--visual-model", default=None, help="visual agent (Visualizer) model override (default: haiku)")
     ap.add_argument("--pilot-model", default=None, help="CLI chat model override (default: sonnet, from its file)")
+    ap.add_argument("--pilot-harness", default=None,
+                    help="CLI the CLI chat runs on (setting; default: the launch engine's; --fake still uses the fake engine)")
     ap.add_argument("--fake", action="store_true", help="scripted demo on the fake engine (zero tokens)")
     ap.add_argument("--question-timeout", type=float, default=None,
                     help=f"seconds before a timed builder question auto-answers (default 180; {FAKE_QUESTION_TIMEOUT_S} with --fake)")

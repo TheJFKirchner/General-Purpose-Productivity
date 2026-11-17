@@ -35,4 +35,18 @@
 .ccard h3{margin:0;font-family:var(--disp);font-size:var(--fs-lg);font-weight:600;line-height:var(--lh-tight);overflow-wrap:anywhere}
 .ccard .qbody{font-size:var(--fs-sm);color:var(--muted)}
 .bubble.streaming::after{content:'\258D';color:var(--indigo);animation:blink 1s infinite;margin-left:var(--sp-0)}
-.modelchip{display:inline-flex;align-items:center;height:var(--chip-h);padding:0 var(--sp-2);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-size:var(--fs-xs);font-weight:700;white-space:nowrap;cursor:default}
+/* the CLI picker under the box (components/ModelPicker.tsx; styles .pk-* in theme.css), then the key hints */
+#viewCode .pk-row{margin-bottom:var(--sp-1)}
+/* the "applies to your next new chat" note stays on the picker's row as one trimmed line (full text in its title) */
+#viewCode .pk-row{flex-wrap:nowrap}
+#viewCode .pk-note{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the placeholder stays on one line beside Stop / Send */
+.code-comp textarea{white-space:pre-wrap;overflow-y:auto}
+.code-comp textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* a permission card's buttons wrap their text inside the card (a long "Always allow ... (saved to ...)" never widens the chat) */
+.ccard{min-width:0;box-sizing:border-box}
+.ccard .row{min-width:0}
+.ccard .row .pill{max-width:100%;height:auto;min-height:var(--ctl-md);white-space:normal;text-align:left;overflow-wrap:anywhere}
+#codeLog{overflow-x:hidden}
+/* narrow or short windows: drop the key-hint line so the messages keep their height */
+@media (max-width:1200px),(max-height:800px){.code-hint{display:none}}

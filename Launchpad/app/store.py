@@ -9,6 +9,8 @@
   session or chat starts (a planner session nobody has written to yet is reloaded with the new planner settings)
 - planner_harness / planner_start_model / planner_auto_promote: also set from the planner's picker
   (app/agents/planner/choices.py)
+- pilot_harness / pilot_model: also set from the CLI chat's picker (app/agents/claude_code/choices.py); pilot_harness
+  None = the launch engine's CLI
 - Agent use counter: agent_uses {agent name: count}; +1 each time an agent is started (app/hub.py count_use);
   starts from zero, survives restarts
 - additional_dir_ids [dir_id]: folders ticked as "additional" (global; a session uses them minus its primary)
@@ -34,6 +36,7 @@ SPECS: dict[str, tuple[type, object, str]] = {
     "promotion_window_turns": (int, 2, "new_sessions"),
     "promotion_criteria_path": (str, None, "new_sessions"),
     "pilot_model": (str, None, "new_sessions"),
+    "pilot_harness": (str, None, "new_sessions"),
     "visual_model": (str, None, "now"),
 }
 

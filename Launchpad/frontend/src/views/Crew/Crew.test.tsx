@@ -5,7 +5,15 @@ import { act } from 'react';
 import { actions, dispatch } from '../../store';
 import { useDemoApp, step, q, qa, doc, click, byText, sentOf, typeInto } from '../../test/demoApp';
 
+import { addAgentText } from './Crew';
+
 useDemoApp();
+
+it('Crew: the add-tile text uses the right article for every purpose', () => {
+  expect(addAgentText('other')).toBe('Add an Other agent');
+  expect(addAgentText('exploring')).toBe('Add an Exploring agent');
+  expect(addAgentText('building')).toBe('Add a Building agent');
+});
 
 it('Crew: hero cards grouped by purpose, live use counts, filter, detail with promotion criteria and back', async () => {
   await act(async () => { actions.setView('crew'); });
@@ -14,7 +22,7 @@ it('Crew: hero cards grouped by purpose, live use counts, filter, detail with pr
   const cards = qa('#crewAgents .hero:not(.add)');
   expect(cards).toHaveLength(8);
   expect(q('#crewSum')?.textContent).toMatch(/6 built in, 2 from claims-project/);
-  expect(qa('.pgroup').map(g => g.getAttribute('data-purpose'))).toEqual(['planning', 'exploring', 'building', 'reviewing']);
+  expect(qa('.pgroup').map(g => g.getAttribute('data-purpose'))).toEqual(['planning', 'exploring', 'building', 'reviewing', 'other']);
   /* built-ins and folder agents look different; each card says its purpose in words */
   const rev = q('.hero[data-name="sql-reviewer"]')!;
   expect(rev.classList.contains('folder')).toBe(true);
@@ -89,6 +97,30 @@ it('Crew: Draft for me fills the form; page checks and server problems show inli
   await step(1_000);
   expect(q('#crewDetail')).toBeNull();
   expect(q('.hero[data-name="null-reviewer"]')).toBeNull();
+});
+
+it('Crew: an Other agent can be added and sits in its own Other section; an unknown purpose is listed there too', async () => {
+  await act(async () => { actions.setView('crew'); });
+  await step(1_000);
+  expect(q('.pgroup[data-purpose="other"] .pgroup-h')?.textContent).toContain('Other');
+  expect(qa('.pgroup[data-purpose="other"] .hero:not(.add)')).toHaveLength(0);
+  await click(q('#crewAdd'));
+  await click(q('input[name="afPurpose"][value="other"]'));
+  expect(q<HTMLInputElement>('input[name="afPurpose"][value="other"]')!.checked).toBe(true);
+  /* not read-only: write tools stay available */
+  expect(qa<HTMLLabelElement>('.af-tool').find(l => l.textContent === 'Write')!.querySelector('input')!.disabled).toBe(false);
+  await typeInto(q<HTMLInputElement>('#afName')!, 'misc-helper');
+  await typeInto(q<HTMLTextAreaElement>('#afDesc')!, 'Does odd jobs that fit no other purpose.');
+  await typeInto(q<HTMLTextAreaElement>('#afInstr')!, 'Do the odd job and say what you did.');
+  await click(q('#afSave'));
+  await step(1_500);
+  expect(sentOf('agent_create').at(-1)).toMatchObject({ fields: { name: 'misc-helper', purpose: 'other' } });
+  const card = q('.pgroup[data-purpose="other"] .hero[data-name="misc-helper"]')!;
+  expect(card).toBeTruthy();
+  expect(card.querySelector('.ptag')?.textContent).toBe('Other');
+  /* a folder agent with no (or an unknown) purpose counts as Other */
+  await act(async () => { dispatch({ type: 'crew_list', dir_id: 'd1', tool_choices: [], skills: [], agents: [{ name: 'odd-one', role: null, purpose: 'nonsense', builtin: false, step_worker: false }] } as never); });
+  expect(q('.pgroup[data-purpose="other"] .hero[data-name="odd-one"] .ptag')?.textContent).toBe('Other');
 });
 
 it('Crew: Skills section per agent (Planner all, others a checklist, the CLI chat handled by the harness)', async () => {
