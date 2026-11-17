@@ -1,7 +1,7 @@
 /* Derived values, ported from the vanilla page. Pure functions of the state: call them with the state you got from
    useLaunchpad() (or getState()). They also work on immer drafts inside the reducer. */
 import type { AppState, Agent, ChatItem, PlannerEntry, QueueItem, Session, VisualSet } from './types';
-import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, Purpose, RoleDecision, RoleEntry } from '../contract';
+import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, McpServer, Purpose, RoleDecision, RoleEntry } from '../contract';
 import { baseName, cleanName, modelName, tparts, type TokParts } from '../lib/format';
 import { PURPOSES, WRITE_TOOLS } from '../lib/labels';
 
@@ -422,3 +422,17 @@ export function relPath(p: string): string {
   const raw = String(p || ''), parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
   return /^([a-z]:|[\\/])/i.test(raw) ? '…/' + parts.slice(-3).join('/') : parts.join('/');
 }
+
+
+/* ---------- MCP library ---------- */
+/** Servers whose last test passed: the only ones the Crew picker offers. */
+export const mcpConnected = (st: S): McpServer[] => st.mcp.servers.filter(x => x.status === 'connected');
+/** One agent's assigned servers, each with its library entry (null = no longer in the library). */
+export function mcpAssigned(st: S, agent: string): { name: string; server: McpServer | null; ok: boolean }[] {
+  return (st.mcp.assignments[agent] || []).map(name => {
+    const server = st.mcp.servers.find(x => x.name === name) || null;
+    return { name, server, ok: !!server && server.status === 'connected' };
+  });
+}
+/** The assigned servers of an agent that are not connected (failed, untested, testing or gone): the card warning. */
+export const mcpProblems = (st: S, agent: string) => mcpAssigned(st, agent).filter(x => !x.ok && x.server?.status !== 'testing');

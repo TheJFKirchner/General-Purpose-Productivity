@@ -159,17 +159,24 @@ def build_settings(args):
         demo.install(project)
         demo_app_root()                        # the editor in the demo edits a copy, never the real agent files
         demo.seed_tally(Tally.beside(store), store)    # sample undefined roles, in the demo's own temp home only
+        import tempfile
+        from . import mcpimport
+        from .mcplib import McpLibrary
+        claude_home = Path(tempfile.gettempdir()) / "launchpad-demo" / "claude-home"
+        mcpimport.CLAUDE_HOME = claude_home            # "Import from Claude Code" reads a sample, never the real home
+        demo.seed_mcp(McpLibrary.beside(store), [Path(d["path"]) for d in store.directories()], claude_home)
     print(f"Settings and connected folders: {launchpad_home() / 'settings.json'}", flush=True)
     return settings, store, overridden
 
 
 def reset_demo_home(home: Path) -> None:
     """Best-effort wipe of the fake demo's own per-user folder (settings.json with folders + use counts, backups, the
-    undefined-roles tally and its review cases)."""
+    undefined-roles tally and its review cases, the MCP library)."""
     import shutil
+    from .mcplib import FILE_NAME as MCP_FILE
     from .tally import CASES_DIR, FILE_NAME
     for p in (home / "settings.json", home / "backups", home / FILE_NAME, home / (FILE_NAME + ".lock"),
-              home / CASES_DIR):
+              home / CASES_DIR, home / MCP_FILE, home / (MCP_FILE + ".lock")):
         try:
             if p.is_dir():
                 shutil.rmtree(p)

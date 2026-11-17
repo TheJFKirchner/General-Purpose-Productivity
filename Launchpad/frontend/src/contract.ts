@@ -129,6 +129,10 @@ export interface CrewAgentDef {
   builtin_tools?: string[] | null;
   custom_tools?: { name: string; description?: string }[];
   mcp_servers?: { name: string; config?: unknown }[];
+  /** false = this agent's engine cannot take MCP servers per run (assignments are kept but do nothing). Absent = yes. NOT in the spec table: assumed. */
+  mcp_supported?: boolean;
+  /** one line naming the engine when mcp_supported is false, e.g. "Cursor". Optional. */
+  engine_label?: string;
   disallowed_tools?: string[];
   warnings?: string[];
   gated_tools?: string[];
@@ -382,6 +386,28 @@ export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?
 export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id; name?: string; error?: string; problems?: AgentProblem[]; role?: string; case_path?: string }
 /** The undefined-roles tally, every entry (most recently used first), with visibility. */
 export interface RolesListEvent { type: 'roles_list'; threshold: number; resurface_uses: number; entries: RoleEntry[] }
+/* ---------- Connections and the MCP library (spec Features/2026-11-17-settings-connections-mcp.md) ---------- */
+/** connection_test: installed false = program not found; installed + reachable false = detail has the error;
+    usable false (Cursor) = installed but Launchpad cannot use it yet. reachable / version may be null when not checked. */
+export interface ConnectionTestEvent {
+  type: 'connection_test'; id: string; installed: boolean; version?: string | null; reachable?: boolean | null; usable?: boolean | null; detail?: string | null;
+}
+export type McpKind = 'command' | 'url';
+export type McpStatus = 'connected' | 'failed' | 'untested' | 'testing';
+/** The config of one server. Secret values (env, headers) arrive masked and are sent back unchanged to keep them
+    (ASSUMED shape: the table only says "its config with secret values masked"). */
+export interface McpConfig { command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string> }
+export interface McpServer { name: string; kind: McpKind; config: McpConfig; status: McpStatus; detail?: string | null; tool_count?: number | null; tested_at?: string | null }
+/** A connection or import source, as listed by the server (id + display name). */
+export interface NamedItem { id: string; name: string }
+/** The reply to every MCP message. connections / import_sources are ASSUMED to ride on it (the table does not say
+    where they come from); error = a refused save (assumed; else the text arrives as a system line). */
+export interface McpLibraryEvent {
+  type: 'mcp_library'; servers: McpServer[]; assignments: Record<string, string[]>;
+  connections?: NamedItem[]; import_sources?: NamedItem[]; error?: string | null;
+}
+export interface McpImportCandidate { name: string; kind: McpKind; summary: string; exists: boolean }
+export interface McpImportsEvent { type: 'mcp_imports'; source: string; servers: McpImportCandidate[] }
 export interface ReviewStartedEvent { type: 'review_started'; review_id: string; role: string; model: string; harness: string }
 export interface ReviewProgressEvent { type: 'review_progress'; review_id: string; role: string; phase: 'reading' | 'asking' | 'finalising'; text: string }
 /** The finished case (also replayed on connect: the latest case per role). */
@@ -415,7 +441,7 @@ export type ServerEvent =
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
   | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent
   | RolesListEvent | ReviewStartedEvent | ReviewProgressEvent | ReviewCaseEvent | ReviewFailedEvent | ReviewRefusedEvent
-  | ReviewDecidedEvent;
+  | ReviewDecidedEvent | ConnectionTestEvent | McpLibraryEvent | McpImportsEvent;
 
 export type ServerEventType = ServerEvent['type'];
 
@@ -428,6 +454,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
   'git_repos', 'git_result',
   'roles_list', 'review_started', 'review_progress', 'review_case', 'review_failed', 'review_refused', 'review_decided',
+  'connection_test', 'mcp_library', 'mcp_imports',
 ];
 
 /* ---------- UI -> here ---------- */
@@ -478,6 +505,14 @@ export type UiMessage =
   | { type: 'review_decide'; role: string; decision: RoleDecision }
   | { type: 'agent_remove'; dir_id: Id; name: string }
   | { type: 'set_agent_skills'; name: string; skills: 'all' | string[]; dir_id?: Id }
+  | { type: 'test_connection'; id: string }
+  | { type: 'get_mcp' }
+  | { type: 'save_mcp_server'; server: { name: string; kind: McpKind; config: McpConfig }; original_name?: string }
+  | { type: 'remove_mcp_server'; name: string }
+  | { type: 'test_mcp_server'; name: string }
+  | { type: 'list_mcp_imports'; source: string }
+  | { type: 'import_mcp_servers'; source: string; names: string[] }
+  | { type: 'set_agent_mcp'; agent: string; servers: string[] }
   | { type: 'git_scan' }
   | { type: 'git_refresh'; repo_id: string }
   | { type: 'git_fetch'; repo_id: string }

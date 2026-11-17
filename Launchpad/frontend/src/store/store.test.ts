@@ -84,6 +84,10 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   review_failed: { review_id: 'rv2', role: 'other-role', error: 'engine down' },
   review_refused: { role: 'ghost', review_id: null, error: 'There is no role called ghost in the tally.' },
   review_decided: { role: 'sql-tuner', decision: 'not_yet', reviewer_verdict: 'keep', review_id: 'rv1', case_file: 'c1.md' },
+  connection_test: { id: 'claude_code', installed: true, version: '2.1.0', reachable: true, usable: true, detail: null },
+  mcp_library: { servers: [{ name: 'fs', kind: 'command', config: { command: 'npx' }, status: 'connected', detail: null, tool_count: 3, tested_at: null }], assignments: { 'launchpad-builder': ['fs'] },
+    connections: [{ id: 'claude_code', name: 'Claude Code' }], import_sources: [{ id: 'claude_code', name: 'Claude Code' }] },
+  mcp_imports: { source: 'claude_code', servers: [{ name: 'gh', kind: 'url', summary: 'https://x', exists: false }] },
 };
 
 describe('reducer', () => {
@@ -124,6 +128,10 @@ describe('reducer', () => {
     expect(st.reviews['sql-tuner']).toMatchObject({ status: 'case', reviewId: 'rv1', model: 'sonnet', progress: ['Reading the tally'], decided: { decision: 'not_yet', reviewerVerdict: 'keep' } });
     expect(st.reviews['sql-tuner'].case!.sections).toHaveLength(5);
     expect(st.reviews['other-role']).toMatchObject({ status: 'failed', error: 'engine down' });
+    /* connections and the MCP library */
+    expect(st.connTests.claude_code).toMatchObject({ status: 'done', result: { installed: true, version: '2.1.0' } });
+    expect(st.mcp).toMatchObject({ loaded: true, connections: [{ id: 'claude_code', name: 'Claude Code' }], assignments: { 'launchpad-builder': ['fs'] } });
+    expect(st.mcpImports.claude_code).toMatchObject({ loading: false });
     expect(st.reviews.ghost).toMatchObject({ status: 'refused' });
   });
 

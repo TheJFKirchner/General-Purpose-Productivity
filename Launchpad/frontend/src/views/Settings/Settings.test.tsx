@@ -3,7 +3,7 @@
 import { it, expect } from 'vitest';
 import { act } from 'react';
 import { actions, getState } from '../../store';
-import { useDemoApp, step, q, qa, click, byText, sentOf, typeInto, key } from '../../test/demoApp';
+import { useDemoApp, step, q, qa, click, byText, sentOf, typeInto } from '../../test/demoApp';
 
 useDemoApp();
 
@@ -31,8 +31,9 @@ it('Settings: folders, add, two-click remove, a setting sent on change', async (
   await act(async () => { num.value = '240'; num.dispatchEvent(new Event('change', { bubbles: true })); });
   expect(sentOf('set_settings').at(-1)).toEqual({ type: 'set_settings', patch: { question_timeout_s: 240 } });
   expect(q<HTMLInputElement>('#set-pilot_model')!.disabled).toBe(true);      // set by a launch option
-  await key('Escape');
-  expect(getState().ui.settingsOpen).toBe(false);
+  expect(getState().ui.view).toBe('settings');
+  expect(q('#viewSettings')).toBeTruthy();                                     // a view now, not a dialog
+  expect(q('[role=dialog]')).toBeNull();
 });
 
 it('Settings: the primary folder is marked; another folder can be ticked as additional', async () => {

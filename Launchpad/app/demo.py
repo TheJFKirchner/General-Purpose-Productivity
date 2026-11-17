@@ -28,6 +28,11 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
   their session folders are made up, so the reviewer says they are gone); the fake Role Reviewer walks all three
   verdicts: frontend-dev -> keep, copy-editor -> not_yet, data-migrator -> one question card, then define (the
   drafter then fills the form from the case)
+- Settings > Connections: Claude Code's test finds the real program and version (read-only) and sends its one
+  request to the fake engine; Cursor's is the real install check. MCP library: seed_mcp() fills the demo's temp home
+  with three servers (two local demo servers that really pass their test, one URL server that fails), assignments
+  for the Builder and copy-reviewer, and a sample Claude Code setup to import from (never the real home folder).
+  Agents run on the fake engine, which cannot take MCP servers, so assignments do nothing in the demo
 """
 from __future__ import annotations
 
@@ -331,6 +336,62 @@ def seed_tally(tally, store) -> None:
                 "dir_id": shop["dir_id"], "folder": shop["name"], "project": shop["path"],
                 "session_id": f"20261101-0900{k}{i}-demo", "run": 1, "step": i, "title": title, "skills": skills,
                 "outcome": outcome, "questions": questions, "assumptions": assumptions, "timed_out": timed_out})
+
+
+# ---------------------------------------------------------------- MCP library + Claude Code import (sample, temp only)
+DEMO_MCP_SERVER = Path(__file__).resolve().parent / "demo_mcp_server.py"
+
+
+def demo_mcp_servers() -> list[dict]:
+    """The demo's sample MCP library: two real local servers (app/demo_mcp_server.py: their background test passes,
+    zero tokens, no network) and one URL server nothing answers (its test fails; masked header)."""
+    import sys
+    return [
+        {"name": "notes", "kind": "command",
+         "config": {"command": sys.executable, "args": [str(DEMO_MCP_SERVER), "--set", "notes"], "env": {}}},
+        {"name": "glossary", "kind": "command",
+         "config": {"command": sys.executable, "args": [str(DEMO_MCP_SERVER), "--set", "glossary"],
+                    "env": {"GLOSSARY_TOKEN": "demo-token-not-real"}}},
+        {"name": "warehouse", "kind": "url",
+         "config": {"url": "http://127.0.0.1:9/mcp", "headers": {"Authorization": "Bearer demo-not-a-real-token"}}},
+    ]
+
+
+DEMO_MCP_ASSIGNMENTS = {"launchpad-builder": ["notes"], FOLDER_AGENT_NAME: ["glossary", "warehouse"]}
+
+
+def seed_mcp(lib, folders: list[Path], claude_home: Path) -> None:
+    """The demo's MCP library (in its own temp home only, never a real one; reset to the sample on every launch) and a
+    sample Claude Code setup to import
+    from (claude_home/.claude.json: one user server, one local-scope server for the first demo folder; the first demo
+    folder's .mcp.json: one project server). Import commands are made up and URLs end in .invalid, so testing an
+    imported server fails fast and never downloads or sends anything."""
+    import json
+    from .tally import in_temp
+    if lib.path is None or not in_temp(lib.path) or not in_temp(claude_home):
+        return
+    for name in lib.names():                    # every launch starts from the fresh sample (temp home only)
+        lib.remove(name)
+    if not lib.names():
+        for s in demo_mcp_servers():
+            lib.save(s)
+        for agent, names in DEMO_MCP_ASSIGNMENTS.items():
+            lib.set_agent(agent, names)
+    claude_home.mkdir(parents=True, exist_ok=True)
+    shop = Path(folders[0]) if folders else None
+    projects = {}
+    if shop is not None:
+        projects[shop.resolve().as_posix()] = {"mcpServers": {
+            "shop-db": {"type": "stdio", "command": "shop-db-mcp", "args": ["--read-only"], "env": {}}}}
+        (shop / ".mcp.json").write_text(json.dumps({"mcpServers": {
+            "figma": {"type": "http", "url": "https://mcp.figma.invalid/mcp",
+                      "headers": {"Authorization": "Bearer ${FIGMA_TOKEN}"}}}}, indent=1), encoding="utf-8")
+    (claude_home / ".claude.json").write_text(json.dumps({
+        "mcpServers": {
+            "github": {"type": "stdio", "command": "github-mcp-demo", "args": [],
+                       "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}},
+            "notes": {"type": "stdio", "command": "notes-mcp", "args": []}},
+        "projects": projects}, indent=1), encoding="utf-8")
 
 
 def _section(test: str, finding: str, strength: str, quote: str = "", source: str = "") -> dict:

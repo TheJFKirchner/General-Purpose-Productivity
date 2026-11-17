@@ -64,7 +64,7 @@ export default function Code() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = getState();
-      if (!codeShowing() || isModalOpen() || st.ui.settingsOpen || st.editor.open || st.crewForm.open) return;
+      if (!codeShowing() || isModalOpen() || st.ui.view === 'settings' || st.editor.open || st.crewForm.open) return;
       const ae = document.activeElement;
       const inChat = ae === document.body || ae === inputRef.current || ae === modeRef.current || !!(ae && logRef.current && logRef.current.contains(ae));
       const ch = sel.curChat(st);

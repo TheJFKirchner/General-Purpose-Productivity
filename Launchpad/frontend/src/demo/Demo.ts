@@ -11,6 +11,7 @@ import { baseName } from '../lib/format';
 import { esc } from '../lib/markdown';
 import { visExtra, visJs } from './visuals';
 import { demoGitOn, demoGitRepos } from './gitDemo';
+import { demoMcp, demoMcpOn } from './mcpDemo';
 import { DEMO_DRAFT_USAGE, demoCase, demoRoles, demoVerdict } from './rolesDemo';
 import { agentPath, crewBase, DEMO_SKILLS, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
 
@@ -65,6 +66,7 @@ export class Demo {
   /* Crew: use counts per agent name (agent_uses), the connected folder's own agents */
   uses: Record<string, number> = { ...START_USES };
   folderAgents = folderAgentsBase();
+  mcp = demoMcp();                                          // the MCP library, its assignments and secrets
   roles = demoRoles();                                      // undefined roles (the tally), as roles_list shows them
   roleCases: Record<string, Ev> = {};                       // role -> the case its review wrote
   skillSet: Record<string, 'all' | string[]> = {};          // set_agent_skills (agent name -> setting)
@@ -731,6 +733,9 @@ export class Demo {
       case 'list_dir': case 'read_file': case 'save_file': case 'list_backups': case 'restore_backup': this.fsOn(msg); break;
       case 'git_scan': case 'git_refresh': case 'git_fetch': case 'git_commit': case 'git_push':
         demoGitOn(msg, this.gitRepos || (this.gitRepos = demoGitRepos()), ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
+      case 'test_connection': case 'get_mcp': case 'save_mcp_server': case 'remove_mcp_server': case 'test_mcp_server':
+      case 'list_mcp_imports': case 'import_mcp_servers': case 'set_agent_mcp':
+        demoMcpOn(msg, this.mcp, ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
       case 'set_autopilot': this.setAutopilot(msg.session_id, !!msg.on); break;
       case 'set_auto_answers': this.setAutoAnswers(msg.session_id, !!msg.on); break;
       case 'planner_promote': {
@@ -953,7 +958,7 @@ export class Demo {
       }
     }
     return { type: 'crew_list', dir_id: dir, tool_choices: [...TOOL_CHOICES], skills,
-             agents: [...builtins, ...folder].map(a => ({ ...a, skill_setting: setting(a) })) };
+             agents: [...builtins, ...folder].map(a => ({ ...a, skill_setting: setting(a), mcp_supported: true })) };
   }
 
   /* ---- Crew: draft / create / remove a folder agent ---- */

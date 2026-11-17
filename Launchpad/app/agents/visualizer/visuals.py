@@ -286,6 +286,7 @@ class VisualBoard:
             agent = crew.load("visual", engine=s.engine, project=self.folder.project, model=s.visual_model,
                               save_conversation=False,
                               **crew.session_kw(self.ls, crew.builtin_name("visual"), role="visual"))
+            await hub.give_mcp(agent, who=crew.display("visual"), session_id=self.ls.id)
 
             reply = None
             async with agent.session() as sess:

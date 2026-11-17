@@ -31,6 +31,14 @@
   written after a run marks that run's uses sent back; roles_get / role_dismiss / role_merge change the list
   (roles_list); review_start / review_decide run the Role Reviewer (app/agents/role_reviewer/reviewer.py Reviews);
   agent_draft {role} adds the case as drafter context, agent_create {role} removes the entry and saves the case copy
+- Connections (app/connections/): test_connection {id} runs that tool's own test script -> connection_test
+- MCP library (app/mcplib.py, per-user mcp.json beside settings.json; in memory without a user file and under --fake
+  unless that home is a temp folder; imports app/mcpimport.py): get_mcp, save_mcp_server, remove_mcp_server,
+  test_mcp_server, list_mcp_imports, import_mcp_servers, set_agent_mcp -> mcp_library (+ mcp_imports). A server is
+  tested on add, on edit, on request, and every server once in the background when the app starts
+  (start_background: server startup, else the first connection). give_mcp(agent, who) right before any crew agent
+  starts: its assigned servers whose last test passed; each skipped one is a system warning in that session / chat
+  (once per owner, server and reason)
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -43,7 +51,9 @@ import sys
 import traceback
 from collections import deque
 
+from . import connections
 from . import costs
+from . import mcpimport, mcplib
 from . import plan as plan_mod
 from . import skills as skills_mod
 from . import tally as tally_mod
@@ -215,6 +225,14 @@ class Hub:
         if settings.engine == "fake" and not tally_mod.in_temp(self.tally.path):
             self.tally = tally_mod.Tally(None)           # the demo never writes a real tally
         self.reviews = Reviews(self)                     # Role Reviewer runs + latest cases
+        self.mcp = mcplib.McpLibrary.beside(self.store)  # MCP library, beside settings.json (app/mcplib.py)
+        if settings.engine == "fake" and not tally_mod.in_temp(self.mcp.path):
+            self.mcp = mcplib.McpLibrary(None)           # the demo never writes a real MCP library
+        self.mcp_started = False                         # background test of every server (once per launch)
+        self.mcp_warned: set = set()                     # (owner, who, server, reason) warnings already shown
+        self.connection_tests: set[str] = set()          # connection tests running now
+        self.background: set[asyncio.Task] = set()
+        self.mcp_tasks: dict[str, asyncio.Task] = {}      # server name -> its running (or last) test
         self.sessions: dict[str, LaunchSession] = {}   # in the order the front end letters them (Run A, B, ...)
         self.chats: dict[str, PilotChat] = {}       # regular sessions (Pilot), several may coexist
         self.current: LaunchSession = self._new()
@@ -362,6 +380,7 @@ class Hub:
             snapshot.append(self.current.started_event())       # last one = the current session
         snapshot += [c.started_event() for c in self.chats.values()]
         snapshot.append(self.roles_event())
+        snapshot.append(self.mcp_event())
         snapshot += self.reviews.events()
         snapshot += [m.event() for m in self.meters] + self.incoming.open_events() + list(self.auto_lines) + list(self.recent_activity)
         lock = self.clients[send]
@@ -370,6 +389,7 @@ class Hub:
                 await send(ev)
         await self.emit_crew()
         await self.emit_totals()
+        self.start_background()
 
     def disconnect(self, send) -> None:
         self.clients.pop(send, None)
@@ -403,6 +423,11 @@ class Hub:
             await self._agent_message(kind, msg)
         elif kind in ("roles_get", "role_dismiss", "role_merge", "review_start", "review_decide"):
             await self._role_message(kind, msg)
+        elif kind == "test_connection":
+            await self.test_connection(str(msg.get("id") or ""))
+        elif kind in ("get_mcp", "save_mcp_server", "remove_mcp_server", "test_mcp_server", "list_mcp_imports",
+                      "import_mcp_servers", "set_agent_mcp"):
+            await self._mcp_message(kind, msg)
         elif kind == "set_agent_skills":
             try:
                 self.store.set_agent_skills(str(msg.get("name") or ""), skills_mod.clean_setting(msg.get("skills")))
@@ -616,6 +641,178 @@ class Hub:
         except tally_mod.TallyError as e:
             await self.system(f"Roles: {e}")
         await self.emit_roles()
+
+    # ---------------------------------------------------------------- connections + MCP library
+    async def test_connection(self, cid: str) -> None:
+        """One CLI tool's own test script (app/connections/) -> connection_test. One run per tool at a time."""
+        if connections.find(cid) is None:
+            await self.emit({"type": "connection_test", "id": cid, "installed": False, "version": None,
+                             "reachable": None, "usable": False, "detail": f"Unknown connection '{cid}'."})
+            return
+        if cid in self.connection_tests:
+            return                                          # the running test's result answers this click too
+        self.connection_tests.add(cid)
+        try:
+            await self.emit(await connections.run(cid, self.settings.engine))
+        finally:
+            self.connection_tests.discard(cid)
+
+    def mcp_event(self, error: str | None = None) -> dict:
+        extra = {"connections": connections.listing(), "import_sources": mcpimport.listing()}
+        if error:
+            extra["error"] = error
+        try:
+            return self.mcp.event(**extra)
+        except OSError as e:                                # an unreadable file must not break the page
+            return {"type": "mcp_library", "servers": [], "assignments": {}, **extra,
+                    "error": f"could not read the MCP library ({e})"}
+
+    def _spawn(self, coro) -> asyncio.Task:
+        t = asyncio.get_running_loop().create_task(coro)
+        self.background.add(t)
+        t.add_done_callback(self.background.discard)
+        return t
+
+    def start_background(self) -> None:
+        """Re-test every server in the library once per launch, in the background (statuses arrive as mcp_library)."""
+        if self.mcp_started:
+            return
+        self.mcp_started = True
+        if self.mcp.names():
+            self._spawn(self.mcp_test_all())
+
+    def mcp_start_test(self, name: str, *, restart: bool = False, gate=None) -> asyncio.Task:
+        """One test task per server. A test already running answers a new request too; restart (after a save)
+        cancels it and tests the new config once it has stopped."""
+        running = self.mcp_tasks.get(name)
+        if running is not None and not running.done():
+            if not restart:
+                return running
+            running.cancel()
+        t = self._spawn(self.mcp_test(name, after=running if restart else None, gate=gate))
+        self.mcp_tasks[name] = t
+        return t
+
+    async def mcp_idle(self) -> None:
+        """Wait until no MCP test is running (tests, shutdown)."""
+        while any(not t.done() for t in self.mcp_tasks.values()):
+            await asyncio.gather(*self.mcp_tasks.values(), return_exceptions=True)
+
+    async def mcp_test(self, name: str, *, after: asyncio.Task | None = None, gate=None) -> None:
+        """Start the server, list its tools, stop it (agentlib, zero tokens): status testing, then the result."""
+        if after is not None:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await after
+        async with gate or contextlib.nullcontext():
+            server = self.mcp.get(name)
+            if server is None:
+                return
+            self.mcp.testing.add(name)
+            await self.emit(self.mcp_event())
+            try:
+                try:
+                    result = await mcplib.TESTER(mcplib.agent_config(server))
+                except Exception as e:  # noqa: BLE001 -- a tester bug is a failed test, never a crash
+                    result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+                now = self.mcp.get(name)
+                if now is not None and (now.get("kind"), now.get("config")) == (server.get("kind"), server.get("config")):
+                    self.mcp.set_result(name, result)       # not edited or removed meanwhile
+            finally:
+                self.mcp.testing.discard(name)
+            await self.emit(self.mcp_event())
+
+    async def mcp_test_all(self, limit: int = 4) -> None:
+        gate = asyncio.Semaphore(limit)
+        tasks = [self.mcp_start_test(n, gate=gate) for n in self.mcp.names()]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _mcp_message(self, kind: str, msg: dict) -> None:
+        name = str(msg.get("name") or "").strip()
+        try:
+            if kind == "save_mcp_server":
+                saved = self.mcp.save(msg.get("server") or {}, msg.get("original_name"))
+                orig = str(msg.get("original_name") or "").strip()
+                if orig and orig != saved and orig in self.mcp_tasks:
+                    self.mcp_tasks.pop(orig).cancel()       # renamed: the old name's test is moot
+                await self.emit(self.mcp_event())           # the saved server (untested) at once
+                self.mcp_start_test(saved, restart=True)    # tested on add and on edit (testing, then the result)
+                return
+            if kind == "remove_mcp_server":
+                self.mcp.remove(name)
+                if name in self.mcp_tasks:
+                    self.mcp_tasks.pop(name).cancel()
+            elif kind == "test_mcp_server":
+                if self.mcp.get(name) is None:
+                    raise ValueError(f"there is no server named '{name}'")
+                self.mcp_start_test(name)                   # sends mcp_library (testing), then the result
+                return
+            elif kind == "list_mcp_imports":
+                sid = str(msg.get("source") or "")
+                folders = [Path(d["path"]) for d in self.store.directories() if Path(d["path"]).is_dir()]
+                cands = await asyncio.to_thread(mcpimport.candidates, sid, folders)
+                await self.emit({"type": "mcp_imports", "source": sid,
+                                 "servers": mcpimport.page_view(cands, set(self.mcp.names()))})
+                return
+            elif kind == "import_mcp_servers":
+                await self._mcp_import(str(msg.get("source") or ""), msg.get("names"))
+                return
+            elif kind == "set_agent_mcp":
+                self.mcp.set_agent(str(msg.get("agent") or ""), msg.get("servers"))
+        except ValueError as e:
+            await self.emit(self.mcp_event(error=str(e)))
+            if kind != "save_mcp_server":
+                await self.system(f"MCP: {e}")
+            return
+        await self.emit(self.mcp_event())
+
+    async def _mcp_import(self, sid: str, names) -> None:
+        """Copy the ticked candidates into the library (a name already there is skipped), then test each one."""
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise ValueError("names must be a list of server names")
+        folders = [Path(d["path"]) for d in self.store.directories() if Path(d["path"]).is_dir()]
+        cands = {c["name"]: c for c in await asyncio.to_thread(mcpimport.candidates, sid, folders)}
+        added, problems = [], []
+        for n in dict.fromkeys(names):
+            c = cands.get(n)
+            if c is None:
+                problems.append(f"{n}: no longer found in {mcpimport.source(sid)['name']}")
+            elif self.mcp.get(n) is not None:
+                problems.append(f"{n}: already in the library (skipped)")
+            else:
+                try:
+                    added.append(self.mcp.save({"name": n, "kind": c["kind"], "config": c["config"]}))
+                except ValueError as e:
+                    problems.append(f"{n}: {e}")
+        if problems:
+            await self.system("MCP import: " + "; ".join(problems))
+        await self.emit(self.mcp_event(error="; ".join(problems) if problems and not added else None))
+        for n in added:
+            self.mcp_start_test(n)
+
+    async def give_mcp(self, agent, *, who: str, session_id: str | None = None, chat_id: str | None = None,
+                       name: str | None = None) -> list[str]:
+        """Right before `agent` starts: its assigned MCP servers whose last test passed (crew.attach_mcp). Each
+        skipped server -> one system warning in that session / chat (once per owner, agent, server and reason);
+        returns the warning lines (the step runner also puts them in the step report). Never raises."""
+        try:
+            skipped = crew.attach_mcp(self, agent, name)
+        except Exception as e:  # noqa: BLE001 -- an unreadable library must not stop a run
+            skipped = [{"server": "(library)", "reason": f"the MCP library could not be read ({e})"}]
+        lines = []
+        for s in skipped:
+            text = f"MCP server '{s['server']}' was not given to the {who}: {s['reason']}. It runs without it."
+            lines.append(text)
+            key = (session_id or chat_id, who, s["server"], s["reason"])
+            if key in self.mcp_warned:
+                continue
+            self.mcp_warned.add(key)
+            ev = {"type": "system", "text": text}
+            if session_id:
+                ev["session_id"] = session_id
+            if chat_id:
+                ev["chat_id"] = chat_id
+            await self.emit(ev)
+        return lines
 
     async def _settings_message(self, kind: str, msg: dict) -> None:
         try:
@@ -887,6 +1084,8 @@ class Hub:
         await ls.chat.handle({"type": "user_message", "text": msg, "history": "Run report sent to the planner."})
 
     async def close(self) -> None:
+        for t in list(self.background):
+            t.cancel()
         for ls in self.sessions.values():
             await ls.visuals.close()
             if ls.running:

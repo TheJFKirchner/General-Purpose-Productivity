@@ -280,7 +280,7 @@ def test_edited_agent_file_reaches_crew_list_and_new_sessions(tmp_path, monkeypa
     assert c.of("file_saved")[-1]["applies"] == "new_sessions"
     planner = next(x for x in c.of("crew_list")[-1]["agents"] if x["role"] == "planner")
     assert "CUSTOM LINE." in planner["instructions"] and planner["root"] == "app" and planner["editable"]
-    assert planner["path"].endswith("planner/agent.md") and planner["promotion"]["root"] == "app"
+    assert planner["path"].replace("\\", "/").endswith("planner/agent.md") and planner["promotion"]["root"] == "app"
     assert "CUSTOM LINE." in hub.current.chat.agent.instructions                 # new session: new file
     assert "CUSTOM LINE." not in old.chat.agent.instructions                     # running session keeps its prompt
     assert "CUSTOM LINE." not in (crew.ROOT / "app" / "agents" / "planner" / "agent.md").read_text(encoding="utf-8")

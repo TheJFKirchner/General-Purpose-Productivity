@@ -200,6 +200,7 @@ class Run:
         agent = crew.load("orchestrator", engine=self.settings.engine, project=self.folder.project,
                           tools=orchestrator_tools(self),
                           **crew.session_kw(self.ls, crew.builtin_name("orchestrator"), role="orchestrator"))
+        await self.hub.give_mcp(agent, who=crew.display("orchestrator"), session_id=self.ls.id)
 
         await self.hub.count_use(agent.name)
         meter = Meter(self.hub, session_id=self.ls.id, role="orchestrator", name=crew.display("orchestrator"))

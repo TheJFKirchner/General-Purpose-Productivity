@@ -149,6 +149,8 @@ class PilotChat:
             await self.meter.set_status("working")
             try:
                 if self.session is None:
+                    if hasattr(self.hub, "give_mcp"):        # assigned MCP servers that passed their last test
+                        await self.hub.give_mcp(self.agent, who=self.meter.name, chat_id=self.id)
                     self.session = self.agent.session(resume=self.resume_id) if self.resume_id else self.agent.session()
                     await self.session.__aenter__()
                     if not self.counted:

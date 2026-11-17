@@ -16,6 +16,7 @@ import {
 } from './mutations';
 import { fxKey, isFinished, problemText, qOpen, sLabel, sName } from './selectors';
 import { initialCrewForm } from './initial';
+import { onConnectionTest, onMcpImports, onMcpLibrary } from './mcp';
 import { onReviewCase, onReviewDecided, onReviewFailed, onReviewProgress, onReviewRefused, onReviewStarted, onRolesList, reviewOf } from './roles';
 import { REDUCED, baseName, modelName } from '../lib/format';
 import { ADDABLE_PURPOSES, S_LABEL, WRITE_TOOLS } from '../lib/labels';
@@ -112,6 +113,9 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'agent_saved': onAgentSaved(c, ev); break;
     case 'agent_removed': onAgentRemoved(c, ev); break;
     case 'roles_list': onRolesList(c, ev); break;
+    case 'connection_test': onConnectionTest(c, ev); break;
+    case 'mcp_library': onMcpLibrary(c, ev); break;
+    case 'mcp_imports': onMcpImports(c, ev); break;
     case 'review_started': onReviewStarted(c, ev); break;
     case 'review_progress': onReviewProgress(c, ev); break;
     case 'review_case': onReviewCase(c, ev); break;
@@ -265,7 +269,7 @@ function endReplay(c: Ctx): void {
 /** A system line goes into its session's chat; when that chat is not on screen, or it answers an Approve the page is
     waiting on, it is also a toast. While Settings is open, an unscoped one is the answer to a settings request. */
 function onSystem(c: Ctx, ev: SystemEvent): void {
-  if (c.st.ui.settingsOpen && ev.session_id == null && !c.st.replaying) {
+  if (c.st.ui.view === 'settings' && ev.session_id == null && !c.st.replaying) {
     c.st.ui.settingsMsg = ev.text;
     later(c, 9000, () => run(c2 => { c2.st.ui.settingsMsg = null; }), 'settingsMsg');
     c.st.ui.settingsAdding = null; c.st.ui.picking = false;

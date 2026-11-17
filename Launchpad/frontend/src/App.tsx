@@ -1,5 +1,5 @@
 /* App shell: header + tab views + the right-hand aside + the visuals panel slot, and the page-wide overlays
-   (modal, pen editor, settings, folder menu, tooltip, toasts). Each screen lives in src/views/<Name>/. The "plan" tab
+   (modal, pen editor, folder menu, tooltip, toasts). Each screen lives in src/views/<Name>/. The "plan" tab
    is the chat screen (views/Chat): the Planner / CLI switch over both conversations. */
 import { useEffect, type ReactNode } from 'react';
 import { sel, useComputed, useLaunchpad, type View } from './store';
@@ -12,7 +12,7 @@ import Files from './views/Files/Files';
 import EditorModal from './views/Files/EditorModal';
 import Aside from './views/Aside/Aside';
 import VisualsPanel from './views/Visuals/Visuals';
-import SettingsModal from './views/Settings/Settings';
+import Settings from './views/Settings/Settings';
 
 export default function App() {
   const view = useLaunchpad(st => st.ui.view);
@@ -41,13 +41,13 @@ export default function App() {
           <Slot v="missions" view={view}><Missions /></Slot>
           <Slot v="crew" view={view}><Crew /></Slot>
           <Slot v="files" view={view}><Files /></Slot>
+          <Slot v="settings" view={view}><Settings /></Slot>
           <Aside />
           <VisualsPanel />
         </main>
       </div>
       <ModalHost />
       <EditorModal />
-      <SettingsModal />
       <DirMenu />
       <TipHost />
       <Toasts />

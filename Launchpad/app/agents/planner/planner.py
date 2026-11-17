@@ -376,6 +376,7 @@ class PlannerChat:
         async with self.lock:
             self.turns += 1
             if self.session is None:
+                await self.ls.hub.give_mcp(self.agent, who=crew.display("planner"), session_id=self.ls.id)
                 self.session = self.agent.session()
                 await self.session.__aenter__()
                 await self.ls.hub.count_use(self.agent.name)        # one count per planner session started

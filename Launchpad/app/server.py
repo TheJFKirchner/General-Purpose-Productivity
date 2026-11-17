@@ -207,6 +207,50 @@
         building and other = the Builder's gated tools and checks; custom_tools = Launchpad's step tools
       - sent again after a save of one of the app's files, after agent_create / agent_remove, and after a save of a
         folder's .claude/agents/*.md (that folder's list)
+      - mcp_supported (bool) = the engine this agent runs on can take MCP servers per run (agentlib; claude yes, fake
+        and Cursor no: assignments are kept but do nothing; say so on the card); engine_label = that engine's name
+        ("Claude", "Cursor", "Fake engine (demo)"). Planner = the planner's harness, CLI = the CLI chat's, others = the
+        launch engine
+    connection_test {id, installed, version, reachable, usable, detail}  (reply to test_connection; Settings >
+                    Connections. Any of version / reachable / usable / detail may be null = not checked; version =
+                    the number only, e.g. "2.1.160")
+      - one test script per CLI tool (app/connections/<tool>.py, each runnable alone from a terminal); the list of
+        tools comes from the server (mcp_library connections), so a new tool needs no page change. Connections is the
+        ONE place the page names the real tools ("Claude Code", "Cursor"); everywhere else it still says "CLI"
+      - claude_code: installed (claude on PATH, else the copy bundled with the SDK) + version + reachable = one minimal
+        request through agentlib (a fraction of a cent; the fake engine in the demo: zero tokens); usable = both
+      - cursor: install check only (cursor-agent / agent); reachable null; usable false while agentlib's Cursor engine
+        is a stub, with the reason in detail
+      - nothing runs until the user clicks Test; a second click while one runs is answered by the running test
+    mcp_library {servers:[{name, kind: command|url, config, status: connected|failed|untested|testing, detail,
+                 tool_count, tools:[names], tested_at}], assignments: {<agent name>: [server names]},
+                 connections:[{id, name}], import_sources:[{id, name}], error?}
+      - reply to every MCP message (below); also on connect and whenever a test starts or ends (broadcast)
+      - config: kind command {command, args:[..], env:{..}}; kind url {url, headers:{..}, type?: "sse"} (no type =
+        streamable HTTP; a URL whose path ends in /sse defaults to sse; an edit without type keeps the stored one).
+        Secret values arrive as "********": every env / header value (a value that is only a ${VAR} reference is shown),
+        secret-looking --flag=value / --flag value args, URL credentials and secret-looking query values. Send a
+        masked value back exactly as received to keep the stored secret; a mask with nothing stored is refused
+      - status testing = a test is running (the stored result stays in force for runs until it ends); detail = "N tools"
+        when connected, else the error; tool_count null unless connected; tested_at ISO time of the last finished test
+      - assignments: agent names as in crew_list `name` (launchpad-builder, launchpad-planner, launchpad-pilot,
+        copy-reviewer, ...). No agent has any server by default (absent = none)
+      - connections = the CLI tools for Settings > Connections; import_sources = "Import from <name>" buttons
+      - error = why the last request was refused (bad name, name taken, unknown server, hidden value not stored, ...);
+        absent when it worked. For anything but a save the same text also arrives as system "MCP: ..."
+      - stored in <home>/.launchpad/mcp.json (never settings.json, never a project); under --fake a temp sample library
+    mcp_imports {source, servers:[{name, kind, summary, scope: local|project|user, exists}]}  (reply to
+                list_mcp_imports; summary = the command line or URL, masked, " · " where it came from; exists = a server of
+                that name is already in the library (importing it is skipped))
+      - claude_code source: each connected folder's local scope (~/.claude.json projects["<folder>"].mcpServers) and
+        <folder>/.mcp.json, then user scope (~/.claude.json mcpServers); the first of a name wins (Claude Code's own
+        precedence). Only stdio / http / sse entries; ${VAR} references copied as they are (expanded at test / run)
+    MCP at run time: right before ANY crew agent starts (planner, Explorer, orchestrator, builders and folder step
+      agents, Visualizer, CLI chat; identical rule) it gets its assigned servers whose last finished test passed. Each
+      other assigned server is skipped: system {text: "MCP server '<name>' was not given to the <agent>: <reason>. It
+      runs without it.", session_id | chat_id} (once per session / chat, agent, server and reason; a step's warning is
+      also in its step report's issues). An engine that cannot take MCP servers (fake, Cursor): nothing given, no
+      warning. MCP tools are pre-approved (no permission cards, Launchpad's write guard does not see them)
     agent_uses {name, uses}  (whenever a count changes: planner session started, explore, step, run, visual render,
                 CLI chat's first turn)
     agent_drafted {ok: true, dir_id, fields: {name, description, purpose, model, tools:[..], instructions},
@@ -329,6 +373,20 @@
                   via list_backups / restore_backup {root: dir_id, path: ".claude/agents/<name>.md"})
     chat_from_plan {session_id} -> chat_started (mode plan, from_session_id) in the session's folder, the plan sent as
                   the first message; the draft stays approvable. Refused (system) if the session has no draft
+    test_connection {id} -> connection_test  (id from mcp_library connections: claude_code | cursor)
+    get_mcp {} -> mcp_library  (the Settings page sends it when it opens)
+    save_mcp_server {server: {name, kind, config}, original_name?} -> mcp_library (untested), then mcp_library
+                  (testing), then mcp_library (connected | failed): every save is tested. original_name = edit (a new
+                  name = rename, followed into every assignment); refused -> mcp_library with error
+    remove_mcp_server {name} -> mcp_library  (also removed from every agent)
+    test_mcp_server {name} -> mcp_library (status testing), then mcp_library (the result). A test = start the server,
+                  list its tools, stop it (agentlib.mcp_check; zero tokens; 30 s limit). Every server is also re-tested
+                  once in the background when the app starts
+    list_mcp_imports {source} -> mcp_imports
+    import_mcp_servers {source, names:[..]} -> mcp_library, then each imported server is tested (names already in the
+                  library or no longer found are skipped: system "MCP import: ...")
+    set_agent_mcp {agent, servers:[names]} -> mcp_library  (the whole list for that agent; [] = none; unknown names
+                  refused; failing servers may stay assigned (the card warns), the page offers only connected ones)
     set_autopilot {session_id, on: bool}
     set_auto_answers {session_id, on: bool} -> auto_answers (+ auto_answer lines and queue_resolved by "auto" for the
                   plan-step questions already waiting). Builders only. Per session, off by default, separate from
@@ -509,6 +567,10 @@ def create_app(port: int, code: str, settings: Settings, store=None, overridden=
             pass
         finally:
             hub.disconnect(send)
+
+    @app.on_event("startup")
+    async def _startup():
+        hub.start_background()          # re-test every MCP server in the library (once per launch)
 
     @app.on_event("shutdown")
     async def _shutdown():

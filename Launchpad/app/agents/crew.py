@@ -18,6 +18,10 @@
   skills (allowlist + a plan step's skills, through agentlib skills / skill_dirs). No skills = loaded as before
 - HELPERS (not crew cards, not in the registry, still editable in the File Explorer): the agent drafter and the Role
   Reviewer (role_reviewer: reviews an undefined role from the tally, app/agents/role_reviewer/)
+- MCP servers (app/mcplib.py): attach_mcp(hub, agent) right before an agent starts = its assigned servers whose last
+  test passed, for every crew agent alike (planner and CLI chat included; helpers get none); hub.give_mcp wraps it and
+  shows a warning for each skipped server. crew_list cards carry mcp_supported + engine_label (the engine the agent
+  runs on: planner = the planner's harness, CLI = the CLI chat's, others = the launch engine)
 """
 from __future__ import annotations
 
@@ -180,6 +184,38 @@ def session_kw(ls, name: str, *, role: str | None = None, step_skills=()) -> dic
         kw["skills"] = names
         kw["skill_dirs"] = list(getattr(ls, "skill_dirs", []) or [])
     return kw
+
+
+# --------------------------------------------------------------------------- MCP servers (app/mcplib.py)
+ENGINE_LABELS = {"claude": "Claude", "cursor": "Cursor", "fake": "Fake engine (demo)"}
+
+
+def engine_label(engine: str) -> str:
+    return ENGINE_LABELS.get(engine, str(engine))
+
+
+def mcp_supported(engine: str) -> bool:
+    """agentlib's answer: can this engine take external MCP servers per run? (claude yes; fake and the Cursor stub no)"""
+    try:
+        from agentlib import get_engine
+        caps = get_engine(engine).capabilities
+        return bool(caps.available and caps.mcp_servers)
+    except Exception:  # noqa: BLE001 -- unknown engine: no
+        return False
+
+
+def attach_mcp(hub, agent: Agent, name: str | None = None) -> list[dict]:
+    """Give an agent that is about to start its assigned MCP servers whose last test passed (agentlib mcp_servers;
+    the agent file's own servers win a name clash). Same rule for every agent, the planner and the CLI chat included;
+    nothing assigned = nothing given. -> skipped [{server, reason}] (failing / untested ones: the run goes ahead
+    without them). An engine that cannot take MCP servers (fake, Cursor): nothing given, nothing skipped."""
+    lib = getattr(hub, "mcp", None)
+    if lib is None or not mcp_supported(agent.engine):
+        return []
+    servers, skipped = lib.for_agent(name or agent.name)
+    if servers:
+        agent.mcp_servers = {**servers, **dict(agent.mcp_servers or {})}
+    return skipped
 
 
 # --------------------------------------------------------------------------- registry
@@ -428,6 +464,12 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
                        "prompt_note": PROMPT_NOTES["lean+engine" if a.setup == "lean" and a.engine_prompt else a.setup],
                        "skill_setting": "cli" if role == "pilot" else
                        skills_mod.setting_of(agent_skills, d["name"], planner=role == "planner")})
+    from .claude_code import choices as cli_choices
+    from .planner import choices as planner_choices
+    run_engine = {"planner": planner_choices.planner_engine(settings), "pilot": cli_choices.cli_engine(settings)}
+    for a in agents:
+        eng = run_engine.get(a["role"], engine)
+        a["mcp_supported"], a["engine_label"] = mcp_supported(eng), engine_label(eng)
     for a in agents:
         if a["role"] == "planner":
             a["promotion"] = {"start_model": start, "target_model": top, "auto_promote": auto,
@@ -437,6 +479,7 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
     for e in folder_agents(folder):
         card = _folder_card(e, engine=engine, folder=folder, dir_id=dir_id, uses=uses)
         card["skill_setting"] = skills_mod.setting_of(agent_skills, e["name"])
+        card["mcp_supported"], card["engine_label"] = mcp_supported(engine), engine_label(engine)
         agents.append(card)
     return {"type": "crew_list", "dir_id": dir_id, "agents": agents, "tool_choices": list(TOOL_CHOICES),
             "skills": [{k: s[k] for k in ("name", "description", "path", "folder_name", "dir_id", "source", "shadowed")}

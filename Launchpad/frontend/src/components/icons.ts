@@ -6,5 +6,5 @@ export {
   AlertTriangle, ArrowLeft, ArrowRight, ArrowUp, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, CircleHelp, ClipboardList,
   CloudDownload, Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, GitBranch, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
   MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, Shapes, ShieldAlert, ShieldCheck, Sparkles, Square,
-  Telescope, Terminal, Trash, UserCog, UserPlus, Users, Wallet, WandSparkles, WifiOff, X, GitMerge,
+  Telescope, Terminal, Plug, Server, Download, CircleCheck, CircleX, Trash, UserCog, UserPlus, Users, Wallet, WandSparkles, WifiOff, X, GitMerge,
 } from 'lucide-react';

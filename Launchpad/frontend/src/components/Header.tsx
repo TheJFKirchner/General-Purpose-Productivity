@@ -27,6 +27,7 @@ export function Header() {
 
   const onKey = (e: RKeyboardEvent<HTMLDivElement>) => {
     const k = TABS.findIndex(t => t.view === view);
+    if (k < 0) return;
     let next = -1;
     if (e.key === 'ArrowRight') next = (k + 1) % TABS.length;
     else if (e.key === 'ArrowLeft') next = (k - 1 + TABS.length) % TABS.length;
@@ -50,7 +51,7 @@ export function Header() {
             {TABS.map(t => {
               const on = view === t.view;
               return (
-                <button key={t.view} type="button" role="tab" id={tabId(t.view)} aria-selected={on} aria-controls={panelId(t.view)} tabIndex={on ? 0 : -1}
+                <button key={t.view} type="button" role="tab" id={tabId(t.view)} aria-selected={on} aria-controls={panelId(t.view)} tabIndex={on || view === 'settings' && t.view === 'plan' ? 0 : -1}
                   title={t.title} onClick={() => actions.setView(t.view)}>
                   {t.icon}{t.label}
                   {t.view === 'plan' && chatWaiting > 0 && !on ? <span className="nbadge warn" aria-label={`${chatWaiting} waiting in the chats`}>{chatWaiting}</span> : null}
@@ -59,7 +60,7 @@ export function Header() {
               );
             })}
           </div>
-          <button type="button" className="navset" aria-haspopup="dialog" title="Settings: connected folders, timers, models" onClick={() => actions.openSettings()}><Settings /><span className="navset-txt">Settings</span></button>
+          <button type="button" className="navset" id={tabId('settings')} aria-pressed={view === 'settings'} title="Settings: connections, MCP servers, connected folders, timers, models" onClick={() => actions.setView('settings')}><Settings /><span className="navset-txt">Settings</span></button>
         </nav>
         <div className="hdr-right">
           <span className="conn" role="status" title={conn.text}><span className="dot" style={{ background: conn.color }} /><span className="conn-txt">{conn.text}</span></span>

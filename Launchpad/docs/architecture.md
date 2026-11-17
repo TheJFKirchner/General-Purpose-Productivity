@@ -69,6 +69,18 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 - **Skills** (`app/skills.py`): found only in the session's folders, primary first. Per folder: `.claude/skills` when it has a `.claude` folder (then `.agents` is ignored), else `.agents/skills`. A name found twice: the earlier folder wins, the other is listed as shadowed.
 - **Who gets which**: each crew agent has a skill setting ("all" or a list of names; Planner all, everyone else none), set in the Crew tab and stored per user. The planner's first message lists the skills; a plan step may name some (`skills` in plan.md), and that step's worker gets its own allowlist plus those. Agents receive them through agentlib (`Agent(skills=..., skill_dirs=...)`, lean setup: names and descriptions in the prompt, read on demand). The CLI chat keeps the harness's own skill discovery.
 
+## Settings: Connections and the MCP library
+
+- **Connections** (`app/connections/`): one small test script per CLI tool, each runnable alone from a terminal and listed (id + name) in `connections/__init__.py`; the page gets the list on `mcp_library` and sends `test_connection {id}`. Claude Code: program found, version, then one minimal request through agentlib (`check_connection`; the fake engine in the demo). Cursor: install check only; not usable while agentlib's Cursor engine is a stub. This is the one place the UI names the real tools.
+- **MCP library** (`app/mcplib.py`, `<home>/.launchpad/mcp.json`): servers added by form or imported (`app/mcpimport.py`, a list of sources; Claude Code's local, project and user scopes). Secrets never reach the page (masked; a masked value sent back keeps the stored one). A test starts the server, lists its tools and stops it (`agentlib.mcp_check`, zero tokens), on add, edit, click, and for every server in the background at app start.
+- **At run time**: right before any crew agent starts (planner, Explorer, orchestrator, builders, folder step agents, Visualizer, CLI chat), `hub.give_mcp` -> `crew.attach_mcp` passes its assigned servers whose last finished test passed to agentlib's `mcp_servers`. Others are skipped with a system warning (and a line in the step report); the run goes on. Engines that cannot take MCP servers (fake, Cursor) skip assignments silently; Crew cards say so (`mcp_supported`).
+
+```
+Settings page --save / test / import--> hub._mcp_message -> mcplib (mcp.json) -> mcp_test -> agentlib.mcp_check (thread)
+                                                                          \-> mcp_library (testing, then the result)
+agent about to start -> hub.give_mcp -> crew.attach_mcp -> mcplib.for_agent -> agent.mcp_servers (+ warnings)
+```
+
 ## Supporting modules (flat in `app/`)
 
 - `plan.py` plan.md render / parse / validate / targeted edits · `sessionfiles.py` the session folder files
@@ -81,7 +93,7 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 ## State on disk
 
 - `<folder>/.launchpad/<session-id>/`: written at run time inside each connected folder, ignored by git through its own `.gitignore`: `plan.md`, `flight-log.md`, `steps/`, `assumptions.md`, `operations-manual.md`, `report.md`, `activity.log`, `decisions.md`, `questions/` (one `NNN-<slug>.md` per answered question, kept across runs), `visuals/` (an older run's steps and report move to `run-<k>/`).
-- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) and `role-cases/` (one markdown case per review, with cost, date and the user's decision). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles seeded there).
+- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) `role-cases/` (one markdown case per review, with cost, date and the user's decision) and `mcp.json` (the MCP library: servers with their secrets, last test results, agent assignments; same lock + atomic replace). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles and a sample MCP library seeded there).
 - `<folder>/.claude/agent-cases/<agent>.md`: the review case of an agent created on the define path (beside `.claude/agents/`, never loaded as an agent).
 
 - No database; the in-memory hub state is rebuilt for a reconnecting page from the snapshot.

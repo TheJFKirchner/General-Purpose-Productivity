@@ -5,11 +5,11 @@
 import type {
   ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CliChoiceEvent, CrewAgentDef, DirEntry, Directory, FileContentEvent,
   FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoleCase, RoleDecision, RoleEntry, RoundAnswer, RunUsage,
-  ReviewTest, SettingValue, SkillInfo, StepStatus, VisualOption,
+  ReviewTest, ConnectionTestEvent, McpImportCandidate, McpServer, NamedItem, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
 /** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / CLI switch. */
-export type View = 'plan' | 'missions' | 'crew' | 'files';
+export type View = 'plan' | 'missions' | 'crew' | 'files' | 'settings';
 /** Which side of the chat screen's switch is showing. */
 export type ChatSide = 'planner' | 'code';
 export type SessionStatus = 'planning' | 'running' | 'done' | 'stopped' | 'failed' | 'blocked';
@@ -231,6 +231,17 @@ export interface CrewForm {
   cost: RunUsage | null;
 }
 
+/* ---------- Connections and the MCP library ---------- */
+/** The last mcp_library (loaded = one has arrived). assignments: agent name -> server names. */
+export interface McpState {
+  loaded: boolean; servers: McpServer[]; assignments: Record<string, string[]>;
+  connections: NamedItem[]; importSources: NamedItem[]; error: string | null;
+}
+/** A Test click: testing until connection_test answers, then done with the answer. */
+export type ConnTest = { status: 'testing' } | { status: 'done'; result: Omit<ConnectionTestEvent, 'type' | 'id'> };
+/** An import candidate list for one source: loading until mcp_imports answers. */
+export type McpImportList = { loading: true } | { loading: false; servers: McpImportCandidate[] };
+
 /* ---------- undefined roles: the list and one review per role ---------- */
 export interface RolesState { loaded: boolean; threshold: number; resurface: number; entries: RoleEntry[] }
 /** starting = review_start sent; running = the reviewer is reading; case = the case is in; failed / refused = a plain message, the role stays reviewable */
@@ -326,7 +337,6 @@ export interface UiState {
   newPlanBusy: boolean;
   newChatBusy: boolean;
   vis: { open: boolean; wide: boolean; width: number };
-  settingsOpen: boolean;
   settingsMsg: string | null;
   settingsAdding: string | null;
   settingsAddPath: string;
@@ -407,6 +417,9 @@ export interface AppState {
   roles: RolesState;
   reviews: Record<string, RoleReview>;
   roleOpen: string | null;
+  mcp: McpState;
+  connTests: Record<string, ConnTest>;
+  mcpImports: Record<string, McpImportList>;
   crewRemoving: string | null;            // agent_remove sent, waiting for agent_removed
   crewError: string | null;               // the last agent_removed failure
   crewFlash: string | null;               // a card just added (highlighted for a moment)

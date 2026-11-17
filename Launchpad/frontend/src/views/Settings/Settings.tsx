@@ -1,61 +1,56 @@
-/* The Settings modal (nav "Settings" -> actions.openSettings()): connected working folders (add by path or Browse…,
-   make default, two-click remove) and the server's settings (sent when a field is left or Enter is pressed).
-   Vanilla source: prototype/launchpad-orbit.html JS 2990-3063 (+ SET_LABEL in src/lib/labels.ts). */
+/* The Settings view (the header's Settings button, a fifth full view beside Plan, Missions, Crew and Files).
+   Sections in order: Connections (Connections.tsx), MCP library (McpLibrary.tsx), Working directories (add by path or
+   Browse…, make primary, two-click remove) and the server's general settings (sent when a field is left or Enter is
+   pressed). Vanilla source of the last two: prototype/launchpad-orbit.html JS 2990-3063 (+ SET_LABEL in src/lib/labels.ts). */
 import './Settings.css';
 import { useEffect, useRef, useState } from 'react';
 import { actions, useLaunchpad } from '../../store';
 import type { Directory } from '../../contract';
 import { baseName } from '../../lib/format';
 import { SET_LABEL } from '../../lib/labels';
-import { Dialog, DialogTitle, DialogX, Loading } from '../../components';
+import { Loading, ViewFrame } from '../../components';
 import { Folder, FolderOpen, Info, Plus } from '../../components/icons';
+import { Connections } from './Connections';
+import { McpLibrary } from './McpLibrary';
 
-export default function SettingsModal() {
-  const open = useLaunchpad(st => st.ui.settingsOpen);
+export default function SettingsView() {
   const settings = useLaunchpad(st => st.settings);
   const msg = useLaunchpad(st => st.ui.settingsMsg);
   const addPath = useLaunchpad(st => st.ui.settingsAddPath);
-  const closeRef = useRef<HTMLButtonElement>(null);
 
-  /* Close gets focus on open; Esc, an outside click, Close and the X close it (Dialog) */
   const vals = (settings && settings.values) || {};
   const names = Object.keys(vals);
 
   return (
-    <Dialog open={open} onRequestClose={() => actions.closeSettings()} className="wide" initialFocus={() => closeRef.current?.focus()}>
-      {open && (<>
-          <div className="modal-head">
-            <div><DialogTitle asChild><h2 id="setTitle">Settings</h2></DialogTitle><div className="modal-meta">Connected folders, timers and models for this launch</div></div>
-            <DialogX onClick={() => actions.closeSettings()} />
-          </div>
-          <div className="modal-body">
-            <div className="setbody" id="setBody">
-              {msg ? <div className="warn setmsg" id="setMsg" role="status"><Info />{msg}</div> : null}
-              <section className="set-sec">
-                <h3><Folder />Working directories</h3>
-                <p className="mut set-hint">Sessions and CLI chats run in the primary folder (New plan and New chat let you pick another). Folders ticked as additional are given to every new session and chat too: agents may work there, and skills are found there.</p>
-                <div id="setDirs"><Dirs dirs={settings ? settings.directories : null} /></div>
-                <form className="other set-add" id="setAdd" onSubmit={e => { e.preventDefault(); actions.addDirectory(addPath); }}>
-                  <label className="sr" htmlFor="setAddPath">Folder path</label>
-                  <input className="field" id="setAddPath" placeholder="Type or paste a folder path, e.g. C:\work\my-project" value={addPath} onChange={e => actions.setSettingsAddPath(e.target.value)} />
-                  <button className="pill sm primary" type="submit"><Plus />Add</button>
-                  <button className="pill sm" type="button" id="setBrowse" hidden={!(settings && settings.can_pick)} onClick={() => actions.pickDirectory()}><FolderOpen />Browse…</button>
-                </form>
-              </section>
-              <section className="set-sec">
-                <h3>Settings</h3>
-                <div id="setVals">
-                  {names.length ? <>
-                    {names.map(name => <SettingRow key={name} name={name} v={vals[name]} />)}
-                    <p className="mut set-hint">Changes are sent when you leave a field or press Enter. A value set by a launch option can only be changed by starting Launchpad without that option.</p>
-                  </> : settings ? <p className="mut">The server sent no settings.</p> : <Loading />}
-                </div>
-              </section>
+    <ViewFrame id="viewSettings" label="Settings" title="Settings" sub="Connections, MCP servers, connected folders, timers and models for this launch" bodyClass={null}>
+      <div className="set-page">
+        <div className="setbody" id="setBody">
+          {msg ? <div className="warn setmsg" id="setMsg" role="status"><Info />{msg}</div> : null}
+          <Connections />
+          <McpLibrary />
+          <section className="set-sec">
+            <h3><Folder />Working directories</h3>
+            <p className="mut set-hint">Sessions and CLI chats run in the primary folder (New plan and New chat let you pick another). Folders ticked as additional are given to every new session and chat too: agents may work there, and skills are found there.</p>
+            <div id="setDirs"><Dirs dirs={settings ? settings.directories : null} /></div>
+            <form className="other set-add" id="setAdd" onSubmit={e => { e.preventDefault(); actions.addDirectory(addPath); }}>
+              <label className="sr" htmlFor="setAddPath">Folder path</label>
+              <input className="field" id="setAddPath" placeholder="Type or paste a folder path, e.g. C:\work\my-project" value={addPath} onChange={e => actions.setSettingsAddPath(e.target.value)} />
+              <button className="pill sm primary" type="submit"><Plus />Add</button>
+              <button className="pill sm" type="button" id="setBrowse" hidden={!(settings && settings.can_pick)} onClick={() => actions.pickDirectory()}><FolderOpen />Browse…</button>
+            </form>
+          </section>
+          <section className="set-sec">
+            <h3>Settings</h3>
+            <div id="setVals">
+              {names.length ? <>
+                {names.map(name => <SettingRow key={name} name={name} v={vals[name]} />)}
+                <p className="mut set-hint">Changes are sent when you leave a field or press Enter. A value set by a launch option can only be changed by starting Launchpad without that option.</p>
+              </> : settings ? <p className="mut">The server sent no settings.</p> : <Loading />}
             </div>
-          </div>
-          <div className="modal-foot"><button type="button" className="pill ghost" ref={closeRef} onClick={() => actions.closeSettings()}>Close</button></div>
-      </>)}
-    </Dialog>
+          </section>
+        </div>
+      </div>
+    </ViewFrame>
   );
 }
 

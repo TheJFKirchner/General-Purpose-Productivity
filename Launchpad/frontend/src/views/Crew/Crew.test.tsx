@@ -129,24 +129,24 @@ it('Crew: Skills section per agent (Planner all, others a checklist, the CLI cha
   /* Planner: all skills */
   await click(q('.hero[data-name="launchpad-planner"]'));
   expect(byText('#crewDetail .seg button', 'All skills')!.getAttribute('aria-pressed')).toBe('true');
-  expect(qa('#crewDetail .skl li:not(.gone)').map(li => li.querySelector('code')!.textContent)).toEqual(['claims-glossary', 'sql-style']);
+  expect(qa('#crewDetail section:not(#crewMcp) .skl li:not(.gone)').map(li => li.querySelector('code')!.textContent)).toEqual(['claims-glossary', 'sql-style']);
   await click(q('#crewBack'));
   /* Builder: none ticked; ticking one sends set_agent_skills */
   await click(q('.hero[data-name="launchpad-builder"]'));
   expect(byText('#crewDetail .seg button', 'Choose')!.getAttribute('aria-pressed')).toBe('true');
-  const boxes = qa<HTMLInputElement>('#crewDetail .skl li:not(.gone) input');
+  const boxes = qa<HTMLInputElement>('#crewDetail section:not(#crewMcp) .skl li:not(.gone) input');
   expect(boxes.every(b => !b.checked)).toBe(true);
   await click(boxes[1]);
   expect(sentOf('set_agent_skills').at(-1)).toEqual({ type: 'set_agent_skills', name: 'launchpad-builder', skills: ['sql-style'], dir_id: 'd1' });
   await step(500);
-  expect(qa<HTMLInputElement>('#crewDetail .skl li:not(.gone) input')[1].checked).toBe(true);
+  expect(qa<HTMLInputElement>('#crewDetail section:not(#crewMcp) .skl li:not(.gone) input')[1].checked).toBe(true);
   /* a stored name that no longer exists stays listed, greyed */
   await act(async () => { actions.setAgentSkills('launchpad-builder', ['sql-style', 'gone-skill']); });
   await step(500);
-  expect(q('#crewDetail .skl li.gone code')?.textContent).toBe('gone-skill');
+  expect(q('#crewDetail section:not(#crewMcp) .skl li.gone code')?.textContent).toBe('gone-skill');
   await click(q('#crewBack'));
   /* the CLI chat: no checklist */
   await click(q('.hero[data-name="launchpad-pilot"]'));
   expect(q('#crewDetail #cdSkills')?.textContent).toContain('All (handled by the CLI)');
-  expect(q('#crewDetail .skl')).toBeNull();
+  expect(q('#crewDetail section:not(#crewMcp) .skl')).toBeNull();
 });

@@ -1,7 +1,7 @@
 /* UI actions: everything a screen does that changes state and/or sends a message. Views call these (or plain
    send() for messages with no local state change); they never write the store themselves.
    Ported from the vanilla click handlers; the same messages go out. */
-import type { AgentFields, ChatMode, Id, RoundAnswer } from '../contract';
+import type { AgentFields, ChatMode, Id, McpConfig, McpKind, RoundAnswer } from '../contract';
 import { getState, later, run, send, toast, type Ctx } from './core';
 import type { ChatSide, QueueItem, View } from './types';
 import type { GitOp, UiMessage } from '../contract';
@@ -41,7 +41,8 @@ export const actions = {
     run(c => {
       c.st.ui.view = v;
       if (v === 'files') { if (!c.st.settings) send({ type: 'get_settings' }); fxBoot(c); gitScan(c); }
-      if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); }
+      if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); send({ type: 'get_mcp' }); }
+      if (v === 'settings') { send({ type: 'get_settings' }); send({ type: 'get_mcp' }); c.st.ui.settingsMsg = null; }
       if (v === 'plan' && c.st.ui.chatSide === 'code' && !c.st.crewDefs && !c.st.crewLoading) requestCrew(c);
     });
   },
@@ -590,8 +591,23 @@ export const actions = {
   },
 
   /* ---------- Settings ---------- */
-  openSettings() { run(c => { send({ type: 'get_settings' }); c.st.ui.settingsOpen = true; c.st.ui.settingsMsg = null; }); },
-  closeSettings() { run(c => { c.st.ui.settingsOpen = false; }); },
+  /** Settings is a view (the header button): same as setView('settings'). */
+  openSettings() { actions.setView('settings'); },
+
+  /* ---------- Connections and the MCP library ---------- */
+  testConnection(id: string) { run(c => { if (send({ type: 'test_connection', id })) c.st.connTests[id] = { status: 'testing' }; }); },
+  /** Save a server (add, or edit with the name it had). The page waits for the next mcp_library. */
+  saveMcpServer(server: { name: string; kind: McpKind; config: McpConfig }, originalName?: string) {
+    run(c => { c.st.mcp.error = null; send(originalName ? { type: 'save_mcp_server', server, original_name: originalName } : { type: 'save_mcp_server', server }); });
+  },
+  removeMcpServer(name: string) { send({ type: 'remove_mcp_server', name }); },
+  testMcpServer(name: string) { run(c => { if (send({ type: 'test_mcp_server', name })) { const s = c.st.mcp.servers.find(x => x.name === name); if (s) { s.status = 'testing'; s.detail = null; } } }); },
+  listMcpImports(source: string) { run(c => { if (send({ type: 'list_mcp_imports', source })) c.st.mcpImports[source] = { loading: true }; }); },
+  closeMcpImports(source: string) { run(c => { delete c.st.mcpImports[source]; }); },
+  importMcpServers(source: string, names: string[]) { if (names.length) send({ type: 'import_mcp_servers', source, names }); },
+  setAgentMcp(agent: string, servers: string[]) {
+    run(c => { if (send({ type: 'set_agent_mcp', agent, servers })) c.st.mcp.assignments[agent] = servers; });
+  },
   setSettingsAddPath(path: string) { run(c => { c.st.ui.settingsAddPath = path; }); },
   addDirectory(path: string) {
     const p = String(path || '').trim(); if (!p) return;

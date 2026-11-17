@@ -44,6 +44,7 @@ async def explore(ls, question: str) -> dict:
     agent = crew.load("astronaut", engine=hub.settings.engine, project=folder.project,
                       output_schema=ASTRONAUT_SCHEMA, save_conversation=False,
                       **crew.session_kw(ls, crew.builtin_name("astronaut"), role="astronaut"))
+    await hub.give_mcp(agent, who=crew.display("astronaut"), session_id=ls.id)
 
     await hub.count_use(agent.name)             # one count per explore
     if ls.astronaut_meter is None:              # one Explorer per session: working on each trip, idle between
