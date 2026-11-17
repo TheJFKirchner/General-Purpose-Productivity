@@ -62,7 +62,7 @@ One block per slide.
 - Visual from:
 - Cut (settings and reason):
 - Footnote:
-- Source: <finding id (F2) when the project has findings.md, then the table or commentary id the numbers are read from>
+- Source:
 
 ## Questions
 

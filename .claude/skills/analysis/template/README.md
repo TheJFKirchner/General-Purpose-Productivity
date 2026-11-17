@@ -26,11 +26,6 @@ Created __DATE__. Built with the `analysis` skill.
 
 **Not included:**
 
-**Findings for the project** (only in a project; see the `findings` skill):
-
-| Goal | Finding, one sentence | Section | Filed as |
-| --- | --- | --- | --- |
-
 **Approved:**
 
 ## Cold read

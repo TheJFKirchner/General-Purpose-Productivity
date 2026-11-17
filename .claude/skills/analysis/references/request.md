@@ -23,7 +23,7 @@ The analysis may be strict ("compare these two fields") or open ("why is this ha
 | **For whom** | Who reads it; what they already know about this data |
 | **Background** | Why now; what prompted it |
 | **How it will be used** | The decision or action that follows |
-| **Where it fits** | The larger piece of work this feeds. In a project: the plan goal ids it serves (G1, G2), and what `findings.md` already says about them |
+| **Where it fits** | The larger piece of work this feeds |
 | **Success** | What the reader must be able to say or do after reading. One or two sentences |
 | **Scope** | Strict or open-ended. What is out of scope |
 | **Sources** | Each source: what one row is, the key, the period |

@@ -78,4 +78,3 @@ One file beside the shell, rewritten every run: `commentary.json` (dashboards: `
 - Missing filters, tables, snapshot column or questions: ask, never assume.
 - Regenerate saved commentary only on purpose.
 - After every run: report counts (generated, reused, failed, unverified, stale); show unverified bullets; ask keep, edit or drop.
-- In a project (a folder with `project_plan.md` above the deliverable): commentary stays inside its deliverable; this skill never writes findings. After a run on refreshed data, run the `findings` skill's `findings.py check`: findings that cite this commentary's tables go stale and are reworded from the new commentary.
