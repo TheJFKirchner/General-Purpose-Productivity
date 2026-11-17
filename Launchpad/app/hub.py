@@ -3,13 +3,20 @@
 - One LaunchSession = one planning conversation (+ its run); unique id; folder <project>/.launchpad/<id>/
 - Several sessions can be in flight: new_session starts a fresh planner while earlier runs keep going
 - user_message / round_answer go to the current session's planner
-- Regular sessions (Claude Code chats: PilotChat, app/agents/claude_code/pilot.py) live beside them in `chats`
+- Regular sessions (CLI chats: PilotChat, app/agents/claude_code/pilot.py) live beside them in `chats`
+- Folders: a session or chat runs in its primary folder (cwd) plus the folders ticked as additional (minus the
+  primary), fixed when it starts (extra_dirs); the session's skills are discovered from those folders (app/skills.py)
 - UI -> here: user_message, round_answer, plan_approve, queue_response, queue_dismiss, get_crew,
   report_to_planner, run_stop, new_session, chat_new, chat_message, chat_set_mode, chat_stop,
-  visual_pick, visual_tweak, visual_retry, set_autopilot, planner_promote,
-  agent_draft, agent_create, agent_remove, chat_from_plan
+  visual_pick, visual_tweak, visual_retry, set_autopilot, planner_promote, planner_choose,
+  agent_draft, agent_create, agent_remove, chat_from_plan, set_agent_skills,
+  git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py)
 - Agent use counter: count_use(name) -> store + agent_uses event (planner session, explore, step, run, visual
-  render, Claude Code chat)
+  render, CLI chat)
+- Planner picker (app/agents/planner/choices.py): planner_choose -> a planner nobody has written to yet takes any
+  available choice at once; a running one only promotion (its top model); anything else is remembered for the next
+  new plan (settings planner_harness / planner_start_model, per user). planner_choice is sent on connect and after
+  every change of a planner setting or of the app's files (the rules text)
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -23,14 +30,17 @@ import traceback
 from collections import deque
 
 from . import plan as plan_mod
+from . import skills as skills_mod
 from .activity import log_line
 from .agents import crew, folder_agents
 from .agents.claude_code.pilot import PilotChat
 from .agents.drafter import drafter
 from .agents.orchestrator.run import Run
-from .agents.planner.planner import PlannerChat
+from .agents.planner import choices
+from .agents.planner.planner import PlannerChat, promotion_criteria
 from .agents.visualizer.visuals import VisualBoard
 from .files import FileError, Files
+from .gitrepos import GitRepos
 from .incoming import Incoming
 from .sessionfiles import SessionFolder, new_session_id
 from .settings import Settings
@@ -44,7 +54,10 @@ class LaunchSession:
         self.hub = hub
         self.id = new_session_id()
         self.dir_id = dir_id or hub.default_dir
-        self.folder = SessionFolder(project or hub.settings.project, self.id)   # agents, guard, records: here
+        self.extra_ids, extra = hub.extra_dirs(self.dir_id)      # additional folders, fixed for the session
+        self.folder = SessionFolder(project or hub.settings.project, self.id, extra)   # agents, guard, records
+        self.skills = skills_mod.discover(self.folder.folders, [self.dir_id, *self.extra_ids])
+        self.skill_dirs = skills_mod.skill_dirs(self.folder.folders)
         self.plan_text: str | None = None
         self.run: Run | None = None
         self.run_count = 0
@@ -62,30 +75,49 @@ class LaunchSession:
 
     def started_event(self) -> dict:
         return {"type": "session_started", "session_id": self.id, "folder": self.folder.rel(self.folder.path),
-                "dir_id": self.dir_id, "cwd": str(self.folder.project)}
+                "dir_id": self.dir_id, "cwd": str(self.folder.project), "additional_dir_ids": list(self.extra_ids)}
+
+    def skill_names(self) -> set[str]:
+        return {s["name"] for s in skills_mod.active(self.skills)}
+
+    def step_skill_fields(self, step: dict) -> dict:
+        """skills (+ skills_unknown: named but not in this session's folders, ignored at run time) for UI events;
+        nothing when the step names no skills (events as before)."""
+        named = list(step.get("skills") or [])
+        if not named:
+            return {}
+        unknown = [n for n in named if n not in self.skill_names()]
+        return {"skills": named, **({"skills_unknown": unknown} if unknown else {})}
+
 
     def draft_event(self) -> dict:
         p = plan_mod.parse(self.plan_text)
         reg = crew.registry(self.folder.project)
         return {"type": "plan_draft", "session_id": self.id, "path": self.folder.rel(self.folder.plan),
                 "markdown": self.plan_text,
-                "steps": [{"n": s["n"], "title": s["title"], **crew.step_fields(s.get("agent"), self.folder.project, reg)}
-                          for s in p["steps"]],
+                "steps": [{"n": s["n"], "title": s["title"], **crew.step_fields(s.get("agent"), self.folder.project, reg),
+                           **self.step_skill_fields(s)} for s in p["steps"]],
                 "revision": self.draft_revision, "previous_runs": self.run_count}
 
     def agent_note(self, text: str) -> str:
         """Tool-result line for steps naming an agent the run would not use (it falls back to the Builder)."""
-        bad = []
+        bad, unknown = [], []
+        have = self.skill_names()
         for s in plan_mod.parse(text)["steps"]:
             if s.get("agent"):
                 _, reason = crew.resolve_step_agent(s["agent"], self.folder.project)
                 if reason:
                     bad.append(f"step {s['n']}: {reason}")
-        if not bad:
-            return ""
-        names = ", ".join(e["name"] for e in crew.step_agents(self.folder.project))
-        return (" Note: " + "; ".join(bad) + f". Those steps would run on the Builder; step agents: {names}. "
-                "Fix with edit_plan (set_step agent) if that is not intended.")
+            unknown += [f"step {s['n']}: {n}" for n in s.get("skills") or [] if n not in have]
+        out = ""
+        if bad:
+            names = ", ".join(e["name"] for e in crew.step_agents(self.folder.project))
+            out += (" Note: " + "; ".join(bad) + f". Those steps would run on the Builder; step agents: {names}. "
+                    "Fix with edit_plan (set_step agent) if that is not intended.")
+        if unknown:
+            out += (" Note: unknown skills (ignored at run time): " + "; ".join(unknown) + ". Skills: "
+                    + (", ".join(sorted(have)) or "none") + ". Fix with edit_plan (set_step skills).")
+        return out
 
     @property
     def draft_pending(self) -> bool:
@@ -143,6 +175,8 @@ class Hub:
         self.overridden: set[str] = set(overridden or ())    # settings a launch option overrides this launch
         self.picker = None                               # launch.py sets a native folder picker (window mode)
         self.files = Files(self)
+        self.git = GitRepos(self.store.directories)      # the Repos panel (app/gitrepos.py)
+        self.git_locks: dict[str, asyncio.Lock] = {}     # one operation at a time per repo
         self.clients: dict[object, asyncio.Lock] = {}
         self.meters: list = []
         self.recent_activity: deque = deque(maxlen=ACTIVITY_SNAPSHOT)
@@ -162,18 +196,33 @@ class Hub:
             raise ValueError(f"folder not found on disk: {path}")
         return did, path.resolve()
 
+    def extra_dirs(self, primary: str | None) -> tuple[list[str], list[Path]]:
+        """The additional folders for a session or chat whose primary is `primary`: (dir_ids, paths); ticked
+        folders minus the primary, only those that exist on disk."""
+        ids, paths = [], []
+        for did in self.store.additional_ids():
+            entry = self.store.get(did)
+            if did == primary or entry is None or not Path(entry["path"]).is_dir():
+                continue
+            ids.append(did)
+            paths.append(Path(entry["path"]).resolve())
+        return ids, paths
+
     def busy(self, did: str) -> bool:
         """A run, a planner turn or a chat turn is going in that directory."""
         return (any(ls.dir_id == did and (ls.running or ls.chat.lock.locked()) for ls in self.sessions.values())
                 or any(c.dir_id == did and c.lock.locked() for c in self.chats.values()))
 
     def settings_event(self) -> dict:
+        extra = set(self.store.additional_ids())
         dirs = [{"dir_id": d["dir_id"], "path": d["path"], "name": d["name"], "exists": Path(d["path"]).is_dir(),
-                 "is_default": d["dir_id"] == self.default_dir, "busy": self.busy(d["dir_id"])}
+                 "is_default": d["dir_id"] == self.default_dir, "is_additional": d["dir_id"] in extra,
+                 "busy": self.busy(d["dir_id"])}
                 for d in self.store.directories()]
         values = {k: {"value": getattr(self.settings, k), "applies": spec[2], "overridden_by_launch": k in self.overridden}
                   for k, spec in SPECS.items()}
-        return {"type": "settings", "directories": dirs, "values": values, "can_pick_directory": self.picker is not None}
+        return {"type": "settings", "directories": dirs, "values": values, "can_pick_directory": self.picker is not None,
+                "additional_dir_ids": self.store.additional_ids()}
 
     def _new(self, did: str | None = None) -> LaunchSession:
         did, path = self.directory(did)
@@ -245,7 +294,7 @@ class Hub:
         """New UI connection: register and send a snapshot of everything in flight."""
         self.clients[send] = asyncio.Lock()
         engine = "fake engine (demo, zero tokens)" if self.settings.engine == "fake" else self.current.chat.agent.model
-        snapshot = [self.snapshot_event(), self.settings_event(),
+        snapshot = [self.snapshot_event(), self.settings_event(), self.choice_event(),
                     {"type": "plan_meta", "name": "Launchpad", "mode": "Chat", "status": "Ready"},
                     {"type": "system", "text": f"Connected to the planner ({engine}). Project: {self.settings.project.name}."}]
         for ls in self.sessions.values():
@@ -303,11 +352,17 @@ class Hub:
                 await self.system(f"Crew: {e}")
         elif kind in ("agent_draft", "agent_create", "agent_remove"):
             await self._agent_message(kind, msg)
+        elif kind == "set_agent_skills":
+            try:
+                self.store.set_agent_skills(str(msg.get("name") or ""), skills_mod.clean_setting(msg.get("skills")))
+                await self.emit(self.crew_event(msg.get("dir_id")))
+            except ValueError as e:
+                await self.system(f"Crew: {e}")
         elif kind == "chat_from_plan":
             try:
                 await self.chat_from_plan(str(msg.get("session_id") or self.current.id))
             except ValueError as e:
-                await self.system(f"Send plan to Claude Code: {e}", str(msg.get("session_id") or "") or None)
+                await self.system(f"Send plan to CLI: {e}", str(msg.get("session_id") or "") or None)
         elif kind == "report_to_planner":
             await self.report_to_planner(str(msg.get("session_id") or self.current.id))
         elif kind == "run_stop":
@@ -321,6 +376,8 @@ class Hub:
             await self._settings_message(kind, msg)
         elif kind in ("list_dir", "read_file", "save_file", "list_backups", "restore_backup"):
             await self._file_message(kind, msg)
+        elif kind in ("git_scan", "git_refresh", "git_fetch", "git_commit", "git_push"):
+            await self._git_message(kind, msg)
         elif kind == "planner_promote":
             ls = self.sessions.get(str(msg.get("session_id") or self.current.id))
             if ls is None:
@@ -330,6 +387,8 @@ class Hub:
                 await ls.chat.promote(by="user")
             except ValueError as e:
                 await self.system(f"Planner: {e}", ls.id)
+        elif kind == "planner_choose":
+            await self.planner_choose(msg)
         elif kind == "set_autopilot":
             await self.set_autopilot(str(msg.get("session_id") or self.current.id), bool(msg.get("on")))
         elif kind in ("visual_pick", "visual_tweak", "visual_retry"):
@@ -375,7 +434,7 @@ class Hub:
         return chat
 
     async def chat_from_plan(self, session_id: str) -> PilotChat:
-        """Send plan to Claude Code: a new Claude Code chat in the session's folder, in Plan mode, with the plan as
+        """Send plan to CLI: a new CLI chat in the session's folder, in Plan mode, with the plan as
         its first message (an alternative to Approve; the draft stays approvable)."""
         ls = self.sessions.get(session_id)
         if ls is None:
@@ -392,8 +451,10 @@ class Hub:
     def crew_event(self, dir_id: str | None = None) -> dict:
         """crew_list for a connected folder (default: the current session's): built-ins + its own agents."""
         did, path = self.directory(dir_id or self.current.dir_id)
+        extra_ids, extra = self.extra_dirs(did)
+        found = skills_mod.discover([path, *extra], [did, *extra_ids])
         return crew.crew_list(self.settings.engine, self.settings.project, self.settings, self.store,
-                              folder=path, dir_id=did)
+                              folder=path, dir_id=did, skills_found=found)
 
     async def registry_changed(self, dir_id: str) -> None:
         """A folder's agents were added, edited or removed: fresh crew_list; its planners hear it on their next turn."""
@@ -438,10 +499,13 @@ class Hub:
                     if not self.store.get(did):
                         raise ValueError("that folder is not connected")
                     self._used(did)
-                clean = self.store.set_values(patch)                    # validated + saved
-                for k, v in clean.items():
-                    setattr(self.settings, k, v)                         # live; new sessions read it at start
-                    self.overridden.discard(k)
+                if "additional_dir_ids" in patch:                         # the "Additional" ticks
+                    self.store.set_additional(patch.pop("additional_dir_ids"))
+                if "planner_harness" in patch:
+                    self._check_harness(patch["planner_harness"])
+                clean = self._apply_settings(patch)                      # validated + saved; live
+                if any(k in choices.PLANNER_SETTINGS for k in clean):
+                    await self.planner_settings_changed()
             elif kind == "add_directory":
                 self.store.add(msg.get("path") or "")
             elif kind == "remove_directory":
@@ -476,6 +540,7 @@ class Hub:
                 await self.emit(ev)
                 if root == "app":                                        # agent files / criteria changed
                     await self.emit(self.crew_event())
+                    await self.emit(self.choice_event())                 # the picker's rules text
                 elif re.match(r"^\.claude/agents/[^/]+\.md$", ev.get("path") or ""):   # a folder agent edited
                     await self.registry_changed(root)
         except FileError as e:
@@ -485,6 +550,79 @@ class Hub:
             await self.emit(err)
         except OSError as e:
             await self.emit({"type": "file_error", "root": root, "path": path, "code": "not_found", "message": str(e)})
+
+    async def _git_message(self, kind: str, msg: dict) -> None:
+        """Repos panel: git runs off the event loop (app/gitrepos.py); one operation at a time per repo."""
+        if kind == "git_scan":
+            await self.emit(await asyncio.to_thread(self.git.scan))
+            return
+        rid = str(msg.get("repo_id") or "")
+        lock = self.git_locks.setdefault(rid, asyncio.Lock())
+        async with lock:
+            await self.emit(await asyncio.to_thread(self.git.run, kind[len("git_"):], msg))
+
+    # ---------------------------------------------------------------- planner picker
+    def choice_event(self) -> dict:
+        """planner_choice: harness-and-model options (availability from agentlib), the remembered choice for new
+        plans, auto-promote and the promotion rules (read-only text)."""
+        try:
+            text, path = promotion_criteria(self.settings)
+            rules = {"markdown": text, "path": crew.shown_path(path)}
+        except OSError:
+            rules = {"markdown": "", "path": None}
+        return choices.choice_event(self.settings, rules, self.overridden)
+
+    def _apply_settings(self, patch: dict) -> dict:
+        """Validate + save setting values (per user) and apply them to this launch (over a launch option)."""
+        clean = self.store.set_values(patch)
+        for k, v in clean.items():
+            setattr(self.settings, k, v)                         # live; new sessions read it at start
+            self.overridden.discard(k)
+        return clean
+
+    @staticmethod
+    def _check_harness(name) -> None:
+        if not choices.harness(str(name or "")):
+            raise ValueError(f"unknown harness {name!r}")
+        if not choices.harness_available(str(name)):
+            raise ValueError(f"{choices.harness_label(str(name))} is {choices.NOT_AVAILABLE}")
+
+    async def planner_settings_changed(self) -> None:
+        """A planner setting changed: planners nobody has written to yet reload with it (their planner_model is sent
+        again); then a fresh planner_choice."""
+        for ls in self.sessions.values():
+            if not ls.chat.started:
+                ls.chat.configure()
+                await self.emit(ls.chat.model_event())
+        await self.emit(self.choice_event())
+
+    async def planner_choose(self, msg: dict) -> None:
+        """The picker: option_id (choices.option_id) for session_id (default the current one). Not started yet ->
+        remembered and applied at once; the session's top model while it runs on its start model -> promotion by
+        hand (nothing remembered); anything else -> remembered for the next new plan (the page says so)."""
+        ls = self.sessions.get(str(msg.get("session_id") or "")) or self.current
+        opt = choices.find(str(msg.get("option_id") or ""), self.settings)
+        if opt is None or not opt["available"]:
+            what = opt["label"] + " is " + choices.NOT_AVAILABLE if opt else "unknown choice"
+            await self.system(f"Planner: {what}.", ls.id)
+            await self.emit(self.choice_event())
+            return
+        if self.settings.planner_model:
+            await self.system("Planner: the model is pinned for this launch (--model); start Launchpad without it "
+                              "to choose.", ls.id)
+            await self.emit(self.choice_event())
+            return
+        chat = ls.chat
+        if (chat.started and opt["harness"] == chat.harness and opt["model"] == chat.top_model
+                and opt["model"] != chat.model and chat.can_promote()):
+            try:
+                await chat.promote(by="user")                    # sends planner_model
+            except ValueError as e:
+                await self.system(f"Planner: {e}", ls.id)
+                await self.emit(chat.model_event())
+            return
+        self._apply_settings({"planner_harness": opt["harness"], "planner_start_model": opt["model"]})
+        await self.planner_settings_changed()
 
     async def system(self, text: str, session_id: str | None = None) -> None:
         await self.emit({"type": "system", "text": text, **({"session_id": session_id} if session_id else {})})

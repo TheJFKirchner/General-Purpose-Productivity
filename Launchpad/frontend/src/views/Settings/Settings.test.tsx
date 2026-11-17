@@ -34,3 +34,18 @@ it('Settings: folders, add, two-click remove, a setting sent on change', async (
   await key('Escape');
   expect(getState().ui.settingsOpen).toBe(false);
 });
+
+it('Settings: the primary folder is marked; another folder can be ticked as additional', async () => {
+  await act(async () => { actions.openSettings(); });
+  await step(400);
+  const rows = qa('.dirrow');
+  expect(rows[0].querySelector('.chip.ok')?.textContent).toBe('Primary');
+  expect(rows[0].querySelector('.dr-add')).toBeNull();                          // the primary has no tick box
+  const tick = rows[1].querySelector<HTMLInputElement>('.dr-add input')!;
+  expect(tick.checked).toBe(false);
+  await click(tick);
+  expect(sentOf('set_settings').at(-1)).toEqual({ type: 'set_settings', patch: { additional_dir_ids: ['d2'] } });
+  await step(400);
+  expect(qa('.dirrow')[1].querySelector<HTMLInputElement>('.dr-add input')!.checked).toBe(true);
+  expect(getState().settings!.directories.find(d => d.dir_id === 'd2')!.is_additional).toBe(true);
+});

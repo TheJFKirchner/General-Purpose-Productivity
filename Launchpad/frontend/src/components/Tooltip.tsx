@@ -57,7 +57,7 @@ export function tipContent(st: AppState, key: string): ReactNode {
     for (const a of Object.values(st.agents)) { const r = a.role || 'other'; by[r] = (by[r] || 0) + (+a.cost_usd || 0); }
     const rows = Object.entries(by).sort((x, y) => y[1] - x[1]);
     return <>
-      <b>Whole app</b> <span className="m">· every agent since launch: all planners, every session, Claude Code chats, the Visualizer</span><hr />
+      <b>Whole app</b> <span className="m">· every agent since launch: all planners, every session, CLI chats, the Visualizer</span><hr />
       Cost <b>{usd(t.cost)}</b> · {tokShort(t.parts)}<br /><span className="m">{tokLong(t.parts)}</span>
       {rows.length ? <ul>{rows.map(([r, v]) => <li key={r}>{roleLabel(r)}: {usd(v)}</li>)}</ul> : null}
       {st.usageFromServer && t.from === 'agents' && Math.abs(st.cost - t.cost) > 0.005 ? <span className="m">Server total: {usd(st.cost)}</span> : null}
@@ -73,7 +73,7 @@ export function tipContent(st: AppState, key: string): ReactNode {
     </>;
   }
   if (k === 'chat') {
-    const u = sel.chatUsage(st), ch = sel.curChat(st); if (!u || !ch) return <><b>Claude Code</b><br /><span className="m">No chat yet</span></>;
+    const u = sel.chatUsage(st), ch = sel.curChat(st); if (!u || !ch) return <><b>CLI</b><br /><span className="m">No chat yet</span></>;
     const p = { i: u.in, o: u.out, cr: u.cr, cw: u.cw };
     return <><b>This chat</b> <span className="m">· {MODE_LABEL[ch.mode]}{ch.model ? ' · ' + modelName(ch.model) : ''}</span><hr />Cost <b>{usd(u.cost)}</b> · {tokShort(p)} · {u.tools} tool calls<br /><span className="m">{tokLong(p)}</span></>;
   }

@@ -9,7 +9,7 @@ app/agents/
   crew.py            shared: role registry (ROLES / HELPERS), loading (load, load_step_worker), display names,
                      purposes, folder-agent registry, crew_list event, shared tool constants
   folder_agents.py   shared: folder agents' form fields, create, remove (<folder>/.claude/agents/<name>.md)
-  planner/           agent.md, promotion.md, planner.py
+  planner/           agent.md, promotion.md, planner.py, choices.py (the harness-and-model picker)
   explorer/          agent.md, astronaut.py
   orchestrator/      agent.md, run.py, report.py
   builder/           agent.md, builder.py, deny.py
@@ -20,7 +20,7 @@ app/agents/
 
 ## Role id to folder
 
-Role ids, front-matter names and websocket fields did not change when the folders were introduced; the folders use the display names.
+Role ids, front-matter names and websocket fields did not change when the folders were introduced, nor when "Claude Code" was renamed "CLI" (2026-11-16, so the app reads harness-neutral); the folders use the older display names.
 
 | Role id | Folder | Display name | Front-matter name | Python module |
 |---|---|---|---|---|
@@ -29,7 +29,7 @@ Role ids, front-matter names and websocket fields did not change when the folder
 | `orchestrator` | `orchestrator/` | Orchestrator | `launchpad-orchestrator` | `app.agents.orchestrator.run` (+ `report`) |
 | `builder` | `builder/` | Builder | `launchpad-builder` | `app.agents.builder.builder` (+ `deny`) |
 | `visual` | `visualizer/` | Visualizer | `launchpad-visual` | `app.agents.visualizer.visuals` (+ `libraries`) |
-| `pilot` | `claude_code/` | Claude Code | `launchpad-pilot` | `app.agents.claude_code.pilot` |
+| `pilot` | `claude_code/` | CLI (was Claude Code) | `launchpad-pilot` | `app.agents.claude_code.pilot` |
 | `drafter` (helper) | `drafter/` | Agent drafter | `launchpad-drafter` | `app.agents.drafter.drafter` |
 
 - Python modules are named after the role id (astronaut, pilot), or after what they hold where a folder has several modules
@@ -39,6 +39,7 @@ Role ids, front-matter names and websocket fields did not change when the folder
 ## What is shared
 
 - `crew.load(role, ...)`: loads `<folder>/agent.md` through agentlib's `load_claude_agent` and appends Launchpad's own tools (Tool objects) to the file's tool list. Library-only settings (setup, gated tools, output schema, model overrides) are passed at load time, never written into the file
+- `crew.session_kw(ls, name, role=, step_skills=)`: what every agent of a session gets at load time: `add_dirs` = the session's additional folders, and `skills` + `skill_dirs` = its allowlist (store `agent_skills`, keyed by agent name; Planner default all, others none) plus a plan step's skills, limited to the skills found in the session's folders (`app/skills.py`). Nothing to add = loaded exactly as before. The CLI chat (pilot) gets only `add_dirs` (its skills are the harness's own)
 - `crew.ROLES` / `crew.HELPERS`: role id -> folder, front-matter name, display name. The registry and crew cards cover ROLES; HELPERS (the drafter) load the same way but are not crew cards
 - `crew.WRITE_TOOLS`, `crew.WRITE_SHELL`, `crew.BUILDER_GATED`: the one place for the write / shell tool lists used by the Builder, read-only folder agents and the new-agent form
 - Import direction: each agent imports `crew`; the orchestrator imports the builder (`run_step`); `crew.crew_list` imports the agents lazily (inside the function) to avoid import cycles
@@ -47,7 +48,8 @@ Role ids, front-matter names and websocket fields did not change when the folder
 
 1. Make `app/agents/<folder>/` with `agent.md` (standard front matter: `name: launchpad-<role>`, `description`, `tools`, `model`; the body is the prompt), an `__init__.py`, the agent's Python code and a `README.md` like the others
 2. Add the role to `crew.ROLES` (folder, front-matter name, display name) and `crew.BUILTIN_PURPOSE`; use `crew.HELPERS` instead for a helper that is not a crew card
-3. Load it with `crew.load("<role>", engine=..., project=..., tools=[...])` from the code that runs it, with a `Meter` for its usage
+3. Load it with `crew.load("<role>", engine=..., project=..., tools=[...], **crew.session_kw(ls, <its agent name>, role="<role>"))` from the code that runs it (session_kw: additional folders + skills), with a `Meter` for its usage
+
 4. If it should appear in the Crew tab, add it to the `built` dict in `crew.crew_list`
 5. Add a fake-engine script for its front-matter name in `app/demo.py` and tests under `tests/` (zero tokens)
 6. Document new websocket fields in the `app/server.py` header (authoritative contract)

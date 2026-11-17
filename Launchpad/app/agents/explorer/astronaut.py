@@ -42,7 +42,9 @@ async def explore(ls, question: str) -> dict:
     """Run one Explorer for `ls` (a LaunchSession). -> {links:[{path, line, answer}], text, error?}."""
     hub, folder = ls.hub, ls.folder
     agent = crew.load("astronaut", engine=hub.settings.engine, project=folder.project,
-                      output_schema=ASTRONAUT_SCHEMA, save_conversation=False)
+                      output_schema=ASTRONAUT_SCHEMA, save_conversation=False,
+                      **crew.session_kw(ls, crew.builtin_name("astronaut"), role="astronaut"))
+
     await hub.count_use(agent.name)             # one count per explore
     if ls.astronaut_meter is None:              # one Explorer per session: working on each trip, idle between
         ls.astronaut_meter = Meter(hub, session_id=ls.id, role="astronaut", name=crew.display("astronaut"))

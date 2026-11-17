@@ -67,7 +67,9 @@ def test_starts_on_sonnet_and_promotes_by_criteria_in_the_window(harness):
     events = c.of("planner_model")
     assert events[0]["model"] == "sonnet" and events[0]["promoted"] is False
     assert events[-1] == {"type": "planner_model", "session_id": hub.current.id, "model": "opus", "promoted": True,
-                          "reason": "Multi-part dashboard with unclear goals.", "by": "criteria"}
+                          "reason": "Multi-part dashboard with unclear goals.", "by": "criteria",
+                          "harness": "claude", "start_model": "sonnet", "top_model": "opus", "label": "Claude · Opus",
+                          "option_id": "claude:opus", "auto_promote": True, "started": True, "switchable_to": []}
     chat = hub.current.chat
     assert chat.session.model == "opus" and chat.session.last_reply.model == "opus"
     assert seen and "q1: " in seen[0]                                     # same conversation: the answer arrived

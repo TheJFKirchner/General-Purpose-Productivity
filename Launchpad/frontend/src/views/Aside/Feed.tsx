@@ -63,7 +63,7 @@ export function Feed() {
 }
 
 const FeedRow = memo(function FeedRow({ a, hidden, where, hl, pin }: { a: Activity; hidden: boolean; where: string; hl: boolean; pin: boolean }) {
-  const meta = [cleanName(a.name) || a.agent_id, a.chat_id != null ? 'Claude Code' : where, a.step != null ? `step ${a.step}` : '', clock(a.ts)].filter(Boolean).join(' · ');
+  const meta = [cleanName(a.name) || a.agent_id, a.chat_id != null ? 'CLI' : where, a.step != null ? `step ${a.step}` : '', clock(a.ts)].filter(Boolean).join(' · ');
   const stt = a.status === 'started' ? <i className="live" title="running" />
     : a.status === 'denied' ? 'denied' : a.status === 'failed' ? 'failed'
     : a.auto ? <span className="autotag" title="Approved by Autopilot (no card)">auto</span> : null;

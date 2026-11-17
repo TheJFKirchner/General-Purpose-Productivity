@@ -106,6 +106,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `.cursor/agents/*.md` agent files | `load_cursor_agent(name_or_path, project=..., tools=[impls], ask_user=True, **overrides)` | `agentlib/loaders/cursor.py` |
 | Reading an agent definition without starting it (no SDK equivalent) | `agent.describe()` -> JSON-safe dict: `name, description, model, engine, source_path, instructions, builtin_tools, custom_tools, mcp_servers` (secrets redacted)`, disallowed_tools, skills, warnings`; starts nothing, spends nothing | `agentlib/agent.py` |
 | `skills=` / `.claude/skills/<name>/SKILL.md` | `Agent(skills=["name"])` or `skills:` in the agent file | `agentlib/skills.py`, `agentlib/engines/claude.py` |
+| Skills from other folders (e.g. `.agents/skills`, extra project folders); no SDK equivalent | `Agent(skills=[...], skill_dirs=[folder, ...])` (lean: searched in order instead of the default; first match wins); `agentlib.skills.list_skills(folder)` lists one folder's skills | `agentlib/skills.py`, `agentlib/agent.py` |
 | `setting_sources`, `strict_mcp_config`, `system_prompt` preset, `tools` preset | `Agent(setup="lean" \| "project")` | `agentlib/engines/claude.py` |
 | `system_prompt={"type": "preset", "preset": "claude_code", "append": ...}` without `setting_sources` | `Agent(engine_prompt=True)` (lean setup: the engine's own agent prompt + `instructions` appended; no folder settings, CLAUDE.md, skills or connectors) | `agentlib/agent.py`, `agentlib/engines/claude.py` (`_system_prompt`) |
 | `hooks=` | internal only (ends_turn, lean skill guard); not user-facing | `agentlib/engines/claude.py` |
@@ -145,6 +146,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `extra_args={"no-session-persistence": None}` | `save_conversation` | default True; False = engine stores nothing (cannot resume; not in session lists). Capability `unsaved` |
 | `effort` | `effort` | passed only if set |
 | `skills` | `skills` | lean: listed in prompt, read on demand; project: native |
+| - | `skill_dirs` | lean only: folders holding `<name>/SKILL.md`, searched in order instead of the default search (`None` = default); a skill is found by folder name, else by its `name:`. Project setup ignores it (native discovery). Library-side lookup: no capability flag |
 | `setting_sources` etc. | `setup` | `"lean"` (default) or `"project"` |
 | `can_use_tool` | `on_permission` | Claude + fake only |
 | - | `timeout_s` | per turn, default 600; `None` = no limit. Timeout -> `AgentError` |
@@ -230,6 +232,7 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 | Test an agent without spending tokens | `from agentlib import fake`; `fake.script(...)`; `engine="fake"` | `examples/09_test_with_fake_engine.py` |
 | Behave like Claude Code in a folder (CLAUDE.md, settings, all built-ins) | `Agent(setup="project", cwd=...)` | - |
 | Give the agent skills | `Agent(skills=["name"])` (folder `<cwd or ~>/.claude/skills/<name>/SKILL.md` or `.cursor/skills`) | - |
+| Take skills from folders I choose (`.agents/skills`, several project folders) | `Agent(skills=[...], skill_dirs=[...])`; list a folder with `agentlib.skills.list_skills(folder)` | `agentlib/tests/test_loaders.py` |
 | Track spend | `reply.cost_usd`, `reply.total_cost_usd`, `reply.usage` | `examples/01_one_shot.py` |
 | Cap what a run may spend | `Agent(max_budget_usd=...)`; check `reply.error_kind == "budget"` | `examples/10_spending_cap.py` |
 | Run non-interactively (deny anything not pre-approved) | `Agent(permission_mode="never_ask")` | `examples/11_never_ask.py` |
@@ -286,7 +289,8 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 - A broken custom tool (exception) becomes an error tool result; the turn continues
 - Tool return: `str`; `dict`/`list` -> JSON; `None` -> `"ok"`. Sync handlers run in a thread
 - Skills in lean setup: names + descriptions go into the prompt; `Read` is added (if not listed) but limited to
-  the skill folders. Search: `<cwd>/.claude/skills`, `<cwd>/.cursor/skills`, `~/.claude/skills`, `~/.cursor/skills`
+  the skill folders. Search: `<cwd>/.claude/skills`, `<cwd>/.cursor/skills`, `~/.claude/skills`, `~/.cursor/skills`,
+  or exactly `Agent.skill_dirs` (in order) when given
 - Infrastructure failures raise `AgentError`; a model run that ends badly (spending cap, max turns, a reply that
   does not match `output_schema`, an API error) returns `Reply(status="error")` so usage is not lost;
   `Reply.error_kind` says which (`budget`, `max_turns`, `output_shape`, `other`). A turn that fails midway (timeout, process died) puts the

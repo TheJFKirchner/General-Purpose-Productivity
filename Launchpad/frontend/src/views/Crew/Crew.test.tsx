@@ -90,3 +90,31 @@ it('Crew: Draft for me fills the form; page checks and server problems show inli
   expect(q('#crewDetail')).toBeNull();
   expect(q('.hero[data-name="null-reviewer"]')).toBeNull();
 });
+
+it('Crew: Skills section per agent (Planner all, others a checklist, the CLI chat handled by the harness)', async () => {
+  await act(async () => { actions.setView('crew'); });
+  await step(1_000);
+  /* Planner: all skills */
+  await click(q('.hero[data-name="launchpad-planner"]'));
+  expect(byText('#crewDetail .seg button', 'All skills')!.getAttribute('aria-pressed')).toBe('true');
+  expect(qa('#crewDetail .skl li:not(.gone)').map(li => li.querySelector('code')!.textContent)).toEqual(['claims-glossary', 'sql-style']);
+  await click(q('#crewBack'));
+  /* Builder: none ticked; ticking one sends set_agent_skills */
+  await click(q('.hero[data-name="launchpad-builder"]'));
+  expect(byText('#crewDetail .seg button', 'Choose')!.getAttribute('aria-pressed')).toBe('true');
+  const boxes = qa<HTMLInputElement>('#crewDetail .skl li:not(.gone) input');
+  expect(boxes.every(b => !b.checked)).toBe(true);
+  await click(boxes[1]);
+  expect(sentOf('set_agent_skills').at(-1)).toEqual({ type: 'set_agent_skills', name: 'launchpad-builder', skills: ['sql-style'], dir_id: 'd1' });
+  await step(500);
+  expect(qa<HTMLInputElement>('#crewDetail .skl li:not(.gone) input')[1].checked).toBe(true);
+  /* a stored name that no longer exists stays listed, greyed */
+  await act(async () => { actions.setAgentSkills('launchpad-builder', ['sql-style', 'gone-skill']); });
+  await step(500);
+  expect(q('#crewDetail .skl li.gone code')?.textContent).toBe('gone-skill');
+  await click(q('#crewBack'));
+  /* the CLI chat: no checklist */
+  await click(q('.hero[data-name="launchpad-pilot"]'));
+  expect(q('#crewDetail #cdSkills')?.textContent).toContain('All (handled by the CLI)');
+  expect(q('#crewDetail .skl')).toBeNull();
+});

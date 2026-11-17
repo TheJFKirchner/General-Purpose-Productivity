@@ -4,11 +4,14 @@
    live (agent_uses). Clicking a card opens the full definition (the reader the Crew tab always had) with the edit pen;
    folder agents can also be removed there (two-click confirm, the server keeps a backup copy). "Add agent" opens
    the form in AgentForm.tsx. Vanilla source of the reader: prototype/launchpad-orbit.html 3324-3400.
-   Selection, filter text and Formatted / Raw are local to this view. Prompt and criteria text go through <Markdown>. */
+   Selection, filter text and Formatted / Raw are local to this view. Prompt and criteria text go through <Markdown>.
+   The detail's Skills section sets the agent's skills ("All skills" or a checklist of the skills found in the folder
+   and the additional folders; set_agent_skills); names no longer found stay listed, greyed. The CLI chat shows
+   "All (handled by the CLI)" with no checklist. */
 import './Crew.css';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type AppState } from '../../store';
-import type { CrewAgentDef, Purpose } from '../../contract';
+import type { CrewAgentDef, Purpose, SkillInfo } from '../../contract';
 import { Empty, Loading, Markdown, PURPOSE_ICON, PenButton, Pill, PurposeTag, ViewFrame } from '../../components';
 import { AlertTriangle, ArrowLeft, Bot, Copy, FolderOpen, Plus, RotateCw, Rocket, Search, Trash, UserPlus, Users } from '../../components/icons';
 import { ADDABLE_PURPOSES, PURPOSES, PURPOSE_HINT, PURPOSE_LABEL, roleLabel } from '../../lib/labels';
@@ -256,7 +259,7 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
         <dt>Description</dt><dd>{a.description ? a.description : <span className="none">None</span>}</dd>
         <dt>Purpose</dt><dd>{PURPOSE_LABEL[p]}<span className="mut">({PURPOSE_HINT[p].replace(/^./, ch => ch.toLowerCase())})</span></dd>
         {a.role && builtin ? <><dt>Role</dt><dd>{roleLabel(a.role)}</dd></> : null}
-        {a.setup ? <><dt>Setup</dt><dd>{a.setup}{a.setup === 'project' ? <> <span className="mut">(Claude Code in the project folder: its CLAUDE.md, settings and skills)</span></> : a.setup === 'lean' ? <> <span className="mut">(only the listed tools, no folder settings)</span></> : null}</dd></> : null}
+        {a.setup ? <><dt>Setup</dt><dd>{a.setup}{a.setup === 'project' ? <> <span className="mut">(the CLI harness in the project folder: its own instructions file, settings and skills)</span></> : a.setup === 'lean' ? <> <span className="mut">(only the listed tools, no folder settings)</span></> : null}</dd></> : null}
       </dl>
       {pr ? (
         <section className="cd-sec">
@@ -268,9 +271,10 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
             <dt>Criteria file</dt><dd><code className="pathcode">{pathBreaks(pr.criteria_path || 'unknown')}</code>{pr.editable ? <PenButton root={pr.root} path={pr.path || pr.criteria_path} label="Edit criteria" /> : null}</dd>
           </dl>
           {pr.criteria ? <div className="prompt cd-crit"><Markdown text={pr.criteria} /></div> : null}
-          <p className="none cd-crit-note">The user can also promote by hand from the Plan chat header.</p>
+          <p className="none cd-crit-note">The user can also promote by hand from the picker under the Plan chat box.</p>
         </section>
       ) : null}
+      <SkillsSection a={a} />
       <section className="cd-sec">
         <h3>Built-in tools <span>{readOnly && !builtin ? 'read-only purpose: write, edit and shell tools are removed when it runs' : 'the agent is restricted to these'}</span></h3>
         {tools}
@@ -300,3 +304,68 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
     </div>
   );
 }
+
+/* ---------------- one agent's skills ---------------- */
+const EMPTY_SKILLS: SkillInfo[] = [];
+function SkillsSection({ a }: { a: CrewAgentDef }) {
+  const skills = useLaunchpad(st => st.crewSkills) || EMPTY_SKILLS;
+  const setting = a.skill_setting;
+  if (setting === undefined) return null;                                   // an older server: no skills yet
+  if (setting === 'cli') {
+    return (
+      <section className="cd-sec" aria-labelledby="cdSkills">
+        <h3 id="cdSkills">Skills <span>All (handled by the CLI)</span></h3>
+        <p className="none">The CLI harness finds and picks skills itself, as it does in this folder; Launchpad does not limit them.</p>
+      </section>
+    );
+  }
+  const active = skills.filter(s => !s.shadowed), shadowed = skills.filter(s => s.shadowed);
+  const all = setting === 'all';
+  const picked = all ? active.map(s => s.name) : setting;
+  const unknown = all ? [] : setting.filter(n => !active.some(s => s.name === n));
+  const toggle = (name: string, on: boolean) => actions.setAgentSkills(a.name, on ? [...picked, name] : picked.filter(n => n !== name));
+  const where = (s: SkillInfo) => `${s.folder_name || 'folder'} · .${s.source || 'claude'}/skills`;
+  return (
+    <section className="cd-sec" aria-labelledby="cdSkills">
+      <div className="cd-row">
+        <h3 id="cdSkills">Skills <span>{all ? `all ${active.length} found` : `${picked.length - unknown.length} of ${active.length} ticked`}</span></h3>
+        <div className="seg" role="group" aria-label="Which skills this agent gets">
+          <button type="button" aria-pressed={all} onClick={() => { if (!all) actions.setAgentSkills(a.name, 'all'); }}>All skills</button>
+          <button type="button" aria-pressed={!all} onClick={() => { if (all) actions.setAgentSkills(a.name, active.map(s => s.name)); }}>Choose</button>
+        </div>
+      </div>
+      <p className="none skl-note">Skills come from the folder and the folders ticked as additional (.claude/skills, or .agents/skills when a folder has no .claude folder). The agent sees each name and description and reads a skill when a task matches. A plan step can add skills for its own worker. Changes apply to new sessions and steps.</p>
+      {active.length || unknown.length ? (
+        <ul className="skl">
+          {active.map(s => (
+            <li key={s.name}>
+              <label className="skl-row">
+                <input type="checkbox" checked={picked.includes(s.name)} disabled={all} onChange={e => toggle(s.name, e.target.checked)} />
+                <span className="skl-t"><code>{s.name}</code><small>{s.description || 'No description.'}</small></span>
+                <span className="skl-src">{where(s)}</span>
+              </label>
+            </li>
+          ))}
+          {unknown.map(n => (
+            <li key={'u:' + n} className="gone">
+              <label className="skl-row" title="Not found in these folders: ignored when the agent runs">
+                <input type="checkbox" checked onChange={() => toggle(n, false)} />
+                <span className="skl-t"><code>{n}</code><small>Not found in these folders (ignored when it runs). Untick to forget it.</small></span>
+              </label>
+            </li>
+          ))}
+          {shadowed.map((s, i) => (
+            <li key={'s:' + s.name + i} className="gone">
+              <span className="skl-row" title="Another folder earlier in the list has a skill with this name, so that one is used">
+                <input type="checkbox" disabled checked={false} aria-label={`${s.name} (shadowed)`} />
+                <span className="skl-t"><code>{s.name}</code><small>Shadowed: the primary or an earlier folder has a skill with this name.</small></span>
+                <span className="skl-src">{where(s)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="none">No skills found. A skill is a folder holding a SKILL.md (name and description at the top).</p>}
+    </section>
+  );
+}
+

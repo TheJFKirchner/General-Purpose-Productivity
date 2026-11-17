@@ -284,7 +284,9 @@ class VisualBoard:
             if self.gate is not None:
                 await self.gate.wait()
             agent = crew.load("visual", engine=s.engine, project=self.folder.project, model=s.visual_model,
-                              save_conversation=False)
+                              save_conversation=False,
+                              **crew.session_kw(self.ls, crew.builtin_name("visual"), role="visual"))
+
             reply = None
             async with agent.session() as sess:
                 async for ev in sess.stream(message):

@@ -1,16 +1,17 @@
 /* DEMO: scripted fake back end, ported from the vanilla page (two runs in flight, timed + blocking questions,
    permissions, an info card, costs, reports, the crew list with use counts and folder agents, agent draft / create /
-   remove, new sessions, Claude Code chats (also from a plan), plans with an agent per step, visuals, files).
+   remove, new sessions, CLI chats (also from a plan), the planner picker, plans with an agent per step, visuals, files).
    Talks to the UI only through emit(ev) -> the store's dispatch, and receive(msg) for UI messages, exactly like the
    websocket would. Used when the page URL has no ?port=&code= (also `npm run dev`). ?speed=N runs it N times faster.
    Loosely typed on purpose: it is a script, the store's reducer is the typed side. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { UiMessage } from '../contract';
+import type { GitRepo, UiMessage } from '../contract';
 import { actions, getState, sel } from '../store';
 import { baseName } from '../lib/format';
 import { esc } from '../lib/markdown';
 import { visExtra, visJs } from './visuals';
-import { agentPath, crewBase, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
+import { demoGitOn, demoGitRepos } from './gitDemo';
+import { agentPath, crewBase, DEMO_SKILLS, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
 
 type Ev = Record<string, any>;
 /** The agent file behind each built-in role (use counts are keyed by agent name). */
@@ -49,6 +50,7 @@ export class Demo {
   fsN = 0;
   bkN = 0;
   fs: Map<string, DemoFile> | null = null;
+  gitRepos: GitRepo[] | null = null;
   rev: Record<string, number> = {};
   runs: Record<string, number> = { 'S-A': 1, 'S-B': 1 };            // the two seeded runs count as run 1
   running: Record<string, boolean> = { 'S-A': true, 'S-B': true };
@@ -60,7 +62,11 @@ export class Demo {
   /* Crew: use counts per agent name (agent_uses), the connected folder's own agents */
   uses: Record<string, number> = { ...START_USES };
   folderAgents = folderAgentsBase();
+  skillSet: Record<string, 'all' | string[]> = {};          // set_agent_skills (agent name -> setting)
   visPicked: string | null = null;
+  /* planner picker: each session's planner (harness, models, promoted, started) and what new plans start on */
+  pm: Record<string, { harness: string; start: string; top: string; model: string; promoted: boolean; by: 'criteria' | 'user' | null; reason: string | null; started: boolean }> = {};
+  pkHarness = 'claude'; pkStart = 'sonnet';
   visMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
   private intervals: ReturnType<typeof setInterval>[] = [];
 
@@ -196,6 +202,43 @@ export class Demo {
     this.emit({ type: 'session_started', session_id: sid, folder, dir_id: d, cwd: dd ? dd.path : '' });
   }
 
+  /* ---- planner picker (planner_choice / planner_model / planner_choose), as app/agents/planner/choices.py ---- */
+  pkOptions(): Ev[] {
+    const out: Ev[] = [];
+    for (const [h, hl, ok] of [['claude', 'Claude', true], ['cursor', 'Cursor', false]] as const)
+      for (const [m, ml] of [['sonnet', 'Sonnet'], ['opus', 'Opus']] as const)
+        out.push({ id: `${h}:${m}`, harness: h, harness_label: hl, model: m, model_label: ml, label: `${hl} · ${ml}`, available: ok, note: ok ? null : 'not available yet' });
+    return out;
+  }
+  pkLabel(h: string, m: string): string { const o = this.pkOptions().find(x => x.id === `${h}:${m}`); return o ? o.label : `${h} · ${m}`; }
+  pkEmit(): void {
+    const auto = this.fsVals.planner_auto_promote ? !!this.fsVals.planner_auto_promote.value : true;
+    this.emit({ type: 'planner_choice', options: this.pkOptions(), choice: { option_id: `${this.pkHarness}:${this.pkStart}`, harness: this.pkHarness, model: this.pkStart, label: this.pkLabel(this.pkHarness, this.pkStart) },
+      auto_promote: auto, top_model: 'opus', top_label: 'Opus', promotion_off: this.pkStart === 'opus', pinned: null, overridden: [],
+      rules: { markdown: this.fsBody(`app|${PROMOTION_PATH}`), path: PROMOTION_PATH } });
+  }
+  /** One session's planner_model (all fields), after merging `patch` into its state. */
+  pmEmit(sid: string, patch: Partial<Demo['pm'][string]> = {}): void {
+    const p = this.pm[sid] = { ...(this.pm[sid] || { harness: this.pkHarness, start: this.pkStart, top: 'opus', model: this.pkStart, promoted: false, by: null, reason: null, started: false }), ...patch };
+    const switchable = !p.started ? this.pkOptions().filter(o => o.available).map(o => o.id) : p.start !== p.top && !p.promoted ? [`${p.harness}:${p.top}`] : [];
+    this.emit({ type: 'planner_model', session_id: sid, model: p.model, promoted: p.promoted, reason: p.reason, by: p.by, harness: p.harness, start_model: p.start, top_model: p.top,
+      label: this.pkLabel(p.harness, p.model), option_id: `${p.harness}:${p.model}`, auto_promote: p.start !== p.top, started: p.started, switchable_to: switchable });
+  }
+  pkChoose(msg: Ev): void {
+    const sid = msg.session_id || this.current, o = this.pkOptions().find(x => x.id === msg.option_id), p = this.pm[sid];
+    if (!o || !o.available) { this.emit({ type: 'system', session_id: sid, text: `Planner: ${o ? o.label + ' is not available yet' : 'unknown choice'}.` }); this.pkEmit(); return; }
+    if (p && p.started && o.harness === p.harness && o.model === p.top && p.model !== p.top && !p.promoted) {        // promotion by hand
+      const pid = Object.values(this.agents).find(a => a.role === 'planner' && a.session_id === sid)?.agent_id;
+      this.later(400, () => { if (pid) this.agent(pid, { model: p.top }); this.pmEmit(sid, { model: p.top, promoted: true, by: 'user', reason: null }); });
+      return;
+    }
+    this.pkHarness = o.harness; this.pkStart = o.model;                                                              // remembered
+    this.later(200, () => {
+      for (const [id, q] of Object.entries(this.pm)) if (!q.started) this.pmEmit(id, { harness: o.harness, start: o.model, model: o.model });
+      this.pkEmit();
+    });
+  }
+
   /* ---- Files demo: two connected folders + the app's own files, editable markdown, a conflict, an invalid save, backups ---- */
   fsInit(): void {
     if (this.fs) return;
@@ -208,7 +251,7 @@ export class Demo {
     if (f) Object.assign(f, { text, size: text.length, mtime: Date.now(), version: f.version + 1 });
     else this.fs!.set(k, { kind: 'markdown', text, size: text.length, mtime: Date.now(), version: 1, editable: true, applies: 'now', validates_as: null, backups: [], ...o });
   }
-  fsSettings(): void { this.emit({ type: 'settings', directories: JSON.parse(JSON.stringify(this.fsDirs)), values: JSON.parse(JSON.stringify(this.fsVals)), can_pick_directory: true }); }
+  fsSettings(): void { this.emit({ type: 'settings', directories: JSON.parse(JSON.stringify(this.fsDirs)), values: JSON.parse(JSON.stringify(this.fsVals)), can_pick_directory: true, additional_dir_ids: this.fsDirs.filter(d => d.is_additional).map(d => d.dir_id) }); }
   fsList(root: string, path: string): Ev[] {
     this.fsInit();
     const pre = path ? path + '/' : '', seen = new Map<string, Ev>();
@@ -238,9 +281,12 @@ export class Demo {
       case 'set_settings': {
         for (const [key, v] of Object.entries(msg.patch || {})) {
           if (key === 'default_dir_id') this.fsDirs.forEach(d => { d.is_default = d.dir_id === v; });
+          else if (key === 'additional_dir_ids' && Array.isArray(v)) this.fsDirs.forEach(d => { d.is_additional = v.includes(d.dir_id); });
           else if (this.fsVals[key] && !this.fsVals[key].overridden_by_launch) this.fsVals[key].value = v;
         }
-        this.fsSettings(); break;
+        this.fsSettings();
+        if (msg.patch && 'planner_auto_promote' in msg.patch) this.pkEmit();
+        break;
       }
       case 'add_directory': {
         const p = String(msg.path || '').trim();
@@ -295,6 +341,7 @@ export class Demo {
 
   start(): void {
     this.fsSettings();
+    this.pkEmit();
     actions.setQuiet(true);
     /* Run A: claims loader, on step 2 */
     this.session('S-A', 'runs/2026-11-12-claims-loader', 'Claims loader rebuild');
@@ -316,7 +363,7 @@ export class Demo {
     this.session('S-C', 'plans/q3-inpatient-refresh', 'Q3 inpatient trend refresh');
     this.emit({ type: 'plan_meta', session_id: 'S-C', name: 'Q3 inpatient trend refresh', mode: 'Plan', status: 'Draft' });
     this.agent('P-C', { session_id: 'S-C', role: 'planner', name: 'Planner', model: 'sonnet', status: 'idle' });
-    this.emit({ type: 'planner_model', session_id: 'S-C', model: 'sonnet', promoted: false, reason: null, by: null });
+    this.pmEmit('S-C', { started: true });
     this.total();
     actions.setQuiet(false);
 
@@ -384,8 +431,9 @@ export class Demo {
   }
   draftC(): void {
     const B = { agent: null, agent_display: 'Builder', agent_purpose: 'building' };
-    const steps = [{ n: 1, title: 'Pull the Q3 claims extract', ...B }, { n: 2, title: 'Refresh the trend tabs', ...B },
-      { n: 3, title: 'Build the readmissions tab', agent: 'sql-builder', agent_display: 'Sql builder', agent_purpose: 'building' },
+    const steps = [{ n: 1, title: 'Pull the Q3 claims extract', ...B, skills: ['claims-glossary'] }, { n: 2, title: 'Refresh the trend tabs', ...B },
+      { n: 3, title: 'Build the readmissions tab', agent: 'sql-builder', agent_display: 'Sql builder', agent_purpose: 'building', skills: ['sql-style', 'readmission-rules'], skills_unknown: ['readmission-rules'] },
+
       { n: 4, title: 'Review the readmissions SQL', agent: 'sql-reviewer', agent_display: 'Sql reviewer', agent_purpose: 'reviewing' },
       { n: 5, title: 'Draft commentary after your sign-off', ...B }];
     this.drafts['S-C'] = { steps, markdown: DRAFT_C_MARKDOWN, name: 'Q3 inpatient trend refresh' };
@@ -516,6 +564,7 @@ export class Demo {
     switch (msg.type) {
       case 'user_message': {
         const draft = /draft now/i.test(msg.text);
+        if (this.pm[this.current] && !this.pm[this.current].started) this.pmEmit(this.current, { started: true });   // the picker narrows
         if (!this.first[this.current]) this.first[this.current] = msg.text;
         this.think(900);
         this.later(1000, () => {
@@ -534,10 +583,11 @@ export class Demo {
         this.think(700);
         this.later(1100, () => {
           this.say('Noted.');
-          if (this.roundNo === 1 && this.current === 'S-C' && !this.agents['P-C'].promotedDemo) {   // turn 2: the criteria fire
+          if (this.roundNo === 1 && this.current === 'S-C' && !this.agents['P-C'].promotedDemo && !(this.pm['S-C'] && this.pm['S-C'].promoted)) {   // turn 2: the criteria fire
             this.agents['P-C'].promotedDemo = true; this.agent('P-C', { model: 'opus' });
-            this.emit({ type: 'planner_model', session_id: 'S-C', model: 'opus', promoted: true, by: 'criteria',
-              reason: 'Three outputs (trend tabs, readmissions SQL, commentary) and a sign-off point: a multi-part analysis plan.' });
+            if (!this.fsVals.planner_auto_promote || this.fsVals.planner_auto_promote.value !== false)
+              this.pmEmit('S-C', { model: 'opus', promoted: true, by: 'criteria',
+                reason: 'Three outputs (trend tabs, readmissions SQL, commentary) and a sign-off point: a multi-part analysis plan.' });
           }
           if (this.roundNo === 1 && this.current === 'S-C' && !this.vsets['vs-1']) {
             this.say("Quick design questions first: how should the readmissions trend look (ECharts by default, plus Chart.js, D3 and the team notebook's matplotlib style), and what palette and hero card should the report use? I asked the Visualizer for sketches on made-up data. They're in the panel beside the chat; pick any, or tweak them.");
@@ -573,8 +623,8 @@ export class Demo {
         const id = `S-N${++this.n}`;
         this.session(id, `.launchpad/new-plan-${this.n}`, null, msg.dir_id);
         this.current = id; this.pid = 'P-' + id;
-        this.agent(this.pid, { session_id: id, role: 'planner', name: 'Planner', model: 'sonnet', status: 'idle' });
-        this.emit({ type: 'planner_model', session_id: id, model: 'sonnet', promoted: false, reason: null, by: null });
+        this.agent(this.pid, { session_id: id, role: 'planner', name: 'Planner', model: this.pkStart, status: 'idle' });
+        this.pmEmit(id);
         this.emit({ type: 'plan_meta', session_id: id, name: 'New session', mode: 'Chat', status: 'Ready' });
         this.later(500, () => this.say('Fresh page. What are we planning? Say **draft now** any time and I’ll write a plan you can approve.'));
         break;
@@ -601,16 +651,20 @@ export class Demo {
       case 'agent_draft': this.agentDraft(msg); break;
       case 'agent_create': this.agentCreate(msg); break;
       case 'agent_remove': this.agentRemove(msg); break;
+      case 'set_agent_skills': this.skillSet[msg.name] = msg.skills === 'all' ? 'all' : [...(msg.skills || [])]; this.later(150, () => this.emit(this.crewList(msg.dir_id))); break;
       case 'chat_from_plan': this.chatFromPlan(msg.session_id); break;
       case 'chat_new': this.later(250, () => this.chatStart(msg.dir_id)); break;
       case 'get_settings': case 'set_settings': case 'add_directory': case 'remove_directory': case 'pick_directory':
       case 'list_dir': case 'read_file': case 'save_file': case 'list_backups': case 'restore_backup': this.fsOn(msg); break;
+      case 'git_scan': case 'git_refresh': case 'git_fetch': case 'git_commit': case 'git_push':
+        demoGitOn(msg, this.gitRepos || (this.gitRepos = demoGitRepos()), ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
       case 'set_autopilot': this.setAutopilot(msg.session_id, !!msg.on); break;
       case 'planner_promote': {
         const pid = Object.values(this.agents).find(a => a.role === 'planner' && a.session_id === msg.session_id)?.agent_id;
-        this.later(400, () => { if (pid) this.agent(pid, { model: 'opus' }); this.emit({ type: 'planner_model', session_id: msg.session_id, model: 'opus', promoted: true, by: 'user', reason: null }); });
+        this.later(400, () => { if (pid) this.agent(pid, { model: 'opus' }); this.pmEmit(msg.session_id, { model: 'opus', promoted: true, by: 'user', reason: null }); });
         break;
       }
+      case 'planner_choose': this.pkChoose(msg); break;
       case 'visual_pick': { const vs = this.vsets[msg.set_id]; if (vs) { vs.picked_id = msg.option_id; this.visPicked = (vs.options.find((o: Ev) => o.id === msg.option_id) || {}).label || null; this.visEmit(vs.set_id); } break; }
       case 'visual_tweak': this.visRedo(msg, String(msg.text || '')); break;
       case 'visual_retry': this.visRedo(msg, ''); break;
@@ -620,13 +674,13 @@ export class Demo {
     }
   }
 
-  /* ---- Claude Code demo: scripted Claude Code chats ---- */
+  /* ---- CLI demo: scripted CLI chats ---- */
   chatLater(cid: string, ms: number, fn: () => void): void { const t = this.chatTurns[cid]; this.later(ms, () => { if (this.chatTurns[cid] === t) fn(); }); }
   chatStart(dirId?: string, mode = 'default', fromSession?: string): string {
     const id = 'chat-' + (++this.chatN), d = this.fsDirs.find(x => x.dir_id === dirId) || this.fsDirs.find(x => x.is_default) || this.fsDirs[0];
     this.chatMode[id] = mode; this.chatCount[id] = 0; this.chatTurns[id] = 0; this.chatCalls[id] = [];
     this.emit({ type: 'chat_started', chat_id: id, mode, model: 'sonnet', cwd: d ? d.path : '', dir_id: d ? d.dir_id : null, ...(fromSession ? { from_session_id: fromSession } : {}) });
-    this.agent('pilot-' + id, { session_id: null, chat_id: id, role: 'pilot', name: 'Claude Code', model: 'sonnet', status: 'idle' });
+    this.agent('pilot-' + id, { session_id: null, chat_id: id, role: 'pilot', name: 'CLI', model: 'sonnet', status: 'idle' });
     this.total();
     return id;
   }
@@ -653,7 +707,7 @@ export class Demo {
     const id = 'cq-' + (++this.cqN);
     this.chatOpen[id] = cid;
     this.pending[id] = msg => { delete this.chatOpen[id]; onAnswer(msg); };
-    this.emit({ type: 'queue_item', id, chat_id: cid, session_id: null, agent: 'Claude Code', agent_id: 'pilot-' + cid, step: null, title: '', body: '', rec: null,
+    this.emit({ type: 'queue_item', id, chat_id: cid, session_id: null, agent: 'CLI', agent_id: 'pilot-' + cid, step: null, title: '', body: '', rec: null,
       blocking: true, timeout_s: null, expires_at: null, ...o });
   }
   chatTurnRun(cid: string, text: string, fromPlan?: { name: string; steps: Ev[] }): void {
@@ -810,7 +864,18 @@ export class Demo {
       const p = `.claude/agents/${a.name}.md`;
       return { ...a, root: dir, path: p, source_path: `${d ? d.path : ''}/${p}`, editable: true, uses: this.uses[a.name] || 0, instructions: this.fsBody(`${dir}|${p}`) };
     });
-    return { type: 'crew_list', dir_id: dir, tool_choices: [...TOOL_CHOICES], agents: [...builtins, ...folder] };
+    const setting = (a: Ev) => a.role === 'pilot' ? 'cli' : this.skillSet[a.name] ?? (a.role === 'planner' ? 'all' : []);
+    /* skills: the folder first, then the folders ticked as additional; a repeated name is shadowed */
+    const seen = new Set<string>(), skills: Ev[] = [];
+    for (const x of [dir, ...this.fsDirs.filter(f => f.is_additional && f.dir_id !== dir).map(f => f.dir_id)]) {
+      const fd = this.fsDirs.find(f => f.dir_id === x);
+      for (const s of DEMO_SKILLS[x] || []) {
+        skills.push({ ...s, dir_id: x, folder_name: fd ? fd.name : x, path: `${fd ? fd.path : ''}/.${s.source}/skills/${s.name}/SKILL.md`, shadowed: seen.has(s.name) });
+        seen.add(s.name);
+      }
+    }
+    return { type: 'crew_list', dir_id: dir, tool_choices: [...TOOL_CHOICES], skills,
+             agents: [...builtins, ...folder].map(a => ({ ...a, skill_setting: setting(a) })) };
   }
 
   /* ---- Crew: draft / create / remove a folder agent ---- */
@@ -875,10 +940,10 @@ export class Demo {
     });
   }
 
-  /* ---- "Send plan to Claude Code": a chat in the session's folder, Plan mode, the plan as its first message ---- */
+  /* ---- "Send plan to CLI": a chat in the session's folder, Plan mode, the plan as its first message ---- */
   chatFromPlan(sid: string): void {
     const d = this.drafts[sid];
-    if (!d) { this.emit({ type: 'system', session_id: sid, text: 'There is no draft plan to send to Claude Code yet.' }); return; }
+    if (!d) { this.emit({ type: 'system', session_id: sid, text: 'There is no draft plan to send to the CLI yet.' }); return; }
     this.later(300, () => {
       const cid = this.chatStart(this.sdir[sid], 'plan', sid);
       this.emit({ type: 'chat_message', chat_id: cid, role: 'user', markdown: d.markdown });                   // the plan as the user's first message

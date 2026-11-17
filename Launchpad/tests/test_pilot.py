@@ -1,4 +1,4 @@
-"""Regular session (Claude Code chat) on the fake engine: streaming, permissions, modes, plans, questions, interrupt, snapshot."""
+"""Regular session (CLI chat) on the fake engine: streaming, permissions, modes, plans, questions, interrupt, snapshot."""
 import asyncio
 
 import pytest

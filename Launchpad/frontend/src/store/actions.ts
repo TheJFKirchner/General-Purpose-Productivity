@@ -2,17 +2,32 @@
    send() for messages with no local state change); they never write the store themselves.
    Ported from the vanilla click handlers; the same messages go out. */
 import type { AgentFields, ChatMode, Id, RoundAnswer } from '../contract';
-import { getState, later, run, send, toast } from './core';
+import { getState, later, run, send, toast, type Ctx } from './core';
 import type { ChatSide, QueueItem, View } from './types';
+import type { GitOp, UiMessage } from '../contract';
 import {
   addBubble, addSys, answerQ, chatBubble, closeEditor, curChatOf, dropItem, fxBoot, fxLoad, fxSelect, noteVisPick, openVis,
   requestCrew, sendChat, setChatMode, setCurrent, submitIfDone,
 } from './mutations';
-import { agentFormProblems, canApprove, crewDir, curSess, dirsList, draftLaunched, fxKey, isBuiltin, problemField, sLabel, sName } from './selectors';
+import { agentFormProblems, canApprove, crewDir, curSess, dirsList, draftLaunched, fxKey, gitTicked, isBuiltin, problemField, sLabel, sName } from './selectors';
 import { initialCrewForm, initialEditor } from './initial';
 import { MODES, WRITE_TOOLS } from '../lib/labels';
 import { REDUCED } from '../lib/format';
 import { LS_EDITOR_VIEW, lsSet } from '../lib/storage';
+
+/* Repos panel: ask for the repo list (also when the Files tab opens); a lost answer must not leave the panel waiting */
+function gitScan(c: Ctx): void {
+  if (!send({ type: 'git_scan' })) return;
+  c.st.git.scanning = true;
+  later(c, 90_000, () => run(c2 => { c2.st.git.scanning = false; }), 'gitScan');
+}
+/** One operation on one repo: busy until its git_result (or 3 minutes, a push may be slow). */
+function gitOp(c: Ctx, id: string, op: GitOp, msg: UiMessage): void {
+  const g = c.st.git;
+  if (g.busy[id] || !send(msg)) return;
+  g.busy[id] = op; delete g.error[id]; delete g.note[id];
+  later(c, 180_000, () => run(c2 => { delete c2.st.git.busy[id]; }), `git:${id}`);
+}
 
 /* folder menu callback (functions are kept out of the store) */
 let dirMenuCb: ((dirId: string) => void) | null = null;
@@ -23,12 +38,12 @@ export const actions = {
   setView(v: View) {
     run(c => {
       c.st.ui.view = v;
-      if (v === 'files') { if (!c.st.settings) send({ type: 'get_settings' }); fxBoot(c); }
+      if (v === 'files') { if (!c.st.settings) send({ type: 'get_settings' }); fxBoot(c); gitScan(c); }
       if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); }
       if (v === 'plan' && c.st.ui.chatSide === 'code' && !c.st.crewDefs && !c.st.crewLoading) requestCrew(c);
     });
   },
-  /** The chat screen's Planner / Claude Code switch (shows the chat screen too). Both conversations stay as they are. */
+  /** The chat screen's Planner / CLI switch (shows the chat screen too). Both conversations stay as they are. */
   setChatSide(side: ChatSide) {
     run(c => {
       c.st.ui.view = 'plan';
@@ -96,8 +111,8 @@ export const actions = {
       }));
     });
   },
-  /** "Send plan to Claude Code" on a plan draft card: the server opens the folder's Claude Code chat in Plan mode
-      with the plan as its first message (chat_from_plan -> chat_started); the switch flips to Claude Code. */
+  /** "Send plan to CLI" on a plan draft card: the server opens a CLI chat in the folder in Plan mode
+      with the plan as its first message (chat_from_plan -> chat_started); the switch flips to the CLI side. */
   sendPlanToCode(sid: Id) {
     run(c => {
       const s = c.st.sessions[sid]; if (!s || !s.draft || s.codeSending) return;
@@ -108,24 +123,36 @@ export const actions = {
       c.st.ui.view = 'plan'; c.st.ui.chatSide = 'code';
       later(c, 20000, () => run(c2 => {
         const s2 = c2.st.sessions[sid];
-        if (s2 && s2.codeSending) { s2.codeSending = false; toast(c2, 'Claude Code has not started yet. You can send the plan again.'); }
+        if (s2 && s2.codeSending) { s2.codeSending = false; toast(c2, 'The CLI chat has not started yet. You can send the plan again.'); }
         if (c2.st.chatFromPlan === sid) { c2.st.chatFromPlan = null; c2.st.ui.newChatBusy = false; }
       }));
     });
   },
-  /** Promote the planner: first click arms (4 s), second click sends planner_promote. */
-  promotePlanner(sid: Id) {
+  /** The planner picker: one harness-and-model option (planner_choose). The server decides what it means: an unstarted
+      session takes it at once, the session's top model is promotion by hand, anything else is for the next new plan.
+      Picking what the session already runs, with nothing pending, sends nothing. */
+  choosePlanner(optionId: string) {
     run(c => {
-      const s = c.st.sessions[sid]; if (!s || s.promoted || s.promoting) return;
-      if (c.st.ui.pmConfirm !== sid) {
-        c.st.ui.pmConfirm = sid;
-        later(c, 4000, () => run(c2 => { c2.st.ui.pmConfirm = null; }), 'pmConfirm');
-        return;
-      }
-      c.st.ui.pmConfirm = null;
-      if (!send({ type: 'planner_promote', session_id: sid })) return;
-      s.promoting = true;
-      later(c, 15000, () => run(c2 => { const s2 = c2.st.sessions[sid]; if (s2 && s2.promoting) s2.promoting = false; }));
+      const pc = c.st.plannerChoice, o = pc ? pc.options.find(x => x.id === optionId) : null;
+      if (!o || !o.available || c.st.ui.pickerChoosing) return;
+      const s = curSess(c.st);
+      if (s && s.plannerOption === optionId && pc && pc.choice.option_id === optionId) return;
+      if (!send(s ? { type: 'planner_choose', option_id: optionId, session_id: s.id } : { type: 'planner_choose', option_id: optionId })) return;
+      c.st.ui.pickerChoosing = optionId;
+      if (s && s.plannerStarted && s.switchableTo.includes(optionId)) s.promoting = true;
+      const sid = s ? s.id : null;
+      later(c, 15000, () => run(c2 => {
+        c2.st.ui.pickerChoosing = null;
+        const s2 = sid ? c2.st.sessions[sid] : null; if (s2 && s2.promoting) s2.promoting = false;
+      }), 'pickerChoosing');
+    });
+  },
+  /** The picker's "Auto-promote" toggle: a per-user setting (planner_auto_promote). Off applies at once (the planner
+      never promotes itself); on applies to plans nobody has written to yet. */
+  setAutoPromote(on: boolean) {
+    run(c => {
+      if (!send({ type: 'set_settings', patch: { planner_auto_promote: on } })) return;
+      if (c.st.plannerChoice) c.st.plannerChoice.auto_promote = on;
     });
   },
   /** Autopilot switch: turning on takes a second click within 4 s; turning off is immediate. */
@@ -217,7 +244,7 @@ export const actions = {
   /** "Move to Landed". */
   clearSystem(sid: Id) { run(c => { const s = c.st.sessions[sid]; if (s) s.cleared = true; }); },
 
-  /* ---------- Claude Code chats (the switch's Claude Code side) ---------- */
+  /* ---------- CLI chats (the switch's CLI side) ---------- */
   /** Send in the open chat; with no chat open, starts one and sends the text once chat_started arrives. */
   sendChat(text: string): boolean { const t = String(text || '').trim(); if (!t) return false; return run(c => sendChat(c, t)); },
   setChatMode(mode: ChatMode) { run(c => setChatMode(c, mode)); },
@@ -237,7 +264,7 @@ export const actions = {
       later(c, 8000, () => run(c2 => { c2.st.ui.newChatBusy = false; }), 'newChat');
     });
   },
-  /** Answer an inline Claude Code card. `fields` = {decision, remember?, mode?, message?} or {answer}; label = settled text. */
+  /** Answer an inline CLI card. `fields` = {decision, remember?, mode?, message?} or {answer}; label = settled text. */
   chatRespond(itemId: Id, fields: { decision: 'allow' | 'deny' | 'always'; remember?: 'session' | 'project_local'; mode?: 'default' | 'accept_edits'; message?: string } | { answer: string }, label: string) {
     run(c => {
       const i = c.st.chatItems[itemId]; if (!i || i.ui !== 'open') return;
@@ -347,6 +374,16 @@ export const actions = {
     });
   },
   clearCrewError() { if (getState().crewError) run(c => { c.st.crewError = null; }); },
+  /** One agent's skills: "all" or a list of names (set_agent_skills -> a fresh crew_list). Shown at once. */
+  setAgentSkills(name: string, skills: 'all' | string[]) {
+    run(c => {
+      const a = (c.st.crewDefs || []).find(x => x.name === name);
+      if (!a || a.skill_setting === 'cli') return;
+      const dir = crewDir(c.st);
+      if (!send({ type: 'set_agent_skills', name, skills: skills === 'all' ? 'all' : [...skills], ...(dir ? { dir_id: dir } : {}) })) return;
+      a.skill_setting = skills === 'all' ? 'all' : [...skills];
+    });
+  },
 
   /* ---------- File Explorer ---------- */
   fxToggle(root: string, path: string) {
@@ -377,6 +414,49 @@ export const actions = {
   setFxRaw(raw: boolean) { run(c => { c.st.fx.raw = raw; }); },
   toggleFxCollapsed() { run(c => { c.st.fx.collapsed = !c.st.fx.collapsed; }); },
   setFxWidth(px: number) { run(c => { c.st.fx.width = Math.round(px); }); },
+
+  /* ---------- Repos panel ---------- */
+  gitScan() { run(c => gitScan(c)); },
+  gitRefresh(id: string) { run(c => gitOp(c, id, 'refresh', { type: 'git_refresh', repo_id: id })); },
+  gitFetch(id: string) { run(c => gitOp(c, id, 'fetch', { type: 'git_fetch', repo_id: id })); },
+  gitPush(id: string) { run(c => gitOp(c, id, 'push', { type: 'git_push', repo_id: id })); },
+  /** Commit the ticked files with the typed message; push = "Commit and push". Needs a message and one ticked file. */
+  gitCommit(id: string, push: boolean) {
+    run(c => {
+      const repo = c.st.git.repos.find(r => r.repo_id === id), message = (c.st.git.message[id] || '').trim();
+      if (!repo || !message) return;
+      const paths = gitTicked(c.st, repo);
+      if (!paths.length) return;
+      gitOp(c, id, 'commit', { type: 'git_commit', repo_id: id, message, paths, push });
+    });
+  },
+  gitSetMessage(id: string, text: string) { run(c => { c.st.git.message[id] = text; }); },
+  gitToggleFile(id: string, path: string) {
+    run(c => {
+      const off = c.st.git.unticked[id] || (c.st.git.unticked[id] = []), i = off.indexOf(path);
+      if (i >= 0) off.splice(i, 1); else off.push(path);
+    });
+  },
+  /** Tick all / untick all. */
+  gitTickAll(id: string, on: boolean) {
+    run(c => {
+      const repo = c.st.git.repos.find(r => r.repo_id === id);
+      c.st.git.unticked[id] = on || !repo ? [] : repo.files.map(f => f.path);
+    });
+  },
+  gitToggleOpen(id: string, open: boolean) { run(c => { c.st.git.open[id] = open; }); },
+  /** A changed file opens in the Files view (its folders expand, the file is selected). Deleted files have nothing to open. */
+  gitOpenFile(id: string, path: string) {
+    run(c => {
+      const repo = c.st.git.repos.find(r => r.repo_id === id); if (!repo) return;
+      const full = repo.rel && repo.rel !== '.' ? repo.rel + '/' + path : path, dir = full.split('/').slice(0, -1).join('/');
+      const fx = c.st.fx, add = (k: string) => { if (!fx.open.includes(k)) fx.open.push(k); };
+      add(fxKey(repo.dir_id, '')); fxLoad(c, repo.dir_id, '');
+      let acc = '';
+      for (const p of dir.split('/').filter(Boolean)) { acc = acc ? acc + '/' + p : p; add(fxKey(repo.dir_id, acc)); fxLoad(c, repo.dir_id, acc); }
+      fxSelect(c, repo.dir_id, full);
+    });
+  },
 
   /* ---------- pen editor (any editable markdown file) ---------- */
   openEditor(root: string | null | undefined, path: string | null | undefined, title?: string) {
@@ -443,6 +523,16 @@ export const actions = {
   /** One setting changed (the view checks numbers first). */
   setSetting(key: string, value: unknown) { run(c => { if (send({ type: 'set_settings', patch: { [key]: value } })) toast(c, 'Setting sent'); }); },
   makeDefaultDir(dirId: Id) { send({ type: 'set_settings', patch: { default_dir_id: dirId } }); },
+  /** Tick / untick a folder as additional (sends the whole list; a session leaves out its own primary itself). */
+  setAdditionalDir(dirId: Id, on: boolean) {
+    run(c => {
+      const dirs = c.st.settings ? c.st.settings.directories : [];
+      const ids = dirs.filter(d => (d.dir_id === dirId ? on : !!d.is_additional)).map(d => d.dir_id);
+      if (!send({ type: 'set_settings', patch: { additional_dir_ids: ids } })) return;
+      for (const d of dirs) if (d.dir_id === dirId) d.is_additional = on;
+    });
+  },
+
   removeDirectory(dirId: Id) { send({ type: 'remove_directory', dir_id: dirId }); },
 
   /* ---------- "Run it in which folder?" menu (New plan, New chat) ---------- */

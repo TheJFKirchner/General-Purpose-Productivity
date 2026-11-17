@@ -1,18 +1,21 @@
 """Launchpad's agents: standard agent definition files + Launchpad-only tools handed over at load time.
 
-- Files hold standard front matter only (usable in Claude Code / agentlib elsewhere, minus our tools)
+- Files hold standard front matter only (usable in the CLI harness / agentlib elsewhere, minus our tools)
 - load(role, ...) = load_claude_agent(file) + Launchpad tools appended to the file's tool list
 - Built-in definitions: app/agents/<folder>/agent.md (ROLES / HELPERS map role -> folder); the planner's promotion
   criteria: app/agents/planner/promotion.md
-- Display names are plain (Planner, Explorer, Orchestrator, Builder, Visualizer, Claude Code); role keys and
-  front-matter names stay as they were (astronaut = the Explorer, pilot = Claude Code, visual = the Visualizer)
+- Display names are plain (Planner, Explorer, Orchestrator, Builder, Visualizer, CLI); role keys and
+  front-matter names stay as they were (astronaut = the Explorer, pilot = the CLI chat, visual = the Visualizer)
 - Purposes: planning | exploring | building | reviewing (built-ins: BUILTIN_PURPOSE; folder agents: a `purpose:`
   front-matter field, default building)
 - Registry = the six built-ins + the connected folder's `.claude/agents/*.md` (folder agents). Step workers (what a
   plan step may name) = the Builder + folder agents that are exploring / building / reviewing and load cleanly
 - Folder agents run as step workers: exploring / reviewing are read-only (no write, edit or shell tools whatever
   the file lists); building ones get the Builder's gated tools, permission cards, guards and shell deny list
-- crew_list event: Agent.describe() (agentlib) + display_name, role, purpose, uses, builtin; plus folder agents
+- crew_list event: Agent.describe() (agentlib) + display_name, role, purpose, uses, builtin, skill_setting; plus
+  folder agents; plus the skills found in the folder's session folders (app/skills.py)
+- session_kw(ls, name): what every agent of a session gets at load time: add_dirs (the additional folders) and its
+  skills (allowlist + a plan step's skills, through agentlib skills / skill_dirs). No skills = loaded as before
 """
 from __future__ import annotations
 
@@ -21,6 +24,9 @@ from pathlib import Path
 
 from agentlib import Agent, load_claude_agent
 from agentlib.loaders import frontmatter
+from agentlib.skills import list_skills
+
+from .. import skills as skills_mod
 
 ROOT = Path(__file__).resolve().parents[2]      # the Launchpad folder
 APP_ROOT = ROOT                    # where the app's editable files live (a temp copy in the fake demo)
@@ -45,7 +51,7 @@ ROLES = {
     "astronaut": {"folder": "explorer", "name": "launchpad-astronaut", "display": "Explorer"},
     "orchestrator": {"folder": "orchestrator", "name": "launchpad-orchestrator", "display": "Orchestrator"},
     "builder": {"folder": "builder", "name": "launchpad-builder", "display": "Builder"},
-    "pilot": {"folder": "claude_code", "name": "launchpad-pilot", "display": "Claude Code"},
+    "pilot": {"folder": "claude_code", "name": "launchpad-pilot", "display": "CLI"},
     "visual": {"folder": "visualizer", "name": "launchpad-visual", "display": "Visualizer"},
 }
 
@@ -90,14 +96,14 @@ AGENT_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 PROMPT_NOTES = {
     "lean": "Own prompt only (lean setup): this file's text and the tools listed; no project settings.",
-    "lean+engine": ("Claude Code system prompt with this file's text appended; only the tools listed; no project "
+    "lean+engine": ("The CLI harness's own system prompt with this file's text appended; only the tools listed; no project "
                     "CLAUDE.md, settings, skills or connectors (lean)."),
-    "project": ("Claude Code system prompt, all built-in tools, and the launch folder's own CLAUDE.md, user and "
-                "project settings (permission rules), skills and hooks; permissions are Claude Code's own. "
+    "project": ("The CLI harness's own system prompt, all built-in tools, and the launch folder's own CLAUDE.md, user and "
+                "project settings (permission rules), skills and hooks; permissions are the harness's own. "
                 "None of Launchpad's builder guards."),
-    "folder-building": ("Step worker from this folder: Claude Code system prompt with this file's text appended "
+    "folder-building": ("Step worker from this folder: the CLI harness's system prompt with this file's text appended "
                         "(lean); the Builder's permission cards, write guard and shell deny list apply."),
-    "folder-read-only": ("Step worker from this folder, read-only: Claude Code system prompt with this file's text "
+    "folder-read-only": ("Step worker from this folder, read-only: the CLI harness's system prompt with this file's text "
                          "appended (lean); no write, edit or shell tools, whatever the file lists."),
 }
 
@@ -142,12 +148,34 @@ def agent_file(role: str) -> Path:
 
 def load(role: str, *, engine: str, project: Path, tools: list = (), model: str | None = None,
          setup: str = "lean", **overrides) -> Agent:
-    """Load the role's file; append Launchpad's own tools (Tool objects) to the file's tool list."""
+    """Load the role's file; append Launchpad's own tools (Tool objects) to the file's tool list. skills (from
+    session_kw) replace the file's skills list."""
+    skills = overrides.pop("skills", None)
     agent = load_claude_agent(agent_file(role), engine=engine, setup=setup, cwd=project, model=model, **overrides)
+    if skills:
+        agent.skills = list(skills)
     if tools:                                  # no Launchpad tools: keep the file's list (None = not specified)
         agent.tools = list(agent.tools or []) + list(tools)
     agent.resolved_tools()                     # fail now on a bad tool list
     return agent
+
+
+def session_kw(ls, name: str, *, role: str | None = None, step_skills=()) -> dict:
+    """Load-time settings for one agent of a LaunchSession `ls`: add_dirs = the session's additional folders;
+    skills = the agent's allowlist (store agent_skills, keyed by agent name) + step_skills, limited to the skills
+    found in the session's folders, with skill_dirs = those folders' skills folders. Empty parts are left out, so an
+    agent with no skills loads exactly as before."""
+    kw: dict = {}
+    extra = list(getattr(ls.folder, "extra", []) or [])
+    if extra:
+        kw["add_dirs"] = extra
+    found = getattr(ls, "skills", None) or []
+    setting = skills_mod.setting_of(ls.hub.store.agent_skills(), name, planner=role == "planner")
+    names = skills_mod.allowed(setting, found, list(step_skills or []))
+    if names:
+        kw["skills"] = names
+        kw["skill_dirs"] = list(getattr(ls, "skill_dirs", []) or [])
+    return kw
 
 
 # --------------------------------------------------------------------------- registry
@@ -314,8 +342,14 @@ def load_step_worker(entry: dict, *, engine: str, project: Path, tools: list, **
     meta, _ = frontmatter.read(entry["path"])
     file_model = meta.get("model")
     model = builtin_model("builder") if file_model in (None, "inherit") else None
+    skills = overrides.pop("skills", None)
     agent = load_claude_agent(entry["path"], engine=engine, setup="lean", cwd=project, model=model,
                               include_ask_user=False, engine_prompt=True, **overrides)
+    if skills:
+        # Launchpad hands it skills: keep the file's own skills only where the session's folders have them
+        avail = {s.name for d in agent.skill_dirs or [] for s in list_skills(d)}
+        agent.skills = list(dict.fromkeys(list(skills) + [s for s in agent.skills if s in avail]))
+
     file_tools, gated, disallowed = step_worker_tools(agent.tools, entry["purpose"])
     agent.tools = file_tools + list(tools)
     agent.gated_tools = gated
@@ -335,9 +369,10 @@ def builtin_model(role: str) -> str | None:
 
 # --------------------------------------------------------------------------- crew_list
 def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: Path | None = None,
-              dir_id: str | None = None) -> dict:
+              dir_id: str | None = None, skills_found: list[dict] | None = None) -> dict:
     """crew_list event: each agent as Launchpad runs it (tools built with a dummy context; nothing runs), then the
-    folder's own agents. folder = the connected folder whose agents are included (default: project)."""
+    folder's own agents. folder = the connected folder whose agents are included (default: project).
+    skills_found = app/skills.py discover() for that folder + the additional folders (default: folder only)."""
     from ..settings import Settings
     from .builder.builder import builder_tools
     from .claude_code.pilot import pilot_overrides
@@ -347,11 +382,15 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
     settings = settings or Settings(project=project, engine=engine)
     folder = Path(folder or project)
     uses = store.uses() if store is not None else {}
+    agent_skills = store.agent_skills() if store is not None else {}
+    if skills_found is None:
+        skills_found = skills_mod.discover([folder], [dir_id])
     start, top = planner_models(settings)
+    auto = start != top and bool(getattr(settings, "planner_auto_promote", True))   # the planner may promote itself
     criteria, criteria_path = promotion_criteria(settings)
     built = {
         "planner": load("planner", engine=engine, project=project, model=start,
-                        tools=planner_tools(None, criteria=criteria if start != top else None)),
+                        tools=planner_tools(None, criteria=criteria if auto else None)),
         "astronaut": load("astronaut", engine=engine, project=project, output_schema=ASTRONAUT_SCHEMA),
         "orchestrator": load("orchestrator", engine=engine, project=project, tools=orchestrator_tools(None)),
         "builder": load("builder", engine=engine, project=project, tools=builder_tools(None),
@@ -372,16 +411,22 @@ def crew_list(engine: str, project: Path, settings=None, store=None, *, folder: 
                        "disallowed_tools": d["disallowed_tools"], "warnings": d["warnings"],
                        "gated_tools": list(a.gated_tools) if engine != "fake" or role != "pilot" else [],
                        "setup": a.setup, "engine_prompt": a.setup == "project" or a.engine_prompt,
-                       "prompt_note": PROMPT_NOTES["lean+engine" if a.setup == "lean" and a.engine_prompt else a.setup]})
+                       "prompt_note": PROMPT_NOTES["lean+engine" if a.setup == "lean" and a.engine_prompt else a.setup],
+                       "skill_setting": "cli" if role == "pilot" else
+                       skills_mod.setting_of(agent_skills, d["name"], planner=role == "planner")})
     for a in agents:
         if a["role"] == "planner":
-            a["promotion"] = {"start_model": start, "target_model": top,
-                              "window_turns": settings.promotion_window_turns if start != top else 0,
+            a["promotion"] = {"start_model": start, "target_model": top, "auto_promote": auto,
+                              "window_turns": settings.promotion_window_turns if auto else 0,
                               "criteria": criteria, "criteria_path": shown_path(criteria_path),
                               **criteria_root(criteria_path, store)}
     for e in folder_agents(folder):
-        agents.append(_folder_card(e, engine=engine, folder=folder, dir_id=dir_id, uses=uses))
-    return {"type": "crew_list", "dir_id": dir_id, "agents": agents, "tool_choices": list(TOOL_CHOICES)}
+        card = _folder_card(e, engine=engine, folder=folder, dir_id=dir_id, uses=uses)
+        card["skill_setting"] = skills_mod.setting_of(agent_skills, e["name"])
+        agents.append(card)
+    return {"type": "crew_list", "dir_id": dir_id, "agents": agents, "tool_choices": list(TOOL_CHOICES),
+            "skills": [{k: s[k] for k in ("name", "description", "path", "folder_name", "dir_id", "source", "shadowed")}
+                       for s in skills_found]}
 
 
 def _folder_card(e: dict, *, engine: str, folder: Path, dir_id: str | None, uses: dict) -> dict:

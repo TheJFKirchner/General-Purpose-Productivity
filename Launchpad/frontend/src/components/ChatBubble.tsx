@@ -1,4 +1,4 @@
-/* Chat log pieces shared by the planner chat (Plan), the Claude Code chat and the read-only archive. */
+/* Chat log pieces shared by the planner chat (Plan), the CLI chat and the read-only archive. */
 import { useId, useState, type ReactNode } from 'react';
 import { Markdown } from './Markdown';
 import { ChevronDown, ClipboardList } from './icons';
@@ -27,7 +27,7 @@ function Folded({ className, text, children, label = 'Show all' }: { className: 
   );
 }
 
-/** The plan sent to Claude Code as its first message: a labelled, formatted plan, folded to its first lines. */
+/** The plan sent to the CLI as its first message: a labelled, formatted plan, folded to its first lines. */
 function PlanBubble({ label, text }: { label: string; text: string }) {
   return (
     <Folded className="bubble me planmsg" text={text} label="Show the whole plan">

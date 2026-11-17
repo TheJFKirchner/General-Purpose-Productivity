@@ -1,7 +1,7 @@
 /* Derived values, ported from the vanilla page. Pure functions of the state: call them with the state you got from
    useLaunchpad() (or getState()). They also work on immer drafts inside the reducer. */
 import type { AppState, Agent, ChatItem, PlannerEntry, QueueItem, Session, VisualSet } from './types';
-import type { AgentFields, AgentProblem, CrewAgentDef, Purpose } from '../contract';
+import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, Purpose } from '../contract';
 import { baseName, cleanName, modelName, tok, tparts, tsum, type TokParts } from '../lib/format';
 import { PURPOSES, WRITE_TOOLS } from '../lib/labels';
 
@@ -26,7 +26,7 @@ export const currentStep = (s: Session) => {
 export const stepsDone = (s: Session): number => ((s.run && s.run.steps) || []).filter(x => x.status === 'done').length;
 
 /** One definition everywhere: session total = Orchestrator + step agents + Explorers + Visualizer. The planner is separate.
-    (Role ids stay as they were: astronaut = Explorer, visual = Visualizer, pilot = Claude Code.) */
+    (Role ids stay as they were: astronaut = Explorer, visual = Visualizer, pilot = CLI.) */
 const RUN_ROLES = ['orchestrator', 'builder', 'astronaut', 'visual'];
 export const crewOf = (st: S, sid: string): Agent[] => agentsOf(st, sid).filter(a => RUN_ROLES.includes(a.role));
 export function sessionTotal(st: S, sid: string): number {
@@ -121,7 +121,7 @@ export function appTotals(st: S): { cost: number; parts: TokParts; from: 'agents
   return { cost: st.cost, parts, from: 'usage' };
 }
 
-/* ---------- Claude Code chats ---------- */
+/* ---------- CLI chats ---------- */
 export const curChat = (st: S) => (st.currentChat != null && st.chats[st.currentChat]) || null;
 export function chatUsage(st: S) {
   const c = curChat(st); if (!c) return null;
@@ -134,7 +134,7 @@ export function codeAgentName(st: S): string {
   const d = (st.crewDefs || []).find(a => a.role === 'pilot');
   if (d) return d.display_name || d.name;
   const p = Object.values(st.agents).find(a => a.role === 'pilot');
-  return (p && cleanName(p.name)) || 'Claude Code';
+  return (p && cleanName(p.name)) || 'CLI';
 }
 const openChatItems = (st: S): ChatItem[] => Object.values(st.chatItems).filter(i => i.ui === 'open');
 
@@ -147,7 +147,7 @@ export function plannerWaiting(st: S): number {
   if (s && canApprove(s) && s.status !== 'running') n++;
   return n;
 }
-/** Claude Code side: open permission / plan / question cards in any chat. */
+/** CLI side: open permission / plan / question cards in any chat. */
 export const codeWaiting = (st: S): number => openChatItems(st).length;
 export const plannerBusy = (st: S): boolean => { const s = curSess(st); return s ? s.typing : st.preTyping; };
 export const codeBusy = (st: S): boolean => Object.values(st.chats).some(c => c.busy);
@@ -217,24 +217,53 @@ export function problemText(p: AgentProblem): string {
   return p.field ? `${p.field}: ${msg}` : msg;
 }
 
-/* ---------- planner model ---------- */
-const promoConf = (st: S) => ((st.crewDefs || []).find(a => a.role === 'planner') || {} as { promotion?: undefined }).promotion || null;
-/** Plan header model chip + Promote button (hidden once promoted or when start = target). */
-export function plannerModelView(st: S) {
+/* ---------- planner picker (under the planner's chat box) ---------- */
+export interface PickerItem {
+  id: string; label: string; harness: string; model: string; available: boolean;
+  /** what the current plan runs on now */
+  current: boolean;
+  /** what the next new plan starts on, when that differs from what this plan started on */
+  next: boolean;
+  /** one short line under the label ("not available yet", "promote this plan · costs more", "from your next new plan") */
+  hint: string;
+  disabled: boolean;
+}
+/** The picker from planner_choice + the current session's planner_model. Everything it says comes from the server:
+    the options and their availability, what the session can switch to now (switchable_to), what the next plan starts on. */
+export function plannerPickerView(st: S) {
+  const pc = st.plannerChoice; if (!pc) return null;
   const s = curSess(st);
-  if (!s || !s.plannerModel) return null;
-  const conf = promoConf(st), target = (conf && conf.target_model) || 'opus';
-  const hide = s.promoted || (!!conf && modelName(conf.start_model) === modelName(conf.target_model)) || modelName(s.plannerModel) === modelName(target);
-  const confirm = st.ui.pmConfirm === s.id;
+  const started = !!(s && s.plannerStarted);
+  const current = (s && s.plannerOption) || pc.choice.option_id;
+  const startOpt = s && s.plannerHarness && s.plannerStart ? `${s.plannerHarness}:${s.plannerStart}` : null;
+  /* a choice the running plan could not take: remembered for the next new plan */
+  const pending = started && startOpt != null && pc.choice.option_id !== startOpt ? pc.choice : null;
+  const label = (s && s.plannerLabel) || pc.choice.label;
+  const items: PickerItem[] = pc.options.map(o => {
+    const isCurrent = o.id === current;
+    const nowOk = !started || (!!s && s.switchableTo.includes(o.id));
+    let hint = '';
+    if (!o.available) hint = o.note || 'not available yet';
+    else if (isCurrent) hint = s && s.promoted ? 'promoted' : '';
+    else if (started && nowOk) hint = 'promote this plan · costs more';
+    else if (started) hint = 'from your next new plan';
+    const next = !!pending && pending.option_id === o.id && !isCurrent;
+    if (next) hint = 'your next new plan starts here';
+    return { id: o.id, label: o.label, harness: o.harness, model: o.model, available: o.available, current: isCurrent,
+      next, hint, disabled: !o.available || !!pc.pinned };
+  });
+  const note = pc.pinned ? `The planner model is pinned to ${modelName(pc.pinned)} for this launch.`
+    : pending ? `${pending.label} applies to your next new plan; this plan keeps ${label}.` : '';
   return {
-    session: s,
-    chip: `${modelName(s.plannerModel)}${s.promoted ? ' · promoted' : ''}`,
-    chipTitle: s.promoted ? `Promoted ${s.promoBy === 'user' ? 'by you' : 'by its criteria'}${s.promoReason ? ': ' + s.promoReason : ''}` : "The model this session's planner is using",
-    showPromote: !hide,
-    confirm,
-    promoteLabel: s.promoting ? 'Promoting…' : confirm ? `Confirm: switch to ${modelName(target)} (costs more)` : `Promote to ${modelName(target)}`,
-    promoteTitle: `Move this session's planner to ${modelName(target)} for the rest of the session. It costs more per turn.`,
-    target,
+    label, items, note, pending, started,
+    promoted: !!(s && s.promoted),
+    choosing: st.ui.pickerChoosing,
+    auto: pc.auto_promote,
+    topLabel: pc.top_label || modelName(pc.top_model),
+    /** start = top for new plans: nothing to promote to */
+    promotionOff: pc.promotion_off,
+    rules: pc.rules,
+    title: s && s.promoted ? `Promoted ${s.promoBy === 'user' ? 'by you' : 'by its criteria'}${s.promoReason ? ': ' + s.promoReason : ''}` : 'Harness and model for the planner',
   };
 }
 
@@ -254,7 +283,7 @@ export function feedRunOptions(st: S): { value: string; label: string }[] {
   const runs = [...new Set(st.acts.map(runKey))];
   return runs.map(id => {
     if (id === '_none') return { value: id, label: 'No run' };
-    if (id.startsWith('chat:')) return { value: id, label: 'Claude Code chat' };
+    if (id.startsWith('chat:')) return { value: id, label: 'CLI chat' };
     const s = st.sessions[id];
     return { value: id, label: s ? `${sLabel(s)} · ${sName(s)}` : id };
   });
@@ -264,7 +293,7 @@ export function feedAgentOptions(st: S): { value: string; label: string }[] {
   st.acts.forEach(a => { if (!st.ui.feedRun || runKey(a) === st.ui.feedRun) agents.set(a.agent_id, a); });
   return [...agents.values()].map(a => {
     const s = a.session_id != null ? st.sessions[a.session_id] : null;
-    return { value: a.agent_id, label: `${cleanName(a.name) || a.agent_id}${a.chat_id != null ? ' · Claude Code' : s ? ' · ' + s.letter : ''}${a.step != null && a.role === 'builder' ? ' · step ' + a.step : ''}` };
+    return { value: a.agent_id, label: `${cleanName(a.name) || a.agent_id}${a.chat_id != null ? ' · CLI' : s ? ' · ' + s.letter : ''}${a.step != null && a.role === 'builder' ? ' · step ' + a.step : ''}` };
   });
 }
 /** Newest first. */
@@ -279,6 +308,40 @@ export const rootLabel = (st: S, root: string): string => root === 'app' ? 'Laun
 export function dirLabelOf(st: S, dirId: string | null | undefined, cwd?: string): string { const d = dirById(st, dirId); return d ? (d.name || baseName(d.path)) : cwd ? baseName(cwd) : ''; }
 export const fxKey = (root: string, path: string | null | undefined): string => `${root}|${path || ''}`;
 export function fxRoots(st: S) {
-  return [...dirsList(st).map(d => ({ root: d.dir_id, name: d.name || baseName(d.path), full: d.path, exists: d.exists !== false, isDefault: !!d.is_default, app: false })),
-    { root: 'app', name: 'Launchpad app files', full: 'agent definitions, promotion criteria', exists: true, isDefault: false, app: true }];
+  return [...dirsList(st).map(d => ({ root: d.dir_id, name: d.name || baseName(d.path), full: d.path, exists: d.exists !== false, isDefault: !!d.is_default, isAdditional: !!d.is_additional, app: false })),
+    { root: 'app', name: 'Launchpad app files', full: 'agent definitions, promotion criteria', exists: true, isDefault: false, isAdditional: false, app: true }];
+}
+
+/* ---------- Repos panel ---------- */
+export interface GitGroup { dirId: string; name: string; repos: GitRepo[] }
+/** Repos grouped under their connected folder, in the server's order. */
+export function gitGroups(st: S): GitGroup[] {
+  const out: GitGroup[] = [];
+  for (const r of st.git.repos) {
+    let g = out.find(x => x.dirId === r.dir_id);
+    if (!g) { g = { dirId: r.dir_id, name: r.folder_name, repos: [] }; out.push(g); }
+    g.repos.push(r);
+  }
+  return out;
+}
+/** Paths of the repo's changed files that are ticked (all, unless the user unticked some). */
+export function gitTicked(st: S, repo: GitRepo): string[] {
+  const off = st.git.unticked[repo.repo_id] || [];
+  return repo.files.filter(f => !off.includes(f.path)).map(f => f.path);
+}
+/** A card is open when the user opened it, or by default while it has changes or something to report (error, note, busy). */
+export const gitIsOpen = (st: S, repo: GitRepo): boolean =>
+  st.git.open[repo.repo_id] ?? (!repo.clean || !!repo.error || !!st.git.error[repo.repo_id] || !!st.git.note[repo.repo_id] || !!st.git.busy[repo.repo_id]);
+/** Status chips for a repo header: "Not linked", "2 ahead", "3 behind", "Changes", "Up to date". */
+export function gitChips(repo: GitRepo): { text: string; tone: 'ok' | 'warn' | 'info' | 'err' }[] {
+  if (repo.error) return [{ text: 'Error', tone: 'err' }];
+  const out: { text: string; tone: 'ok' | 'warn' | 'info' | 'err' }[] = [];
+  if (!repo.linked) out.push({ text: 'Not linked', tone: 'warn' });
+  else {
+    if (repo.ahead) out.push({ text: `${repo.ahead} ahead`, tone: 'info' });
+    if (repo.behind) out.push({ text: `${repo.behind} behind`, tone: 'warn' });
+  }
+  if (!repo.clean) out.push({ text: 'Changes', tone: 'info' });
+  else if (repo.linked && !repo.ahead && !repo.behind) out.push({ text: 'Up to date', tone: 'ok' });
+  return out;
 }

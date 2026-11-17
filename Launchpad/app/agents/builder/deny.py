@@ -1,7 +1,7 @@
 """The Builder's shell deny list: commands that need the user (or autopilot) before they run.
 
 - git commit / git push; package installs (pip, npm, uv, conda, brew, winget ...); deletes outside the project
-  (or of the project folder itself)
+  (or of the project folder itself); the session's additional folders count as inside (not the folders themselves)
 - Used by the Builder and by building folder agents (app/agents/builder/builder.py StepContext._classify)
 """
 from __future__ import annotations
@@ -25,9 +25,11 @@ _DELETE = {"rm", "rmdir", "del", "erase", "rd", "remove-item", "ri", "unlink", "
 _SPLIT = re.compile(r"&&|\|\||;|\||\n")
 
 
-def deny_match(command: str, project: Path) -> str | None:
-    """Category of a deny-listed shell command ('git push', 'package install', 'delete outside the project'), else None."""
+def deny_match(command: str, project: Path, extra: list[Path] | tuple = ()) -> str | None:
+    """Category of a deny-listed shell command ('git push', 'package install', 'delete outside the project'), else None.
+    extra = additional folders that count as inside the project."""
     project = Path(project).resolve()
+    roots = [project, *(Path(e).resolve() for e in extra)]
     cwd = project
     for seg in _SPLIT.split(command or ""):
         seg = seg.strip()
@@ -64,6 +66,7 @@ def deny_match(command: str, project: Path) -> str | None:
                     return "delete outside the project"
                 target = Path(arg).expanduser()
                 target = target if target.is_absolute() else cwd / target
-                if not inside(target, project) or target.resolve() == project:   # incl. the project itself
+                if not any(inside(target, r) for r in roots) or target.resolve() in roots:   # incl. the folders
                     return "delete outside the project"
+
     return None

@@ -1,8 +1,8 @@
-"""Regular session (display name "Claude Code"; role key pilot): a plain Claude Code chat in the launch folder. No plan, no orchestrator.
+"""Regular session (display name "CLI"; role key pilot): a plain chat in the CLI harness, in the launch folder. No plan, no orchestrator.
 
-- setup="project": Claude Code system prompt, all built-in tools, the folder's CLAUDE.md, user + project
+- setup="project": the harness's own system prompt, all built-in tools, the folder's CLAUDE.md, user + project
   settings (incl. the user's own permission allow/deny rules), skills, hooks. Nothing Launchpad-specific is
-  added (no ask_user, empty agent body) and none of the builder guards apply: permissions are Claude Code's
+  added (no ask_user, empty agent body) and none of the builder guards apply: permissions are the harness's
 - Permission modes: default | accept_edits | plan, switchable any time (between turns and mid-turn); no bypass
 - Permission prompts, plan proposals and Claude's own questions (AskUserQuestion) become queue items tied to
   the chat (chat_id, session_id null), no timer; "always allow" offers this session or the project's local
@@ -10,8 +10,10 @@
 - In plan mode edits reach on_permission (the engine does not hard-block them): denied here without a card
 - Streaming (chat_delta), interrupt (chat_stop), activity feed + usage like any agent; activity.log in
   <project>/.launchpad/<chat-id>/
-- Fake engine: project setup with tools=None approves every built-in, so the tools Claude Code would ask about
+- Fake engine: project setup with tools=None approves every built-in, so the tools the harness would ask about
   are gated there (FAKE_ASKING) to make prompts visible; on Claude nothing is gated
+- Folders: cwd = the chat's primary folder; the folders ticked as additional go in as add_dirs (fixed at start).
+  Skills: the harness's own discovery (project setup); Launchpad's per-agent skill settings do not apply
 """
 from __future__ import annotations
 
@@ -34,7 +36,7 @@ PLAN_EDIT_DENIED = "Plan mode is on: do not edit files until the user approves y
 
 
 def pilot_overrides(engine: str) -> dict:
-    """Load-time settings for the Claude Code chat (library-only, never in the agent file)."""
+    """Load-time settings for the CLI chat (library-only, never in the agent file)."""
     kw = dict(setup="project", include_ask_user=False, permission_mode="default", timeout_s=None)
     if engine == "fake":
         kw["gated_tools"] = list(FAKE_ASKING)
@@ -60,9 +62,11 @@ class PilotChat:
         self.id = new_session_id()
         self.dir_id = dir_id or hub.default_dir
         project = project or s.project                    # the chat's own directory (cwd, settings, records)
-        self.folder = SessionFolder(project, self.id)
+        self.extra_ids, extra = hub.extra_dirs(self.dir_id) if hasattr(hub, "extra_dirs") else ([], [])
+        self.folder = SessionFolder(project, self.id, extra)
         self.agent = crew.load("pilot", engine=s.engine, project=project, model=s.pilot_model,
-                               on_permission=self.permission, **pilot_overrides(s.engine))
+                               on_permission=self.permission, **pilot_overrides(s.engine),
+                               **({"add_dirs": list(self.folder.extra)} if self.folder.extra else {}))
         self.mode = self.agent.permission_mode
         self.meter = Meter(hub, session_id=None, chat_id=self.id, role="pilot", name=crew.display("pilot"))
         self.session = None
@@ -81,11 +85,12 @@ class PilotChat:
 
     def started_event(self) -> dict:
         return {"type": "chat_started", "chat_id": self.id, "mode": self.mode, "model": self.agent.model,
-                "cwd": str(self.folder.project), "dir_id": self.dir_id}
+                "cwd": str(self.folder.project), "dir_id": self.dir_id, "additional_dir_ids": list(self.extra_ids)}
 
     def snapshot(self) -> dict:
         return {"id": self.id, "dir_id": self.dir_id, "mode": self.mode, "model": self.agent.model,
-                "cwd": str(self.folder.project),
+                "cwd": str(self.folder.project), "additional_dir_ids": list(self.extra_ids),
+
                 "busy": self.lock.locked(), "history": list(self.history)}
 
     async def _mode_changed(self, mode: str) -> None:
@@ -197,7 +202,7 @@ class PilotChat:
             return PermissionDecision("allow")
         if answer == "always":
             remember = resp.get("remember") if resp.get("remember") in ("session", "project_local") else "session"
-            if remember == "session" and edits:            # Claude Code's "allow all edits this session"
+            if remember == "session" and edits:            # the harness's "allow all edits this session"
                 await self._mode_changed("accept_edits")
                 return PermissionDecision("allow", mode="accept_edits")
             return PermissionDecision("always_allow", remember=remember)

@@ -7,7 +7,7 @@ export function Card({ className = '', ...rest }: HTMLAttributes<HTMLDivElement>
 }
 
 /** A tab's frame: <section class="view card"> with the standard header (.vhead: h1, a line under it, tools on the right).
-    Missions, Crew and Files use this look; the chat screen's Planner and Claude Code panes have their own chat header (.chat-head). */
+    Missions, Crew and Files use this look; the chat screen's Planner and CLI panes have their own chat header (.chat-head). */
 export function ViewFrame({ id, label, title, sub, tools, children, bodyClass = 'vbody' }: {
   id: string; label: string; title: ReactNode; sub?: ReactNode; tools?: ReactNode; children?: ReactNode; bodyClass?: string | null;
 }) {

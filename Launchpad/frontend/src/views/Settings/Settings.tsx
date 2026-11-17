@@ -33,7 +33,7 @@ export default function SettingsModal() {
               {msg ? <div className="warn setmsg" id="setMsg" role="status"><Info />{msg}</div> : null}
               <section className="set-sec">
                 <h3><Folder />Working directories</h3>
-                <p className="mut set-hint">Sessions and Claude Code chats run in one of these folders. New plan and New chat let you pick one when there is more than one.</p>
+                <p className="mut set-hint">Sessions and CLI chats run in the primary folder (New plan and New chat let you pick another). Folders ticked as additional are given to every new session and chat too: agents may work there, and skills are found there.</p>
                 <div id="setDirs"><Dirs dirs={settings ? settings.directories : null} /></div>
                 <form className="other set-add" id="setAdd" onSubmit={e => { e.preventDefault(); actions.addDirectory(addPath); }}>
                   <label className="sr" htmlFor="setAddPath">Folder path</label>
@@ -77,13 +77,20 @@ function Dirs({ dirs }: { dirs: Directory[] | null }) {
       <div key={d.dir_id} className={`dirrow${d.exists === false ? ' missing' : ''}${d.busy ? ' busy' : ''}`}>
         <div className="dr-main">
           <b>{d.name || baseName(d.path)}</b>
-          {d.is_default ? <span className="chip ok">Default</span> : null}
+          {d.is_default ? <span className="chip ok" title="New sessions and chats run here unless the folder menu picks another">Primary</span> : null}
+          {d.is_additional && !d.is_default ? <span className="chip">Additional</span> : null}
           {d.exists === false ? <span className="chip warnc">Missing on disk</span> : null}
           {d.busy ? <span className="chip">In use by a running session</span> : null}
           <code>{d.path}</code>
         </div>
         <div className="row">
-          {d.is_default ? null : <button className="pill xs" type="button" onClick={() => actions.makeDefaultDir(d.dir_id)}>Make default</button>}
+          {d.is_default ? null : (
+            <label className="dr-add" title="Also give new sessions and chats this folder (beside the primary)">
+              <input type="checkbox" checked={!!d.is_additional} disabled={d.exists === false} onChange={e => actions.setAdditionalDir(d.dir_id, e.target.checked)} />
+              Additional
+            </label>
+          )}
+          {d.is_default ? null : <button className="pill xs" type="button" onClick={() => actions.makeDefaultDir(d.dir_id)}>Make primary</button>}
           <button className={`pill xs${armed ? ' danger' : ' ghost'}`} type="button" disabled={!!d.busy || only} onClick={() => remove(d.dir_id)}
             title={d.busy ? 'A running session uses this folder' : only ? 'At least one folder must stay connected' : 'Disconnect this folder (nothing is deleted)'}>
             {armed ? 'Confirm remove' : 'Remove'}

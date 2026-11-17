@@ -30,8 +30,8 @@ Launchpad is a local desktop app. The user chats with a **planner**, approves th
 
 1. **`app/launch.py`**: entry point. Reads launch options, opens the per-user store, picks a free port and an access code, starts the server on a background thread and opens a pywebview window (`--browser`, `--no-window` also exist). `--fake` swaps in the fake engine.
 2. **`app/server.py`**: FastAPI. Serves the built page at `/` (plus `/assets`, `/classic`, `/vendor/...`) and one websocket. Binds 127.0.0.1 only; the websocket needs the access code and a matching Origin. It only moves JSON in and out.
-3. **`app/hub.py`**: the centre. A `Hub` owns every `LaunchSession` (one planning conversation plus its run) and every Claude Code chat, broadcasts events to all connected pages, builds the reconnect `snapshot`, and dispatches each UI message (`user_message`, `plan_approve`, `queue_response`, ...). Several sessions in different folders can run at once.
-4. **Planner**: a chat with its own tools (`explore`, `read_markdown`, `write_plan`, `edit_plan`, `show_visuals`, `promote_planner`). Starts on Sonnet and may promote itself once to Opus (criteria in `app/agents/planner/promotion.md`).
+3. **`app/hub.py`**: the centre. A `Hub` owns every `LaunchSession` (one planning conversation plus its run) and every CLI chat, broadcasts events to all connected pages, builds the reconnect `snapshot`, and dispatches each UI message (`user_message`, `plan_approve`, `queue_response`, ...). Several sessions in different folders can run at once.
+4. **Planner**: a chat with its own tools (`explore`, `read_markdown`, `write_plan`, `edit_plan`, `show_visuals`, `promote_planner`). Starts on Sonnet and may promote itself once to Opus (criteria in `app/agents/planner/promotion.md`; only with auto-promote on). The picker under its chat box (`app/agents/planner/choices.py`) chooses the harness and start model for new plans and the auto-promote flag (per user); a plan nobody has written to yet takes a choice at once, a running one only promotion. The harness decides the agentlib engine the planner is loaded on (`--fake` forces the fake engine).
 5. **Plan draft**: the planner writes `plan.md` (validated by `app/plan.py`); the page shows it; the user approves or sends back. A revised draft can be approved again.
 6. **Orchestrator run**: on approve, `agents/orchestrator/run.py` starts the orchestrator, whose only tools are `run_builder` and `write_report`. Each step runs one **Builder** (or the folder agent the plan names; a missing one falls back to the Builder). Write and shell actions pass Launchpad's guards and may raise a permission card.
 7. **Report**: step reports and `report.md` are written by code into the session folder.
@@ -40,23 +40,31 @@ Launchpad is a local desktop app. The user chats with a **planner**, approves th
 
 - **Explorer** (haiku, read-only): called by the planner's `explore` tool; returns structured file links only, which code adds to the flight log.
 - **Visualizer** (haiku, no tools): the planner's `show_visuals` starts it; it draws options (ECharts, Chart.js, D3, ...) shown beside the chat in sealed iframes. A pick sends one line back to the planner.
-- **Claude Code session**: a plain Claude Code chat in a connected folder (the Planner / Claude Code switch on the Plan tab); separate from the planner. "Send plan to Claude Code" opens it with a plan as the first message.
+- **CLI session** (role `pilot`, `app/agents/claude_code/`): a plain chat in the CLI harness in a connected folder (the Planner / CLI switch on the Plan tab); separate from the planner. "Send plan to CLI" opens it with a plan as the first message.
 - **Drafter** (haiku, no tools): the Crew tab's "Draft for me" fills the new-folder-agent form; nothing is saved until the user saves.
 - **Folder agents**: `<folder>/.claude/agents/*.md` files, run only as plan-step workers through the Builder's code.
 
 Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/agents/README.md).
+
+## Folders and skills
+
+- **Folders**: a session or CLI chat runs in one **primary** folder (its working directory; the default connected folder, or the one the folder menu picks) plus the connected folders ticked as **additional** in Settings (minus the primary). The set is fixed when it starts: agents get the extras as agentlib `add_dirs`, the Builder's write guard and shell deny list treat them as inside the project, and the planner's `read_markdown` may open `.md` files there. Session records stay in the primary's `.launchpad/`.
+- **Skills** (`app/skills.py`): found only in the session's folders, primary first. Per folder: `.claude/skills` when it has a `.claude` folder (then `.agents` is ignored), else `.agents/skills`. A name found twice: the earlier folder wins, the other is listed as shadowed.
+- **Who gets which**: each crew agent has a skill setting ("all" or a list of names; Planner all, everyone else none), set in the Crew tab and stored per user. The planner's first message lists the skills; a plan step may name some (`skills` in plan.md), and that step's worker gets its own allowlist plus those. Agents receive them through agentlib (`Agent(skills=..., skill_dirs=...)`, lean setup: names and descriptions in the prompt, read on demand). The CLI chat keeps the harness's own skill discovery.
 
 ## Supporting modules (flat in `app/`)
 
 - `plan.py` plan.md render / parse / validate / targeted edits · `sessionfiles.py` the session folder files
 - `incoming.py` the question / permission / plan queue with server-side timers · `meter.py` per-agent tokens, cost, tool calls
 - `activity.py` live one-line feed of every tool call · `settings.py` active settings · `store.py` per-user store
-- `files.py` File Explorer back end (safe paths, conflict-safe `.md` saves, backups) · `demo.py` scripts for `--fake`
+- `skills.py` skill discovery in a session's folders + per-agent allowlists
+- `files.py` File Explorer back end (safe paths, conflict-safe `.md` saves, backups) · `gitrepos.py` the Repos panel's git back end (a plain utility, not an agent: argument-list subprocesses only, repo ids issued by its own scan, paths checked inside the repo, never force push / pull / switch branch / reset; shown in the right-hand panel while the Files tab is open) · `demo.py` scripts for `--fake`
 
 ## State on disk
 
 - `<folder>/.launchpad/<session-id>/`: written at run time inside each connected folder, ignored by git through its own `.gitignore`: `plan.md`, `flight-log.md`, `steps/`, `assumptions.md`, `operations-manual.md`, `report.md`, `activity.log`, `decisions.md`, `visuals/` (an older run's files move to `run-<k>/`).
-- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, settings, agent use counts) and `backups/` of hand-edited files. `LAUNCHPAD_HOME` moves it.
+- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`) and `backups/` of hand-edited files. `LAUNCHPAD_HOME` moves it.
+
 - No database; the in-memory hub state is rebuilt for a reconnecting page from the snapshot.
 
 ## Fake engine (tests and demo)

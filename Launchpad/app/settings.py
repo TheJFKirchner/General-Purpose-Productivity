@@ -12,10 +12,12 @@ class Settings:
     planner_model: str | None = None           # set = always this model (promotion off; --model)
     planner_start_model: str = "sonnet"        # every session starts here ...
     planner_top_model: str = "opus"            # ... and may be promoted here (same value = promotion off)
+    planner_harness: str = "claude"            # harness new planners run on (app/agents/planner/choices.py)
+    planner_auto_promote: bool = True          # off = the planner never promotes itself (by hand still works)
     promotion_window_turns: int = 2            # the planner may promote itself only in its first N turns
     promotion_criteria_path: str | None = None # replacement criteria file (default app/agents/planner/promotion.md)
     visual_model: str | None = None            # visual agent (Visualizer); None = the agent file's model (haiku)
-    pilot_model: str | None = None             # Claude Code chat; None = the agent file's model (sonnet)
+    pilot_model: str | None = None             # CLI chat; None = the agent file's model (sonnet)
     question_timeout_s: float = 180            # timed builder questions auto-answer after this
     permission_timeout_s: float = 180          # builder permission cards are DENIED after this (separate setting)
     autopilot_default: bool = False            # new sessions start with autopilot on/off

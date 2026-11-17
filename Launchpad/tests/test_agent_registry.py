@@ -58,7 +58,7 @@ def test_registry_builtins_folder_agents_and_purposes(project):
     reg = {e["name"]: e for e in crew.registry(project)}
     builtins = [e for e in reg.values() if e["builtin"]]
     assert len(builtins) == 6 and {e["display_name"] for e in builtins} == {
-        "Planner", "Explorer", "Orchestrator", "Builder", "Visualizer", "Claude Code"}
+        "Planner", "Explorer", "Orchestrator", "Builder", "Visualizer", "CLI"}
     assert {e["role"]: e["purpose"] for e in builtins} == {
         "planner": "planning", "visual": "planning", "astronaut": "exploring", "builder": "building",
         "orchestrator": "building", "pilot": "building"}

@@ -3,7 +3,7 @@
    Views never handle server events themselves: they read the state this produces. */
 import type {
   ActivityEvent, AgentDraftedEvent, AgentFields, AgentRemovedEvent, AgentSavedEvent, AgentUsageEvent, ChatHistoryItem,
-  ChatStartedEvent, FileErrorEvent, FileSavedEvent, Id, PlanDraftEvent, PlannerHistoryItem, PlannerModelEvent, QueueItemEvent,
+  ChatStartedEvent, FileErrorEvent, FileSavedEvent, GitReposEvent, GitResultEvent, Id, PlanDraftEvent, PlannerHistoryItem, PlannerModelEvent, QueueItemEvent,
   QueueResolvedEvent, QuestionRoundEvent, RunFinishedEvent, RunStartedEvent, ServerEvent, SessionStartedEvent, SettingsEvent,
   SnapshotEvent, StepUpdateEvent, SystemEvent, VisualSetEvent,
 } from '../contract';
@@ -68,7 +68,7 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
       const b = ch.streamId ? ch.log.find(e => e.id === ch.streamId) : undefined;
       if (b && b.kind === 'bubble') b.streaming = false;
       endStream(ch);
-      if (ev.status === 'stopped') chatSys(c, ch.id, 'Interrupted. Tell Claude what to do instead, or carry on.');
+      if (ev.status === 'stopped') chatSys(c, ch.id, 'Interrupted. Say what to do instead, or carry on.');
       else if (ev.status === 'failed') chatSys(c, ch.id, `The turn failed${ev.error ? ': ' + ev.error : '.'}`, 'err');
       break;
     }
@@ -105,6 +105,7 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
       c.st.crewLoading = false;
       if (ev.dir_id !== undefined) c.st.crewDirId = ev.dir_id ?? null;
       if (Array.isArray(ev.tool_choices)) c.st.toolChoices = ev.tool_choices.map(String);
+      c.st.crewSkills = Array.isArray(ev.skills) ? ev.skills : [];
       for (const a of c.st.crewDefs) if (typeof a.uses === 'number') c.st.crewUses[a.name] = a.uses;
       break;
     }
@@ -112,10 +113,13 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'agent_drafted': onAgentDrafted(c, ev); break;
     case 'agent_saved': onAgentSaved(c, ev); break;
     case 'agent_removed': onAgentRemoved(c, ev); break;
+    case 'git_repos': onGitRepos(c, ev); break;
+    case 'git_result': onGitResult(c, ev); break;
     case 'activity': onActivity(c, ev); break;
     case 'visual_set': onVisualSet(c, ev); break;
     case 'autopilot': { const s = sess(c, ev.session_id); if (s) s.autopilot = !!ev.on; break; }
     case 'planner_model': onPlannerModel(c, ev); break;
+    case 'planner_choice': { const { type: _t, ...data } = ev; c.st.plannerChoice = data; c.st.ui.pickerChoosing = null; break; }
     case 'settings': onSettings(c, ev); break;
     case 'directory_picked': {
       c.st.ui.picking = false;
@@ -148,6 +152,23 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
       break;
     }
   }
+}
+
+/* ---------------- Repos panel ---------------- */
+function onGitRepos(c: Ctx, ev: GitReposEvent): void {
+  const g = c.st.git, ids = new Set(ev.repos.map(r => r.repo_id));
+  g.available = !!ev.available; g.loaded = true; g.scanning = false; g.repos = Array.isArray(ev.repos) ? ev.repos : [];
+  g.busy = {};
+  for (const m of [g.error, g.note, g.unticked, g.message, g.open] as Record<string, unknown>[]) for (const k of Object.keys(m)) if (!ids.has(k)) delete m[k];
+}
+function onGitResult(c: Ctx, ev: GitResultEvent): void {
+  const g = c.st.git, id = ev.repo_id;
+  delete g.busy[id];
+  const i = g.repos.findIndex(r => r.repo_id === id);
+  if (ev.repo && i >= 0) g.repos[i] = ev.repo;
+  if (i < 0) { toast(c, ev.message || 'That repo is not in the list any more.'); return; }
+  if (ev.ok) { g.note[id] = ev.message; delete g.error[id]; } else { g.error[id] = ev.message || 'git failed.'; delete g.note[id]; }
+  if (ev.committed) { g.message[id] = ''; delete g.unticked[id]; }
 }
 
 /* ---------------- sessions ---------------- */
@@ -205,7 +226,9 @@ function onSnapshot(c: Ctx, ev: SnapshotEvent): void {
     {
       const pm = x.planner_model && typeof x.planner_model === 'object' ? x.planner_model : x;    // same fields as planner_model
       const model = typeof x.planner_model === 'string' ? x.planner_model : pm.model;
-      if (model) onPlannerModel(c, { type: 'planner_model', session_id: s.id, model, promoted: !!pm.promoted, reason: pm.reason ?? null, by: pm.by ?? null });
+      if (model) onPlannerModel(c, { type: 'planner_model', session_id: s.id, model, promoted: !!pm.promoted, reason: pm.reason ?? null, by: pm.by ?? null,
+        harness: x.harness, start_model: x.start_model, top_model: x.top_model, label: x.label, option_id: x.option_id, auto_promote: x.auto_promote,
+        started: x.started, switchable_to: x.switchable_to });
     }
     const h = x.chat ?? x.history; if (Array.isArray(h)) replayHistory(c, s.id, h);
     if (Array.isArray(x.visual_sets)) for (const v of x.visual_sets) onVisualSet(c, { ...v, type: 'visual_set', session_id: s.id });
@@ -236,7 +259,7 @@ function onSystem(c: Ctx, ev: SystemEvent): void {
   const s = ev.session_id != null ? c.st.sessions[ev.session_id] || null : null;
   const waiting = !!s && s.approving && /draft|approve|already going|no run|cannot|can't/i.test(String(ev.text || ''));
   if (waiting && s) s.approving = false;
-  /* "Send plan to Claude Code" refused (no draft, no folder ...): the answer is this system line */
+  /* "Send plan to CLI" refused (no draft, no folder ...): the answer is this system line */
   const codeRefused = !!s && s.codeSending;
   if (codeRefused && s) { s.codeSending = false; if (c.st.chatFromPlan === s.id) { c.st.chatFromPlan = null; c.st.ui.newChatBusy = false; } }
   if (waiting || codeRefused || (s && (s.id !== c.st.current || c.st.ui.view !== 'plan' || c.st.ui.chatSide !== 'planner'))) toast(c, `${s ? sLabel(s) + ': ' : ''}${ev.text}`);
@@ -288,7 +311,8 @@ function onRunStarted(c: Ctx, ev: RunStartedEvent): void {
   if (ev.autopilot != null) s.autopilot = !!ev.autopilot;
   s.run = { name: ev.name || sName(s), started: Date.now(),
             steps: (Array.isArray(ev.steps) ? ev.steps : []).map(st => ({ n: st.n, title: st.title || `Step ${st.n}`, status: st.status || 'todo', built: [], report_path: '',
-              agent: st.agent ?? null, agent_display: st.agent_display ?? null, agent_fallback: !!st.agent_fallback, agent_purpose: st.agent_purpose ?? null })) };
+              agent: st.agent ?? null, agent_display: st.agent_display ?? null, agent_fallback: !!st.agent_fallback, agent_purpose: st.agent_purpose ?? null,
+              skills: st.skills || [], skills_unknown: st.skills_unknown || [] })) };
   /* a new run in the same session: fresh steps, back in flight; earlier agents and their costs stay in the session */
   Object.assign(s, { status: 'running', approving: false, report: null, reportSent: false, snapReportSent: false, cleared: false, stopping: false, flash: 0 });
   if (again) removeQ(c, 'report:' + s.id);
@@ -310,7 +334,9 @@ function onStepUpdate(c: Ctx, ev: StepUpdateEvent): void {
   if (ev.agent_display !== undefined) st.agent_display = ev.agent_display;
   if (ev.agent !== undefined || ev.agent_display !== undefined || ev.agent_fallback !== undefined) st.agent_fallback = !!ev.agent_fallback;
   if (ev.agent_purpose !== undefined) st.agent_purpose = ev.agent_purpose;
+  if (ev.skills !== undefined) { st.skills = ev.skills || []; st.skills_unknown = ev.skills_unknown || []; }
 }
+
 
 function onRunFinished(c: Ctx, ev: RunFinishedEvent): void {
   const s = sess(c, ev.session_id); if (!s) return;
@@ -349,6 +375,15 @@ function onPlannerModel(c: Ctx, ev: PlannerModelEvent): void {
   const s = sessOf(c, ev.session_id); if (!s) return;
   const was = !!s.promoted;
   s.plannerModel = ev.model || s.plannerModel; s.promoted = !!ev.promoted; s.promoReason = ev.reason || null; s.promoBy = ev.by || null; s.promoting = false;
+  if (ev.harness !== undefined) s.plannerHarness = ev.harness || null;
+  if (ev.start_model !== undefined) s.plannerStart = ev.start_model || null;
+  if (ev.top_model !== undefined) s.plannerTop = ev.top_model || null;
+  if (ev.label !== undefined) s.plannerLabel = ev.label || null;
+  if (ev.option_id !== undefined) s.plannerOption = ev.option_id || null;
+  if (ev.started !== undefined) s.plannerStarted = !!ev.started;
+  if (ev.auto_promote !== undefined) s.plannerAuto = !!ev.auto_promote;
+  if (Array.isArray(ev.switchable_to)) s.switchableTo = ev.switchable_to.map(String);
+  if (s.id === c.st.current) c.st.ui.pickerChoosing = null;
   /* one line per promotion: live, or restored on reload (the server's chat history does not carry it) */
   if (s.promoted && (!was || c.st.replaying) && !s.log.some(e => e.kind === 'sys' && e.cls === 'promo')) {
     const line = { kind: 'sys' as const, id: nextId(c), text: promoLine(s), cls: 'promo' as const };
@@ -363,7 +398,7 @@ function onPlannerModel(c: Ctx, ev: PlannerModelEvent): void {
 function onQueueItem(c: Ctx, ev: QueueItemEvent): void {
   if (ev.id == null) return;
   const { type: _t, ...item } = ev;
-  if (item.chat_id != null) { onChatItem(c, item); return; }          // Claude Code chats: shown inline in that chat
+  if (item.chat_id != null) { onChatItem(c, item); return; }          // CLI chats: shown inline in that chat
   if (item.session_id != null) sess(c, item.session_id);
   const ex = c.st.queue.find(i => i.id === item.id);
   if (ex) Object.assign(ex, item);
@@ -401,7 +436,7 @@ function onActivity(c: Ctx, ev: ActivityEvent): void {
   if (isNew || a.status === 'denied' || a.status === 'failed') c.fx.pings.push({ a: snap, isNew });
 }
 
-/* ---------------- Claude Code chats ---------------- */
+/* ---------------- CLI chats ---------------- */
 function onChatStarted(c: Ctx, ev: ChatStartedEvent): void {
   const ch = chatOf(c, ev.chat_id); if (!ch) return;
   if (ev.mode) ch.mode = ev.mode;
@@ -410,7 +445,7 @@ function onChatStarted(c: Ctx, ev: ChatStartedEvent): void {
   if (ev.dir_id != null) ch.dirId = ev.dir_id;
   if (ev.busy != null) ch.busy = !!ev.busy;
   const fresh = !ch.started; ch.started = true;
-  /* the answer to "Send plan to Claude Code": the server opened this chat in Plan mode and sent the plan as its first message */
+  /* the answer to "Send plan to CLI": the server opened this chat in Plan mode and sent the plan as its first message */
   const fromId = ev.from_session_id ?? (fresh && !c.st.replaying ? c.st.chatFromPlan : null);
   const fromPlan = fresh && !c.st.replaying && fromId != null ? c.st.sessions[fromId] || null : null;
   if (fromPlan || (fresh && !c.st.replaying && !ev.from_session_id)) c.st.chatFromPlan = null;
@@ -423,7 +458,7 @@ function onChatStarted(c: Ctx, ev: ChatStartedEvent): void {
   if (fromPlan) {
     fromPlan.codeSending = false; fromPlan.codeSentV = fromPlan.draftV;
     ch.awaitPlan = `Plan from ${sLabel(fromPlan)} · ${sName(fromPlan)}`;
-    chatSys(c, ch.id, 'Claude Code starts in Plan mode: nothing changes until you approve its plan.');
+    chatSys(c, ch.id, 'The CLI starts in Plan mode: nothing changes until you approve its plan.');
     if (ev.busy == null) { ch.busy = true; ch.typing = true; }
     c.st.ui.chatSide = 'code';
     return;                                          // keeps the server's mode (plan) and sends nothing else
@@ -543,8 +578,13 @@ function onAgentRemoved(c: Ctx, ev: AgentRemovedEvent): void {
 }
 
 /* ---------------- settings and files ---------------- */
+/** The folder set as the server last reported it (ids, primary, additional); a change makes the skills list stale. */
+let folderSig: string | null = null;
 function onSettings(c: Ctx, ev: SettingsEvent): void {
   c.st.settings = { directories: Array.isArray(ev.directories) ? ev.directories : [], values: ev.values && typeof ev.values === 'object' ? ev.values : {}, can_pick: !!ev.can_pick_directory };
+  const sig = c.st.settings.directories.map(d => `${d.dir_id}:${d.is_default ? 'p' : ''}${d.is_additional ? 'a' : ''}`).join('|');
+  if (folderSig !== null && sig !== folderSig && c.st.crewDefs && !c.st.crewLoading) requestCrew(c);
+  folderSig = sig;
   const adding = c.st.ui.settingsAdding;
   if (adding && c.st.settings.directories.some(d => d.path === adding)) { c.st.ui.settingsAddPath = ''; c.st.ui.settingsAdding = null; }
   if (c.st.ui.view === 'files') fxBoot(c);

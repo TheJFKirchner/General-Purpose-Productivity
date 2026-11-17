@@ -10,7 +10,9 @@ its report back to the orchestrator.
   refused in code without a card). Same Launchpad tools and hand-off as the Builder
 - Edits inside the project and ordinary shell commands run without a card. Writes outside the project (or into
   .launchpad/ or .git/) and deny-listed shell commands (deny.py) become permission cards with a timer (default
-  180 s): unanswered -> denied, the builder is told, the step records an issue
+  180 s): unanswered -> denied, the builder is told, the step records an issue. The session's additional folders
+  count as inside the project (their .launchpad/ and .git/ ask too)
+- Skills: the worker is loaded with its own allowlist plus the step's `skills` (crew.session_kw; app/skills.py)
 - Autopilot (per session, switchable during a run): every such request is approved without a card and logged
   (assumptions.md, report section "Approved by autopilot", activity auto: true); turning it on approves open cards
 - Timed questions auto-answer with the recommendation at the timeout (assumption logged by code); blocking
@@ -194,12 +196,13 @@ class StepContext:
             raw = str(req.input.get("file_path") or req.input.get("notebook_path") or "")
             target = folder.resolve_in_project(raw)
             where = ("outside the project folder" if target is None else
-                     "inside .launchpad/ (session records)" if inside(target, folder.root) else
-                     "inside .git/" if inside(target, folder.project / ".git") else None)
+                     "inside .launchpad/ (session records)" if any(inside(target, f / ".launchpad")
+                                                                   for f in folder.folders) else
+                     "inside .git/" if any(inside(target, f / ".git") for f in folder.folders) else None)
             return (f"{req.tool} {where}", one_line(raw, 300)) if where else None
         if req.tool == "Bash":
             command = str(req.input.get("command", ""))
-            label = deny_match(command, folder.project)
+            label = deny_match(command, folder.project, folder.extra)
             return (f"Bash · {label}", command) if label else None
         return (req.tool, one_line(json.dumps(req.input, default=str), 300))     # anything unexpected asks
 
@@ -264,8 +267,14 @@ def builder_message(run, n: int, brief: str, ctx: StepContext | None = None) -> 
     if folder_agent:                        # the agent's own file knows nothing about Launchpad's hand-off
         rules = STEP_WORKER_RULES + ("\n" + READ_ONLY_RULE if ctx.read_only else "") + "\n\n"
     lead = "Work on" if folder_agent else "Build"
+    extra = (f"Additional folders (also yours to work in; absolute paths): {', '.join(str(e) for e in f.extra)}\n"
+             if f.extra else "")
+    step_skills = list((run.steps.get(n) or {}).get("skills") or [])
+    skills_line = (f"Skills for this step (see your Skills section; read each SKILL.md first): {', '.join(step_skills)}\n"
+                   if step_skills else "")
     return (f"{lead} step {n} of the plan \"{run.plan['name']}\". Your working folder is the project folder; "
             "work only inside it.\n"
+            f"{extra}{skills_line}"
             f"Plan (only if you need the bigger picture): {f.rel(f.plan)}\n"
             f"Earlier step reports: {', '.join(earlier) if earlier else 'none'}\n\n"
             f"--- brief from the orchestrator ---\n{brief.strip()}\n\n"
@@ -278,10 +287,13 @@ def load_worker(run, ctx: StepContext):
     """The step's agent: the Builder as always, or a folder agent with purpose-based permissions."""
     common = dict(engine=run.settings.engine, project=run.folder.project, tools=builder_tools(ctx),
                   on_permission=ctx.permission, timeout_s=run.settings.builder_turn_timeout_s,
-                  env=dict(crew.WAITING_ENV))
+                  env=dict(crew.WAITING_ENV),
+                  **crew.session_kw(run.ls, ctx.worker["name"], role=ctx.worker.get("role"),
+                                    step_skills=run.step_skills(ctx.n)))
+
     if ctx.worker.get("builtin"):
         return crew.load("builder", gated_tools=list(crew.BUILDER_GATED),
-                         engine_prompt=True,   # Claude Code's own prompt + the file text; still lean (no settings)
+                         engine_prompt=True,   # the harness's own prompt + the file text; still lean (no settings)
                          **common)
     return crew.load_step_worker(ctx.worker, **common)
 

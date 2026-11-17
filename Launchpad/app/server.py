@@ -4,11 +4,12 @@
 - All agent work lives in the hub (app/hub.py); this file only moves JSON in and out
 - Websocket contract below (authoritative: the front end in frontend/ follows it)
 - Agent display names: Planner, Explorer (role astronaut), Orchestrator, Builder, Visualizer (role visual),
-  Claude Code (role pilot); folder agents: their name with dashes as spaces ("copy-reviewer" -> "Copy reviewer")
+  CLI (role pilot, the plain chat in the CLI harness); folder agents: their name with dashes as spaces ("copy-reviewer" -> "Copy reviewer")
   here -> UI
     snapshot {current_session_id, sessions:[{session_id, dir_id, cwd, folder, chat:[...], report_sent, running, total_cost_usd,
               planner_cost_usd, visual_sets:[...], plan_revision, draft_pending, runs, autopilot,
-              model, promoted, reason, by}], chats:[{id, dir_id, mode, model, cwd, busy, history:[{role: user|assistant, markdown}]}]}
+              model, promoted, reason, by, + the other planner_model fields}], chats:[{id, dir_id, additional_dir_ids, mode, model, cwd, busy,
+              history:[{role: user|assistant, markdown}]}]}
              (first event on every connection; then the replay events below)
              planner chat entries: {role: user|assistant|system, text} · {role: round, round:{id, round, questions}}
              · {role: answers, roundId, answers, skipped}
@@ -17,12 +18,20 @@
           (= the plain sum of every agent_usage, all sessions and chats incl. the planner; tokens = the four counts,
            mostly cache reads; input_tokens = uncached input only) · crew {agents:[{name, role, status, session_id}]}
     plan_meta {name, mode, status} · system {text, session_id?, chat_id?}
-    session_started {session_id, folder, dir_id, cwd}  (cwd = the connected folder the session runs in)
-    settings {directories:[{dir_id, path, name, exists, is_default, busy}], values:{<setting>: {value,
-              applies: now|new_sessions, overridden_by_launch}}, can_pick_directory}  (on connect and after any change)
+    session_started {session_id, folder, dir_id, cwd, additional_dir_ids}
+      - cwd = the session's primary folder (its working directory); additional_dir_ids = the folders ticked as
+        additional when it started, minus the primary (agents get them as add_dirs; fixed for the session)
+    settings {directories:[{dir_id, path, name, exists, is_default, is_additional, busy}], values:{<setting>: {value,
+              applies: now|new_sessions, overridden_by_launch}}, can_pick_directory, additional_dir_ids}
+              (on connect and after any change)
+      - is_default = the primary folder (where the next session or chat runs unless the folder menu picks another);
+        is_additional / additional_dir_ids = folders ticked as additional (global, per user; a session uses them minus
+        its own primary; new sessions and chats only)
       - settings: question_timeout_s, permission_timeout_s, visual_model (now); autopilot_default,
-        planner_start_model, planner_top_model, promotion_window_turns, promotion_criteria_path, pilot_model
-        (new_sessions). Stored in <home>/.launchpad/settings.json; a launch option overrides for that launch
+        planner_start_model, planner_top_model, planner_harness (default claude), planner_auto_promote (default
+        true), promotion_window_turns, promotion_criteria_path, pilot_model (new_sessions; a planner nobody has
+        written to yet is reloaded with a new planner setting at once; planner_harness must be a known harness that is
+        available, else system "Settings: ..."). Stored in <home>/.launchpad/settings.json; a launch option overrides for that launch
         (overridden_by_launch) until the setting is changed from the page
     directory_picked {path: string|null}  (reply to pick_directory; the page then sends add_directory)
     dir_listing {root, path, entries:[{name, type: dir|file, size, mtime, kind: markdown|text|binary|too_large|null,
@@ -33,8 +42,28 @@
     file_error {root, path, code: conflict|invalid|not_allowed|not_found|too_large|binary, message,
                 current?: {text, version}}  (current on conflict)
     backups {root, path, items:[{backup_id, saved_at, size}]}  (newest first)
-    plan_draft {session_id, path, markdown, steps:[{n, title, agent, agent_display, agent_purpose, agent_fallback?}],
-                revision, previous_runs}
+    git_repos {available: bool, repos:[{repo_id, name, dir_id, folder_name, rel, branch (null = detached), detached,
+              remote: {name, host, owner, repo}|null, upstream: "origin/main"|null, linked, ahead, behind, clean,
+              files:[{path, status: M|A|D|U|?, added, removed, binary}], more, added, removed, error}]}
+              (reply to git_scan: every repo in every connected folder, with its status; available false = git is not
+              installed, repos [])
+      - detection (app/gitrepos.py): the connected folder itself when it holds .git, else repos up to two levels below
+        it; .git, node_modules, .venv, venv, env, .launchpad are skipped and a repo is never entered; a repo reachable
+        from two connected folders is listed once (under the first). rel = path below dir_id's folder ("." = itself)
+      - repo_id = an id the server issued in its last scan (every git message must use one); remote = display parts
+        only (credentials and local paths never sent); linked = a remote and an upstream branch exist (else "not
+        linked": commit only); changed files = tracked changes vs HEAD (staged + unstaged) + untracked (all lines
+        counted as added); binary files: binary true, counts 0; paths relative to the repo, "/" separators; at most
+        300 listed (more = how many were left out); added / removed = totals over the listed files; error = git's
+        own text when the repo could not be read
+    git_result {repo_id, op: refresh|fetch|commit|push, ok, committed, message, repo}
+              (reply to git_refresh / git_fetch / git_commit / git_push; repo = the re-read repo object as above, null
+              when the id is unknown; message = a short success note, or on failure git's own text with credentials
+              removed, trimmed; committed true when a commit was made even if the push after it failed)
+    plan_draft {session_id, path, markdown, steps:[{n, title, agent, agent_display, agent_purpose, agent_fallback?,
+                skills?, skills_unknown?}], revision, previous_runs}
+      - skills = skill names the plan names for the step (absent when none): its worker gets them on top of its own
+        allowlist; skills_unknown = those not found in the session's folders (ignored at run time; show greyed)
       - agent = the step's agent name, null = the Builder; agent_display = who will run it ("Builder" when null);
         agent_purpose = that agent's purpose (planning|exploring|building|reviewing; "building" for the Builder):
         colour steps by this, not by a folder's crew_list;
@@ -42,17 +71,34 @@
       - revision counts drafts in the session (1, 2, ...); previous_runs > 0 = a revised plan after a run (send-back).
         Every new draft can be approved, also after a finished run; a reconnect replays a pending draft after the
         finished run's run_started / run_finished
-    run_started {session_id, name, steps:[{n, title, status, agent, agent_display, agent_purpose, agent_fallback?}], run, revision,
-                 autopilot}
+    run_started {session_id, name, steps:[{n, title, status, agent, agent_display, agent_purpose, agent_fallback?,
+                 skills?, skills_unknown?}], run, revision, autopilot}
       - plan_approve answers: run_started (success), or system {text, session_id}: "No draft plan to approve yet." /
         "This session's run is already going." / "There is no new draft to approve: ..." (already ran)
       - a second run in a session first moves steps/ and report.md into run-<k>/
-    planner_model {session_id, model, promoted: bool, reason: string|null, by: "criteria"|"user"|null}
-      - sent at session start (replayed on reconnect) and on promotion; starts on the start model (default sonnet),
-        promoted at most once to the target (default opus): by the planner within its first N turns, or by the user
+    planner_model {session_id, model, promoted: bool, reason: string|null, by: "criteria"|"user"|null, harness,
+                   start_model, top_model, label, option_id, auto_promote: bool, started: bool, switchable_to:[option ids]}
+      - sent at session start (replayed on reconnect), on its first message, on promotion and when an unstarted
+        planner is reloaded; starts on the start model (default sonnet), promoted at most once to the top model
+        (default opus): by the planner within its first N turns (only when auto_promote), or by the user
+      - label = "<harness> · <model>" now (e.g. "Claude · Sonnet"); option_id = "<harness>:<model>" now;
+        auto_promote = this session may promote itself; started = someone wrote to it (harness and start model fixed);
+        switchable_to = picker options it can move to now: every available one before its first message, else only
+        its top model while it can still be promoted (= promotion by hand); [] otherwise
+    planner_choice {options:[{id: "<harness>:<model>", harness, harness_label, model, model_label, label, available,
+                    note: "not available yet"|null}], choice: {option_id, harness, model, label}, auto_promote,
+                    top_model, top_label, promotion_off, pinned: model|null, overridden:[setting names],
+                    rules: {markdown, path}}
+      - the planner picker (under the planner's chat box). options come from app/agents/planner/choices.py:
+        harnesses x models, available = agentlib says the harness's engine is (the Cursor engine is a stub: listed,
+        disabled); the configured start / top models are always listed for Claude. choice = what the next new plan
+        starts on (settings planner_harness + planner_start_model, per user); a session whose start option differs
+        and that has started shows it as "applies to your next new plan". promotion_off = start = top; pinned =
+        --model (no choosing); rules = the promotion criteria text (read-only in the picker)
+      - sent on connect and after any change of a planner setting (picker, set_settings) or of the app's files
     autopilot {session_id, on}  (after set_autopilot; on = every builder permission request approved without a card)
     step_update {session_id, n, status: todo|in_progress|blocked|done|failed, agent, agent_display, agent_purpose,
-                 agent_fallback?,
+                 agent_fallback?, skills?, skills_unknown?,
                  built?, report_path?}
       - from in_progress on, agent_display = the agent actually running the step (after any fallback); a fallback
         is also an issue in the step report and report.md (Steps table has an Agent column)
@@ -87,25 +133,34 @@
                purpose: planning|exploring|building|reviewing, uses, builtin, description, model, source_path,
                instructions, builtin_tools, custom_tools:[{name, description}], mcp_servers, disallowed_tools, warnings,
                gated_tools, setup: lean|project, engine_prompt, prompt_note, root, path (relative), editable,
-               step_worker? (folder agents), promotion? (planner): {start_model, target_model, window_turns,
-               criteria (markdown), criteria_path, root, path, editable}}]}
+               step_worker? (folder agents), skill_setting, promotion? (planner): {start_model, target_model,
+               auto_promote, window_turns (0 when auto_promote is false), criteria (markdown), criteria_path, root, path, editable}}],
+               skills:[{name, description, path (SKILL.md), folder_name, dir_id, source: claude|agents, shadowed}]}
+      - skills = every skill found in the folder dir_id (primary) and the folders ticked as additional, primary first.
+        Per folder: .claude/skills when the folder has a .claude folder (then .agents is ignored, even with no
+        skills folder), else .agents/skills. shadowed: true = a skill of the same name in an earlier folder wins
+      - skill_setting = the agent's skills: "all" | [skill names] (names not in skills are ignored at run time; show
+        them greyed) | "cli" (the CLI chat, role pilot: the harness's own skill discovery, no checklist).
+        Defaults: Planner "all", every other agent []. Stored per user (<home>/.launchpad/settings.json agent_skills)
       - the six built-ins first (builtin true, root "app", path "app/agents/<folder>/agent.md"), then the agents of the connected folder dir_id
         (builtin false, role null, root = dir_id, path ".claude/agents/<file>.md", purpose from the file's
         `purpose:` field, default building; a broken file is listed with its problems in warnings and
         step_worker false). Built-in purposes: Planner + Visualizer planning, Explorer exploring, Builder +
-        Orchestrator + Claude Code building
+        Orchestrator + CLI building
       - uses = times the agent was started (per user, survives restarts; keyed by agent name)
       - folder agents as Launchpad runs them: exploring / reviewing = read-only (no write, edit or shell tools);
         building = the Builder's gated tools and checks; custom_tools = Launchpad's step tools
       - sent again after a save of one of the app's files, after agent_create / agent_remove, and after a save of a
         folder's .claude/agents/*.md (that folder's list)
     agent_uses {name, uses}  (whenever a count changes: planner session started, explore, step, run, visual render,
-                Claude Code chat's first turn)
+                CLI chat's first turn)
     agent_drafted {ok: true, dir_id, fields: {name, description, purpose, model, tools:[..], instructions}}
                   | {ok: false, dir_id?, error}   (reply to agent_draft; fields are a suggestion the user edits)
     agent_saved {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, error, problems:[..]}
     agent_removed {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, name?, error}
-    chat_started {chat_id, mode, model, cwd, dir_id, from_session_id?} · chat_typing {chat_id, on} · chat_delta {chat_id, text}
+    chat_started {chat_id, mode, model, cwd, dir_id, additional_dir_ids, from_session_id?} · chat_typing {chat_id, on}
+      · chat_delta {chat_id, text}
+      - cwd = the chat's primary folder; additional_dir_ids = the additional folders it got as add_dirs
       - from_session_id: set when chat_from_plan opened the chat (mode "plan"); the plan follows as
         chat_message {chat_id, role: user, markdown} (also in the snapshot history), then the usual turn events
     chat_message {chat_id, role: assistant|user, markdown}  (role user only for text the page did not type: chat_from_plan) · chat_mode {chat_id, mode} (authoritative, incl. engine changes)
@@ -131,17 +186,38 @@
     visual_pick {session_id, set_id, option_id (null clears)} · visual_tweak {session_id, set_id, option_id, text}
     visual_retry {session_id, set_id, option_id}
     planner_promote {session_id}  (promote the planner by hand, any time; refused if already promoted or off)
+    planner_choose {option_id, session_id?}  (the picker; session default the current one) -> planner_model and / or
+                  planner_choice: an unstarted session takes any available option at once (remembered per user);
+                  the session's top model while it runs on its start model = planner_promote (nothing remembered);
+                  anything else (a step down, another harness) is remembered for the next new plan. Refused
+                  (system "Planner: ..."): unknown or unavailable option, or a model pinned by --model
     agent_draft {dir_id, text} -> agent_drafted  (one cheap one-shot call: haiku, no tools; nothing saved)
     agent_create {dir_id, fields: {name, description, purpose: exploring|building|reviewing, model?, tools:[..],
                   instructions}} -> agent_saved  (writes <folder>/.claude/agents/<name>.md after the agent-file
                   validation; refused: planning purpose, a built-in name, an existing agent or file, read-only
                   purpose with Write / Edit / Bash; empty tools = the purpose's default set)
+    set_agent_skills {name, skills: "all" | [skill names], dir_id?} -> crew_list (for dir_id, default the current
+                  session's folder)  (one agent's skill setting, keyed by agent name; saved per user; new sessions and
+                  steps only). Refused (system "Crew: ...") for anything but "all" or a list of names
     agent_remove {dir_id, name} -> agent_removed  (folder agents only; the file is backed up like a save, restorable
                   via list_backups / restore_backup {root: dir_id, path: ".claude/agents/<name>.md"})
     chat_from_plan {session_id} -> chat_started (mode plan, from_session_id) in the session's folder, the plan sent as
                   the first message; the draft stays approvable. Refused (system) if the session has no draft
     set_autopilot {session_id, on: bool}
-    get_settings {} · set_settings {patch: {<setting>: value, default_dir_id?: dir_id ("Make default")}}
+    get_settings {} · set_settings {patch: {<setting>: value, default_dir_id?: dir_id ("Make default" = the primary),
+                  additional_dir_ids?: [dir_id] (the whole list of folders ticked as additional)}}
+
+    git_scan {} -> git_repos · git_refresh {repo_id} (re-read status only) · git_fetch {repo_id} (git fetch, then re-read)
+    git_commit {repo_id, message, paths:[repo-relative file paths], push?: bool} · git_push {repo_id}  -> git_result
+      - the Repos panel (right-hand panel while the Files tab is open). git runs as argument-list subprocesses (never a
+        shell) off the event loop, with timeouts, GIT_TERMINAL_PROMPT=0 and literal pathspecs; one operation at a time
+        per repo. Never: force push, pull, branch switch, reset, history rewrite. Commits use the user's own git identity
+      - commit: message trimmed and required; every path must lie inside the repo AND be one of its changed files
+        (else refused, nothing staged); stages exactly those paths (git add -A -- paths) and commits only them
+        (git commit -- paths: other staged files stay staged); push true then pushes the current branch to its own
+        upstream (git push, never forced); a push that fails after a commit = ok false, committed true
+      - git_push alone: nothing to push (not ahead) -> ok true "Nothing to push."; fetch / push on a repo that is not
+        linked are refused; git not installed or an unknown repo_id -> ok false with a clear message
     add_directory {path} · remove_directory {dir_id} (refused while busy; never deletes anything) · pick_directory {}
     list_dir {root, path} · read_file {root, path} · save_file {root, path, text, base_version}
     list_backups {root, path} · restore_backup {root, path, backup_id}

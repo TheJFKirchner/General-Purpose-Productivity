@@ -1,4 +1,4 @@
-/* The chat screen (header tab "Plan"): one card with the Planner / Claude Code switch on top and the two
+/* The chat screen (header tab "Plan"): one card with the Planner / CLI switch on top and the two
    conversations under it. Both panes stay mounted, so flipping loses nothing: logs, scroll, expanded rows and typed
    drafts are kept. The switch is a WAI-ARIA tablist (two tabs, Left / Right / Home / End), and each tab says when its
    side has something waiting on you (a coral count) or is working (a pulsing dot). */
@@ -11,7 +11,7 @@ import Code from '../Code/Code';
 
 const SIDES: { side: ChatSide; label: string; icon: ReactNode; hint: string }[] = [
   { side: 'planner', label: 'Planner', icon: <MessagesSquare />, hint: 'Plan with the Planner: rounds of questions, then a plan you approve and launch' },
-  { side: 'code', label: 'Claude Code', icon: <Terminal />, hint: 'A plain Claude Code chat in a connected folder: the standard tools, permission prompts and modes' },
+  { side: 'code', label: 'CLI', icon: <Terminal />, hint: 'A plain CLI chat in a connected folder: the harness behaves as it does in a terminal, with its standard tools, permission prompts and modes' },
 ];
 const sideTabId = (s: ChatSide) => `chatsw-${s}`;
 const sidePanelId = (s: ChatSide) => `chatpane-${s}`;

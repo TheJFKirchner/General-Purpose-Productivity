@@ -12,7 +12,10 @@
 
 - .launchpad/ holds a .gitignore of '*' so it ignores itself in git
 - The folder is created on first write; deliverables never go here
-- All paths shown to agents / the UI are relative to the project folder, with forward slashes
+- All paths shown to agents / the UI are relative to the project folder, with forward slashes (files in an
+  additional folder: absolute)
+- extra = the session's additional folders (fixed at start): they count as inside the project for agents' paths,
+  the Builder's write guard and the flight log; session records stay in the primary folder
 """
 from __future__ import annotations
 
@@ -42,8 +45,9 @@ def one_line(text: str, limit: int = 300) -> str:
 
 
 class SessionFolder:
-    def __init__(self, project: Path, session_id: str):
+    def __init__(self, project: Path, session_id: str, extra: list[Path] | tuple = ()):
         self.project = Path(project).resolve()
+        self.extra = [Path(e).resolve() for e in extra if Path(e).resolve() != self.project]
         self.id = session_id
         self.root = self.project / ROOT_NAME
         self.path = self.root / session_id
@@ -66,14 +70,20 @@ class SessionFolder:
         except ValueError:
             return str(p)
 
+    @property
+    def folders(self) -> list[Path]:
+        """The session's working folders: primary first, then the additional ones."""
+        return [self.project, *self.extra]
+
     def resolve_in_project(self, p: str) -> Path | None:
-        """A path given by an agent -> absolute path inside the project, else None."""
+        """A path given by an agent (relative = to the primary folder) -> absolute path inside one of the session's
+        folders, else None."""
         if not str(p or "").strip():
             return None
         cand = Path(p)
         if not cand.is_absolute():
             cand = self.project / cand
-        return cand.resolve() if inside(cand, self.project) else None
+        return cand.resolve() if any(inside(cand, f) for f in self.folders) else None
 
     def ensure(self) -> Path:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -115,7 +125,10 @@ class SessionFolder:
             return False
         self._logged.add(key)
         label = f"{rel}:{line}" if line else rel
-        link = os.path.relpath(target, self.path).replace(os.sep, "/")
+        try:
+            link = os.path.relpath(target, self.path).replace(os.sep, "/")
+        except ValueError:                                   # another drive (Windows): absolute link
+            link = target.as_posix()
         self._append(self.flight_log, "Flight log",
                      f"- [{label}]({link}) — {one_line(why, 240)} _({source})_")
         return True

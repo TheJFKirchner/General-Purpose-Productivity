@@ -48,8 +48,9 @@ export function docHtml(text: unknown): string {
   const facts = (meta.plan != null ? planKeys : Object.entries(meta)).filter(([, v]) => v != null && v !== '' && typeof v !== 'object');
   if (!facts.length && !steps.length) return md(fm.body);
   const stepRows = steps.map(s => {
-    const after = s.after as unknown;
-    const extra = [s.status ? STEP_LABEL[String(s.status)] || String(s.status) : '', s.skill ? `skill ${s.skill}` : '',
+    const after = s.after as unknown, skills = s.skills as unknown;
+    const skillText = Array.isArray(skills) && skills.length ? `skills ${skills.join(', ')}` : s.skill ? `skill ${s.skill}` : '';
+    const extra = [s.status ? STEP_LABEL[String(s.status)] || String(s.status) : '', skillText,
       Array.isArray(after) && after.length ? `after step ${after.join(', ')}` : ''].filter(Boolean).join(' · ');
     return `<li><span class="n">${esc(s.n ?? '•')}</span><span>${esc(s.title ?? '')}${extra ? ` <span class="mut">· ${esc(extra)}</span>` : ''}</span></li>`;
   }).join('');

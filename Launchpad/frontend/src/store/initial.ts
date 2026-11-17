@@ -1,5 +1,5 @@
 /* Initial state (the File Explorer layout and the editor pane come back from localStorage). */
-import type { AppState, CrewForm, EditorPane, EditorState, FxState } from './types';
+import type { AppState, CrewForm, EditorPane, EditorState, FxState, GitState } from './types';
 import type { AgentFields } from '../contract';
 import { LS_EDITOR_VIEW, LS_FILES, lsGet } from '../lib/storage';
 
@@ -15,6 +15,10 @@ export function initialEditor(pane?: EditorPane): EditorState {
     restoring: false, editable: true, applies: null, validates: null, discardArm: false, conflict: null, banner: null, status: '',
     pane: pane || lsGet<EditorPane>(LS_EDITOR_VIEW, 'side'), backupsShown: false, backups: null,
   };
+}
+
+export function initialGit(): GitState {
+  return { available: null, loaded: false, scanning: false, repos: [], busy: {}, error: {}, note: {}, unticked: {}, message: {}, open: {} };
 }
 
 function initialFx(): FxState {
@@ -33,18 +37,19 @@ export function initialState(): AppState {
     ui: {
       view: 'plan', chatSide: 'planner', conn: { text: 'Demo mode', color: 'var(--green)' }, demo: true,
       queueFilter: 'all', feedRun: '', feedAgent: '', hov: null, sel: null, focus: null, focusScroll: false,
-      stopConfirm: null, apConfirm: null, pmConfirm: null, newPlanBusy: false, newChatBusy: false,
+      stopConfirm: null, apConfirm: null, pickerChoosing: null, newPlanBusy: false, newChatBusy: false,
       vis: { open: false, wide: false, width: 0 },
       settingsOpen: false, settingsMsg: null, settingsAdding: null, settingsAddPath: '', picking: false,
       dirMenu: null, toasts: [],
     },
     replaying: false, quiet: false,
-    sessions: {}, order: [], current: null, preLog: [], preTyping: false, preName: '', preRoundTag: '', rounds: {},
+    sessions: {}, order: [], current: null, preLog: [], preTyping: false, preName: '', preRoundTag: '', rounds: {}, plannerChoice: null,
     agents: {}, tokens: 0, cost: 0, usageEv: null, usageFromServer: false, acts: [], lastAct: {},
     queue: [],
     chats: {}, chatOrder: [], currentChat: null, chatPending: null, codeModePref: null, chatFromPlan: null, chatItems: {},
-    crewDefs: null, crewLoading: false, crewDirId: null, crewDirPick: null, toolChoices: [], crewUses: {}, crewForm: initialCrewForm(),
+    crewDefs: null, crewLoading: false, crewDirId: null, crewDirPick: null, toolChoices: [], crewSkills: [], crewUses: {},
+ crewForm: initialCrewForm(),
     crewRemoving: null, crewError: null, crewFlash: null,
-    settings: null, fx: initialFx(), files: {}, editor: initialEditor(),
+    settings: null, fx: initialFx(), files: {}, editor: initialEditor(), git: initialGit(),
   };
 }

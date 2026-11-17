@@ -8,16 +8,16 @@ export const P_LABEL: Record<string, string> = { working: 'thinking', waiting: '
 export const MODES: ChatMode[] = ['default', 'accept_edits', 'plan'];
 export const MODE_LABEL: Record<ChatMode, string> = { default: 'Ask before edits', accept_edits: 'Auto-accept edits', plan: 'Plan' };   // icons: views/Code (MODE_ICON)
 export const MODE_HINT: Record<ChatMode, string> = {
-  default: 'Claude asks before it edits files or runs commands',
+  default: 'The CLI asks before it edits files or runs commands',
   accept_edits: 'File edits are accepted without asking; commands still ask',
-  plan: 'Read-only: Claude explores and proposes a plan, nothing is changed',
+  plan: 'Read-only: the CLI explores and proposes a plan, nothing is changed',
 };
 
 export const AP_HINT = 'Autopilot approves every builder permission request without showing a card. No exceptions: that includes git push and writes outside the working folder.';
 
 /** Display names of the six built-in roles (the role ids and agent file names stay as they are). */
 export const ROLE_LABEL: Record<string, string> = {
-  planner: 'Planner', astronaut: 'Explorer', orchestrator: 'Orchestrator', builder: 'Builder', visual: 'Visualizer', pilot: 'Claude Code',
+  planner: 'Planner', astronaut: 'Explorer', orchestrator: 'Orchestrator', builder: 'Builder', visual: 'Visualizer', pilot: 'CLI',
   drafter: 'Agent drafter',
 };
 export const roleLabel = (r: unknown): string => ROLE_LABEL[String(r || '')] || String(r || 'agent');
@@ -46,11 +46,12 @@ export const SET_LABEL: Record<string, string> = {
   question_timeout_s: 'Question timer (seconds)', permission_timeout_s: 'Permission timer (seconds; unanswered = denied)',
   autopilot_default: 'Autopilot on for new sessions', planner_start: 'Planner start model', planner_top: 'Planner model after promotion',
   planner_start_model: 'Planner start model', planner_target_model: 'Planner model after promotion', promotion_window: 'Promotion window (turns)',
-  promotion_window_turns: 'Promotion window (turns)', promotion_criteria: 'Promotion criteria file', pilot_model: 'Claude Code model',
+  promotion_window_turns: 'Promotion window (turns)', promotion_criteria: 'Promotion criteria file', pilot_model: 'CLI model', planner_top_model: 'Planner model after promotion',
+  planner_harness: 'Planner harness (new plans)', planner_auto_promote: 'Planner may promote itself (auto-promote)',
   visual_model: 'Visualizer model', planner_model: 'Planner model (pinned)',
 };
 
-/** Queue tag text per kind (Incoming and Claude Code cards). */
+/** Queue tag text per kind (Incoming and CLI cards). */
 export const KIND_TAG: Record<string, { cls: string; text: string }> = {
   question: { cls: 'ques', text: 'Question' },
   permission: { cls: 'perm', text: 'Permission' },

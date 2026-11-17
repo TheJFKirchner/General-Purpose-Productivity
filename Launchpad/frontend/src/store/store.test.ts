@@ -36,7 +36,12 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   backups: { root: 'd1', path: 'b.md', items: [] },
   plan_draft: { session_id: 'S1', path: 'plan.md', markdown: '# Plan X', steps: [{ n: 1, title: 'One', agent: null, agent_display: 'Builder' }], revision: 1, previous_runs: 0 },
   run_started: { session_id: 'S1', name: 'Plan X', steps: [{ n: 1, title: 'One', status: 'todo', agent: 'copy-reviewer', agent_display: 'Copy reviewer' }], run: 1, revision: 1, autopilot: false },
-  planner_model: { session_id: 'S1', model: 'opus', promoted: true, reason: 'big', by: 'criteria' },
+  planner_model: { session_id: 'S1', model: 'opus', promoted: true, reason: 'big', by: 'criteria', harness: 'claude', start_model: 'sonnet',
+    top_model: 'opus', label: 'Claude · Opus', option_id: 'claude:opus', auto_promote: true, started: true, switchable_to: [] },
+  planner_choice: { options: [{ id: 'claude:sonnet', harness: 'claude', harness_label: 'Claude', model: 'sonnet', model_label: 'Sonnet', label: 'Claude · Sonnet', available: true, note: null },
+    { id: 'cursor:sonnet', harness: 'cursor', harness_label: 'Cursor', model: 'sonnet', model_label: 'Sonnet', label: 'Cursor · Sonnet', available: false, note: 'not available yet' }],
+    choice: { option_id: 'claude:sonnet', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet' }, auto_promote: true, top_model: 'opus', top_label: 'Opus',
+    promotion_off: false, pinned: null, overridden: [], rules: { markdown: '# Rules', path: 'app/agents/planner/promotion.md' } },
   autopilot: { session_id: 'S1', on: true },
   step_update: { session_id: 'S1', n: 1, status: 'done', built: ['x.txt'], report_path: 'step-1.md', agent: 'copy-reviewer', agent_display: 'Builder', agent_fallback: true },
   queue_item: { id: 'q1', session_id: 'S1', chat_id: null, kind: 'question', agent: 'Builder', agent_id: 'b1', step: 1, title: 'Which?', body: 'b', rec: 'A', options: ['A', 'B'], blocking: false, timeout_s: 180, expires_at: null },
@@ -45,12 +50,14 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   activity: { id: 'a1', session_id: 'S1', chat_id: null, agent_id: 'b1', role: 'builder', name: 'Builder', step: 1, tool: 'Read', summary: 'x.txt', status: 'started', ts: '2026-11-13T10:00:00Z' },
   run_finished: { session_id: 'S1', status: 'done', report_path: 'report.md', markdown: '# Report', total_cost_usd: 0.25, planner_cost_usd: 0.1 },
   crew_list: { dir_id: 'd1', tool_choices: ['Read', 'Write'], agents: [
-    { name: 'launchpad-pilot', display_name: 'Claude Code', role: 'pilot', purpose: 'building', uses: 4, builtin: true },
+    { name: 'launchpad-pilot', display_name: 'CLI', role: 'pilot', purpose: 'building', uses: 4, builtin: true },
     { name: 'copy-reviewer', display_name: 'Copy reviewer', role: null, purpose: 'reviewing', uses: 1, builtin: false, step_worker: true, root: 'd1', path: '.claude/agents/copy-reviewer.md' }] },
   agent_uses: { name: 'copy-reviewer', uses: 2 },
   agent_drafted: { ok: false, dir_id: 'd1', error: 'nope' },
   agent_saved: { ok: false, dir_id: 'd1', error: 'Not saved', problems: ['name: lowercase letters, digits and dashes only'] },
   agent_removed: { ok: false, dir_id: 'd1', name: 'copy-reviewer', error: 'locked' },
+  git_repos: { available: true, repos: [] },
+  git_result: { repo_id: 'nope', op: 'refresh', ok: false, committed: false, message: 'unknown', repo: null },
   chat_started: { chat_id: 'c1', mode: 'default', model: 'sonnet', cwd: 'C:/p', dir_id: 'd1' },
   chat_typing: { chat_id: 'c1', on: true },
   chat_delta: { chat_id: 'c1', text: 'Hel' },
@@ -127,7 +134,7 @@ describe('reducer', () => {
     expect(sent.find(m => m.type === 'round_answer')).toEqual({ type: 'round_answer', roundId: 'r1', answers: { a: { accepted: true }, b: { accepted: false, text: 'no' } } });
   });
 
-  it('Claude Code: first message starts a chat and is sent once chat_started arrives', () => {
+  it('CLI: first message starts a chat and is sent once chat_started arrives', () => {
     actions.sendChat('do it');
     expect(sent.at(-1)).toEqual({ type: 'chat_new' });
     dispatch({ type: 'chat_started', chat_id: 'c9', mode: 'default', model: 'sonnet', cwd: 'C:/p' });
@@ -160,7 +167,7 @@ describe('reducer', () => {
     expect(sel.agentFormProblems(st, { name: 'copy-reviewer', description: 'd', purpose: 'building', model: 'haiku', tools: [], instructions: 'i' })[0].message).toContain('already exists');
   });
 
-  it('chat switch: what is waiting on each side; New chat and Send plan flip to Claude Code', () => {
+  it('chat switch: what is waiting on each side; New chat and Send plan flip to the CLI', () => {
     dispatch({ type: 'session_started', session_id: 'S1', dir_id: 'd1' });
     dispatch({ type: 'question_round', id: 'r1', round: 1, questions: [{ id: 'a', title: 'A?' }], session_id: 'S1' });
     expect(sel.plannerWaiting(getState())).toBe(1);
@@ -309,7 +316,7 @@ describe('demo', () => {
     vi.advanceTimersByTime(3_000);
     expect(getState().sessions['S-C'].status).toBe('running');
 
-    // Claude Code chat
+    // CLI chat
     actions.sendChat('fix the loader');
     vi.advanceTimersByTime(8_000);
     st = getState();

@@ -3,7 +3,10 @@
 - project setup: the engine loads skills natively; this module is not used
 - lean setup: each listed skill is found here, its name + description go into the prompt (prompts/skills_index.md),
   and the agent may read files inside that skill folder only, on demand. Nothing is pasted in up front.
-- search order: <cwd>/.claude/skills, <cwd>/.cursor/skills, ~/.claude/skills, ~/.cursor/skills
+- search order: Agent(skill_dirs=[...]) when given (exactly those folders, in order); else <cwd>/.claude/skills,
+  <cwd>/.cursor/skills, ~/.claude/skills, ~/.cursor/skills
+- a skill is found by its folder name (<root>/<name>/SKILL.md), else by the `name:` in a SKILL.md in that root
+- list_skills(root): every skill in one folder (apps use it to show what is available)
 """
 from __future__ import annotations
 
@@ -28,20 +31,47 @@ class Skill:
         return self.folder / "SKILL.md"
 
 
-def search_roots(cwd: str | Path | None) -> list[Path]:
+def search_roots(cwd: str | Path | None, dirs: list[str | Path] | None = None) -> list[Path]:
+    """Where skills are looked for: `dirs` when given (explicit skill folders), else the default search."""
+    if dirs is not None:
+        return [Path(d) for d in dirs]
     bases = [Path(cwd) if cwd else Path.cwd(), Path.home()]
     return [b / d for b in bases for d in SKILL_DIRS]
 
 
-def find_skill(name: str, cwd: str | Path | None = None) -> Skill:
-    for root in search_roots(cwd):
+def _read(folder: Path, fallback: str) -> Skill:
+    meta, _ = frontmatter.read(folder / "SKILL.md")
+    return Skill(name=str(meta.get("name") or fallback).strip(),
+                 description=str(meta.get("description") or "").strip(),
+                 folder=folder.resolve())
+
+
+def list_skills(root: str | Path) -> list[Skill]:
+    """Every skill in one skill folder (sub-folders holding a SKILL.md), sorted by folder name. A SKILL.md whose
+    front matter cannot be read is skipped. A missing folder -> []."""
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    out = []
+    for sub in sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name.lower()):
+        if (sub / "SKILL.md").is_file():
+            try:
+                out.append(_read(sub, sub.name))
+            except Exception:  # noqa: BLE001 -- one broken skill must not hide the others
+                continue
+    return out
+
+
+def find_skill(name: str, cwd: str | Path | None = None, dirs: list[str | Path] | None = None) -> Skill:
+    roots = search_roots(cwd, dirs)
+    for root in roots:
         folder = root / name
         if (folder / "SKILL.md").is_file():
-            meta, _ = frontmatter.read(folder / "SKILL.md")
-            return Skill(name=str(meta.get("name") or name),
-                         description=str(meta.get("description") or "").strip(),
-                         folder=folder.resolve())
-    raise AgentFileError(f"skill '{name}' not found in: " + ", ".join(str(r) for r in search_roots(cwd)))
+            return _read(folder, name)
+        hit = next((s for s in list_skills(root) if s.name == name), None)
+        if hit is not None:
+            return hit
+    raise AgentFileError(f"skill '{name}' not found in: " + ", ".join(str(r) for r in roots))
 
 
 def index_text(skills: list[Skill]) -> str:

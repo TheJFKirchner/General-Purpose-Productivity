@@ -12,3 +12,5 @@
 .set-add{margin-top:var(--sp-2)}
 .setrow{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(140px,1fr) 136px auto;gap:var(--sp-1-5) var(--sp-2-5);align-items:center;padding:var(--sp-2) 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm)}
 .setrow input[type=text],.setrow input[type=number]{min-width:0}
+.dr-add{display:inline-flex;align-items:center;gap:var(--sp-1);font-size:var(--fs-xs);color:var(--muted);cursor:pointer}
+.dr-add input{margin:0}

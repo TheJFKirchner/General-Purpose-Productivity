@@ -57,7 +57,7 @@ it('renders the shell, each view and each tooltip with live demo state', async (
     expect(document.body.classList.contains('v-missions')).toBe(v === 'missions');
   }
   await act(async () => { actions.setChatSide('code'); });
-  expect(host.querySelector('#codeName')?.textContent).toBe('Claude Code');
+  expect(host.querySelector('#codeName')?.textContent).toBe('CLI');
   expect(host.querySelector('#tab-flight')).toBeNull();                 // the Free Flight tab is gone
   expect(host.querySelector('#chatsw-planner')?.textContent).toMatch(/^Planner/);
 

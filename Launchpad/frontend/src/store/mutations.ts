@@ -18,7 +18,8 @@ export function sess(c: Ctx, id: Id | null | undefined): Session | null {
       draft: null, draftV: 0, draftRev: null, runDraftV: null, runRev: null, run: null, report: null, approving: false, stopping: false,
       reportSent: false, snapReportSent: false, snapTotal: null, plannerCost: null, cleared: false, flash: 0, flashN: null, created: Date.now(),
       autopilot: false, plannerId: null, plannerStatus: 'idle', plannerModel: null, promoted: false, promoReason: null, promoBy: null,
-      promoting: false, codeSending: false, codeSentV: null, visualSets: [], visSel: null, visSeen: 0, log: [], typing: false,
+      promoting: false, plannerHarness: null, plannerStart: null, plannerTop: null, plannerLabel: null, plannerOption: null,
+      plannerStarted: false, plannerAuto: false, switchableTo: [], codeSending: false, codeSentV: null, visualSets: [], visSel: null, visSeen: 0, log: [], typing: false,
     };
     c.st.sessions[id] = s; c.st.order.push(id);
     s = c.st.sessions[id];
@@ -98,7 +99,7 @@ export function openVis(c: Ctx, on: boolean): void {
   if (c.st.ui.vis.open) { const s = c.st.current != null ? c.st.sessions[c.st.current] : null; if (s) s.visSeen = s.visualSets.length; }
 }
 
-/* ---------- Claude Code chats ---------- */
+/* ---------- CLI chats ---------- */
 export function chatOf(c: Ctx, id: Id | null | undefined): Chat | null {
   if (id == null || id === '') return null;
   let ch = c.st.chats[id];

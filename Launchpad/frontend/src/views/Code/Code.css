@@ -1,4 +1,4 @@
-/* Claude Code side of the chat screen (class names from the vanilla Free Flight page; sizes from the theme.css tokens). */
+/* CLI side of the chat screen (class names from the vanilla Free Flight page; sizes from the theme.css tokens). */
 #viewCode .chat-head{flex-wrap:nowrap}
 #viewCode .chat-head>div:first-child{flex:1;min-width:0}
 #codeSub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -35,3 +35,4 @@
 .ccard h3{margin:0;font-family:var(--disp);font-size:var(--fs-lg);font-weight:600;line-height:var(--lh-tight);overflow-wrap:anywhere}
 .ccard .qbody{font-size:var(--fs-sm);color:var(--muted)}
 .bubble.streaming::after{content:'\258D';color:var(--indigo);animation:blink 1s infinite;margin-left:var(--sp-0)}
+.modelchip{display:inline-flex;align-items:center;height:var(--chip-h);padding:0 var(--sp-2);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-size:var(--fs-xs);font-weight:700;white-space:nowrap;cursor:default}
