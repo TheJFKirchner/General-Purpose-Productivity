@@ -11,6 +11,8 @@ import {
 } from './mutations';
 import { agentFormProblems, canApprove, crewDir, curSess, dirsList, draftLaunched, fxKey, gitTicked, isBuiltin, problemField, sLabel, sName } from './selectors';
 import { initialCrewForm, initialEditor } from './initial';
+import { newReview, reviewOf } from './roles';
+import type { RoleDecision } from '../contract';
 import { MODES, WRITE_TOOLS } from '../lib/labels';
 import { REDUCED } from '../lib/format';
 import { LS_EDITOR_VIEW, lsSet } from '../lib/storage';
@@ -193,7 +195,7 @@ export const actions = {
       const on = !s.autoAnswers;
       if (!send({ type: 'set_auto_answers', session_id: sid, on })) return;
       s.autoAnswers = on;
-      toast(c, on ? `Auto answers ON for ${sLabel(s)}: questions with a recommended answer are answered with it` : `Auto answers off for ${sLabel(s)}: questions wait for you again`);
+      toast(c, on ? `Auto answers ON for ${sLabel(s)}: builders' questions are answered with the builder's own recommendation; planner and CLI questions still wait for you` : `Auto answers off for ${sLabel(s)}: builders' questions wait for you again`);
     });
   },
 
@@ -337,14 +339,14 @@ export const actions = {
   },
 
   /* ---------- Crew ---------- */
-  requestCrew() { run(c => requestCrew(c)); },
+  requestCrew() { run(c => { requestCrew(c); send({ type: 'roles_get' }); }); },
   /** Show the agents of another connected folder (get_crew {dir_id}); new agents are then saved there. */
   crewPickDir(dirId: Id) { run(c => { c.st.crewDirPick = dirId; requestCrew(c); }); },
   /** Open the "Add an agent" form (what was typed before stays until it is saved). */
   crewOpenForm() { run(c => { const f = c.st.crewForm; f.open = true; f.error = null; f.draftError = null; if (!c.st.settings) send({ type: 'get_settings' }); }); },
   crewCloseForm() { run(c => { const f = c.st.crewForm; f.open = false; f.drafting = false; f.saving = false; }); },
   /** Start the form again from empty. */
-  crewResetForm() { run(c => { c.st.crewForm = { ...initialCrewForm(), open: c.st.crewForm.open }; }); },
+  crewResetForm() { run(c => { c.st.crewForm = { ...initialCrewForm(), open: c.st.crewForm.open, role: c.st.crewForm.role }; }); },
   /** Change form fields; the server's problems for those fields go (they no longer apply). */
   crewSetFields(patch: Partial<AgentFields>) {
     run(c => {
@@ -361,9 +363,9 @@ export const actions = {
   crewDraft() {
     run(c => {
       const f = c.st.crewForm, text = f.draftText.trim(), dir = crewDir(c.st);
-      if (!text || f.drafting) return;
+      if ((!text && !f.role) || f.drafting) return;
       if (!dir) { f.draftError = 'Connect a folder in Settings first: added agents are saved in a project folder.'; return; }
-      if (!send({ type: 'agent_draft', dir_id: dir, text })) { f.draftError = 'Not connected to Launchpad.'; return; }
+      if (!send({ type: 'agent_draft', dir_id: dir, text, ...(f.role ? { role: f.role } : {}) })) { f.draftError = 'Not connected to Launchpad.'; return; }
       f.drafting = true; f.draftError = null; f.drafted = false;
       later(c, 90000, () => run(c2 => { const f2 = c2.st.crewForm; if (f2.drafting) { f2.drafting = false; f2.draftError = 'No draft came back. Try again, or fill the form in yourself.'; } }), 'crewDraft');
     });
@@ -380,7 +382,7 @@ export const actions = {
         name: f.fields.name.trim(), description: f.fields.description.trim(), purpose: f.fields.purpose, model: f.fields.model,
         tools: [...f.fields.tools], instructions: f.fields.instructions.trim(),
       };
-      if (!send({ type: 'agent_create', dir_id: dir, fields })) { f.error = 'Not connected to Launchpad.'; return false; }
+      if (!send({ type: 'agent_create', dir_id: dir, fields, ...(f.role ? { role: f.role } : {}) })) { f.error = 'Not connected to Launchpad.'; return false; }
       f.saving = true; f.error = null; f.problems = [];
       later(c, 30000, () => run(c2 => { const f2 = c2.st.crewForm; if (f2.saving) { f2.saving = false; f2.error = 'No answer from Launchpad. Try saving again.'; } }), 'crewSave');
       return true;
@@ -409,6 +411,57 @@ export const actions = {
       a.skill_setting = skills === 'all' ? 'all' : [...skills];
     });
   },
+
+  /* ---------- Crew: undefined roles ("Used but not defined") and their reviews ---------- */
+  /** Show a role's review screen in the Crew tab (from the list, or from an Incoming card). Starts nothing. */
+  openRole(role: string) { run(c => { c.st.ui.view = 'crew'; c.st.roleOpen = role; if (!c.st.crewDefs && !c.st.crewLoading) requestCrew(c); }); },
+  closeRole() { run(c => { c.st.roleOpen = null; }); },
+  /** Review: open the screen and have the reviewer read the history. A case still waiting for the user's decision is just shown. */
+  roleReview(role: string) {
+    run(c => {
+      c.st.ui.view = 'crew'; c.st.roleOpen = role;
+      const r = c.st.reviews[role];
+      if (r && (r.status === 'running' || r.status === 'starting' || (r.status === 'case' && r.case && !r.decided && !r.case.decision))) return;
+      if (!send({ type: 'review_start', role })) { const n = reviewOf(c, role); n.status = 'failed'; n.error = 'Not connected to Launchpad.'; return; }
+      c.st.reviews[role] = newReview(role);
+    });
+  },
+  /** The user's decision on a case. Define also asks for the draft (agent_draft with the role) and opens the filled form when it arrives. */
+  roleDecide(role: string, decision: RoleDecision) {
+    run(c => {
+      const r = reviewOf(c, role);
+      if (r.deciding || !send({ type: 'review_decide', role, decision })) return;
+      r.deciding = decision;
+      if (decision === 'define') {
+        const f = c.st.crewForm;
+        if (f.role !== role) c.st.crewForm = { ...initialCrewForm(), role };
+        actions.roleDraft(role);
+      }
+    });
+  },
+  /** Ask the drafter for the agent (agent_draft {role}); the form opens filled when agent_drafted arrives. */
+  roleDraft(role: string) {
+    run(c => {
+      const dir = crewDir(c.st);
+      if (c.st.crewForm.role !== role) c.st.crewForm = { ...initialCrewForm(), role };
+      const f = c.st.crewForm;
+      if (f.drafting) return;
+      if (!dir) { f.draftError = 'Connect a folder in Settings first: the agent is saved in a project folder.'; return; }
+      if (!send({ type: 'agent_draft', dir_id: dir, text: '', role })) { f.draftError = 'Not connected to Launchpad.'; return; }
+      f.drafting = true; f.draftError = null; f.drafted = false;
+      later(c, 90000, () => run(c2 => { const f2 = c2.st.crewForm; if (f2.drafting) { f2.drafting = false; f2.draftError = 'No draft came back. Try again, or fill the form in yourself.'; } }), 'crewDraft');
+    });
+  },
+  /** Open the form for the role's agent without a draft (empty, or as far as it was drafted). */
+  roleOpenForm(role: string) {
+    run(c => {
+      if (c.st.crewForm.role !== role) c.st.crewForm = { ...initialCrewForm(), role };
+      c.st.crewForm.open = true; c.st.crewForm.error = null; c.st.crewForm.draftError = null;
+      if (!c.st.settings) send({ type: 'get_settings' });
+    });
+  },
+  roleDismiss(role: string) { send({ type: 'role_dismiss', role }); },
+  roleMerge(role: string, into: string) { if (role && into && role !== into) send({ type: 'role_merge', role, into }); },
 
   /* ---------- File Explorer ---------- */
   fxToggle(root: string, path: string) {

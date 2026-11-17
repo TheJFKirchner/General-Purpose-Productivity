@@ -23,6 +23,11 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
 - builder permission cards are timed (45 s in the demo; unanswered = denied); the autopilot switch skips them
 - CLI chat: permission cards (Bash, Write, Edit), a Claude-style question, plan proposal in Plan mode
 - fake built-ins never touch disk: "(fake) ran Write" is all that happens
+- undefined roles: the draft's step 2 carries role "frontend-dev" (tallied when it ends); seed_tally() puts sample
+  entries in the demo's own temp tally (DEMO_ROLES: one below the threshold, two reviewable, one with a failed use;
+  their session folders are made up, so the reviewer says they are gone); the fake Role Reviewer walks all three
+  verdicts: frontend-dev -> keep, copy-editor -> not_yet, data-migrator -> one question card, then define (the
+  drafter then fills the form from the case)
 """
 from __future__ import annotations
 
@@ -39,7 +44,8 @@ PLAN = {
         {"title": "Draft the landing page copy", "details": "Write the new headline, intro and three feature "
          "blurbs as markdown in demo-output/landing.md.", "done_when": "landing.md has all five pieces.", "skills": ["house-style"]},   # a skill in the Demo shop folder
         {"title": "Wire the copy into the page", "details": "Replace the old hero text with the new copy; keep "
-         "the existing styles.", "done_when": "The page shows the new copy.", "after": [1]},
+         "the existing styles.", "done_when": "The page shows the new copy.", "after": [1],
+         "role": "frontend-dev"},                                    # an undefined role: tallied when the step ends
         {"title": "Run checks and publish", "details": "Run the test suite, then push the change.",
          "done_when": "Tests pass and the change is pushed.", "after": [2]},
         {"title": "Review the new copy", "details": "Read demo-output/landing.md and check tone, length and "
@@ -286,6 +292,109 @@ def draft_fields(text: str) -> dict:
                             if purpose == "exploring" else "Make the change, keep it small, and say what you changed.")}
 
 
+# ---------------------------------------------------------------- undefined roles (sample tally + fake reviewer)
+# role -> uses: (step title, step text, outcome, questions, assumptions, timed out, skills)
+DEMO_ROLES = {
+    "release-checker": [("Check the release notes", "Read CHANGELOG.md and check every entry has a date.", "done", 0, 0, 0, [])],
+    "frontend-dev": [
+        ("Add the pricing table", "Build the pricing table in the shop page with the house styles; keep it "
+         "responsive on phones.", "done", 1, 1, 0, ["house-style"]),
+        ("Fix the basket layout", "Fix the basket layout on narrow screens; do not change the colours.",
+         "done", 0, 0, 0, ["house-style"]),
+        ("Restyle the footer", "Restyle the footer links; keep it responsive on phones.", "done", 0, 1, 0, [])],
+    "copy-editor": [
+        ("Tidy the about page", "Shorten the about page to three paragraphs.", "done", 0, 0, 0, ["house-style"]),
+        ("Proofread the FAQ", "Proofread the FAQ for spelling.", "done", 0, 0, 0, [])],
+    "data-migrator": [
+        ("Move orders to the new table", "Copy orders into orders_v2 in batches of 500; keep the old table until "
+         "counts match; never drop data.", "done", 1, 0, 0, []),
+        ("Backfill customer ids", "Backfill customer_id on orders_v2 from the customers table in batches of 500; "
+         "check counts after each batch.", "failed", 3, 2, 1, []),
+        ("Migrate the stock table", "Copy stock into stock_v2 in batches of 500; compare counts; never drop data.",
+         "done", 2, 1, 0, []),
+        ("Migrate the returns table", "Copy returns into returns_v2 in batches of 500; check counts after each "
+         "batch.", "done", 1, 0, 0, [])],
+}
+
+
+def seed_tally(tally, store) -> None:
+    """Sample undefined roles for the demo, in the demo's own temp tally only (never a real one). Session ids are made
+    up: the reviewer says their folders are gone and works from the tally lines and samples."""
+    from .tally import in_temp
+    if tally.path is None or not in_temp(tally.path) or tally.entries():
+        return
+    dirs = store.directories()
+    shop = dirs[0] if dirs else {"dir_id": None, "path": "", "name": "Demo shop"}
+    for k, (role, uses) in enumerate(DEMO_ROLES.items()):
+        for i, (title, text, outcome, questions, assumptions, timed_out, skills) in enumerate(uses, 1):
+            tally.record_use(role, sample=f"### Step {i}: {title}\n{text}", use={
+                "dir_id": shop["dir_id"], "folder": shop["name"], "project": shop["path"],
+                "session_id": f"20261101-0900{k}{i}-demo", "run": 1, "step": i, "title": title, "skills": skills,
+                "outcome": outcome, "questions": questions, "assumptions": assumptions, "timed_out": timed_out})
+
+
+def _section(test: str, finding: str, strength: str, quote: str = "", source: str = "") -> dict:
+    return {"test": test, "finding": finding, "strength": strength,
+            "evidence": [{"quote": quote, "source": source}] if quote else []}
+
+
+def reviewer_reply(msg: str) -> dict:
+    """The fake Role Reviewer's structured reply for one turn (the role is named in the brief)."""
+    m = re.search(r"Role under review: (\S+)", msg)
+    role = m.group(1) if m else ""
+    final = msg.startswith("Answers from the user")
+    empty = {"name": "", "purpose": "", "description": "", "instructions": ""}
+    if role == "data-migrator" or (final and "batches" in msg):
+        if not final:
+            return {"tests": [_section("value", "Steps repeat the same safety rules.", "moderate",
+                                       "in batches of 500; keep the old table until counts match", "sample S1"),
+                              _section("logic", "Is the batch rule always wanted? Asked below.", "weak"),
+                              _section("history", "Four uses in one folder.", "moderate", "uses: 4", "tally"),
+                              _section("fixes", "One step failed.", "moderate", "ended failed", "tally U2"),
+                              _section("independent", "Depends on the answer.", "weak")],
+                    "history_thin": False, "verdict": "not_yet", "reason": "Waiting for one answer.",
+                    "skill_notes": "", "proposal": empty,
+                    "questions": [{"test": "logic", "question": "Should every migration run in batches of 500?",
+                                   "why": "The steps repeat it, but no skill states it.",
+                                   "recommended": "Yes, always in batches of 500"}]}
+        return {"tests": [
+            _section("value", "Every migration step restates the same safety rules; an agent would hold them once.",
+                     "moderate", "in batches of 500; keep the old table until counts match", "sample S1"),
+            _section("logic", "Batch size, count checks and never dropping data appear in each step and in no skill.",
+                     "strong", "check counts after each batch", "tally U2"),
+            _section("history", "Four uses in one folder; the session folders are gone, so only tally lines and "
+                                "samples were read.", "moderate", "U1-U4 data-migrator", "tally"),
+            _section("fixes", "One step failed with three questions, one timed out.", "moderate",
+                     "ended failed | questions 3 | assumptions 2 | timed out 1", "tally U2"),
+            _section("independent", "The rules are procedure, not style: a subagent that always follows them is the "
+                                    "right fix.", "moderate", "Yes, always in batches of 500", "user answer")],
+            "history_thin": False, "verdict": "define",
+            "reason": "Logic beyond any skill is strong and the failed backfill shows its cost.", "skill_notes": "",
+            "proposal": {"name": "data-migrator", "purpose": "building",
+                         "description": "Moves table data to a new table safely, in batches, checking counts.",
+                         "instructions": "- Copy in batches of 500.\n- Check counts after each batch.\n"
+                                         "- Never drop the old table or data."},
+            "questions": []}
+    if role == "frontend-dev":
+        return {"tests": [
+            _section("value", "The Builder did these steps without trouble.", "weak", "ended done", "tally U1"),
+            _section("logic", "The repeated rule (stay responsive) belongs in the house-style skill.", "weak",
+                     "keep it responsive on phones", "sample S1"),
+            _section("history", "Steady use, all done.", "moderate", "uses: 3", "tally"),
+            _section("fixes", "Nothing failed or was sent back.", "none"),
+            _section("independent", "A better skill is the fix, not a subagent.", "moderate")],
+            "history_thin": False, "verdict": "keep",
+            "reason": "No failures and the only repeated rule fits the skill.",
+            "skill_notes": "- Layouts stay responsive on phones.\n- Keep the existing colours unless the step says so.",
+            "proposal": empty, "questions": []}
+    return {"tests": [
+        _section("value", "Too few uses to tell.", "none"), _section("logic", "No repeated instructions.", "none"),
+        _section("history", "Two uses; history is thin.", "weak", "uses: 2", "tally"),
+        _section("fixes", "Nothing failed.", "none"), _section("independent", "Keep counting.", "weak")],
+        "history_thin": True, "verdict": "not_yet", "reason": "History is thin; keep counting.", "skill_notes": "",
+        "proposal": empty, "questions": []}
+
+
 def _project_files(project: Path, k: int = 3) -> list[str]:
     picks = [p for p in ("CLAUDE.md", "README.md", "docs/decisions.md", "app/server.py") if (project / p).is_file()]
     if len(picks) < k:
@@ -524,9 +633,25 @@ def install(project: Path) -> None:
     # ---------------------------------------------------------------- agent drafter (Crew: "Draft for me")
     def drafter(msg: str) -> list:
         text = msg.split("does this:", 1)[-1].strip()
-        return [fake.spend(0.0004), fake.output(draft_fields(text))]
+        fields = draft_fields(text)
+        for key, label in (("name", "name"), ("purpose", "purpose"), ("description", "description")):
+            m = re.search(rf"Reviewer's proposed {label}: (.+)", msg)          # define path: the case as context
+            if m and m.group(1).strip() != "(none)":
+                fields[key] = m.group(1).strip()
+        m = re.search(r"Instructions the agent needs beyond the skill:\n(.+?)(?:\nWhy the reviewer|\nThe user wants)", msg, re.S)
+        if m and m.group(1).strip() != "(none)":
+            fields["instructions"] = m.group(1).strip()
+        return [fake.spend(0.0004), fake.output(fields)]
 
     fake.script("launchpad-drafter", [drafter] * 50)
+
+    # ---------------------------------------------------------------- Role Reviewer (Crew: Review)
+    def role_reviewer(msg: str) -> list:
+        paths = re.findall(r"^- (?:Builder definition|step report|run report): (\S+?)(?: \(|$)", msg, re.M)
+        reads = [fake.call("Read", {"file_path": p}) for p in paths[:3]]
+        return reads + [fake.spend(0.006), fake.output(reviewer_reply(msg))]
+
+    fake.script("launchpad-role-reviewer", [role_reviewer, role_reviewer])
 
     # ---------------------------------------------------------------- CLI chat (role key pilot)
     question = {"question": "Which tone should the notes use?", "header": "Tone",

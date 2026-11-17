@@ -11,6 +11,7 @@ import { baseName } from '../lib/format';
 import { esc } from '../lib/markdown';
 import { visExtra, visJs } from './visuals';
 import { demoGitOn, demoGitRepos } from './gitDemo';
+import { DEMO_DRAFT_USAGE, demoCase, demoRoles, demoVerdict } from './rolesDemo';
 import { agentPath, crewBase, DEMO_SKILLS, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
 
 type Ev = Record<string, any>;
@@ -44,7 +45,7 @@ export class Demo {
   astroSince: Record<string, number> = {};
   autopilot: Record<string, boolean> = {};
   autoAnswers: Record<string, boolean> = {};
-  openRound: { id: string; sid: string; qs: Ev[] } | null = null;
+  openQs: Record<string, Ev> = {};                    // builder questions waiting on a card (Auto answers settles them)
   openPerms: Record<string, string> = {};
   fsDirs = fsDirs();
   fsVals = fsVals();
@@ -64,6 +65,8 @@ export class Demo {
   /* Crew: use counts per agent name (agent_uses), the connected folder's own agents */
   uses: Record<string, number> = { ...START_USES };
   folderAgents = folderAgentsBase();
+  roles = demoRoles();                                      // undefined roles (the tally), as roles_list shows them
+  roleCases: Record<string, Ev> = {};                       // role -> the case its review wrote
   skillSet: Record<string, 'all' | string[]> = {};          // set_agent_skills (agent name -> setting)
   visPicked: string | null = null;
   /* planner picker: each session's planner (harness, models, promoted, started) and what new plans start on */
@@ -99,18 +102,18 @@ export class Demo {
       const f = this.pending[o.id]; delete this.pending[o.id]; if (f) f({ timer: true }, 'deny');
     }, ms);
   }
-  /* Auto answers: a round whose questions all have a recommendation is answered with them (lines, no card); a waiting one too when switched on */
-  autoRound(sid: string, id: string, qs: Ev[]): boolean {
-    if (!qs.length || !qs.every(q => q.rec)) return false;
-    for (const q of qs) this.emit({ type: 'auto_answer', session_id: sid, id: q.id, agent: 'Planner', step: null, title: q.title, answer: q.rec, round_id: id });
-    this.on({ type: 'round_answer', roundId: id, answers: {}, auto: true });
-    return true;
+  /* Auto answers (builders only): a builder's question is decided with its own recommendation; a card that was waiting is settled */
+  autoDecide(o: Ev, shown: boolean): void {
+    if (this.answered[o.id] != null || this.stopped[o.session_id]) return;
+    this.answered[o.id] = o.rec; delete this.openQs[o.id];
+    this.emit({ type: 'auto_answer', session_id: o.session_id, id: o.id, agent: o.agent, step: o.step ?? null, title: o.title, answer: o.rec });
+    if (shown) this.emit({ type: 'queue_resolved', id: o.id, answer: o.rec, by: 'auto' });
+    this.onAnswer(o.id, o.rec);
   }
   setAutoAnswers(sid: string, on: boolean): void {
     this.autoAnswers[sid] = on;
     this.emit({ type: 'auto_answers', session_id: sid, on });
-    const r = this.openRound;
-    if (on && r && r.sid === sid) { this.openRound = null; if (!this.autoRound(sid, r.id, r.qs)) this.openRound = r; }
+    if (on) for (const o of Object.values(this.openQs)) if (o.session_id === sid) this.autoDecide(o, true);
   }
   setAutopilot(sid: string, on: boolean): void {
     this.autopilot[sid] = on;
@@ -185,10 +188,30 @@ export class Demo {
       b.cost_usd += dc; b.input_tokens += i; b.output_tokens += o; b.cache_read_tokens += r; b.cache_write_tokens += w;
     }
     this.push(a);
+    this.totalsFor(a);
+  }
+  /* the demo's own arithmetic standing in for the server's totals (usage scope session / chat, app/costs.py) */
+  totalsFor(a: Agent): void {
+    const all = Object.values(this.agents) as Agent[];
+    const toks = (l: Agent[]) => ({ input_tokens: l.reduce((t, x) => t + x.input_tokens, 0), output_tokens: l.reduce((t, x) => t + x.output_tokens, 0),
+      cache_read_tokens: l.reduce((t, x) => t + x.cache_read_tokens, 0), cache_write_tokens: l.reduce((t, x) => t + x.cache_write_tokens, 0) });
+    const cost = (l: Agent[]) => l.reduce((t, x) => t + x.cost_usd, 0);
+    if (a.session_id) {
+      const ms = all.filter(x => x.session_id === a.session_id), crew = ms.filter(x => x.role !== 'planner'), steps: Record<string, Ev> = {};
+      for (const n of new Set(crew.filter(x => x.role === 'builder' && x.step != null).map(x => x.step))) {
+        const b = crew.filter(x => x.role === 'builder' && x.step === n);
+        steps[String(n)] = { cost: cost(b), tool_calls: b.reduce((t, x) => t + x.tool_calls, 0), agents: b.length, ...toks(b) };
+      }
+      this.emit({ type: 'usage', scope: 'session', session_id: a.session_id, cost: cost(crew), planner_cost: cost(ms.filter(x => x.role === 'planner')), agents: crew.length, ...toks(crew), steps });
+    } else if (a.chat_id != null) {
+      const ms = all.filter(x => x.chat_id === a.chat_id), t = toks(ms);
+      this.emit({ type: 'usage', scope: 'chat', chat_id: a.chat_id, cost: cost(ms), tokens: t.input_tokens + t.output_tokens + t.cache_read_tokens + t.cache_write_tokens, tool_calls: ms.reduce((s, x) => s + x.tool_calls, 0), agents: ms.length, ...t });
+    }
   }
   total(): void {
-    let t = 0, c = 0; for (const a of Object.values(this.agents)) { t += a.input_tokens + a.output_tokens + a.cache_read_tokens + a.cache_write_tokens; c += a.cost_usd; }
-    this.emit({ type: 'usage', tokens: t, cost: c });
+    let t = 0, c = 0; const by: Record<string, number> = {};
+    for (const a of Object.values(this.agents)) { t += a.input_tokens + a.output_tokens + a.cache_read_tokens + a.cache_write_tokens; c += a.cost_usd; by[a.role] = (by[a.role] || 0) + a.cost_usd; }
+    this.emit({ type: 'usage', tokens: t, cost: c, by_role: by });
   }
   tick(): void {
     for (const a of Object.values(this.agents)) if (a.status === 'working' && a.role !== 'planner' && !a.paused) this.burn(a.agent_id, 300 + Math.random() * 1500, Math.random() < .6 ? 1 : 0);
@@ -197,11 +220,13 @@ export class Demo {
   step(sid: string, n: number, status: string, extra: Ev = {}): void { if (!this.stopped[sid]) this.emit({ type: 'step_update', session_id: sid, n, status, ...extra }); }
   item(o: Ev): void { this.emit({ type: 'queue_item', session_id: null, step: null, body: '', rec: null, blocking: false, timeout_s: null, expires_at: null, ...o }); }
   timed(o: Ev, secs: number): void {
+    if (this.autoAnswers[o.session_id]) { this.autoDecide(o, false); return; }
     const ms = secs * 1000 / this.speed;
+    this.openQs[o.id] = o;
     this.item({ kind: 'question', ...o, blocking: false, timeout_s: Math.round(ms / 1000), expires_at: new Date(Date.now() + ms).toISOString() });
     setTimeout(() => {
       if (this.answered[o.id] || this.stopped[o.session_id]) return;
-      this.answered[o.id] = o.rec;
+      this.answered[o.id] = o.rec; delete this.openQs[o.id];
       this.emit({ type: 'queue_resolved', id: o.id, answer: o.rec, by: 'timer' });
       this.onAnswer(o.id, o.rec);
     }, ms);
@@ -382,6 +407,7 @@ export class Demo {
 
   start(): void {
     this.fsSettings();
+    this.rolesEmit();
     this.pkEmit();
     this.cliEmit();
     actions.setQuiet(true);
@@ -468,15 +494,12 @@ export class Demo {
     };
     const qs = rounds[this.roundNo];
     if (!qs) { this.say('That covers it. Here is the draft plan:'); this.draftC(); return; }
-    this.openRound = null;
     this.emit({ type: 'question_round', session_id: this.current, id: 'r' + this.roundNo, round: this.roundNo, questions: qs });
-    if (this.autoAnswers[this.current] && this.autoRound(this.current, 'r' + this.roundNo, qs)) return;
-    this.openRound = { id: 'r' + this.roundNo, sid: this.current, qs };
     this.emit({ type: 'crew', agents: [{ name: 'Planner', role: 'planner', status: 'waiting', session_id: this.current }] });
   }
   draftC(): void {
     const B = { agent: null, agent_display: 'Builder', agent_purpose: 'building' };
-    const steps = [{ n: 1, title: 'Pull the Q3 claims extract', ...B, skills: ['claims-glossary'] }, { n: 2, title: 'Refresh the trend tabs', ...B },
+    const steps = [{ n: 1, title: 'Pull the Q3 claims extract', ...B, skills: ['claims-glossary'] }, { n: 2, title: 'Refresh the trend tabs', ...B, role: 'frontend-dev' },
       { n: 3, title: 'Build the readmissions tab', agent: 'sql-builder', agent_display: 'Sql builder', agent_purpose: 'building', skills: ['sql-style', 'readmission-rules'], skills_unknown: ['readmission-rules'] },
 
       { n: 4, title: 'Review the readmissions SQL', agent: 'sql-reviewer', agent_display: 'Sql reviewer', agent_purpose: 'reviewing' },
@@ -625,7 +648,6 @@ export class Demo {
       }
       case 'round_answer':
         if (msg.skipped) break;
-        this.openRound = null;
         this.think(700);
         this.later(1100, () => {
           this.say('Noted.');
@@ -645,7 +667,7 @@ export class Demo {
       case 'queue_response': {
         if (this.answered[msg.id] != null) break;          // the timer got there first
         const v = msg.answer ?? msg.decision;
-        this.answered[msg.id] = v;
+        this.answered[msg.id] = v; delete this.openQs[msg.id];
         this.emit({ type: 'queue_resolved', id: msg.id, answer: v, by: 'user' });
         this.onAnswer(msg.id, v, msg);
         break;
@@ -694,6 +716,11 @@ export class Demo {
         break;
       }
       case 'get_crew': this.later(300, () => this.emit(this.crewList(msg.dir_id))); break;
+      case 'roles_get': this.rolesEmit(); break;
+      case 'role_dismiss': this.roleDismiss(msg); break;
+      case 'role_merge': this.roleMerge(msg); break;
+      case 'review_start': this.reviewStart(msg); break;
+      case 'review_decide': this.reviewDecide(msg); break;
       case 'agent_draft': this.agentDraft(msg); break;
       case 'agent_create': this.agentCreate(msg); break;
       case 'agent_remove': this.agentRemove(msg); break;
@@ -932,6 +959,18 @@ export class Demo {
   /* ---- Crew: draft / create / remove a folder agent ---- */
   agentDraft(msg: Ev): void {
     const text = String(msg.text || '').trim(), dir = msg.dir_id;
+    if (msg.role) {                                                  // define path: drafted from the role's case
+      const p = (this.roleCases[msg.role] || demoCase(msg.role, 'rv-0')).proposal || { name: String(msg.role), purpose: 'building', description: '', instructions: '' };
+      this.agent('drafter-' + (++this.n), { session_id: null, chat_id: null, role: 'drafter', name: 'Agent drafter', model: 'haiku', status: 'working' });
+      this.later(1400, () => {
+        this.emit({ type: 'agent_drafted', ok: true, dir_id: dir, role: msg.role, usage: DEMO_DRAFT_USAGE, fields: {
+          name: p.name, description: p.description, purpose: p.purpose || 'building', model: 'sonnet', tools: ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash'],
+          instructions: `# ${p.name.replace(/-/g, ' ').replace(/^./, (c: string) => c.toUpperCase())}\n\n${p.description}\n\n## How you work\n${p.instructions}` } });
+        const dr = Object.values(this.agents).find(a => a.role === 'drafter' && a.status === 'working');
+        if (dr) { this.burn(dr.agent_id, 600, 0); this.agent(dr.agent_id, { status: 'done' }); }
+      });
+      return;
+    }
     this.agent('drafter-' + (++this.n), { session_id: null, chat_id: null, role: 'drafter', name: 'Agent drafter', model: 'haiku', status: 'working' });
     this.later(1600, () => {
       if (/\b(fail|nonsense|asdf)\b/i.test(text) || text.length < 8) {
@@ -975,7 +1014,8 @@ export class Demo {
       this.folderAgents.push({ name, display_name: name.replace(/-/g, ' ').replace(/^./, (c: string) => c.toUpperCase()), role: null, purpose: f.purpose, builtin: false, step_worker: true,
         model: f.model || 'inherit', description: f.description, builtin_tools: tools, custom_tools: [{ name: 'report_step', description: 'Write the step report and end the step.' }], mcp_servers: [], disallowed_tools: [], warnings: [] });
       this.uses[name] = 0;
-      this.emit({ type: 'agent_saved', ok: true, dir_id: dir, name });
+      this.emit({ type: 'agent_saved', ok: true, dir_id: dir, name, ...(msg.role ? { role: msg.role, case_path: `.claude/agent-cases/${name}.md` } : {}) });
+      if (msg.role) { this.roles = this.roles.filter(r => r.name !== msg.role); this.rolesEmit(); }
       this.later(150, () => this.emit(this.crewList(dir)));
     });
   }
@@ -989,6 +1029,65 @@ export class Demo {
       this.emit({ type: 'agent_removed', ok: true, dir_id: dir, name });
       this.later(150, () => this.emit(this.crewList(dir)));
     });
+  }
+
+  /* ---- Undefined roles: the list, merge / dismiss, and a review (progress, one question for data-migrator, the case) ---- */
+  rolesEmit(): void { this.emit({ type: 'roles_list', threshold: 2, resurface_uses: 5, entries: JSON.parse(JSON.stringify(this.roles)) }); }
+  roleDismiss(msg: Ev): void {
+    const e = this.roles.find(r => r.name === msg.role); if (!e) return;
+    e.dismissed = true; e.visible = false; e.state = 'dismissed'; this.rolesEmit();
+  }
+  roleMerge(msg: Ev): void {
+    const e = this.roles.find(r => r.name === msg.role), to = this.roles.find(r => r.name === msg.into);
+    if (!e || !to || e === to) return;
+    to.uses = [...to.uses, ...e.uses].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)); to.uses_total += e.uses_total;
+    to.skills = [...new Set([...to.skills, ...e.skills])]; to.problems = to.uses.filter(u => u.outcome !== 'done' || u.sent_back).length;
+    to.last_used = to.uses[0].at; to.visible = to.uses_total >= 2 && to.state !== 'resting'; if (to.visible) to.state = 'listed';
+    this.roles = this.roles.filter(r => r !== e); this.rolesEmit();
+  }
+  reviewStart(msg: Ev): void {
+    const role = String(msg.role || ''), e = this.roles.find(r => r.name === role);
+    if (!e) { this.emit({ type: 'review_refused', role, review_id: null, error: `There is no role called ${role} in the tally.` }); return; }
+    if (e.reviewing) { this.emit({ type: 'review_refused', role, review_id: e.review_id, error: `A review of ${role} is already running.` }); return; }
+    const id = 'rv-' + (++this.n);
+    e.reviewing = true; e.review_id = id;
+    this.emit({ type: 'review_started', review_id: id, role, model: 'sonnet', harness: 'claude' }); this.rolesEmit();
+    const progress = (phase: string, text: string) => this.emit({ type: 'review_progress', review_id: id, role, phase, text });
+    const finish = (answer?: string) => {
+      progress('finalising', answer ? `Writing the case with your answer: ${answer}` : 'Writing the case');
+      this.later(900, () => {
+        const c = demoCase(role, id, answer); this.roleCases[role] = c;
+        e.reviewing = false; e.review_id = null;
+        e.last_review = { review_id: id, verdict: c.verdict, case_file: c.case_file, cost: c.usage.cost, tokens: c.usage.tokens, at: c.date };
+        this.emit({ type: 'review_case', review_id: id, role, case: JSON.parse(JSON.stringify(c)) }); this.rolesEmit();
+      });
+    };
+    this.later(700, () => progress('reading', `Reading the tally: ${e.uses.length} recorded uses of ${role}`));
+    this.later(1500, () => progress('reading', 'Opening the session records for the most recent and every problem use'));
+    if (role !== 'data-migrator') { this.later(2400, () => finish()); return; }
+    this.later(2300, () => {
+      const qid = 'rvq-' + id, ms = 180000 / this.speed;
+      progress('asking', '1 question card is waiting for you');
+      this.pending[qid] = (_m, v) => finish(String(v));
+      this.item({ id: qid, kind: 'question', agent: 'Role Reviewer', agent_id: null, title: 'Do you always want a row-count check before and after a move?',
+        body: 'Two steps repeated this rule and the skill does not state it. It decides whether the rule belongs in an agent.', rec: 'Yes', options: ['Yes', 'No, only for large tables'],
+        timeout_s: Math.round(ms / 1000), expires_at: new Date(Date.now() + ms).toISOString(), review_id: id, role, test: 'logic' });
+      setTimeout(() => {
+        if (this.answered[qid] != null) return;
+        this.answered[qid] = 'timeout';
+        this.emit({ type: 'queue_resolved', id: qid, answer: 'No answer (the question timed out)', by: 'timer' });
+        const f = this.pending[qid]; delete this.pending[qid]; if (f) f({ timer: true }, 'No answer (the question timed out)');
+      }, ms);
+    });
+  }
+  reviewDecide(msg: Ev): void {
+    const role = String(msg.role || ''), decision = msg.decision, e = this.roles.find(r => r.name === role), c = this.roleCases[role];
+    if (!e || !c) return;
+    e.verdict = { decision, reviewer_verdict: demoVerdict(role), at: new Date().toISOString(), uses_at: e.uses_total, case_file: c.case_file };
+    if (decision === 'define') { e.state = 'defining'; e.visible = true; }
+    else { e.state = 'resting'; e.visible = false; e.uses_to_list = 5; }
+    c.decision = { decision, at: new Date().toISOString() };
+    this.emit({ type: 'review_decided', role, decision, reviewer_verdict: demoVerdict(role), review_id: c.review_id, case_file: c.case_file }); this.rolesEmit();
   }
 
   /* ---- "Send plan to CLI": a chat in the session's folder, Plan mode, the plan as its first message ---- */

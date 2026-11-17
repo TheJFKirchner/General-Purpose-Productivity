@@ -17,6 +17,7 @@ class Settings:
     promotion_window_turns: int = 2            # the planner may promote itself only in its first N turns
     promotion_criteria_path: str | None = None # replacement criteria file (default app/agents/planner/promotion.md)
     visual_model: str | None = None            # visual agent (Visualizer); None = the agent file's model (haiku)
+    reviewer_model: str = "sonnet"             # Role Reviewer (undefined roles); runs on the planner's chosen CLI
     pilot_model: str | None = None             # CLI chat; None = the agent file's model (sonnet)
     pilot_harness: str | None = None           # CLI chat's CLI; None = the launch engine's (app/agents/claude_code/choices.py)
     question_timeout_s: float = 180            # timed builder questions auto-answer after this

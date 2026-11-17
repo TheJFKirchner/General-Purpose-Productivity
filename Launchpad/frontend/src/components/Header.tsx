@@ -3,7 +3,7 @@
    usage, avatar. A coral bar under it says when the connection to the back end is lost. */
 import { useRef, type KeyboardEvent as RKeyboardEvent, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type View } from '../store';
-import { tokShort } from '../lib/format';
+import { tokShort, usd } from '../lib/format';
 import { FolderTree, MessagesSquare, Orbit, Settings, Users, Wallet, WifiOff } from './icons';
 
 const TABS: { view: View; label: string; icon: ReactNode; title?: string }[] = [
@@ -21,7 +21,7 @@ export function Header() {
   const conn = useLaunchpad(st => st.ui.conn);
   const { cost, toks, running, chatWaiting } = useComputed(st => {
     const t = sel.appTotals(st);
-    return { cost: `~$${t.cost.toFixed(2)}`, toks: tokShort(t.parts), running: sel.inFlight(st).length, chatWaiting: sel.plannerWaiting(st) + sel.codeWaiting(st) };
+    return { cost: usd(t.cost, { approx: true }), toks: tokShort(t.parts), running: sel.inFlight(st).length, chatWaiting: sel.plannerWaiting(st) + sel.codeWaiting(st) };
   });
   const listRef = useRef<HTMLDivElement>(null);
 

@@ -16,6 +16,8 @@ import { Empty, Loading, Markdown, PURPOSE_ICON, PenButton, Pill, PurposeTag, Vi
 import { AlertTriangle, ArrowLeft, Bot, Copy, FolderOpen, Plus, RotateCw, Rocket, Search, Trash, UserPlus, Users } from '../../components/icons';
 import { ADDABLE_PURPOSES, PURPOSES, PURPOSE_HINT, PURPOSE_LABEL, roleLabel } from '../../lib/labels';
 import AgentForm from './AgentForm';
+import RoleReview from './RoleReview';
+import { UsedRoles } from './UsedRoles';
 
 type Filter = 'all' | Purpose;
 
@@ -36,6 +38,7 @@ export default function Crew() {
   const defs = useLaunchpad(st => st.crewDefs);
   const loading = useLaunchpad(st => st.crewLoading);
   const flash = useLaunchpad(st => st.crewFlash);
+  const roleOpen = useLaunchpad(st => st.roleOpen);
   const canAdd = useLaunchpad(st => !!sel.crewDir(st));
   const [selName, setSelName] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -84,7 +87,7 @@ export default function Crew() {
         <Pill size="sm" id="crewRefresh" icon={<RotateCw className={loading ? 'spin' : undefined} />} onClick={() => actions.requestCrew()}>Refresh</Pill>
       </div>}>
       <div className="crew-body" ref={bodyRef}>
-        {sel1 ? <CrewDetail a={sel1} raw={raw} setRaw={setRaw} onBack={back} /> : (
+        {roleOpen ? <RoleReview role={roleOpen} /> : sel1 ? <CrewDetail a={sel1} raw={raw} setRaw={setRaw} onBack={back} /> : (
           <>
             <div className="crew-bar">
               <div className="crew-search">
@@ -101,6 +104,7 @@ export default function Crew() {
                 ))}
               </div>
             </div>
+            <UsedRoles />
             <div id="crewAgents"><CrewCards defs={defs} loading={loading} query={query.trim().toLowerCase()} filter={filter} canAdd={canAdd} onOpen={open} /></div>
           </>
         )}

@@ -16,10 +16,15 @@ its report back to the orchestrator.
 - Autopilot (per session, switchable during a run): every such request is approved without a card and logged
   (assumptions.md, report section "Approved by autopilot", activity auto: true); turning it on approves open cards
 - Timed questions auto-answer with the recommendation at the timeout (assumption logged by code); blocking
-  questions mark the step blocked and wait for the user. With the session's Auto answers switch on, a question with
-  a recommendation is answered with it at once (app/incoming.py). Every answered or timed-out question is saved as
-  a file in <session folder>/questions/ (sessionfiles.add_question)
+  questions mark the step blocked and wait for the user. ask_question needs a non-empty recommended answer and a
+  reason (a tool error otherwise; the same tool serves folder agents). With the session's Auto answers switch on,
+  EVERY question (blocking too) is answered at once with the worker's own recommendation, the step never shows
+  blocked (app/incoming.py). Every answered or timed-out question is saved as a file in
+  <session folder>/questions/ (sessionfiles.add_question)
 - The orchestrator receives only cap_result(): the report path plus short, length-capped lists
+- Undefined roles: a step with a `role`, or naming an agent that does not exist, that ran on the Builder is recorded
+  in the per-user tally when it ends (hub.record_role_use: outcome, questions asked, assumptions logged, questions
+  timed out, the step text as a sample). A step run by a registered agent is not recorded
 - `run` below is the orchestrator's Run (app/agents/orchestrator/run.py): settings, folder, plan, hub, steps
 """
 from __future__ import annotations
@@ -105,9 +110,11 @@ def builder_tools(ctx) -> list:
     @tool
     async def ask_question(title: str, body: str, recommended: str, options: list[str] | None = None,
                            blocking: bool = False) -> str:
-        """Ask the user one question. blocking=false: if nobody answers within a few minutes you get your
+        """Ask the user one question. recommended (your own best answer) and body (why you ask) are always
+        required, never empty. blocking=false: if nobody answers within a few minutes you get your
         recommended answer back and proceed on it (logged as an assumption). blocking=true only when a wrong
-        guess would invalidate the step: the run waits until the user answers."""
+        guess would invalidate the step: the run waits until the user answers. With the user's Auto answers
+        switch on, your recommended answer is taken as the answer at once."""
         return await ctx.ask(title, body, recommended, options, blocking)
 
     @tool
@@ -150,6 +157,8 @@ class StepContext:
         self.report: dict | None = None
         self.refused: list[str] = []
         self.error: str | None = None
+        self.questions = 0                         # questions the worker asked (tally evidence)
+        self.timed_out = 0                         # of those, answered by the timer
 
     @property
     def agent_name(self) -> str:
@@ -161,22 +170,32 @@ class StepContext:
 
     async def ask(self, title, body, recommended, options, blocking) -> str:
         run = self.run
+        if not str(recommended or "").strip():
+            raise ValueError("recommended is required: give your own best answer (not empty) and call ask_question again")
+        if not str(body or "").strip():
+            raise ValueError("body is required: say why you are asking (not empty) and call ask_question again")
+        self.questions += 1
         timeout = None if blocking else run.settings.question_timeout_s
-        if blocking:
+        auto = run.hub.incoming.auto_applies(run.ls.id)     # Auto answers on: answered at once, the step never shows blocked
+        flipped = blocking and not auto
+        if flipped:
             await run.set_step(self.n, "blocked")
-        await self.meter.set_status("waiting")
+        if not auto:
+            await self.meter.set_status("waiting")
         asked_at = dt.datetime.now()
         answer, by, _ = await run.hub.incoming.ask(
             session_id=run.ls.id, kind="question", agent=self.agent_name, agent_id=self.meter.agent_id,
-            step=self.n, title=str(title),
-            body=str(body), rec=str(recommended), options=[str(o) for o in options or []] or None, timeout_s=timeout)
-        await self.meter.set_status("working")
-        if blocking:
+            step=self.n, title=str(title), body=str(body), rec=str(recommended),
+            options=[str(o) for o in options or []] or None, timeout_s=timeout, auto_ok=True)
+        if not auto:
+            await self.meter.set_status("working")
+        if flipped:
             await run.set_step(self.n, "in_progress")
         if by == "stopped" or answer is None:
             return "The run was stopped. Call submit_report now with status blocked."
         assumed = ""
         if by == "timer":
+            self.timed_out += 1
             secs = int(timeout)
             assumed = (f"{one_line(title, 160)} -> {one_line(recommended, 200)} "
                        f"(no answer within {secs}s; the timer used the recommendation)")
@@ -317,7 +336,11 @@ async def run_step(run, n: int, brief: str) -> dict:
     """Run plan step n on its agent (the Builder, or the folder agent the plan names) -> the capped result the
     orchestrator receives. Writes the step report, assumptions and operations notes; emits step updates."""
     run.builder_runs += 1
-    worker, fallback = crew.resolve_step_agent(run.steps[n].get("agent"), run.folder.project)
+    named = run.steps[n].get("agent")
+    worker, fallback = crew.resolve_step_agent(named, run.folder.project)
+    # tally (app/tally.py): the step's role, or the name of an agent that does not exist; never a registered agent
+    role = run.steps[n].get("role") or (named if named and not crew.agent_exists(named, run.folder.project) else None)
+    assumptions_before = len(run.assumptions)
     ctx = StepContext(run, n, worker, fallback)
     try:
         agent = load_worker(run, ctx)
@@ -359,5 +382,13 @@ async def run_step(run, n: int, brief: str) -> dict:
                               tool_calls=meter.tool_calls, cost_usd=meter.cost_usd)
     await run.set_step(n, report["status"], built=[one_line(f"{b['item']}: {b['does']}", CAP_LINE)
                                                    for b in report["built"]], report_path=rel)
+    if role and ctx.worker.get("builtin"):
+        f = run.folder
+        await run.hub.record_role_use(role, sample=plan_mod.step_text(run.plan_text, n), use={
+            "dir_id": run.ls.dir_id, "folder": f.project.name, "project": str(f.project), "extra_projects": [str(p) for p in f.extra], "session_id": run.ls.id,
+            "run": run.ls.run_count, "step": n, "title": ctx.title, "skills": run.step_skills(n),
+            "outcome": report["status"], "questions": ctx.questions,
+            "assumptions": len(run.assumptions) - assumptions_before, "timed_out": ctx.timed_out,
+            "named_agent": not run.steps[n].get("role")})
     await meter.set_status("done")
     return cap_result(n, report, rel)

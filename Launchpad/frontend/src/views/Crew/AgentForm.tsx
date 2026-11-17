@@ -8,6 +8,7 @@ import { actions, sel, useComputed, useLaunchpad, type FormField } from '../../s
 import type { Purpose } from '../../contract';
 import { Dialog, DialogTitle, DialogX, Loading, PURPOSE_ICON, Pill } from '../../components';
 import { Check, WandSparkles } from '../../components/icons';
+import { tokShort, tparts, usd } from '../../lib/format';
 import { ADDABLE_PURPOSES, AGENT_MODELS, PURPOSE_HINT, PURPOSE_LABEL, WRITE_TOOLS } from '../../lib/labels';
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch'];
@@ -55,7 +56,8 @@ export default function AgentForm() {
       initialFocus={() => draftRef.current?.focus()}>
       <div className="modal-head">
         <div>
-          <DialogTitle asChild><h2>Add an agent</h2></DialogTitle>
+          <DialogTitle asChild><h2>{f.role ? 'Define an agent' : 'Add an agent'}</h2></DialogTitle>
+          {f.role ? <div className="modal-meta af-role">For the role <code>{f.role}</code>. Saving removes it from "Used but not defined" and keeps the review's case beside the agent.</div> : null}
           <div className="modal-meta">Saved as <code>.claude/agents/{fileName}.md</code> in {v.dir}. The planner can then name it for a step in new plans; the Orchestrator starts it.</div>
         </div>
         <DialogX onClick={close} />
@@ -64,20 +66,21 @@ export default function AgentForm() {
         <form className="af-draft" onSubmit={draft} aria-labelledby="afDraftH">
           <div className="af-draft-h">
             <span className="af-draft-ic" aria-hidden="true"><WandSparkles /></span>
-            <div><h3 id="afDraftH">Draft for me</h3><p>Say in a sentence or two what the agent should do. A quick, cheap model fills the form below; you check and edit it before saving.</p></div>
+            <div><h3 id="afDraftH">{f.role ? 'Drafted from the review' : 'Draft for me'}</h3><p>{f.role ? 'A quick, cheap model wrote a first version from the case the reviewer wrote. Edit every field you like before saving. Add a note below and draft again if you want a different take.' : 'Say in a sentence or two what the agent should do. A quick, cheap model fills the form below; you check and edit it before saving.'}</p></div>
           </div>
           <label className="sr" htmlFor="afDraftText">What should the agent do?</label>
           <textarea id="afDraftText" ref={draftRef} className="field" rows={2} value={f.draftText} disabled={f.drafting}
-            placeholder="For example: checks new SQL for NULL handling and join fan-out before a step is marked done"
+            placeholder={f.role ? 'Optional: anything the drafter should know' : 'For example: checks new SQL for NULL handling and join fan-out before a step is marked done'}
             onChange={e => actions.crewSetDraftText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) draft(); }} />
           <div className="af-draft-row">
-            <Pill type="submit" size="sm" icon={f.drafting ? undefined : <WandSparkles />} disabled={f.drafting || !f.draftText.trim()} id="afDraft">
-              {f.drafting ? 'Drafting…' : 'Draft for me'}
+            <Pill type="submit" size="sm" icon={f.drafting ? undefined : <WandSparkles />} disabled={f.drafting || (!f.draftText.trim() && !f.role)} id="afDraft">
+              {f.drafting ? 'Drafting…' : f.role ? 'Draft again' : 'Draft for me'}
             </Pill>
             <span className="af-draft-status" role="status">
               {f.drafting ? <Loading>Writing a first version…</Loading>
                 : f.drafted ? <span className="af-ok"><Check />Drafted. Check every field below, then save.</span> : null}
+              {f.cost && !f.drafting ? <span className="af-cost" id="afDraftCost" title="Counted in the app-wide total, not in any session">Drafting cost <b>{usd(f.cost.cost)}</b> · {tokShort(tparts(f.cost))}</span> : null}
             </span>
           </div>
           {f.draftError ? <div className="warn" role="alert">{f.draftError}</div> : null}

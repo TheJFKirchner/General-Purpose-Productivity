@@ -6,7 +6,7 @@ import { LS_EDITOR_VIEW, LS_FILES, lsGet } from '../lib/storage';
 const emptyAgentFields = (): AgentFields => ({ name: '', description: '', purpose: '', model: 'sonnet', tools: [], instructions: '' });
 
 export function initialCrewForm(): CrewForm {
-  return { open: false, fields: emptyAgentFields(), problems: [], error: null, saving: false, draftText: '', drafting: false, draftError: null, drafted: false };
+  return { open: false, fields: emptyAgentFields(), problems: [], error: null, saving: false, draftText: '', drafting: false, draftError: null, drafted: false, role: null, cost: null };
 }
 
 export function initialEditor(pane?: EditorPane): EditorState {
@@ -44,11 +44,12 @@ export function initialState(): AppState {
     },
     replaying: false, quiet: false,
     sessions: {}, order: [], current: null, preLog: [], preTyping: false, preName: '', preRoundTag: '', rounds: {}, plannerChoice: null, cliChoice: null,
-    agents: {}, tokens: 0, cost: 0, usageEv: null, usageFromServer: false, acts: [], lastAct: {},
+    agents: {}, tokens: 0, cost: 0, usageEv: null, byRole: {}, chatTotals: {}, acts: [], lastAct: {},
     queue: [],
     chats: {}, chatOrder: [], currentChat: null, chatPending: null, codeModePref: null, chatFromPlan: null, chatItems: {},
     crewDefs: null, crewLoading: false, crewDirId: null, crewDirPick: null, toolChoices: [], crewSkills: [], crewUses: {},
  crewForm: initialCrewForm(),
+    roles: { loaded: false, threshold: 2, resurface: 5, entries: [] }, reviews: {}, roleOpen: null,
     crewRemoving: null, crewError: null, crewFlash: null,
     settings: null, fx: initialFx(), files: {}, editor: initialEditor(), git: initialGit(),
   };

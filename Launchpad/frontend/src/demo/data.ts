@@ -25,7 +25,8 @@ export const fsVals = (): Record<string, SettingValue> => ({
   promotion_window: { value: 2, applies: 'new_sessions', overridden_by_launch: false },
   promotion_criteria: { value: PROMOTION_PATH, applies: 'new_sessions', overridden_by_launch: false },
   pilot_model: { value: 'sonnet', applies: 'new_sessions', overridden_by_launch: '--pilot-model sonnet' },
-  visual_model: { value: 'haiku', applies: 'new_sessions', overridden_by_launch: false } });
+  visual_model: { value: 'haiku', applies: 'new_sessions', overridden_by_launch: false },
+  reviewer_model: { value: 'sonnet', applies: 'now', overridden_by_launch: false } });
 
 export interface DemoFile {
   kind: 'markdown' | 'text' | 'binary' | 'too_large'; text?: string; size: number; mtime: number; version: number; editable: boolean;

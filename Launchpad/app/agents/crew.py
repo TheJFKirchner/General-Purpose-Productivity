@@ -16,6 +16,8 @@
   folder agents; plus the skills found in the folder's session folders (app/skills.py)
 - session_kw(ls, name): what every agent of a session gets at load time: add_dirs (the additional folders) and its
   skills (allowlist + a plan step's skills, through agentlib skills / skill_dirs). No skills = loaded as before
+- HELPERS (not crew cards, not in the registry, still editable in the File Explorer): the agent drafter and the Role
+  Reviewer (role_reviewer: reviews an undefined role from the tally, app/agents/role_reviewer/)
 """
 from __future__ import annotations
 
@@ -58,6 +60,7 @@ ROLES = {
 # App helpers: loaded like the crew, editable in the File Explorer, but not crew cards and not in the registry
 HELPERS = {
     "drafter": {"folder": "drafter", "name": "launchpad-drafter", "display": "Agent drafter"},
+    "role_reviewer": {"folder": "role_reviewer", "name": "launchpad-role-reviewer", "display": "Role Reviewer"},
 }
 
 
@@ -281,6 +284,13 @@ def resolve_step_agent(name: str | None, folder: Path | None, reg: list[dict] | 
     if not hit["step_worker"]:
         return builder, f"agent '{name}' is a {hit['purpose']} agent, not a step worker"
     return hit, None
+
+
+def agent_exists(name: str | None, folder: Path | None, reg: list[dict] | None = None) -> bool:
+    """Is `name` a registered agent here (built-in or a folder agent file, broken or not)? A plan step naming an agent
+    that does not exist is tallied under that name (app/tally.py)."""
+    reg = reg if reg is not None else registry(folder)
+    return bool(name) and any(e["name"] == name for e in reg)
 
 
 def step_fields(name: str | None, folder: Path | None, reg: list[dict] | None = None) -> dict:

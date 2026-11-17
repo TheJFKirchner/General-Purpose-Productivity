@@ -24,6 +24,9 @@ Format = YAML header block + markdown body:
   absent = the Builder. Only written when set, so plans without agents look exactly as before
 - skills (optional, per step): skill names the step's worker gets on top of its own allowlist (app/skills.py); only
   written when set. Older plans' `skill: <name or null>` is read as skills [<name>] / []
+- role (optional, per step): a short slug naming the specialism of a step that has no fitting registered agent (it
+  runs on the Builder; app/tally.py records each use under this name). Never together with agent. Only written when
+  set; older plans without it load unchanged
 """
 from __future__ import annotations
 
@@ -38,6 +41,17 @@ STEP_STATUSES = ("todo", "in_progress", "blocked", "done", "failed")
 MAX_STEPS = 20
 AGENT_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 MAX_SKILL_NAME = 80
+ROLE_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")    # slug, 1-40 characters, no edge hyphens
+MAX_ROLE_NAME = 40
+
+
+def clean_role(v) -> str | None:
+    """write_plan / edit_plan role -> slug or None ("" / None = no role). Upper case and spaces are turned into the
+    slug form; anything still not a slug is left for validate() to reject with a clear message."""
+    s = str(v or "").strip().lower()
+    if not s:
+        return None
+    return re.sub(r"[\s_]+", "-", s)
 
 
 def _skills_of(s: dict) -> list[str]:
@@ -128,6 +142,12 @@ def validate(text: str) -> list[str]:
         agent = s.get("agent")
         if agent is not None and (not isinstance(agent, str) or not AGENT_NAME.match(agent)):
             problems.append(f"step {i}: agent must be an agent name (lowercase letters, digits and dashes)")
+        role = s.get("role")
+        if role is not None and (not isinstance(role, str) or not ROLE_NAME.match(role)):
+            problems.append(f"step {i}: role must be a short slug (lowercase letters, digits and hyphens, at most "
+                            f"{MAX_ROLE_NAME} characters)")
+        elif role and agent:
+            problems.append(f"step {i}: set agent or role, not both (a role is only for steps without a listed agent)")
         skills = _skills_of(s)
         if not isinstance(skills, list) or any(not x or len(x) > MAX_SKILL_NAME or "\n" in x for x in skills):
             problems.append(f"step {i}: skills must be a list of skill names")
@@ -137,15 +157,16 @@ def validate(text: str) -> list[str]:
 
 
 def parse(text: str) -> dict:
-    """-> {name, status, date, session, steps:[{n, title, skills, after, status, agent}], body}; PlanError if
-    invalid. agent = None when the step names none (the Builder); skills = [] when it names none."""
+    """-> {name, status, date, session, steps:[{n, title, skills, after, status, agent, role}], body}; PlanError if
+    invalid. agent = None when the step names none (the Builder); skills = [] when it names none; role = None when
+    the step has none."""
     problems = validate(text)
     if problems:
         raise PlanError("; ".join(problems))
     meta, body = split(text)
     steps = [{"n": s["n"], "title": str(s["title"]).strip(), "skills": _skills_of(s),
               "after": list(s.get("after") or []), "status": s.get("status", "todo"),
-              "agent": s.get("agent") or None} for s in meta["steps"]]
+              "agent": s.get("agent") or None, "role": s.get("role") or None} for s in meta["steps"]]
     return {"name": str(meta["plan"]), "status": meta["status"], "date": str(meta["date"]),
             "session": str(meta["session"]), "steps": steps, "body": body}
 
@@ -159,7 +180,7 @@ def step_text(text: str, n: int) -> str:
 
 def render(*, name: str, goal: str, steps: list[dict], session: str, status: str = "draft",
            date: str | None = None) -> str:
-    """steps: [{title, details, done_when, skills?, after?, agent?}] -> plan.md text (not yet validated)."""
+    """steps: [{title, details, done_when, skills?, after?, agent?, role?}] -> plan.md text (not yet validated)."""
     header = {
         "plan": name.strip(),
         "status": status,
@@ -182,6 +203,9 @@ def _header_step(i: int, s: dict) -> dict:
     agent = str(s.get("agent") or "").strip()
     if agent:
         out["agent"] = agent
+    role = clean_role(s.get("role"))
+    if role:
+        out["role"] = role
     skills = clean_skills(s.get("skills") if s.get("skills") is not None else s.get("skill"))
     if skills:
         out["skills"] = skills
@@ -206,7 +230,8 @@ EDIT_OPS = ("replace", "rename", "set_goal", "set_step", "add_step", "remove_ste
 
 
 def to_fields(text: str) -> dict:
-    """plan.md -> {name, goal, steps:[{title, details, done_when, skills, after, agent}]} (the inverse of render)."""
+    """plan.md -> {name, goal, steps:[{title, details, done_when, skills, after, agent, role}]} (the inverse of
+    render)."""
     p = parse(text)
     body = p["body"]
     m = re.search(r"^## Goal\s*\n(.*?)(?=^## Steps|\Z)", body, re.M | re.S)
@@ -219,7 +244,8 @@ def to_fields(text: str) -> dict:
         details = (rest[:done.start()] + rest[done.end():]) if done else rest
         steps.append({"title": s["title"], "details": details.strip(),
                       "done_when": done.group(1).strip() if done else "",
-                      "skills": list(s.get("skills") or []), "after": list(s["after"]), "agent": s.get("agent")})
+                      "skills": list(s.get("skills") or []), "after": list(s["after"]), "agent": s.get("agent"),
+                      "role": s.get("role")})
     return {"name": p["name"], "goal": goal, "steps": steps}
 
 
@@ -283,6 +309,10 @@ def apply_edits(text: str, edits: list[dict], *, session: str) -> tuple[str, lis
                         s[key] = str(e[key]).strip()
                 if e.get("agent") is not None:                      # "" = back to the Builder
                     s["agent"] = str(e["agent"]).strip() or None
+                    if s["agent"] and e.get("role") is None:        # a listed agent replaces the step's role
+                        s["role"] = None
+                if e.get("role") is not None:                       # "" = no role
+                    s["role"] = clean_role(e["role"])
                 if e.get("skills") is not None:                     # [] = none
                     s["skills"] = clean_skills(e["skills"])
                 if e.get("after") is not None:
@@ -296,7 +326,7 @@ def apply_edits(text: str, edits: list[dict], *, session: str) -> tuple[str, lis
                     raise PlanError(f"position must be 1-{len(steps) + 1}")
                 new = {"title": str(e["title"]).strip(), "details": str(e["details"]).strip(),
                        "done_when": str(e.get("done_when") or "").strip(), "skills": clean_skills(e.get("skills")),
-                       "agent": str(e.get("agent") or "").strip() or None,
+                       "agent": str(e.get("agent") or "").strip() or None, "role": clean_role(e.get("role")),
                        "after": ids(e.get("after")) or [], "_id": next_id}
                 next_id += 1
                 steps.insert(pos - 1, new)
@@ -321,7 +351,7 @@ def apply_edits(text: str, edits: list[dict], *, session: str) -> tuple[str, lis
             raise PlanError(f"edit {i} ({op}): {err}. The draft was not changed.") from None
     pos_of = {s["_id"]: n for n, s in enumerate(steps, 1)}
     out_steps = [{"title": s["title"], "details": s["details"], "done_when": s["done_when"],
-                  "skills": list(s.get("skills") or []), "agent": s.get("agent"),
+                  "skills": list(s.get("skills") or []), "agent": s.get("agent"), "role": s.get("role"),
                   "after": sorted(pos_of[a] for a in s["after"])} for s in steps]
 
     new_text = render(name=f["name"], goal=f["goal"], steps=out_steps, session=session)

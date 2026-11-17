@@ -12,11 +12,24 @@
               harness, label, option_id, started, cwd, busy, history:[{role: user|assistant, markdown}]}]}
              (first event on every connection; then the replay events below)
              planner chat entries: {role: user|assistant|system, text} · {role: round, round:{id, round, questions}}
-             · {role: answers, roundId, answers, skipped} · an auto_answer event (see below; replayed as a line)
+             · {role: answers, roundId, answers, skipped}
     planner_message {text, session_id} · typing {on} · question_round {id, round, questions:[{id,title,body,rec,options}]}
-    usage {scope: "app", tokens, cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}
-          (= the plain sum of every agent_usage, all sessions and chats incl. the planner; tokens = the four counts,
-           mostly cache reads; input_tokens = uncached input only) · crew {agents:[{name, role, status, session_id}]}
+    usage {scope: "app", tokens, cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           by_role: {<role>: cost}}
+          (= the plain sum of every agent, all sessions and chats incl. the planner; tokens = the four counts,
+           mostly cache reads; input_tokens = uncached input only; by_role = the cost per agent role)
+    usage {scope: "session", session_id, cost, planner_cost, agents, input_tokens, output_tokens, cache_read_tokens,
+           cache_write_tokens}  (that session's total = every agent but the planner; planner_cost = the planner's own
+           share, never inside cost; agents and the token counts are those same agents'; steps: {"<n>": {cost,
+           tool_calls, agents, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}} = the builders
+           (step agents) of each step)
+    usage {scope: "chat", chat_id, cost, tokens, tool_calls, agents, input_tokens, output_tokens, cache_read_tokens,
+           cache_write_tokens}  (that CLI chat's totals)
+      - cost totals: ALL cost figures the page shows are summed here only (app/costs.py; one rule for which roles count)
+        and sent live: the scope of the agent that just changed (always app; its session or its chat), and every scope
+        on connect. The page adds nothing up: it displays these, and the per-agent agent_usage figures as they are.
+        snapshot total_cost_usd / planner_cost_usd and run_finished carry the same session figures
+      - crew {agents:[{name, role, status, session_id}]}
     plan_meta {name, mode, status} · system {text, session_id?, chat_id?}
     session_started {session_id, folder, dir_id, cwd, additional_dir_ids}
       - cwd = the session's primary folder (its working directory); additional_dir_ids = the folders ticked as
@@ -27,7 +40,8 @@
       - is_default = the primary folder (where the next session or chat runs unless the folder menu picks another);
         is_additional / additional_dir_ids = folders ticked as additional (global, per user; a session uses them minus
         its own primary; new sessions and chats only)
-      - settings: question_timeout_s, permission_timeout_s, visual_model (now); autopilot_default,
+      - settings: question_timeout_s, permission_timeout_s, visual_model, reviewer_model (the Role Reviewer's model,
+        default sonnet; launch option --reviewer-model) (now); autopilot_default,
         planner_start_model, planner_top_model, planner_harness (default claude), planner_auto_promote (default
         true), promotion_window_turns, promotion_criteria_path, pilot_model, pilot_harness (default null = the
         launch engine's CLI) (new_sessions; a planner nobody has written to yet is reloaded with a new planner
@@ -62,9 +76,12 @@
               when the id is unknown; message = a short success note, or on failure git's own text with credentials
               removed, trimmed; committed true when a commit was made even if the push after it failed)
     plan_draft {session_id, path, markdown, steps:[{n, title, agent, agent_display, agent_purpose, agent_fallback?,
-                skills?, skills_unknown?}], revision, previous_runs}
+                skills?, skills_unknown?, role?}], revision, previous_runs}
       - skills = skill names the plan names for the step (absent when none): its worker gets them on top of its own
         allowlist; skills_unknown = those not found in the session's folders (ignored at run time; show greyed)
+      - role = the step's role slug (absent when none; never together with a non-null agent): a specialism the planner
+        named for a step no listed agent fits; the step runs on the Builder and is tallied under it (see roles_list).
+        Show it as a chip on the step
       - agent = the step's agent name, null = the Builder; agent_display = who will run it ("Builder" when null);
         agent_purpose = that agent's purpose (planning|exploring|building|reviewing|other; "building" for the Builder):
         colour steps by this, not by a folder's crew_list;
@@ -73,7 +90,7 @@
         Every new draft can be approved, also after a finished run; a reconnect replays a pending draft after the
         finished run's run_started / run_finished
     run_started {session_id, name, steps:[{n, title, status, agent, agent_display, agent_purpose, agent_fallback?,
-                 skills?, skills_unknown?}], run, revision, autopilot}
+                 skills?, skills_unknown?, role?}], run, revision, autopilot}
       - plan_approve answers: run_started (success), or system {text, session_id}: "No draft plan to approve yet." /
         "This session's run is already going." / "There is no new draft to approve: ..." (already ran)
       - a second run in a session first moves steps/ and report.md into run-<k>/
@@ -109,7 +126,7 @@
         pilot_model (picker, set_settings)
     autopilot {session_id, on}  (after set_autopilot; on = every builder permission request approved without a card)
     step_update {session_id, n, status: todo|in_progress|blocked|done|failed, agent, agent_display, agent_purpose,
-                 agent_fallback?, skills?, skills_unknown?,
+                 agent_fallback?, skills?, skills_unknown?, role?,
                  built?, report_path?}
       - from in_progress on, agent_display = the agent actually running the step (after any fallback); a fallback
         is also an issue in the step report and report.md (Steps table has an Agent column)
@@ -122,26 +139,33 @@
       - builder permission cards: timeout_s = the permission timeout (default 180), expires_at set, blocking false;
         raised for deny-listed shell commands and for writes outside the project / into .launchpad/ or .git/
       - plan (chats): markdown = the proposed plan
+      - Role Reviewer questions (at most 3 per review): kind question, session_id null, chat_id null, agent "Role
+        Reviewer", plus review_id, role (the role under review), test (value|logic|history|fixes|independent or "");
+        rec = the reviewer's recommended answer; timeout_s = the question timeout (on expiry the answer is "No answer (the
+        question timed out)", by timer, never the recommendation); NEVER auto-answered (Auto answers is for builders).
+        Show them with the review in the Crew tab; answer with queue_response {id, answer}
     queue_resolved {id, answer, by: user|timer|autopilot|auto}
       - builder permission timer: {answer: "deny", by: "timer"}; autopilot switched on: {answer: "allow", by: "autopilot"};
-        a waiting question with a recommendation when Auto answers is switched on: {answer: <the recommendation>, by: "auto"}
+        a waiting plan-step question when Auto answers is switched on: {answer: <the worker's recommendation>, by: "auto"}
     auto_answers {session_id, on}  (after set_auto_answers; also snapshot sessions[].auto_answers, off by default)
-    auto_answer {session_id, id, agent, step, title, answer, round_id}
-      - one question the session's Auto answers switch answered with the agent's recommended answer (no card was shown,
-        or the waiting card was closed): the page shows a compact line (question + answer, marked automatic). id = the
-        planner round question's id or the builder card's id; step = the builder's step or null; round_id = the planner
-        round it belonged to (null for a builder question). Kept in the session's chat history (replayed in the snapshot)
-      - rules: only questions WITH a recommendation (a planner round only when every question in it has one; else the
-        whole round waits as a card, as does a builder question with none); permission cards and plan proposals are never
-        affected (that is Autopilot); the agent carries on as if the user had accepted the recommendation
+    auto_answer {session_id, id, agent, step, title, answer}
+      - one plan-step worker's question decided under Auto answers: the worker's own recommended answer was taken (no card
+        was shown, or the waiting card is settled). The page shows a compact, marked line in Incoming (question + answer,
+        "Decided by the <agent> (Auto answers on)"). id = the question's queue id; step = the step. NOT in the planner
+        chat. The most recent ones are replayed on connect (before activity)
+      - rules: BUILDERS ONLY: questions asked by plan-step workers (the Builder and folder / other agents running a step),
+        blocking ones too, always with the worker's own recommended answer (ask_question rejects an empty recommended
+        answer or reason with a tool error, so every question has one); the step stays in_progress (never blocked).
+        Planner question rounds and CLI chat questions are never auto-answered; permission cards and plan proposals are
+        never affected (that is Autopilot)
     question files (no event): every answered question (planner round questions, one file each; builder questions; CLI
         chat questions) and every timed-out one is saved by code as <session folder>/questions/NNN-<slug>.md (number
         unique in the session, found from disk, so it survives a restart; a CLI chat's own folder holds its questions):
         Question, Asked by + when, Step, Run, Options offered, Answer ("No answer (timed out)" when it timed out),
         Justification (reason, recommended answer, the user's note, the assumption taken), How it was answered (by the
-        user / "Answered automatically (recommended)" / timed out). Skipped planner questions get no file. Files stay in
+        user / "Decided by the Builder (Auto answers on)" / timed out). Skipped planner questions get no file. Files stay in
         questions/ across runs; report.md has a "Questions" section linking the files of its run
-    agent_usage {session_id, chat_id, agent_id, role: planner|astronaut|orchestrator|builder|pilot|visual|drafter, name, step,
+    agent_usage {session_id, chat_id, agent_id, role: planner|astronaut|orchestrator|builder|pilot|visual|drafter|reviewer, name, step,
                  status: working|idle|done, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
                  cost_usd, tool_calls, by_model?: [{model, cost_usd, input_tokens, output_tokens, cache_read_tokens,
                  cache_write_tokens}]}  (+ old planner-header fields); one Explorer (role astronaut) per session, idle between trips;
@@ -149,6 +173,9 @@
                  - role builder = any step agent (the Builder or a folder agent; name = its display name)
                  - role drafter = the agent drafter (agent_draft): session_id and chat_id both null; counted in the
                    app-wide usage only
+                 - role reviewer = the Role Reviewer (review_start; name "Role Reviewer"): session_id and chat_id both
+                   null; counted in the app-wide usage only (by_role.reviewer); its Read / Grep / Glob calls appear as
+                   activity events with role reviewer and no session
     activity {id, session_id, chat_id, agent_id, role, name, step, tool, summary, status: started|done|denied|failed, ts,
               auto?: true (final event of a call autopilot approved)}
              (one per tool call: "started", then the same id with the final status; summary = command / path /
@@ -182,10 +209,55 @@
         folder's .claude/agents/*.md (that folder's list)
     agent_uses {name, uses}  (whenever a count changes: planner session started, explore, step, run, visual render,
                 CLI chat's first turn)
-    agent_drafted {ok: true, dir_id, fields: {name, description, purpose, model, tools:[..], instructions}}
-                  | {ok: false, dir_id?, error}   (reply to agent_draft; fields are a suggestion the user edits)
-    agent_saved {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, error, problems:[..]}
+    agent_drafted {ok: true, dir_id, fields: {name, description, purpose, model, tools:[..], instructions},
+                   usage: {tokens, cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}, role?}
+                  | {ok: false, dir_id?, error, role?}   (reply to agent_draft; fields are a suggestion the user edits)
+      - usage = the drafting call's own tokens and cost (show them with the draft); role = echoed when the draft was
+        for a tally role (define path)
+    agent_saved {ok: true, dir_id, name, role?, case_path?} then roles_list (role given or an entry named like the
+                agent) and crew_list | {ok: false, dir_id?, error, problems:[..], role?}
+      - role given (define path): the role's tally entry is removed (also an entry named like the new agent) and, when
+        the role was reviewed this launch, the case is saved beside the agent: case_path = ".claude/agent-cases/
+        <name>.md" relative to the folder (outside .claude/agents/, so it is never loaded as an agent)
     agent_removed {ok: true, dir_id, name} then crew_list | {ok: false, dir_id?, name?, error}
+    roles_list {threshold: 2, resurface_uses: 5, entries:[{name, base_agent, purpose, skills:[..], folders:[{dir_id,
+                name}], uses_total, first_used, last_used, samples:[{text, session_id, step, title, at}], verdict:
+                {decision: define|keep|not_yet, reviewer_verdict, at, uses_at, case_file}|null, dismissed, last_review:
+                {review_id, verdict, case_file, cost, tokens, at}|null, uses:[{id, at, dir_id, folder, session_id, run,
+                step, title, skills, outcome: done|failed|blocked, questions, assumptions, timed_out, sent_back,
+                named_agent}] (newest first, at most 20), problems, state, visible, uses_to_list, resurfaced, reviewing,
+                review_id}]}
+      - undefined roles: the per-user tally (<home>/.launchpad/roles.json, app/tally.py), every entry most recently used
+        first. Sent on connect and after every change (a step recorded, a send-back marked, dismiss, merge, a review
+        starting or ending, a decision, an agent created for a role)
+      - recorded: a plan step with a role that ran on the Builder, or a step naming an agent that does not exist
+        (named_agent true, tallied under that name); never a step run by a registered agent. questions = asked by the
+        worker; assumptions = logged for the step (timer, autopilot and report ones); timed_out = questions the timer
+        answered; sent_back = the session's plan was revised after that run
+      - visible = show under "Used but not defined". state: few_uses (fewer than threshold uses; uses_to_list = how
+        many more) | dismissed (until used again) | resting (after a keep or not_yet decision: until resurface_uses
+        more uses or a new failed / blocked / sent-back use; uses_to_list = uses left) | defining (decision define,
+        until the agent is created) | listed (resurfaced true = back after a rest). problems = failed, blocked or
+        sent-back uses among those listed. reviewing = a review is running (review_id)
+    review_started {review_id, role, model, harness}  (reply to review_start; the reviewer is reading)
+    review_progress {review_id, role, phase: reading|asking|finalising, text}  (one line each: what it opens, how many
+                question cards wait, finalising with the answers)
+    review_case {review_id, role, case}  (the review finished; also replayed on connect: the latest case per role)
+      - case = {case_id, review_id, role, date, reviewer: {name, harness, model, label}, uses_total, uses_recorded,
+        opened:["U7", ...] (uses whose session records were opened), missing:["U8", ...] (session folders gone),
+        sections:[{test: value|logic|history|fixes|independent, title, finding, evidence:[{quote, source}], strength:
+        none|weak|moderate|strong}] (always five, in that order), verdict: define|keep|not_yet, reason, history_thin,
+        skill_notes ("" unless keep: what the skill should cover), proposal: {name, purpose, description,
+        instructions}|null (define only), questions:[{test, question, why, recommended, answer}], usage: {tokens,
+        cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}, decision: {decision, at, agent?,
+        folder?}|null, case_file (file name in <home>/.launchpad/role-cases/, null when the store is in memory)}
+      - section titles: Clear value · Logic beyond the skill · Clear usage history · Mistakes or issues it would fix ·
+        Independent view: is a subagent the right fix?
+    review_failed {review_id, role, error}  (the review errored; the role stays reviewable)
+    review_refused {role, review_id|null, error}  (review_start refused: a review of that role is already running
+                   (review_id = the running one), or the role is not in the tally)
+    review_decided {role, decision, reviewer_verdict, review_id, case_file} then roles_list  (reply to review_decide;
+                   the decision is written into the case file)
     chat_started {chat_id, mode, model, harness, label, option_id, started, cwd, dir_id, additional_dir_ids,
                   from_session_id?} · chat_typing {chat_id, on} · chat_delta {chat_id, text}
       - cwd = the chat's primary folder; additional_dir_ids = the additional folders it got as add_dirs
@@ -228,11 +300,28 @@
                   yet (it is reloaded on the new CLI and model at once); a chat in progress keeps its own, the choice
                   is for the next new chat (remembered per user: pilot_harness + pilot_model). Refused (system
                   "CLI: ..."): unknown or unavailable option
-    agent_draft {dir_id, text} -> agent_drafted  (one cheap one-shot call: haiku, no tools; nothing saved)
+    agent_draft {dir_id, text, role?} -> agent_drafted  (one cheap one-shot call: haiku, no tools; nothing saved)
+      - role (define path): a tally role; the drafter also gets the role's samples and skills and the latest review
+        case of it (proposed name, purpose, description, instructions beyond the skill); text may be empty then.
+        The output fields are the same as without it
     agent_create {dir_id, fields: {name, description, purpose: exploring|building|reviewing|other, model?, tools:[..],
-                  instructions}} -> agent_saved  (writes <folder>/.claude/agents/<name>.md after the agent-file
+                  instructions}, role?} -> agent_saved  (writes <folder>/.claude/agents/<name>.md after the agent-file
                   validation; refused: planning purpose, a built-in name, an existing agent or file, read-only
-                  purpose with Write / Edit / Bash; empty tools = the purpose's default set)
+                  purpose with Write / Edit / Bash; empty tools = the purpose's default set). role = the tally role
+                  this agent defines (removed from the tally, case copy saved beside the agent); dir_id = the folder
+                  chosen on the Crew tab
+    roles_get {} -> roles_list
+    role_dismiss {role} -> roles_list  (hidden until the role is used again)
+    role_merge {role, into} -> roles_list  (folds role into into: uses, samples, skills, folders; counts add up; role
+                  is gone). Refused (system "Roles: ...") for an unknown role or the same name twice
+    review_start {role} -> review_started, review_progress ..., queue_item (questions, if any), review_case |
+                  review_failed; then roles_list. One review at a time per role (else review_refused). The reviewer:
+                  read-only (Read / Grep / Glob, each checked against the paths of its brief), on the planner's chosen
+                  CLI with the reviewer_model setting
+    review_decide {role, decision: define|keep|not_yet} -> review_decided + roles_list  (the user's decision; it may
+                  differ from the reviewer's verdict. keep / not_yet: the role rests (see roles_list); define: the role
+                  stays listed as defining; the page then sends agent_draft {dir_id, text: "", role} and, after the
+                  user edits the form, agent_create {dir_id, fields, role})
     set_agent_skills {name, skills: "all" | [skill names], dir_id?} -> crew_list (for dir_id, default the current
                   session's folder)  (one agent's skill setting, keyed by agent name; saved per user; new sessions and
                   steps only). Refused (system "Crew: ...") for anything but "all" or a list of names
@@ -242,8 +331,8 @@
                   the first message; the draft stays approvable. Refused (system) if the session has no draft
     set_autopilot {session_id, on: bool}
     set_auto_answers {session_id, on: bool} -> auto_answers (+ auto_answer lines and queue_resolved by "auto" for the
-                  questions already waiting that have a recommendation, a waiting planner round included when every
-                  question in it has one). Per session, off by default, separate from Autopilot, state kept on the server
+                  plan-step questions already waiting). Builders only. Per session, off by default, separate from
+                  Autopilot, state kept on the server
     get_settings {} · set_settings {patch: {<setting>: value, default_dir_id?: dir_id ("Make default" = the primary),
                   additional_dir_ids?: [dir_id] (the whole list of folders ticked as additional)}}
 

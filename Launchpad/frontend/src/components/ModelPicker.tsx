@@ -33,11 +33,9 @@ export interface ModelPickerProps {
   onClose?: () => void;
   /** the menu closes when this changes (the planner: the session shown) */
   resetKey?: string | null;
-  /** something that sits in the row beside the picker button (the planner: the Auto answers switch) */
-  trailing?: ReactNode;
 }
 
-export function ModelPicker({ id, rowId, view: v, who, tag, onPick, extra, onClose, resetKey, trailing }: ModelPickerProps) {
+export function ModelPicker({ id, rowId, view: v, who, tag, onPick, extra, onClose, resetKey }: ModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [cliOpen, setCliOpen] = useState(false);
   /** the CLI whose models are listed (starts on the current one each time the menu opens) */
@@ -169,7 +167,6 @@ export function ModelPicker({ id, rowId, view: v, who, tag, onPick, extra, onClo
           </div>
         ) : null}
       </div>
-      {trailing}
       {v.note ? <p className="pk-note" role="status" id={`${id}Note`} title={v.note}>{v.note}</p> : null}
     </div>
   );

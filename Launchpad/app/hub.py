@@ -20,10 +20,17 @@
 - CLI chat picker (app/agents/claude_code/choices.py, same table): cli_choose -> remembered per user (pilot_harness /
   pilot_model); chats nobody has written to yet reload at once (chat_model), chats in progress keep theirs (the
   choice is for the next new chat). cli_choice is sent on connect and after every change of those settings
-- Auto answers (per session, off by default, `auto_answers` on LaunchSession): set_auto_answers; while on, every
-  question WITH a recommendation (planner rounds, builder questions) is answered at once with it and shows as an
-  auto_answer line in the planner chat (auto_answered; also kept in the chat history for a reconnect); questions
-  without one wait as usual; permission cards are never touched. Turning it on answers the waiting ones too
+- Auto answers (per session, off by default, `auto_answers` on LaunchSession): set_auto_answers; BUILDERS ONLY: while
+  on, every question a plan-step worker asks (blocking too) is answered at once with the worker's own recommendation
+  and shows as an auto_answer line in Incoming (auto_answered; kept in auto_lines for a reconnect, never in the
+  planner chat). Planner rounds, CLI chat questions and permission cards are never touched. Turning it on answers
+  the waiting step questions too
+- Totals: emit_totals sends every cost total (usage scope app / session / chat; app/costs.py sums, nothing else does)
+- Undefined roles (app/tally.py, per-user file beside settings.json; in memory without a user file, and always in
+  memory under --fake unless that home is a temp folder): record_role_use (from the step runner) adds a use; a draft
+  written after a run marks that run's uses sent back; roles_get / role_dismiss / role_merge change the list
+  (roles_list); review_start / review_decide run the Role Reviewer (app/agents/role_reviewer/reviewer.py Reviews);
+  agent_draft {role} adds the case as drafter context, agent_create {role} removes the entry and saves the case copy
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -36,8 +43,10 @@ import sys
 import traceback
 from collections import deque
 
+from . import costs
 from . import plan as plan_mod
 from . import skills as skills_mod
+from . import tally as tally_mod
 from .activity import log_line
 from .agents import crew, folder_agents
 from .agents.claude_code import choices as cli_choices
@@ -46,6 +55,7 @@ from .agents.drafter import drafter
 from .agents.orchestrator.run import Run
 from .agents.planner import choices
 from .agents.planner.planner import PlannerChat, promotion_criteria
+from .agents.role_reviewer.reviewer import Reviews, draft_context
 from .agents.visualizer.visuals import VisualBoard
 from .files import FileError, Files
 from .gitrepos import GitRepos
@@ -55,6 +65,7 @@ from .settings import Settings
 from .store import SPECS, Store
 
 ACTIVITY_SNAPSHOT = 300          # recent activity events replayed to a reconnecting UI
+AUTO_LINES_SNAPSHOT = 200        # recent auto_answer lines (builder questions answered by Auto answers) replayed too
 
 
 class LaunchSession:
@@ -105,18 +116,22 @@ class LaunchSession:
         return {"type": "plan_draft", "session_id": self.id, "path": self.folder.rel(self.folder.plan),
                 "markdown": self.plan_text,
                 "steps": [{"n": s["n"], "title": s["title"], **crew.step_fields(s.get("agent"), self.folder.project, reg),
-                           **self.step_skill_fields(s)} for s in p["steps"]],
+                           **self.step_skill_fields(s), **({"role": s["role"]} if s.get("role") else {})}
+                          for s in p["steps"]],
                 "revision": self.draft_revision, "previous_runs": self.run_count}
 
     def agent_note(self, text: str) -> str:
         """Tool-result line for steps naming an agent the run would not use (it falls back to the Builder)."""
-        bad, unknown = [], []
+        bad, unknown, roles = [], [], []
         have = self.skill_names()
+        workers = {e["name"] for e in crew.step_agents(self.folder.project)}
         for s in plan_mod.parse(text)["steps"]:
             if s.get("agent"):
                 _, reason = crew.resolve_step_agent(s["agent"], self.folder.project)
                 if reason:
                     bad.append(f"step {s['n']}: {reason}")
+            if s.get("role") in workers:
+                roles.append(f"step {s['n']}: '{s['role']}'")
             unknown += [f"step {s['n']}: {n}" for n in s.get("skills") or [] if n not in have]
         out = ""
         if bad:
@@ -126,6 +141,9 @@ class LaunchSession:
         if unknown:
             out += (" Note: unknown skills (ignored at run time): " + "; ".join(unknown) + ". Skills: "
                     + (", ".join(sorted(have)) or "none") + ". Fix with edit_plan (set_step skills).")
+        if roles:
+            out += (" Note: role names that are listed step agents: " + "; ".join(roles) + ". Set agent to that name "
+                    "instead (edit_plan set_step agent).")
         return out
 
     @property
@@ -171,6 +189,8 @@ class LaunchSession:
         self.folder.write_plan(text)
         self.plan_text = text
         self.draft_revision += 1
+        if self.run_count:                         # a revised plan after a run = that run was sent back (tally)
+            await self.hub.mark_sent_back(self.id, self.run_count)
         await self.hub.emit(self.draft_event())
         await self.hub.emit({"type": "plan_meta", "session_id": self.id, "name": plan_mod.parse(text)["name"],
                              "mode": "Plan", "status": "Draft"})
@@ -189,7 +209,12 @@ class Hub:
         self.clients: dict[object, asyncio.Lock] = {}
         self.meters: list = []
         self.recent_activity: deque = deque(maxlen=ACTIVITY_SNAPSHOT)
+        self.auto_lines: deque = deque(maxlen=AUTO_LINES_SNAPSHOT)     # auto_answer events, replayed on connect
         self.incoming = Incoming(self)
+        self.tally = tally_mod.Tally.beside(self.store)  # undefined roles, beside settings.json (app/tally.py)
+        if settings.engine == "fake" and not tally_mod.in_temp(self.tally.path):
+            self.tally = tally_mod.Tally(None)           # the demo never writes a real tally
+        self.reviews = Reviews(self)                     # Role Reviewer runs + latest cases
         self.sessions: dict[str, LaunchSession] = {}   # in the order the front end letters them (Run A, B, ...)
         self.chats: dict[str, PilotChat] = {}       # regular sessions (Pilot), several may coexist
         self.current: LaunchSession = self._new()
@@ -276,18 +301,16 @@ class Hub:
         await self.emit(ev)
 
     def session_costs(self, session_id: str) -> tuple[float, float]:
-        """The one definition of a session's cost: (total = every agent but the planner, planner)."""
-        ms = [m for m in self.meters if m.session_id == session_id]
-        return (sum(m.cost_usd for m in ms if m.role != "planner"),
-                sum(m.cost_usd for m in ms if m.role == "planner"))
+        """A session's cost: (total = every agent but the planner, planner). The rule lives in app/costs.py."""
+        return costs.session_split(self.meters, session_id)
 
     def snapshot_event(self) -> dict:
         return {"type": "snapshot", "current_session_id": self.current.id,
                 "sessions": [{"session_id": ls.id, "dir_id": ls.dir_id, "cwd": str(ls.folder.project),
                               "folder": ls.folder.rel(ls.folder.path), "chat": list(ls.chat.history),
                               "report_sent": ls.report_sent, "running": ls.running,
-                              "total_cost_usd": round(self.session_costs(ls.id)[0], 6),
-                              "planner_cost_usd": round(self.session_costs(ls.id)[1], 6),
+                              "total_cost_usd": costs.wire(self.session_costs(ls.id)[0]),
+                              "planner_cost_usd": costs.wire(self.session_costs(ls.id)[1]),
                               "visual_sets": ls.visuals.snapshot(),
                               "plan_revision": ls.draft_revision, "draft_pending": ls.draft_pending,
                               "runs": ls.run_count, "autopilot": ls.autopilot, "auto_answers": ls.auto_answers,
@@ -295,13 +318,19 @@ class Hub:
                              for ls in self.sessions.values()],
                 "chats": [c.snapshot() for c in self.chats.values()]}
 
-    async def emit_totals(self) -> None:
-        """App-wide totals = the plain sum of every agent_usage (same meters, same per-turn engine cost)."""
-        ms = self.meters
-        u = {k: sum(getattr(m.usage, k) for m in ms) for k in
-             ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")}
-        await self.emit({"type": "usage", "scope": "app", "tokens": sum(u.values()),
-                         "cost": round(sum(m.cost_usd for m in ms), 6), **u})
+    async def emit_totals(self, meter=None) -> None:
+        """Every total the page shows, summed here only (app/costs.py): usage scope app, plus the scope of the meter
+        that just changed (its session: total + planner share; its CLI chat); no meter = all of them (on connect)."""
+        await self.emit(costs.app_usage(self.meters))
+        if meter is None:
+            for sid in self.sessions:
+                await self.emit(costs.session_usage(self.meters, sid))
+            for cid in self.chats:
+                await self.emit(costs.chat_usage(self.meters, cid))
+        elif meter.session_id:
+            await self.emit(costs.session_usage(self.meters, meter.session_id))
+        elif meter.chat_id:
+            await self.emit(costs.chat_usage(self.meters, meter.chat_id))
 
     async def emit_crew(self) -> None:
         agents = [{"name": m.name, "role": m.role, "status": m.status, "session_id": m.session_id}
@@ -325,14 +354,16 @@ class Hub:
                 if not ls.running:
                     snapshot.append({"type": "run_finished", "session_id": ls.id, "status": ls.run.status,
                                      "report_path": ls.folder.rel(ls.folder.report), "markdown": ls.run.report_markdown,
-                                     "total_cost_usd": round(ls.run.total_cost, 6),
-                                     "planner_cost_usd": round(ls.run.planner_cost, 6)})
+                                     "total_cost_usd": costs.wire(ls.run.total_cost),
+                                     "planner_cost_usd": costs.wire(ls.run.planner_cost)})
             if ls.draft_pending:                   # incl. a revised draft written after a finished run
                 snapshot.append(ls.draft_event())
         if len(self.sessions) > 1:
             snapshot.append(self.current.started_event())       # last one = the current session
         snapshot += [c.started_event() for c in self.chats.values()]
-        snapshot += [m.event() for m in self.meters] + self.incoming.open_events() + list(self.recent_activity)
+        snapshot.append(self.roles_event())
+        snapshot += self.reviews.events()
+        snapshot += [m.event() for m in self.meters] + self.incoming.open_events() + list(self.auto_lines) + list(self.recent_activity)
         lock = self.clients[send]
         async with lock:
             for ev in snapshot:
@@ -370,6 +401,8 @@ class Hub:
                 await self.system(f"Crew: {e}")
         elif kind in ("agent_draft", "agent_create", "agent_remove"):
             await self._agent_message(kind, msg)
+        elif kind in ("roles_get", "role_dismiss", "role_merge", "review_start", "review_decide"):
+            await self._role_message(kind, msg)
         elif kind == "set_agent_skills":
             try:
                 self.store.set_agent_skills(str(msg.get("name") or ""), skills_mod.clean_setting(msg.get("skills")))
@@ -492,25 +525,97 @@ class Hub:
         except ValueError as e:
             await self.emit({"type": reply, "ok": False, "error": str(e), **({"problems": []} if kind == "agent_create" else {})})
             return
+        role = str(msg.get("role") or "").strip() or None          # define path: the tally role being defined
         try:
             if kind == "agent_draft":
-                fields = await drafter.draft(self, path, str(msg.get("text") or ""))
-                await self.emit({"type": reply, "ok": True, "dir_id": did, "fields": fields})
+                text, context = str(msg.get("text") or ""), ""
+                if role:
+                    context = draft_context(self.tally.get(role), self.reviews.cases.get(role))
+                    text = text.strip() or f"An agent for the recurring role '{role}'."
+                fields, usage = await drafter.draft_with_usage(self, path, text, context)
+                await self.emit({"type": reply, "ok": True, "dir_id": did, "fields": fields, "usage": usage,
+                                 **({"role": role} if role else {})})
             elif kind == "agent_create":
                 name = folder_agents.create(self.files, did, path, msg.get("fields") or {})
-                await self.emit({"type": reply, "ok": True, "dir_id": did, "name": name})
+                extra = await self._role_defined(role, name, path) if role or self.tally.get(name) else {}
+                await self.emit({"type": reply, "ok": True, "dir_id": did, "name": name, **extra})
                 await self.registry_changed(did)
             else:
                 name = folder_agents.remove(self.files, did, path, str(msg.get("name") or ""))
                 await self.emit({"type": reply, "ok": True, "dir_id": did, "name": name})
                 await self.registry_changed(did)
         except folder_agents.AgentFormError as e:
-            ev = {"type": reply, "ok": False, "dir_id": did, "error": str(e)}
+            ev = {"type": reply, "ok": False, "dir_id": did, "error": str(e), **({"role": role} if role else {})}
             if kind == "agent_create":
                 ev["problems"] = e.problems
             elif kind == "agent_remove":
                 ev["name"] = str(msg.get("name") or "")
             await self.emit(ev)
+
+    # ---------------------------------------------------------------- undefined roles (tally + Role Reviewer)
+    def roles_event(self) -> dict:
+        return self.tally.list_event(self.reviews.running)
+
+    async def emit_roles(self) -> None:
+        try:
+            await self.emit(self.roles_event())
+        except OSError as e:                                      # an unreadable tally file must not break anything
+            await self.system(f"Roles: could not read the tally ({e})")
+
+    async def record_role_use(self, name: str, *, use: dict, sample: str) -> None:
+        """One plan step ran on the Builder under role `name` (or a missing agent's name): tally it, then roles_list.
+        Never raises: a tally that cannot be written must not stop a run."""
+        try:
+            self.tally.record_use(name, use=use, sample=sample, base_agent=crew.display("builder"),
+                                  purpose=crew.BUILTIN_PURPOSE["builder"])
+        except (OSError, tally_mod.TallyError) as e:
+            await self.system(f"Roles: the use of '{name}' was not recorded ({e})")
+            return
+        await self.emit_roles()
+
+    async def mark_sent_back(self, session_id: str, run: int) -> None:
+        try:
+            changed = self.tally.mark_sent_back(session_id, run)
+        except OSError:
+            return
+        if changed:
+            await self.emit_roles()
+
+    async def _role_defined(self, role: str | None, agent: str, path: Path) -> dict:
+        """agent_create succeeded: the role's entry goes (and an entry named like the new agent), the case is saved
+        beside the agent -> extra agent_saved fields {role, case_path}."""
+        out: dict = {}
+        if role:
+            out["role"] = role
+            copy = self.reviews.defined(role, agent, path, path.name)
+            if copy:
+                out["case_path"] = copy
+            self.tally.remove(role)
+        if agent != role:
+            self.tally.remove(agent)
+        await self.emit_roles()
+        return out
+
+    async def _role_message(self, kind: str, msg: dict) -> None:
+        role = str(msg.get("role") or "").strip()
+        try:
+            if kind == "roles_get":
+                pass
+            elif kind == "role_dismiss":
+                self.tally.dismiss(role)
+            elif kind == "role_merge":
+                self.tally.merge(role, str(msg.get("into") or "").strip())
+                if role in self.reviews.cases:
+                    self.reviews.cases.pop(role)
+            elif kind == "review_start":
+                await self.reviews.start(role)            # sends its own events, roles_list included
+                return
+            elif kind == "review_decide":
+                await self.reviews.decide(role, str(msg.get("decision") or ""))
+                return
+        except tally_mod.TallyError as e:
+            await self.system(f"Roles: {e}")
+        await self.emit_roles()
 
     async def _settings_message(self, kind: str, msg: dict) -> None:
         try:
@@ -738,7 +843,7 @@ class Hub:
             await self.incoming.resolve_open(ls.id, kind="permission", answer="allow", by="autopilot")
 
     async def set_auto_answers(self, session_id: str, on: bool) -> None:
-        """Per-session switch. Turning it on answers the questions already waiting that have a recommendation."""
+        """Per-session switch, for builders only. Turning it on answers the plan-step questions already waiting."""
         ls = self.sessions.get(session_id)
         if ls is None:
             await self.system("That session is not open.")
@@ -747,17 +852,17 @@ class Hub:
         await self.emit({"type": "auto_answers", "session_id": ls.id, "on": on})
         if on:
             await self.incoming.auto_open(ls.id)
-            await ls.chat.auto_answer_waiting()
 
-    async def auto_answered(self, session_id: str, *, id: str, agent: str, step: int | None, title: str, answer: str,
-                            round_id: str | None = None) -> None:
-        """One question answered by the Auto answers switch: a compact line in the planner chat (kept in its history)."""
+    async def auto_answered(self, session_id: str, *, id: str, agent: str, step: int | None, title: str,
+                            answer: str) -> None:
+        """One plan-step question decided by its worker under Auto answers: one auto_answer line, shown in Incoming
+        (kept for a reconnect; never in the planner chat)."""
         ls = self.sessions.get(session_id)
         if ls is None:
             return
         ev = {"type": "auto_answer", "session_id": ls.id, "id": id, "agent": agent, "step": step, "title": title,
-              "answer": answer, "round_id": round_id}
-        ls.chat.history.append(ev)
+              "answer": answer}
+        self.auto_lines.append(ev)
         await self.emit(ev)
 
     async def stop(self, session_id: str) -> None:

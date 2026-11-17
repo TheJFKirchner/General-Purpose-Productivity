@@ -50,7 +50,9 @@ aside{flex:0 0 var(--aside-w);min-width:0;display:flex;flex-direction:column;gap
 .runrow .pst{font-size:var(--fs-xs);font-weight:500;color:var(--muted)}
 .fl-note{font-size:var(--fs-xs);color:var(--muted);padding:var(--sp-1-5) var(--sp-2)}
 .fl-note button{border:0;background:none;padding:0;color:var(--indigo-ink);font-weight:600;cursor:pointer;font-size:inherit;text-decoration:underline;text-underline-offset:2px;border-radius:var(--r-xs)}
-.apline{display:flex;justify-content:flex-end;padding:0 var(--sp-2) var(--sp-1-5) 42px}
+.apline{display:flex;justify-content:flex-end;flex-wrap:nowrap;gap:var(--sp-1);padding:0 var(--sp-1) var(--sp-1-5) var(--sp-1)}
+.apline .apsw{gap:var(--sp-1-5);padding:0 var(--sp-2) 0 var(--sp-1);min-width:0}
+.apline .apsw .lucide{width:var(--icon-xs);height:var(--icon-xs);flex:none}
 /* Incoming */
 .queue{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:var(--sp-3);padding:var(--sp-0) var(--sp-0) var(--sp-2)}
 .queue>.empty.card{padding:var(--sp-6) var(--sp-5)}

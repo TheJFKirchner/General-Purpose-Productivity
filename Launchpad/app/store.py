@@ -13,6 +13,8 @@
   None = the launch engine's CLI
 - Agent use counter: agent_uses {agent name: count}; +1 each time an agent is started (app/hub.py count_use);
   starts from zero, survives restarts
+- reviewer_model: the Role Reviewer's model (default sonnet; read when a review starts)
+- The undefined-roles tally and review cases live beside this file, in their own files (app/tally.py)
 - additional_dir_ids [dir_id]: folders ticked as "additional" (global; a session uses them minus its primary)
 - agent_skills {agent name: "all" | [skill names]}: per-agent skill allowlist (defaults in app/skills.py)
 """
@@ -38,6 +40,7 @@ SPECS: dict[str, tuple[type, object, str]] = {
     "pilot_model": (str, None, "new_sessions"),
     "pilot_harness": (str, None, "new_sessions"),
     "visual_model": (str, None, "now"),
+    "reviewer_model": (str, "sonnet", "now"),
 }
 
 

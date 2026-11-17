@@ -71,6 +71,19 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   chat_mode: { chat_id: 'c1', mode: 'plan' },
   chat_done: { chat_id: 'c1', status: 'failed', error: 'boom' },
   visual_set: { session_id: 'S1', set_id: 'v1', brief: 'Look?', options: [{ id: 'o1', label: 'Bar', status: 'rendering' }], picked_id: null },
+  roles_list: { threshold: 2, resurface_uses: 5, entries: [{ name: 'sql-tuner', base_agent: 'Builder', purpose: 'building', skills: ['sql-style'], folders: [{ dir_id: 'd1', name: 'p' }], uses_total: 3,
+    first_used: '2026-11-17T09:00:00Z', last_used: '2026-11-17T10:00:00Z', samples: [], verdict: null, dismissed: false, last_review: null, problems: 1,
+    uses: [{ id: 'u1', at: '2026-11-17T10:00:00Z', dir_id: 'd1', folder: 'p', session_id: 'S1', run: 1, step: 1, title: 'Tune', skills: [], outcome: 'failed', questions: 0, assumptions: 0, timed_out: 0, sent_back: false, named_agent: false }],
+    state: 'listed', visible: true, uses_to_list: 0, resurfaced: false, reviewing: true, review_id: 'rv1' }] },
+  review_started: { review_id: 'rv1', role: 'sql-tuner', model: 'sonnet', harness: 'claude' },
+  review_progress: { review_id: 'rv1', role: 'sql-tuner', phase: 'reading', text: 'Reading the tally' },
+  review_case: { review_id: 'rv1', role: 'sql-tuner', case: { case_id: 'c1', review_id: 'rv1', role: 'sql-tuner', date: '2026-11-17T10:05:00Z', reviewer: { name: 'Role Reviewer', harness: 'claude', model: 'sonnet', label: 'Claude · Sonnet' },
+    uses_total: 3, uses_recorded: 3, opened: ['U1'], missing: [], sections: ['value', 'logic', 'history', 'fixes', 'independent'].map(t => ({ test: t, title: t, finding: `${t} finding`, evidence: [], strength: 'weak' })),
+    verdict: 'keep', reason: 'Because.', history_thin: false, skill_notes: '- cover X', proposal: null, questions: [],
+    usage: { tokens: 100, cost: 0.02, input_tokens: 80, output_tokens: 20 }, decision: null, case_file: 'c1.md' } },
+  review_failed: { review_id: 'rv2', role: 'other-role', error: 'engine down' },
+  review_refused: { role: 'ghost', review_id: null, error: 'There is no role called ghost in the tally.' },
+  review_decided: { role: 'sql-tuner', decision: 'not_yet', reviewer_verdict: 'keep', review_id: 'rv1', case_file: 'c1.md' },
 };
 
 describe('reducer', () => {
@@ -106,6 +119,12 @@ describe('reducer', () => {
     expect(st.files['d1|b.md']).toBeTruthy();
     expect(s.visualSets).toHaveLength(1);
     expect(sel.sessionTotal(st, 'S1')).toBeCloseTo(0.25);
+    /* undefined roles: the list, the review's progress and case, a failure, a refusal, the decision */
+    expect(st.roles.entries.map(e => e.name)).toEqual(['sql-tuner']);
+    expect(st.reviews['sql-tuner']).toMatchObject({ status: 'case', reviewId: 'rv1', model: 'sonnet', progress: ['Reading the tally'], decided: { decision: 'not_yet', reviewerVerdict: 'keep' } });
+    expect(st.reviews['sql-tuner'].case!.sections).toHaveLength(5);
+    expect(st.reviews['other-role']).toMatchObject({ status: 'failed', error: 'engine down' });
+    expect(st.reviews.ghost).toMatchObject({ status: 'refused' });
   });
 
   it('a snapshot replays quietly and ends the replay on usage', () => {

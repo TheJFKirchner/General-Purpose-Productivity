@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 import type { Question, RoundAnswer } from '../../contract';
 import { actions, getState, sel, useLaunchpad, useSession, type PlannerEntry, type Round } from '../../store';
 /* direct imports (not the components index, which would be a cycle): components/archiveModals.tsx renders PlanLog for the read-only archive */
+import { AutoAnswersSwitch } from '../../components/AutoAnswersSwitch';
 import { AutopilotSwitch } from '../../components/AutopilotSwitch';
 import { ChatBubble, SysLine, TypingDots } from '../../components/ChatBubble';
 import { Markdown } from '../../components/Markdown';
@@ -12,7 +13,7 @@ import { PenButton } from '../../components/PenButton';
 import { Pill } from '../../components/Pill';
 import { StepAgent } from '../../components/Purpose';
 import { AP_HINT } from '../../lib/labels';
-import { ArrowRight, Check, Sparkles, Terminal } from '../../components/icons';
+import { Check, Sparkles, Terminal, UserCog } from '../../components/icons';
 
 type PlanCardEntry = Extract<PlannerEntry, { kind: 'plancard' }>;
 
@@ -39,23 +40,9 @@ export const LogEntry = memo(function LogEntry({ e, sid, onChanges }: { e: Plann
         </SysLine>
       );
     case 'round': return <RoundView roundId={e.roundId} />;
-    case 'auto': return <AutoLine e={e} />;
     case 'plancard': return sid != null ? <PlanCard e={e} sid={sid} onChanges={onChanges} /> : null;
   }
 });
-
-/* ---------------- auto-answered questions ---------------- */
-/** One question the Auto answers switch answered: the question and the answer taken, marked automatic. */
-function AutoLine({ e }: { e: Extract<PlannerEntry, { kind: 'auto' }> }) {
-  const who = e.step ? `${e.agent}, step ${e.step}` : e.agent;
-  return (
-    <div className="autoline" title={`${who} asked: ${e.title}. Answered automatically with the recommended answer: ${e.answer}`}>
-      <span className="autotag"><Sparkles />Auto</span>
-      <span className="aa-q"><span className="sr">{who} asked: </span>{e.title}</span>
-      <span className="aa-a"><span className="sr">Answered automatically: </span><ArrowRight />{e.answer}</span>
-    </div>
-  );
-}
 
 /* ---------------- question rounds ---------------- */
 function RoundView({ roundId }: { roundId: string }) {
@@ -116,13 +103,19 @@ function QuestionCard({ r, q, i }: { r: Round; q: Question; i: number }) {
 }
 
 /* ---------------- plan draft cards ---------------- */
-/** The skills a plan step names (its worker gets them); ones not found in the session's folders are greyed. */
-function StepSkills({ step }: { step: { n: number; skills?: string[]; skills_unknown?: string[] } }) {
+/** The role a plan step runs under (a specialism no agent defines; the Builder runs it) and the skills it names (its
+    worker gets them); skills not found in the session's folders are greyed. The role chip has a label and its own icon. */
+function StepSkills({ step }: { step: { n: number; skills?: string[]; skills_unknown?: string[]; role?: string } }) {
   const list = step.skills || [];
-  if (!list.length) return null;
+  if (!list.length && !step.role) return null;
   const gone = new Set(step.skills_unknown || []);
   return (
-    <span className="st-skills" aria-label={`Step ${step.n} skills: ${list.join(', ')}`}>
+    <span className="st-skills" aria-label={`Step ${step.n}${step.role ? ` role: ${step.role}` : ''}${list.length ? ` skills: ${list.join(', ')}` : ''}`}>
+      {step.role ? (
+        <span className="chip role-chip" tabIndex={0} data-tip={`text:This step runs on the Builder under the role name ${step.role}`}>
+          <UserCog />Role: {step.role}
+        </span>
+      ) : null}
       {list.map(n => (
         <span key={n} className={`chip skill${gone.has(n) ? ' gone' : ''}`}
           data-tip={`text:${gone.has(n) ? 'Not found in this session\'s folders: ignored when the step runs' : 'This step\'s worker gets this skill'}`}>
@@ -164,7 +157,7 @@ function PlanCard({ e, sid, onChanges }: { e: PlanCardEntry; sid: string; onChan
         <Markdown doc className="mdbox" text={d.markdown} />
       </details>
       <div className="pc-ap">
-        {v.showApSwitch ? <><AutopilotSwitch sessionId={s.id} /><p className="ap-hint">{AP_HINT}</p></>
+        {v.showApSwitch ? <><div className="swpair"><AutopilotSwitch sessionId={s.id} /><AutoAnswersSwitch sessionId={s.id} /></div><p className="ap-hint">{AP_HINT}</p></>
           : v.apTag ? <span className="aptag">Autopilot on for this run</span> : null}
       </div>
       {v.live ? (

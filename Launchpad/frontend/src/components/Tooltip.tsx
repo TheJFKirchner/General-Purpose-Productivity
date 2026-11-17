@@ -6,7 +6,7 @@
    Also: data-hover-agent="<agent_id>" on ships, stars and feed rows sets the shared hover highlight (ui.hov). */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { actions, sel, useLaunchpad, type AppState, type Agent } from '../store';
-import { cleanName, modelName, tokLong, tokShort, toolShort, tparts, tsum, usd } from '../lib/format';
+import { cleanName, modelName, tokLong, tokShort, toolShort, tparts, usd } from '../lib/format';
 import { MODE_LABEL, P_LABEL, PURPOSE_LABEL, STEP_LABEL, S_LABEL, roleLabel } from '../lib/labels';
 
 function Usage({ a }: { a: Agent | null | undefined }) {
@@ -24,18 +24,18 @@ export function tipContent(st: AppState, key: string): ReactNode {
     return <>
       <b>Planner</b> <span className="m">· {P_LABEL[ps] || ps}{cs && cs.plannerModel ? ' · ' + modelName(cs.plannerModel) + (cs.promoted ? ' (promoted)' : '') : ''}</span><hr /><Usage a={p} />
       {p && Array.isArray(p.by_model) && p.by_model.length ? <><hr />By model<ul>{p.by_model.map((m, i) => <li key={i}>{modelName(m.model)}: {usd(m.cost_usd)}{m.input_tokens != null || m.output_tokens != null ? <> <span className="m">· {tokShort(tparts(m))}</span></> : null}</li>)}</ul></> : null}
-      {all.length > 1 ? <><hr />All planners so far: <b>{usd(all.reduce((t, a) => t + (+a.cost_usd || 0), 0))}</b> <span className="m">({all.length} sessions)</span></> : null}
+      {all.length > 1 ? <><hr />All planners so far: <b>{usd(st.byRole.planner)}</b> <span className="m">({all.length} sessions)</span></> : null}
     </>;
   }
   if (k === 'run') {
     const s = st.sessions[id]; if (!s) return null;
     const orch = sel.orchestratorOf(st, id), cur = sel.currentStep(s), steps = (s.run && s.run.steps) || [];
-    const done = steps.filter(x => x.status === 'done'), crew = sel.crewOf(st, id), pc = sel.plannerCostOf(st, id), status = sel.sStatus(st, s);
+    const done = steps.filter(x => x.status === 'done'), pc = sel.plannerCostOf(st, id), status = sel.sStatus(st, s);
     return <>
       <b>{sel.sLabel(s)} · {sel.sName(s)}</b><br /><span className="m">{S_LABEL[status] || s.status}{cur ? ` · step ${cur.n}/${steps.length}: ${cur.title}` : ''}</span>
       {s.autopilot ? <><hr /><b>Autopilot ON</b> <span className="m">· permission requests are approved without asking</span></> : null}
       <hr />Orchestrator · <Usage a={orch} />
-      <hr />Session total <b>{usd(sel.sessionTotal(st, id))}</b> <span className="m">· Orchestrator + step agents + Explorer + Visualizer · {crew.length} agents · {tokShort(tsum(crew))}</span>
+      <hr />Session total <b>{usd(sel.sessionTotal(st, id))}</b> <span className="m">· Orchestrator + step agents + Explorer + Visualizer · {sel.crewCountOf(st, id)} agents · {tokShort(sel.crewTokensOf(st, id))}</span>
       {pc ? <><br /><span className="m">Planner (separate): {usd(pc)}</span></> : null}
       {done.length ? <><hr />Done so far<ul>{done.slice(-5).map(x => <li key={x.n}>{x.n}. {x.title}{x.built.length ? <> <span className="m">· {x.built.slice(0, 3).join(', ')}{x.built.length > 3 ? '…' : ''}</span></> : null}</li>)}</ul></> : <><hr /><span className="m">No steps done yet</span></>}
     </>;
@@ -53,20 +53,18 @@ export function tipContent(st: AppState, key: string): ReactNode {
     </>;
   }
   if (k === 'allagents') {
-    const t = sel.appTotals(st), by: Record<string, number> = {};
-    for (const a of Object.values(st.agents)) { const r = a.role || 'other'; by[r] = (by[r] || 0) + (+a.cost_usd || 0); }
-    const rows = Object.entries(by).sort((x, y) => y[1] - x[1]);
+    const t = sel.appTotals(st);
+    const rows = Object.entries(st.byRole).sort((x, y) => y[1] - x[1]);       // the server's cost per role
     return <>
       <b>Whole app</b> <span className="m">· every agent since launch: all planners, every session, CLI chats, the Visualizer</span><hr />
       Cost <b>{usd(t.cost)}</b> · {tokShort(t.parts)}<br /><span className="m">{tokLong(t.parts)}</span>
       {rows.length ? <ul>{rows.map(([r, v]) => <li key={r}>{roleLabel(r)}: {usd(v)}</li>)}</ul> : null}
-      {st.usageFromServer && t.from === 'agents' && Math.abs(st.cost - t.cost) > 0.005 ? <span className="m">Server total: {usd(st.cost)}</span> : null}
       <hr /><span className="m">"tokens" = uncached input + output; cache reads and writes are shown apart. The planner figure in the chat header is the current session's planner only.</span>
     </>;
   }
   if (k === 'cursession') {
     const s = sel.curSess(st); if (!s) return <><b>Session total</b><br /><span className="m">No session yet</span></>;
-    const n = sel.crewOf(st, s.id).length;
+    const n = sel.crewCountOf(st, s.id);
     return <>
       <b>{sel.sLabel(s)} · session total {usd(sel.sessionTotal(st, s.id))}</b><br /><span className="m">Orchestrator + step agents + Explorer + Visualizer; {n ? `${n} agents` : 'no run agents yet'}</span>
       <hr />Planner (separate) {usd(sel.plannerCostOf(st, s.id))}
@@ -83,14 +81,14 @@ export function tipContent(st: AppState, key: string): ReactNode {
     const ag = sel.agentsOf(st, s.id);
     const who = ag.filter(a => String(a.step) === n && a.role !== 'orchestrator' && a.status !== 'done').map(a => `${cleanName(a.name)} (${a.status})`);
     const wait = st.queue.filter(i => sel.qOpen(i) && i.session_id === s.id && String(i.step) === n).length;
-    const builders = ag.filter(a => a.role === 'builder' && String(a.step) === n);
-    const cost = builders.reduce((t, a) => t + (+a.cost_usd || 0), 0), toks = tsum(builders);
-    const calls = builders.length ? builders.reduce((t, a) => t + (+a.tool_calls || 0), 0) : st.acts.filter(a => a.session_id === s.id && String(a.step) === n).length;
+    const bt = sel.stepTotalsOf(st, s.id, n);                       // the server's totals for this step's builders
+    const cost = bt ? bt.cost : 0, toks = bt ? { i: bt.i, o: bt.o, cr: bt.cr, cw: bt.cw } : { i: 0, o: 0, cr: 0, cw: 0 };
+    const calls = bt ? bt.tools : st.acts.filter(a => a.session_id === s.id && String(a.step) === n).length;
     const assigned = sel.stepAgent(sel.defsForSession(st, s), stp);
     return <>
       <b>Step {stp.n} · {stp.title}</b><br /><span className="m">{sel.sLabel(s)} · {STEP_LABEL[stp.status] || stp.status}</span>
       <br /><span className="m">Done by {assigned ? (assigned.fallback ? `the ${assigned.label} (${assigned.name || 'the named agent'} is not available here)` : `${assigned.label} (${PURPOSE_LABEL[assigned.purpose].toLowerCase()} agent)`) : 'the Builder'}</span>
-      <hr />Cost <b>{usd(cost)}</b> · {tokShort(toks)} · {calls} tool calls<br /><span className="m">{tokLong(toks)}</span><br /><span className="m">{builders.length ? `builder${builders.length > 1 ? 's' : ''} on this step` : 'no builder on this step yet'}</span>
+      <hr />Cost <b>{usd(cost)}</b> · {tokShort(toks)} · {calls} tool calls<br /><span className="m">{tokLong(toks)}</span><br /><span className="m">{bt ? `builder${bt.n > 1 ? 's' : ''} on this step` : 'no builder on this step yet'}</span>
       {wait ? <><hr /><b>{wait} waiting on you</b> in Incoming</> : null}
       {who.length ? <><hr />On it: {who.join(', ')}</> : null}
       {stp.built.length ? <><hr />Built<ul>{stp.built.slice(0, 6).map(b => <li key={b}>{b}</li>)}</ul></> : null}

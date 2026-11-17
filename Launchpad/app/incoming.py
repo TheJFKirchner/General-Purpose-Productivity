@@ -9,9 +9,11 @@
   every open item of one with None
 - Permission cards carry no recommendation (rec null): the page must not badge a choice
 - Builder permission cards are timed (deny on expiry); autopilot resolves open ones with "allow", by "autopilot"
-- Auto answers (per session, hub.set_auto_answers): a question WITH a recommendation is answered at once with it
-  (by "auto", no card; the hub adds the chat line); one without waits as a normal card. auto_open() does the same for
-  questions already waiting when the switch is turned on. Permission and plan items are never affected
+- Auto answers (per session, hub.set_auto_answers): ONLY questions asked by plan-step workers (ask(auto_ok=True),
+  set by the Builder's StepContext) are answered at once with the worker's own recommendation, blocking or not
+  (by "auto", no card; the hub emits one auto_answer line). auto_open() does the same for such questions already
+  waiting when the switch is turned on. Planner rounds, CLI chat questions, permission and plan items are never
+  affected
 """
 from __future__ import annotations
 
@@ -38,6 +40,7 @@ class Item:
     timeout_s: float | None
     expires_at: str | None
     extra: dict = field(default_factory=dict)
+    auto_ok: bool = False          # asked by a plan-step worker: the Auto answers switch may answer it
     future: asyncio.Future | None = None
 
     def event(self) -> dict:
@@ -60,10 +63,12 @@ class Incoming:
     async def ask(self, *, kind: str, agent: str, title: str, body: str, session_id: str | None = None,
                   chat_id: str | None = None, agent_id: str | None = None, step: int | None = None,
                   rec: str | None = None, options: list[str] | None = None, timeout_s: float | None = None,
-                  extra: dict | None = None, timer_answer: str | None = None) -> tuple[str | None, str, dict]:
+                  extra: dict | None = None, timer_answer: str | None = None,
+                  auto_ok: bool = False) -> tuple[str | None, str, dict]:
         """-> (answer, by, response) with by = "user" | "timer" | "autopilot" | "auto" | "stopped"; response = the UI
-        message. On timer expiry the answer is timer_answer if given, else the recommendation."""
-        if kind == "question" and session_id and str(rec or "").strip() and self._auto_on(session_id):
+        message. On timer expiry the answer is timer_answer if given, else the recommendation. auto_ok: a plan-step
+        worker's question, which the session's Auto answers switch answers at once (only these)."""
+        if kind == "question" and auto_ok and self.auto_applies(session_id) and str(rec or "").strip():
             qid = f"q{next(self._ids)}"
             await self.hub.auto_answered(session_id, id=qid, agent=agent, step=step, title=title, answer=str(rec))
             return str(rec), "auto", {}
@@ -73,7 +78,7 @@ class Incoming:
         item = Item(id=f"q{next(self._ids)}", session_id=session_id, chat_id=chat_id, kind=kind, agent=agent,
                     agent_id=agent_id, step=step, title=title, body=body, rec=rec, options=options or None,
                     blocking=timeout_s is None, timeout_s=timeout_s, expires_at=expires, extra=dict(extra or {}),
-                    future=asyncio.get_running_loop().create_future())
+                    auto_ok=auto_ok, future=asyncio.get_running_loop().create_future())
         self.items[item.id] = item
         await self.hub.emit(item.event())
         try:
@@ -87,15 +92,17 @@ class Incoming:
         finally:
             self.items.pop(item.id, None)
 
-    def _auto_on(self, session_id: str) -> bool:
-        ls = getattr(self.hub, "sessions", {}).get(session_id)
+    def auto_applies(self, session_id: str | None) -> bool:
+        """Is the Auto answers switch on for this session?"""
+        ls = getattr(self.hub, "sessions", {}).get(session_id) if session_id else None
         return bool(ls is not None and getattr(ls, "auto_answers", False))
 
     async def auto_open(self, session_id: str) -> int:
-        """Auto answers just turned on: answer every waiting question of the session that has a recommendation."""
+        """Auto answers just turned on: answer every waiting plan-step question of the session."""
         n = 0
         for item in list(self.items.values()):
-            if item.session_id == session_id and item.kind == "question" and str(item.rec or "").strip():
+            if (item.session_id == session_id and item.kind == "question" and item.auto_ok
+                    and str(item.rec or "").strip()):
                 await self.hub.auto_answered(session_id, id=item.id, agent=item.agent, step=item.step,
                                              title=item.title, answer=str(item.rec))
                 await self._resolve(item, str(item.rec), "auto")

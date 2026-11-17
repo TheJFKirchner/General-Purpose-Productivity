@@ -1,4 +1,4 @@
-"""Question files (<session folder>/questions/NNN-<slug>.md) and the per-session Auto answers switch (fake engine)."""
+"""Question files (<session folder>/questions/NNN-<slug>.md) and the per-session Auto answers switch, which is for builders only (fake engine)."""
 import asyncio
 import re
 
@@ -188,80 +188,104 @@ def test_cli_question_is_saved_in_the_chats_own_folder(harness):
     assert f.name == "001-which-colour.md" and "CLI" in t and "## Answer\nBlue" in t and "Not part of a run" in t
 
 
-# ------------------------------------------------------------------ Auto answers
-def test_auto_answers_planner_round_takes_the_recommendations_and_carries_on(harness):
+# ------------------------------------------------------------------ Auto answers (builders only)
+def _ask_two():
+    script_planner_writes_plan(ONE_STEP)
+    script_orchestrator_sequential(1)
+    fake.script("launchpad-builder", [[
+        fake.call("ask_question", {"title": "Colour?", "body": "Pick one", "recommended": "Blue",
+                                   "options": ["Blue", "Red"], "blocking": True}),
+        fake.call("ask_question", {"title": "Size?", "body": "How big", "recommended": "Small", "blocking": False}),
+        fake.call("submit_report", report())]])
+
+
+def test_auto_answers_builder_questions_blocking_or_not_take_the_recommendation_and_the_step_never_blocks(harness):
+    h = harness(timeout_s=5)
+    _ask_two()
+
+    async def go():
+        hub, c = await _run(h, auto=True)
+        await h.wait(lambda: c.of("run_finished"))
+        return hub, c
+
+    hub, c = asyncio.run(go())
+    assert not c.of("queue_item") and not c.of("queue_resolved")                  # no card at all
+    lines = c.of("auto_answer")
+    assert [(e["title"], e["answer"], e["agent"], e["step"]) for e in lines] == [
+        ("Colour?", "Blue", "Builder", 1), ("Size?", "Small", "Builder", 1)]
+    assert "round_id" not in lines[0] and not [e for e in hub.current.chat.history if e.get("type") == "auto_answer"]
+    assert all("recommendation was taken" in r[1] for r in h.tool_results()[:2])
+    statuses = [e["status"] for e in c.of("step_update") if e["n"] == 1]
+    assert "blocked" not in statuses and "in_progress" in statuses and statuses[-1] == "done"
+    a, b = _files(hub)
+    for f, ans in ((a, "Blue"), (b, "Small")):
+        t = _text(f)
+        assert "## How it was answered\nDecided by the Builder (Auto answers on)" in t and f"## Answer\n{ans}" in t
+    md = c.of("run_finished")[0]["markdown"]
+    assert "[001-colour.md](questions/001-colour.md)" in md and "decided by the agent, Auto answers on: Blue" in md
+
+
+def test_an_empty_recommendation_or_reason_is_rejected_with_a_tool_error(harness):
+    h = harness(timeout_s=5)
+    script_planner_writes_plan(ONE_STEP)
+    script_orchestrator_sequential(1)
+    fake.script("launchpad-builder", [[
+        fake.call("ask_question", {"title": "Colour?", "body": "Pick one", "recommended": "   ", "blocking": True}),
+        fake.call("ask_question", {"title": "Colour?", "body": " ", "recommended": "Blue", "blocking": True}),
+        fake.call("submit_report", report())]])
+
+    async def go():
+        hub, c = await _run(h, auto=True)
+        await h.wait(lambda: c.of("run_finished"))
+        return hub, c
+
+    hub, c = asyncio.run(go())
+    first, second = h.tool_results()[:2]
+    assert first[2] and "recommended is required" in first[1]
+    assert second[2] and "body is required" in second[1]
+    assert not c.of("queue_item") and not c.of("auto_answer") and not _files(hub)
+
+
+def test_a_planner_round_is_never_auto_answered(harness):
     h = harness()
-    seen = []
-    fake.script(PLANNER, [[fake.ask(ROUND)], lambda m: seen.append(m) or [fake.say("Carrying on.")]])
+    fake.script(PLANNER, [[fake.ask(ROUND)], [fake.say("Thanks.")]])
 
     async def go():
         hub, c = await h.start()
         await _auto(hub)
         await hub.handle({"type": "user_message", "text": "a dashboard"})
-        return hub, c
+        waiting = (len(c.of("question_round")), not c.of("auto_answer"), not c.of("planner_message"), not _files(hub))
+        await hub.handle({"type": "round_answer", "roundId": c.of("question_round")[-1]["id"],
+                          "answers": {"q1": {"accepted": True}, "q2": {"accepted": True}}})
+        return hub, c, waiting
 
-    hub, c = asyncio.run(go())
-    assert c.of("auto_answers")[0]["on"] is True
-    assert not c.of("question_round")                                             # no card
-    lines = c.of("auto_answer")
-    assert [(e["title"], e["answer"]) for e in lines] == [("Who uses it?", "Managers"), ("Which chart library?", "ECharts")]
-    assert seen and "Managers" in seen[0] and "ECharts" in seen[0]                 # the planner got the answers
-    assert [e["text"] for e in c.of("planner_message")] == ["Carrying on."]
-    a, b = _files(hub)
-    assert "Answered automatically (recommended)" in _text(a) and "Answered automatically (recommended)" in _text(b)
-    assert "## Answer\nManagers" in _text(a)
-    assert [e for e in hub.current.chat.history if e.get("type") == "auto_answer"] == lines
+    hub, c, waiting = asyncio.run(go())
+    assert waiting == (1, True, True, True)                                       # a card, nothing answered for the user
+    assert not c.of("auto_answer") and [e["text"] for e in c.of("planner_message")] == ["Thanks."]
+    assert all("Answered by the user" in _text(p) for p in _files(hub)) and len(_files(hub)) == 2
 
 
-def test_auto_answers_builder_question_is_answered_at_once(harness):
-    h = harness(timeout_s=5)
-    _ask_step(rec="Blue", blocking=True)
-
-    async def go():
-        hub, c = await _run(h, auto=True)
-        await h.wait(lambda: c.of("run_finished"))
-        return hub, c
-
-    hub, c = asyncio.run(go())
-    assert not c.of("queue_item")
-    (line,) = c.of("auto_answer")
-    assert line["title"] == "Colour?" and line["answer"] == "Blue" and line["agent"] == "Builder" and line["step"] == 1
-    assert "recommendation was taken" in h.tool_results()[0][1]
-    t = _text(_files(hub)[0])
-    assert "Answered automatically (recommended)" in t and "## Answer\nBlue" in t
-    assert "(answered automatically: Blue)" in c.of("run_finished")[0]["markdown"]
-
-
-def test_question_without_a_recommendation_is_not_guessed(harness):
-    h = harness(timeout_s=5)
-    _ask_step(rec="", blocking=True)
-
-    async def go():
-        hub, c = await _run(h, auto=True)
-        await h.wait(lambda: c.of("queue_item"))
-        await asyncio.sleep(0.2)
-        waiting = not c.of("run_finished") and not c.of("auto_answer")
-        await hub.handle({"type": "queue_response", "id": c.of("queue_item")[0]["id"], "answer": "Red"})
-        await h.wait(lambda: c.of("run_finished"))
-        return hub, waiting
-
-    hub, waiting = asyncio.run(go())
-    assert waiting
-    assert "Answered by the user" in _text(_files(hub)[0])
-
-
-def test_planner_round_with_a_missing_recommendation_waits_as_a_card(harness):
+def test_a_cli_chat_question_is_never_auto_answered(harness):
     h = harness()
-    fake.script(PLANNER, [[fake.ask([ROUND[0], {"id": "q2", "question": "Open one?", "why": "w"}])], [fake.say("ok")]])
+    q = {"question": "Which colour?", "header": "Colour", "options": [{"label": "Red"}, {"label": "Blue"}],
+         "multiSelect": False}
+    fake.script("launchpad-pilot", [[fake.call("AskUserQuestion", {"questions": [q]}), fake.say("Blue it is.")]])
+    h.responder = lambda ev: ({"type": "queue_response", "id": ev["id"], "answer": "Blue"}
+                              if ev.get("type") == "queue_item" else None)
 
     async def go():
         hub, c = await h.start()
         await _auto(hub)
-        await hub.handle({"type": "user_message", "text": "x"})
-        return hub, c
+        await hub.handle({"type": "chat_new"})
+        cid = c.of("chat_started")[-1]["chat_id"]
+        await hub.handle({"type": "chat_message", "chat_id": cid, "text": "ask me"})
+        return hub, c, cid
 
-    hub, c = asyncio.run(go())
-    assert len(c.of("question_round")) == 1 and not c.of("auto_answer") and not _files(hub)
+    hub, c, cid = asyncio.run(go())
+    (card,) = c.of("queue_item")
+    assert card["chat_id"] == cid and not c.of("auto_answer")
+    (f,) = list(hub.chats[cid].folder.questions.glob("*.md"))
+    assert "Answered by the user" in _text(f)
 
 
 def test_permission_cards_are_not_affected(harness):
@@ -284,46 +308,40 @@ def test_permission_cards_are_not_affected(harness):
     assert c.of("queue_resolved")[0]["by"] == "user"
 
 
-def test_switching_on_answers_waiting_questions_and_a_waiting_round(harness):
+def test_switching_on_answers_a_waiting_builder_question(harness):
     h = harness(timeout_s=5)
     _ask_step(rec="Blue", blocking=True)
-    seen = []
-    fake.script(PLANNER, [[fake.call("write_plan", ONE_STEP), fake.ask(ROUND)],
-                          lambda m: seen.append(m) or [fake.say("Round answered.")]])
 
     async def go():
-        hub, c = await h.start()
-        await hub.handle({"type": "user_message", "text": "go"})
-        assert len(c.of("question_round")) == 1                                   # waiting as a card
-        await _auto(hub)                                                          # answers the round
-        await h.wait(lambda: c.of("planner_message") and c.of("planner_message")[-1]["text"] == "Round answered.")
-        await _auto(hub, False)                                                   # off again for the run
-        await hub.handle({"type": "plan_approve", "session_id": hub.current.id})
+        hub, c = await _run(h)
         await h.wait(lambda: c.of("queue_item"))                                  # blocking question: waits
         await asyncio.sleep(0.1)
-        assert not c.of("queue_resolved")
-        await _auto(hub)                                                          # on again: answered now
+        assert not c.of("queue_resolved") and not c.of("run_finished")
+        await _auto(hub)                                                          # on now: answered now
         await h.wait(lambda: c.of("run_finished"))
         return hub, c
 
     hub, c = asyncio.run(go())
-    assert seen and "Managers" in seen[0]
     done = c.of("queue_resolved")[0]
     assert done["by"] == "auto" and done["answer"] == "Blue"
-    assert [e["title"] for e in c.of("auto_answer")] == ["Who uses it?", "Which chart library?", "Colour?"]
-    assert len(_files(hub)) == 3 and all("automatically" in _text(p) for p in _files(hub))
+    assert [e["title"] for e in c.of("auto_answer")] == ["Colour?"]
+    statuses = [e["status"] for e in c.of("step_update") if e["n"] == 1]
+    assert "blocked" in statuses and statuses[-1] == "done"                       # it really waited, then carried on
+    assert "Decided by the Builder (Auto answers on)" in _text(_files(hub)[0])
 
 
-def test_auto_answers_state_is_replayed_on_reconnect_and_off_by_default(harness):
-    h = harness()
-    fake.script(PLANNER, [[fake.ask(ROUND)], [fake.say("ok")]])
+def test_auto_answers_state_and_lines_are_replayed_on_reconnect_and_off_by_default(harness):
+    h = harness(timeout_s=5)
+    _ask_step(rec="Blue", blocking=True)
 
     async def go():
         hub, c = await h.start()
         assert hub.current.auto_answers is False
         assert c.of("snapshot")[0]["sessions"][0]["auto_answers"] is False
         await _auto(hub)
-        await hub.handle({"type": "user_message", "text": "x"})
+        await hub.handle({"type": "user_message", "text": "go"})
+        await hub.handle({"type": "plan_approve", "session_id": hub.current.id})
+        await h.wait(lambda: c.of("run_finished"))
         late = Client(hub)
         await hub.connect(late)
         return late
@@ -331,4 +349,5 @@ def test_auto_answers_state_is_replayed_on_reconnect_and_off_by_default(harness)
     late = asyncio.run(go())
     s = late.of("snapshot")[0]["sessions"][0]
     assert s["auto_answers"] is True
-    assert [e["type"] for e in s["chat"] if e.get("type")] == ["auto_answer", "auto_answer"]
+    assert not [e for e in s["chat"] if e.get("type") == "auto_answer"]          # never in the planner chat
+    assert [e["title"] for e in late.of("auto_answer")] == ["Colour?"]            # replayed beside Incoming's cards

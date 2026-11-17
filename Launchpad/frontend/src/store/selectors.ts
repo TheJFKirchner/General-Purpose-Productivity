@@ -1,8 +1,8 @@
 /* Derived values, ported from the vanilla page. Pure functions of the state: call them with the state you got from
    useLaunchpad() (or getState()). They also work on immer drafts inside the reducer. */
 import type { AppState, Agent, ChatItem, PlannerEntry, QueueItem, Session, VisualSet } from './types';
-import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, Purpose } from '../contract';
-import { baseName, cleanName, modelName, tok, tparts, tsum, type TokParts } from '../lib/format';
+import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, Purpose, RoleDecision, RoleEntry } from '../contract';
+import { baseName, cleanName, modelName, tparts, type TokParts } from '../lib/format';
 import { PURPOSES, WRITE_TOOLS } from '../lib/labels';
 
 type S = AppState;
@@ -25,21 +25,15 @@ export const currentStep = (s: Session) => {
 };
 export const stepsDone = (s: Session): number => ((s.run && s.run.steps) || []).filter(x => x.status === 'done').length;
 
-/** One definition everywhere: session total = Orchestrator + step agents + Explorers + Visualizer. The planner is separate.
-    (Role ids stay as they were: astronaut = Explorer, visual = Visualizer, pilot = CLI.) */
-const RUN_ROLES = ['orchestrator', 'builder', 'astronaut', 'visual'];
-export const crewOf = (st: S, sid: string): Agent[] => agentsOf(st, sid).filter(a => RUN_ROLES.includes(a.role));
-export function sessionTotal(st: S, sid: string): number {
-  const ag = crewOf(st, sid), s = st.sessions[sid];
-  if (!ag.length && s && typeof s.snapTotal === 'number') return s.snapTotal;
-  if (!ag.length && s && s.report && typeof s.report.total === 'number') return s.report.total;
-  return ag.reduce((t, a) => t + (+a.cost_usd || 0), 0);
-}
-export function plannerCostOf(st: S, sid: string): number {
-  const ps = agentsOf(st, sid).filter(a => a.role === 'planner');
-  if (ps.length) return ps.reduce((t, a) => t + (+a.cost_usd || 0), 0);
-  const s = st.sessions[sid]; return s && typeof s.plannerCost === 'number' ? s.plannerCost : 0;
-}
+/** Session totals are the server's (usage scope session; which roles count is decided there, app/costs.py): shown, never summed here.
+    Session total = Orchestrator + step agents + Explorers + Visualizer; the planner's share is separate. */
+export const sessionTotal = (st: S, sid: string): number => st.sessions[sid]?.total ?? 0;
+export const plannerCostOf = (st: S, sid: string): number => st.sessions[sid]?.plannerCost ?? 0;
+/** How many agents the session total covers, and their token parts (the server's). */
+export const crewCountOf = (st: S, sid: string): number => st.sessions[sid]?.crewAgents ?? 0;
+export const crewTokensOf = (st: S, sid: string): TokParts => st.sessions[sid]?.crewTok ?? { i: 0, o: 0, cr: 0, cw: 0 };
+/** One step's builders' totals (the server's); null = no builder on that step yet. */
+export const stepTotalsOf = (st: S, sid: string, n: number | string) => st.sessions[sid]?.stepTotals?.[String(n)] ?? null;
 export const curPlanner = (st: S): Agent | null => { const s = curSess(st); return s && s.plannerId ? st.agents[s.plannerId] || null : null; };
 export const curPlannerStatus = (st: S): string => (curSess(st) || { plannerStatus: 'idle' }).plannerStatus || 'idle';
 
@@ -112,23 +106,20 @@ export const orchestratorOf = (st: S, sid: string): Agent | null => {
 };
 
 /* ---------- usage ---------- */
-/** Whole app: sum of agent_usage when any arrived; else the server's usage event. */
-export function appTotals(st: S): { cost: number; parts: TokParts; from: 'agents' | 'usage' } {
-  const all = Object.values(st.agents);
-  if (all.length) return { cost: all.reduce((t, a) => t + (+a.cost_usd || 0), 0), parts: tsum(all), from: 'agents' };
+/** Whole app, as the server's usage event (scope app) sent it. */
+export function appTotals(st: S): { cost: number; parts: TokParts } {
   const u = st.usageEv || {};
   const parts = u.input_tokens != null ? tparts(u) : { i: +st.tokens || 0, o: 0, cr: 0, cw: 0 };
-  return { cost: st.cost, parts, from: 'usage' };
+  return { cost: st.cost, parts };
 }
 
 /* ---------- CLI chats ---------- */
 export const curChat = (st: S) => (st.currentChat != null && st.chats[st.currentChat]) || null;
+/** The current CLI chat's totals, as the server's usage event (scope chat) sent them. */
 export function chatUsage(st: S) {
   const c = curChat(st); if (!c) return null;
-  const ag = Object.values(st.agents).filter(a => a.chat_id === c.id || c.agentIds.includes(a.agent_id));
-  return ag.reduce((t, a) => ({ cost: t.cost + (+a.cost_usd || 0), tok: t.tok + tok(a), tools: t.tools + (+a.tool_calls || 0), n: t.n + 1,
-    in: t.in + (+(a.input_tokens ?? 0) || 0), out: t.out + (+(a.output_tokens ?? 0) || 0), cr: t.cr + (+(a.cache_read_tokens ?? 0) || 0), cw: t.cw + (+(a.cache_write_tokens ?? 0) || 0) }),
-    { cost: 0, tok: 0, tools: 0, n: 0, in: 0, out: 0, cr: 0, cw: 0 });
+  const t = st.chatTotals[c.id];
+  return { cost: t?.cost ?? 0, tok: t ? t.i + t.o + t.cr + t.cw : 0, tools: t?.tools ?? 0, n: t?.n ?? 0, in: t?.i ?? 0, out: t?.o ?? 0, cr: t?.cr ?? 0, cw: t?.cw ?? 0 };
 }
 export function codeAgentName(st: S): string {
   const d = (st.crewDefs || []).find(a => a.role === 'pilot');
@@ -410,4 +401,24 @@ export function gitChips(repo: GitRepo): { text: string; tone: 'ok' | 'warn' | '
   if (!repo.clean) out.push({ text: 'Changes', tone: 'info' });
   else if (repo.linked && !repo.ahead && !repo.behind) out.push({ text: 'Up to date', tone: 'ok' });
   return out;
+}
+
+/* ---------- undefined roles ---------- */
+/** The roles the server lists under "Used but not defined" (visible), in its order (most recently used first). */
+export const visibleRoles = (st: S): RoleEntry[] => st.roles.entries.filter(e => e.visible);
+/** Counts of the listed uses that failed, were blocked or were sent back (small markers on a role). */
+export const roleMarkers = (e: RoleEntry): { failed: number; blocked: number; sentBack: number } => ({
+  failed: e.uses.filter(u => u.outcome === 'failed').length,
+  blocked: e.uses.filter(u => u.outcome === 'blocked').length,
+  sentBack: e.uses.filter(u => u.sent_back).length,
+});
+/** The Role Reviewer's question cards for a role (open and settled), in arrival order. */
+export const reviewQueue = (st: S, role: string): QueueItem[] => st.queue.filter(i => i.review_id != null && i.role === role);
+/** One line on when a role that rested after a decision comes back (the number is the server's resurface_uses). */
+export const roleRestNote = (decision: RoleDecision, resurface: number): string =>
+  decision === 'define' ? '' : `${decision === 'keep' ? 'Kept as a skill plus the Builder' : 'Not yet'}: this role leaves the list and keeps being counted. It comes back after ${resurface} more uses, or sooner if a step under it fails, is blocked or is sent back.`;
+/** A path shown relative: an absolute one (a machine path) is cut to its last three parts. */
+export function relPath(p: string): string {
+  const raw = String(p || ''), parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
+  return /^([a-z]:|[\\/])/i.test(raw) ? '…/' + parts.slice(-3).join('/') : parts.join('/');
 }

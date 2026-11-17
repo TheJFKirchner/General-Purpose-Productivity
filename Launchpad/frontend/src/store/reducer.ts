@@ -5,7 +5,7 @@ import type {
   ActivityEvent, AgentDraftedEvent, AgentFields, AgentRemovedEvent, AgentSavedEvent, AgentUsageEvent, AutoAnswerEvent, ChatHistoryItem,
   ChatModelFields, ChatStartedEvent, FileErrorEvent, FileSavedEvent, GitReposEvent, GitResultEvent, Id, PlanDraftEvent, PlannerHistoryItem, PlannerModelEvent, QueueItemEvent,
   QueueResolvedEvent, QuestionRoundEvent, RunFinishedEvent, RunStartedEvent, ServerEvent, SessionStartedEvent, SettingsEvent,
-  SnapshotEvent, StepUpdateEvent, SystemEvent, VisualSetEvent,
+  SnapshotEvent, StepUpdateEvent, SystemEvent, UsageEvent, VisualSetEvent,
 } from '../contract';
 import { run, type Ctx } from './core';
 import type { Activity, Chat, ChatItem, Session, VisualSet } from './types';
@@ -16,6 +16,7 @@ import {
 } from './mutations';
 import { fxKey, isFinished, problemText, qOpen, sLabel, sName } from './selectors';
 import { initialCrewForm } from './initial';
+import { onReviewCase, onReviewDecided, onReviewFailed, onReviewProgress, onReviewRefused, onReviewStarted, onRolesList, reviewOf } from './roles';
 import { REDUCED, baseName, modelName } from '../lib/format';
 import { ADDABLE_PURPOSES, S_LABEL, WRITE_TOOLS } from '../lib/labels';
 import { splitFrontMatter } from '../lib/markdown';
@@ -88,10 +89,7 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
         if (s && a.status) s.plannerStatus = a.status;
       }
       break;
-    case 'usage':
-      if (!ev.scope || ev.scope === 'app') { c.st.tokens = +ev.tokens || 0; c.st.cost = +ev.cost || 0; c.st.usageEv = { ...ev }; c.st.usageFromServer = true; }
-      endReplay(c);
-      break;
+    case 'usage': onUsage(c, ev); endReplay(c); break;
     case 'session_started': onSessionStarted(c, ev); break;
     case 'plan_draft': onPlanDraft(c, ev); break;
     case 'run_started': onRunStarted(c, ev); break;
@@ -113,6 +111,13 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'agent_drafted': onAgentDrafted(c, ev); break;
     case 'agent_saved': onAgentSaved(c, ev); break;
     case 'agent_removed': onAgentRemoved(c, ev); break;
+    case 'roles_list': onRolesList(c, ev); break;
+    case 'review_started': onReviewStarted(c, ev); break;
+    case 'review_progress': onReviewProgress(c, ev); break;
+    case 'review_case': onReviewCase(c, ev); break;
+    case 'review_failed': onReviewFailed(c, ev); break;
+    case 'review_refused': onReviewRefused(c, ev); break;
+    case 'review_decided': onReviewDecided(c, ev); break;
     case 'git_repos': onGitRepos(c, ev); break;
     case 'git_result': onGitResult(c, ev); break;
     case 'activity': onActivity(c, ev); break;
@@ -232,7 +237,7 @@ function onSnapshot(c: Ctx, ev: SnapshotEvent): void {
     if (x.cwd) s.cwd = x.cwd;
     if (x.report_sent != null) { s.reportSent = !!x.report_sent; s.snapReportSent = !!x.report_sent; }
     if (typeof x.planner_cost_usd === 'number') s.plannerCost = x.planner_cost_usd;
-    if (typeof x.total_cost_usd === 'number') s.snapTotal = x.total_cost_usd;
+    if (typeof x.total_cost_usd === 'number') s.total = x.total_cost_usd;
     if (x.autopilot != null) s.autopilot = !!x.autopilot;
     if (x.auto_answers != null) s.autoAnswers = !!x.auto_answers;
     {
@@ -285,13 +290,13 @@ function onRound(c: Ctx, ev: QuestionRoundEvent): void {
   logFor(c, ev.session_id).push({ kind: 'round', id: nextId(c), roundId: ev.id });
 }
 
-/** A question answered by the Auto answers switch: a compact line, and a round card that was still showing is closed. */
+/** A builder's question decided under Auto answers: a settled, marked line in Incoming (a card that was waiting is settled in place). */
 function onAutoAnswer(c: Ctx, ev: AutoAnswerEvent): void {
-  logFor(c, ev.session_id).push({ kind: 'auto', id: nextId(c), agent: ev.agent || 'Agent', step: ev.step ?? null, title: ev.title, answer: ev.answer });
-  const r = ev.round_id ? c.st.rounds[ev.round_id] : null;
-  if (!r || r.sent) return;
-  r.answers[ev.id] = { accepted: true, text: ev.answer };
-  if (r.questions.every(q => r.answers[q.id])) { r.sent = true; r.actionsHidden = true; }
+  const ex = c.st.queue.find(i => i.id === ev.id);
+  if (ex) { ex.ui = 'decided'; ex.answer = ev.answer; return; }
+  if (ev.session_id != null) sess(c, ev.session_id);
+  c.st.queue.push({ id: ev.id, kind: 'question', session_id: ev.session_id, agent: ev.agent || 'Builder', step: ev.step ?? null, title: ev.title,
+    rec: ev.answer, at: Date.now(), ui: 'decided', answer: ev.answer });
 }
 
 /* ---------------- plan drafts ---------------- */
@@ -333,7 +338,7 @@ function onRunStarted(c: Ctx, ev: RunStartedEvent): void {
   s.run = { name: ev.name || sName(s), started: Date.now(),
             steps: (Array.isArray(ev.steps) ? ev.steps : []).map(st => ({ n: st.n, title: st.title || `Step ${st.n}`, status: st.status || 'todo', built: [], report_path: '',
               agent: st.agent ?? null, agent_display: st.agent_display ?? null, agent_fallback: !!st.agent_fallback, agent_purpose: st.agent_purpose ?? null,
-              skills: st.skills || [], skills_unknown: st.skills_unknown || [] })) };
+              skills: st.skills || [], skills_unknown: st.skills_unknown || [], ...(st.role ? { role: st.role } : {}) })) };
   /* a new run in the same session: fresh steps, back in flight; earlier agents and their costs stay in the session */
   Object.assign(s, { status: 'running', approving: false, report: null, reportSent: false, snapReportSent: false, cleared: false, stopping: false, flash: 0 });
   if (again) removeQ(c, 'report:' + s.id);
@@ -356,6 +361,7 @@ function onStepUpdate(c: Ctx, ev: StepUpdateEvent): void {
   if (ev.agent !== undefined || ev.agent_display !== undefined || ev.agent_fallback !== undefined) st.agent_fallback = !!ev.agent_fallback;
   if (ev.agent_purpose !== undefined) st.agent_purpose = ev.agent_purpose;
   if (ev.skills !== undefined) { st.skills = ev.skills || []; st.skills_unknown = ev.skills_unknown || []; }
+  if (ev.role !== undefined) st.role = ev.role || undefined;
 }
 
 
@@ -366,6 +372,7 @@ function onRunFinished(c: Ctx, ev: RunFinishedEvent): void {
   s.reportSent = ev.report_sent != null ? !!ev.report_sent : !!s.snapReportSent;   // the snapshot knows if it was sent
   s.snapReportSent = false;
   if (typeof ev.planner_cost_usd === 'number') s.plannerCost = ev.planner_cost_usd;
+  if (typeof ev.total_cost_usd === 'number') s.total = ev.total_cost_usd;
   s.report = { path: ev.report_path || '', markdown: ev.markdown || '', total: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : null };
   if (!s.run) s.run = { name: sName(s), steps: [], started: Date.now() };
   s.run.finished = Date.now();
@@ -375,6 +382,22 @@ function onRunFinished(c: Ctx, ev: RunFinishedEvent): void {
   c.st.queue.push({ id: rid, kind: 'report', session_id: s.id, agent: 'Orchestrator', step: null, title: '', at: Date.now(), ui: 'open' });
   if (!c.st.replaying) addSys(c, `Run ${s.letter} (${sName(s)}) finished: ${S_LABEL[s.status].toLowerCase()}. The report is in Incoming.`, s.id);
   toast(c, `Run ${s.letter} finished · ${S_LABEL[s.status]}`);
+}
+
+/** The server's totals (app / session / chat), stored as sent: the page adds no costs up itself. */
+function onUsage(c: Ctx, ev: UsageEvent): void {
+  const n = (v: unknown): number => +(v as number) || 0;
+  if (ev.scope === 'session') {
+    const s = sess(c, ev.session_id); if (!s) return;
+    s.total = n(ev.cost); s.plannerCost = n(ev.planner_cost); s.crewAgents = n(ev.agents);
+    s.crewTok = { i: n(ev.input_tokens), o: n(ev.output_tokens), cr: n(ev.cache_read_tokens), cw: n(ev.cache_write_tokens) };
+    s.stepTotals = {};
+    for (const [k, v] of Object.entries(ev.steps || {})) s.stepTotals[k] = { cost: n(v.cost), tools: n(v.tool_calls), n: n(v.agents), i: n(v.input_tokens), o: n(v.output_tokens), cr: n(v.cache_read_tokens), cw: n(v.cache_write_tokens) };
+  } else if (ev.scope === 'chat') {
+    c.st.chatTotals[ev.chat_id] = { cost: n(ev.cost), tools: n(ev.tool_calls), n: n(ev.agents), i: n(ev.input_tokens), o: n(ev.output_tokens), cr: n(ev.cache_read_tokens), cw: n(ev.cache_write_tokens) };
+  } else {
+    c.st.tokens = n(ev.tokens); c.st.cost = n(ev.cost); c.st.usageEv = { ...ev }; c.st.byRole = { ...(ev.by_role || {}) };
+  }
 }
 
 function onAgentUsage(c: Ctx, ev: AgentUsageEvent): void {
@@ -432,6 +455,7 @@ function onQueueItem(c: Ctx, ev: QueueItemEvent): void {
 function onQueueResolved(c: Ctx, ev: QueueResolvedEvent): void {
   if (c.st.chatItems[ev.id]) { onChatItemResolved(c, ev); return; }
   const i = c.st.queue.find(x => x.id === ev.id); if (!i) return;
+  if (ev.by === 'auto') { if (i.ui !== 'decided') { i.ui = 'decided'; i.answer = ev.answer ?? i.rec ?? ''; } return; }
   if (ev.by === 'timer' && i.kind === 'permission') { i.ui = 'timedout'; i.answer = ev.answer ?? 'deny'; return; }
   if (ev.by === 'autopilot') { i.ui = 'autopilot'; i.answer = ev.answer ?? 'allow'; return; }
   if (ev.by === 'timer') { i.ui = 'auto'; i.answer = ev.answer ?? i.rec ?? ''; return; }
@@ -568,6 +592,7 @@ function onAgentDrafted(c: Ctx, ev: AgentDraftedEvent): void {
   const f = c.st.crewForm;
   if (!f.drafting) return;                           // the form was closed (or never asked)
   f.drafting = false;
+  if (ev.usage) f.cost = ev.usage;
   if (!ev.ok || !ev.fields) { f.draftError = ev.error || 'The drafter could not fill the form. Try saying it another way, or fill it in yourself.'; return; }
   const d = ev.fields, cur = f.fields;
   const purpose = String(d.purpose || '');
@@ -582,6 +607,7 @@ function onAgentDrafted(c: Ctx, ev: AgentDraftedEvent): void {
   };
   if (f.fields.purpose === 'exploring' || f.fields.purpose === 'reviewing') f.fields.tools = f.fields.tools.filter(t => !WRITE_TOOLS.includes(t));
   f.draftError = null; f.drafted = true; f.problems = []; f.error = null;
+  if (f.role) f.open = true;                          // the define path: the filled form opens for editing
 }
 
 function onAgentSaved(c: Ctx, ev: AgentSavedEvent): void {
@@ -589,6 +615,8 @@ function onAgentSaved(c: Ctx, ev: AgentSavedEvent): void {
   f.saving = false;
   if (ev.ok) {
     const name = ev.name || f.fields.name;
+    const role = ev.role || f.role;
+    if (role) reviewOf(c, role).saved = { agent: name, casePath: ev.case_path ?? null };
     c.st.crewForm = { ...initialCrewForm() };
     c.st.crewFlash = name;
     later(c, 3000, () => run(c2 => { if (c2.st.crewFlash === name) c2.st.crewFlash = null; }), 'crewFlash');

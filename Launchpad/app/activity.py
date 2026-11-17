@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from pathlib import Path
 
 from .sessionfiles import one_line
@@ -22,18 +23,49 @@ def now_iso() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def _path(p, project: Path | None) -> str:
-    s = str(p or "")
-    if project is not None and s:
+APP_DIR = Path(__file__).resolve().parent.parent      # the Launchpad folder: built-in files are shown relative to it
+
+
+def _roots(project) -> list[Path]:
+    """`project` may be one folder, a list of them, or None; the app folder is always the last root."""
+    items = project if isinstance(project, (list, tuple, set)) else [project]
+    out: list[Path] = []
+    for r in items:
+        if r is None:
+            continue
         try:
-            return Path(s).resolve().relative_to(project).as_posix() if Path(s).is_absolute() else s
-        except (ValueError, OSError):
-            return s
-    return s
+            r = Path(r).resolve()
+        except OSError:
+            continue
+        out.append(r.parent if r.is_file() else r)
+    return out + [APP_DIR]
 
 
-def summarize(tool: str, args: dict, project: Path | None = None) -> str:
-    """One short line describing a tool call (no file contents)."""
+def _is_abs(s: str) -> bool:
+    return Path(s).is_absolute() or bool(re.match(r"^[A-Za-z]:[\\/]", s)) or s.startswith(("\\\\", "/"))
+
+
+def _path(p, project) -> str:
+    """A file path for the feed and activity.log: relative to the first folder it is inside (the session's folders
+    first, then the app folder); never an absolute path (one outside every known folder shows as .../parent/name)."""
+    s = str(p or "")
+    if not s or not _is_abs(s):
+        return s
+    try:
+        full = Path(s).resolve()
+    except OSError:
+        full = Path(s)
+    for r in _roots(project):
+        try:
+            return full.relative_to(r).as_posix()
+        except ValueError:
+            continue
+    parts = [x for x in re.split(r"[\\/]", s) if x and not x.endswith(":")]
+    return ".../" + "/".join(parts[-2:])
+
+
+def summarize(tool: str, args: dict, project=None) -> str:
+    """One short line describing a tool call (no file contents). `project` = the folder(s) paths are shown relative to."""
     a = args or {}
     if tool == "Bash":
         s = a.get("command", "")
@@ -50,7 +82,7 @@ def summarize(tool: str, args: dict, project: Path | None = None) -> str:
     elif tool == "explore":
         s = f"Explorer: {a.get('question', '')}"
     elif tool == "read_markdown":
-        s = a.get("path", "")
+        s = _path(a.get("path", ""), project)
     elif tool == "show_visuals":
         s = f"visuals: {a.get('brief', '')} ({len(a.get('options') or [])} options)"
     elif tool == "write_plan":

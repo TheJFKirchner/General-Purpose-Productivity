@@ -17,7 +17,7 @@ STANDARD = {"name", "description", "tools", "model"}
 
 @pytest.mark.parametrize("role,model", [("planner", "opus"), ("astronaut", "haiku"),
                                         ("orchestrator", "sonnet"), ("builder", "sonnet"), ("pilot", "sonnet"),
-                                        ("visual", "haiku"), ("drafter", "haiku")])
+                                        ("visual", "haiku"), ("drafter", "haiku"), ("role_reviewer", "sonnet")])
 def test_agent_files_are_standard(role, model):
     path = crew.agent_file(role)
     meta, body = frontmatter.read(path)
@@ -25,11 +25,12 @@ def test_agent_files_are_standard(role, model):
     if role == "pilot":
         assert body.strip() == "" and "tools" not in meta            # Claude Code's own prompt and tools
     else:
-        assert body.strip() and len(body) < 2500                   # lean prompt
+        limit = 2800 if role == "planner" else 2500                 # the planner's role rule (2026-11-17) needs a little more
+        assert body.strip() and len(body) < limit                  # lean prompt
 
 
 FOLDERS = {"planner": "planner", "astronaut": "explorer", "orchestrator": "orchestrator", "builder": "builder",
-           "visual": "visualizer", "pilot": "claude_code", "drafter": "drafter"}
+           "visual": "visualizer", "pilot": "claude_code", "drafter": "drafter", "role_reviewer": "role_reviewer"}
 
 
 def test_each_builtin_has_its_own_folder_with_definition_code_and_readme():

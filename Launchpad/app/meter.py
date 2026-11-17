@@ -20,6 +20,7 @@ class Meter:
     def __init__(self, hub, *, session_id: str | None, role: str, name: str, step: int | None = None,
                  chat_id: str | None = None):
         self.hub = hub
+        self.path_roots: list = []                 # extra folders its paths are shown relative to (the Role Reviewer's)
         self.session_id = session_id
         self.chat_id = chat_id                     # regular chats (role "pilot"): session_id None, chat_id set
         self.role = role
@@ -83,6 +84,15 @@ class Meter:
     async def _activity_start(self, call) -> None:
         owner = self.hub.sessions.get(self.session_id or "") or self.hub.chats.get(self.chat_id or "")
         project = owner.folder.project if owner is not None else self.hub.settings.project
+        roots = [project, *self.path_roots]
+        try:
+            roots += self.hub.extra_dirs(None)[1]
+        except Exception:
+            pass
+        home = getattr(getattr(self.hub, "tally", None), "home", None)
+        if home:
+            roots.append(home)
+        project = roots
         ev = {"type": "activity", "id": f"{self.agent_id}:{call.id}", "session_id": self.session_id,
               "chat_id": self.chat_id,
               "agent_id": self.agent_id, "role": self.role, "name": self.name, "step": self.step,
@@ -129,7 +139,7 @@ class Meter:
         if count_tools:
             self.tool_calls += len(reply.tool_calls)
         await self.push()
-        await self.hub.emit_totals()
+        await self.hub.emit_totals(self)
 
     def tokens(self) -> int:
         return self.usage.total_input_tokens + self.usage.output_tokens

@@ -6,6 +6,8 @@
   message and again, as one short block before the user's next message, when the folder's agents change. The system
   prompt and the cached tool list never change for this. The planner may name an agent per step (write_plan /
   edit_plan `agent`); it never starts one: the orchestrator does, after approval
+- Roles: a step with no fitting listed agent may get a `role` slug (write_plan / edit_plan); the first message lists
+  the role names already in the per-user tally (app/tally.py), the 20 most recently used, so the planner reuses them
 - Skills: the session's skills (app/skills.py, found in its folders) reach the planner in its first message; a step
   may name some (`skills`), and that step's worker gets them on top of its own allowlist. The planner itself runs
   with its own allowlist (default all) through agentlib skills
@@ -15,9 +17,7 @@
 - No shell, no write/edit, no general file reading: read_markdown only opens .md files inside the project
 - ask_user questions -> question_round cards; round_answer -> session.answer(); every answered question is also
   saved as its own file in the session's questions/ folder (sessionfiles.add_question)
-- Auto answers (session switch): a round whose questions ALL have a recommendation is answered at once with them
-  (no card; one auto_answer line per question, hub.auto_answered) and the planner carries on; a round with any
-  question lacking one waits as a normal card. Turning the switch on answers a waiting round the same way
+- The Auto answers switch never touches planner rounds: every round waits for the user (the switch is for builders)
 - write_plan -> validated plan.md draft + plan_draft event; only the user's approval starts a run
 - Harness and model (choices.py, the picker): loaded on the chosen harness's engine and start model; until the first
   message the session follows settings changes (configure); afterwards only promotion moves it. Auto-promote off =
@@ -33,6 +33,7 @@ from agentlib import AgentError, tool
 from agentlib.events import Done, Text
 
 from ... import skills as skills_mod
+from ... import tally as tally_mod
 from ...meter import Meter
 from ...sessionfiles import inside
 
@@ -62,6 +63,8 @@ EDIT_PLAN_SCHEMA = {
             "skills": {"type": "array", "items": {"type": "string"},
                        "description": "set_step / add_step: skill names for the step's worker; [] = none"},
             "agent": {"type": "string", "description": "set_step / add_step: step agent name; \"\" = the Builder"},
+            "role": {"type": "string", "description": "set_step / add_step: role slug for a step with no listed "
+                                                      "agent; \"\" = none"},
             "after": {"type": "array", "items": {"type": "integer"}},
         },
         "required": ["op"]}}},
@@ -121,6 +124,9 @@ WRITE_PLAN_SCHEMA = {
                                               "gets them"},
                     "agent": {"type": "string", "description": "optional step agent name from Launchpad's list; "
                                                                "omit for the Builder"},
+                    "role": {"type": "string", "description": "optional role slug (e.g. sql-tuner) when no listed "
+                                                              "agent fits and the step needs a specialism; never with "
+                                                              "agent"},
                     "after": {"type": "array", "items": {"type": "integer"},
                               "description": "earlier step numbers this step needs"},
                 },
@@ -184,7 +190,7 @@ def planner_tools(chat, *, criteria: str | None = None) -> list:
     async def edit_plan(**args) -> str:
         """Change the current draft with targeted edits instead of rewriting it: replace an exact passage
         (find/replace), rename, set_goal, set_step (title/details/done_when/after of step n), add_step,
-        remove_step, move_step; set_step / add_step may set the step's agent and skills. Edits apply in order; step numbers refer to the plan at that moment. The plan is
+        remove_step, move_step; set_step / add_step may set the step's agent, role and skills. Edits apply in order; step numbers refer to the plan at that moment. The plan is
         re-checked; an edit that would break it is refused with the reason and nothing changes."""
         return await chat.ls.edit_plan(args.get("edits"))
 
@@ -214,8 +220,6 @@ class PlannerChat:
         self.round_no = 0
         self.rounds: dict[str, list] = {}
         self.round_meta: dict[str, dict] = {}   # round id -> {asked_at, run}: for the question files
-        self.open_round: str | None = None      # a round card waiting for the user (Auto answers may answer it)
-        self.auto_next: dict | None = None      # the auto round_answer to run as the next turn
         self.first = True
         self.registry_dirty = False             # the folder's agents changed: tell the planner before the next message
         self.history: list[dict] = []           # for the reconnect snapshot: {role: user|assistant|system|round|answers, ...}
@@ -305,6 +309,7 @@ class PlannerChat:
             lines.append("Additional folders (steps may work there too; give absolute paths): "
                          + ", ".join(str(e) for e in f.extra))
         lines.append(crew.registry_note(f.project))
+        lines.append(tally_mod.role_note(self.ls.hub.tally.recent_names(tally_mod.PLANNER_ROLE_NAMES)))
         lines.append(skills_mod.note(getattr(self.ls, "skills", [])))
         lines.append(libraries.libraries_note(f.project))
         return "\n".join(lines) + "\n\n"
@@ -340,7 +345,6 @@ class PlannerChat:
     def save_answers(self, msg: dict, qs: list) -> None:
         """One file per answered question of a round (skipped ones get none)."""
         meta = self.round_meta.get(msg.get("roundId"), {})
-        how = "auto" if msg.get("auto") else "user"
         answers = msg.get("answers") or {}
         for q in qs:
             a = answers.get(q.id)
@@ -359,37 +363,13 @@ class PlannerChat:
                 self.ls.folder.add_question(
                     title=q.question, asked_by="Planner", asked_at=meta.get("asked_at"), run=meta.get("run"),
                     run_name=self.ls.hub.run_name(self.ls.id), no_run="Before launch",
-                    options=list(q.options or []), answer=str(answer), how=how, reason=q.why,
+                    options=list(q.options or []), answer=str(answer), how="user", reason=q.why,
                     recommended=q.recommended or "", note=note)
             except OSError:
                 pass                                     # a file that cannot be written must not stop the chat
 
-    async def auto_answer_waiting(self) -> None:
-        """Auto answers was just turned on: answer the waiting round when every question has a recommendation."""
-        rid = self.open_round
-        qs = self.rounds.get(rid) if rid else None
-        if not qs or not all(str(q.recommended or "").strip() for q in qs) or self.lock.locked():
-            return
-        self.open_round = None
-        for q in qs:
-            await self.ls.hub.auto_answered(self.ls.id, id=q.id, agent=self.meter.name, step=None, title=q.question,
-                                            answer=str(q.recommended), round_id=rid)
-        await self.handle(self.auto_round_answer(rid, qs))
-
-    @staticmethod
-    def auto_round_answer(rid: str, qs: list) -> dict:
-        return {"type": "round_answer", "roundId": rid, "auto": True,
-                "answers": {q.id: {"accepted": True} for q in qs}}
-
     async def handle(self, msg: dict) -> None:
-        """One UI message; a round answered automatically carries straight on with the next turn."""
-        while msg is not None:
-            self.auto_next = None
-            await self._turn(msg)
-            msg = self.auto_next
-
-    async def _turn(self, msg: dict) -> None:
-        self.open_round = None
+        """One UI message (user_message or round_answer) = one planner turn."""
         kind = msg.get("type")
         if self.lock.locked():
             await self.emit({"type": "system", "text": "Still working on the last message, one moment."})
@@ -405,9 +385,8 @@ class PlannerChat:
             try:
                 if kind == "round_answer":
                     qs = self.rounds.get(msg.get("roundId"), self.session.pending_questions)
-                    if not msg.get("auto"):          # an auto round has its own history lines (hub.auto_answered)
-                        self.history.append({"role": "answers", "roundId": msg.get("roundId"),
-                                             "answers": msg.get("answers") or {}, "skipped": bool(msg.get("skipped"))})
+                    self.history.append({"role": "answers", "roundId": msg.get("roundId"),
+                                         "answers": msg.get("answers") or {}, "skipped": bool(msg.get("skipped"))})
                     self.save_answers(msg, qs)
                     stream = self.session.answer_stream(self.round_answers(msg), questions=[q.to_dict() for q in qs])
                 else:
@@ -440,18 +419,10 @@ class PlannerChat:
             rid = f"{self.ls.id}-r{self.round_no}"
             self.rounds[rid] = list(reply.questions)
             self.round_meta[rid] = {"asked_at": dt.datetime.now(), "run": self.run_number()}
-            if (self.ls.auto_answers and reply.questions
-                    and all(str(q.recommended or "").strip() for q in reply.questions)):
-                for q in reply.questions:                # answered at once: lines only, no card
-                    await self.ls.hub.auto_answered(self.ls.id, id=q.id, agent=self.meter.name, step=None,
-                                                    title=q.question, answer=str(q.recommended), round_id=rid)
-                self.auto_next = self.auto_round_answer(rid, list(reply.questions))
-                return
             ev = {"type": "question_round", "id": rid, "round": self.round_no, "questions": [
                 {"id": q.id, "title": q.question, "body": q.why, "rec": q.recommended, "options": q.options}
                 for q in reply.questions]}
             self.history.append({"role": "round", "round": {k: v for k, v in ev.items() if k != "type"}})
-            self.open_round = rid
             await self.emit(ev)
             await self.meter.set_status("waiting")
         else:

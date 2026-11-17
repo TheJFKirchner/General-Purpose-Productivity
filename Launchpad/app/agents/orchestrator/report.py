@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+from ... import costs
 from ...sessionfiles import one_line
 from .. import crew
 
@@ -34,7 +35,7 @@ def render_report(run, status: str, issue: str | None) -> str:
     if asked:
         out += ["", "## Questions"]
         for q in asked:
-            how = {"auto": "answered automatically", "timer": "timed out"}.get(q["how"], "answered by the user")
+            how = {"auto": "decided by the agent, Auto answers on", "timer": "timed out"}.get(q["how"], "answered by the user")
             out.append(f"- [{q['name']}](questions/{q['name']}): {one_line(q['title'], 120)} ({how}: {one_line(q['answer'], 80)})")
     issues = list(final["issues"]) + ([issue] if issue else [])
     for n in sorted(run.results):
@@ -48,8 +49,8 @@ def render_report(run, status: str, issue: str | None) -> str:
     for m in run_meters:
         u = m.usage
         out.append(f"| {m.name} | {m.role} | {m.step or '-'} | {u.input_tokens} | {u.output_tokens} | "
-                   f"{u.cache_read_tokens} | {u.cache_write_tokens} | {m.tool_calls} | {m.cost_usd:.4f} |")
+                   f"{u.cache_read_tokens} | {u.cache_write_tokens} | {m.tool_calls} | {costs.usd(m.cost_usd, symbol=False)} |")
     run.total_cost, run.planner_cost = run.hub.session_costs(run.ls.id)
-    out += ["", f"Session total (orchestrator, step agents, explorer, visualizer): **${run.total_cost:.4f}**",
-            f"Planner (separate, not in the session total): ${run.planner_cost:.4f}", ""]
+    out += ["", f"Session total (orchestrator, step agents, explorer, visualizer): **{costs.usd(run.total_cost)}**",
+            f"Planner (separate, not in the session total): {costs.usd(run.planner_cost)}", ""]
     return "\n".join(out)

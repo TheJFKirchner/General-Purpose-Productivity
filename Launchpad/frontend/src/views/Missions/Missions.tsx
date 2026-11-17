@@ -7,7 +7,7 @@
 import './Missions.css';
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { actions, getState, onActivityPing, sel, useLaunchpad, type AppState, type Session } from '../../store';
-import { AutopilotSwitch, DirChip, Letter, Pill, Status, StepAgent, ViewFrame, openArchive, openPlan, openReport } from '../../components';
+import { AutoAnswersSwitch, AutopilotSwitch, DirChip, Letter, Pill, Status, StepAgent, ViewFrame, openArchive, openPlan, openReport } from '../../components';
 import { useAnimationFrame } from '../../lib/hooks';
 import { REDUCED, usd } from '../../lib/format';
 import { AP_HINT, S_LABEL } from '../../lib/labels';
@@ -187,7 +187,7 @@ function StepAgents({ st, s }: { st: AppState; s: Session }) {
 function SystemActions({ st, s }: { st: AppState; s: Session }) {
   const sid = s.id, fin = sel.isFinished(s);
   return <>
-    {s.status === 'running' ? <AutopilotSwitch sessionId={sid} /> : null}
+    {s.status === 'running' ? <><AutopilotSwitch sessionId={sid} /><AutoAnswersSwitch sessionId={sid} /></> : null}
     {s.status === 'running' ? (st.ui.stopConfirm === sid
       ? <Pill size="sm" variant="danger" onClick={() => actions.stopRun(sid)}>Confirm stop</Pill>
       : <Pill size="sm" disabled={s.stopping} onClick={() => actions.stopRun(sid)}>{s.stopping ? 'Stopping…' : 'Stop run'}</Pill>) : null}

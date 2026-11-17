@@ -81,6 +81,10 @@ What exists today that this builds on: steps carry `agent` and `skills` but no f
 - Is "smaller" for the activity feed about height (assumption 14), or about text and row size too?
 - Should an "other" agent be guarded like a builder (assumption 12), or be read-only until told otherwise?
 
+## Corrected by request 26
+
+Auto answers as built here was wrong on scope. James's correction: builders only, never the planner or CLI chats, and every question is answered. Request 26 ([2026-11-17-role-review.md](2026-11-17-role-review.md)) reworks it and moves the switch beside Autopilot; where the two files differ, request 26 wins.
+
 ## As built (2026-11-17)
 
 Built on branch `feature/cli-picker-other-questions` by two builders in sequence, one UI review and one fix round. Where this section differs from the assumptions, this section is what the code does.

@@ -17,6 +17,7 @@ import json
 from agentlib import AgentError, tool
 from agentlib.events import Done
 
+from ... import costs
 from ... import plan as plan_mod
 from ...meter import Meter
 from .. import crew
@@ -64,7 +65,7 @@ class Run:
         self.plan = plan_mod.parse(self.plan_text)
         reg = crew.registry(self.folder.project)
         self.steps = {s["n"]: {"n": s["n"], "title": s["title"], "after": s["after"], "status": "todo",
-                               **crew.step_fields(s.get("agent"), self.folder.project, reg),
+                               "role": s.get("role"), **crew.step_fields(s.get("agent"), self.folder.project, reg),
                                **(ls.step_skill_fields(s) if hasattr(ls, "step_skill_fields") else {})}
                       for s in self.plan["steps"]}
         self.reports: dict[int, str] = {}          # n -> project-relative report path
@@ -136,6 +137,8 @@ class Run:
                "agent_purpose": s.get("agent_purpose") or "building"}
         if s.get("agent_fallback"):
             out["agent_fallback"] = True
+        if s.get("role"):
+            out["role"] = s["role"]
         if s.get("skills"):
             out["skills"] = list(s["skills"])
 
@@ -235,7 +238,7 @@ class Run:
         path = self.folder.write_report(self.report_markdown)
         await self.hub.emit({"type": "run_finished", "session_id": self.ls.id, "status": status,
                              "report_path": self.folder.rel(path), "markdown": self.report_markdown,
-                             "total_cost_usd": round(self.total_cost, 6),
-                             "planner_cost_usd": round(self.planner_cost, 6)})
+                             "total_cost_usd": costs.wire(self.total_cost),
+                             "planner_cost_usd": costs.wire(self.planner_cost)})
         await self.hub.emit({"type": "plan_meta", "session_id": self.ls.id, "name": self.plan["name"],
                              "mode": "Run", "status": {"done": "Done", "stopped": "Stopped"}.get(status, "Failed")})

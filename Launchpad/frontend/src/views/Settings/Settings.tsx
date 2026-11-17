@@ -109,6 +109,7 @@ function SettingRow({ name, v }: { name: string; v: unknown }) {
   const kind = typeof val === 'boolean' ? 'bool' : typeof val === 'number' ? 'num' : 'str';
   const id = 'set-' + name.replace(/[^\w-]/g, '_');
   const ref = useRef<HTMLInputElement>(null);
+  const harnessOpts = useLaunchpad(st => (name === 'pilot_harness' ? st.cliChoice : name === 'planner_harness' ? st.plannerChoice : null)?.options);
 
   useEffect(() => {
     const i = ref.current; if (!i) return;
@@ -127,6 +128,23 @@ function SettingRow({ name, v }: { name: string; v: unknown }) {
   }, [name, kind]);
 
   const label = SET_LABEL[name] || name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+  if (harnessOpts && harnessOpts.length) {
+    /* a CLI setting reads as the pickers show it (the CLI's display label), not as its raw id */
+    const hs: { harness: string; label: string; ok: boolean }[] = [];
+    for (const o of harnessOpts) { const h = hs.find(x => x.harness === o.harness); if (!h) hs.push({ harness: o.harness, label: o.harness_label || o.harness, ok: o.available }); else if (o.available) h.ok = true; }
+    const cur = String(val ?? '');
+    return (
+      <div className="setrow">
+        <label htmlFor={id}>{label}</label>
+        <select id={id} className="field" value={cur} disabled={!!over} onChange={e => actions.setSetting(name, e.target.value)}>
+          {cur && !hs.some(h => h.harness === cur) ? <option value={cur}>{cur}</option> : null}
+          {hs.map(h => <option key={h.harness} value={h.harness} disabled={!h.ok}>{h.label}{h.ok ? '' : ' (not available yet)'}</option>)}
+        </select>
+        <span className={`chip ${applies === 'now' ? 'ok' : ''}`}>{applies === 'now' ? 'Applies now' : applies === 'new_sessions' ? 'New sessions only' : ''}</span>
+        {over ? <span className="chip warnc" title={typeof over === 'string' ? over : 'A launch option overrides this'}>Set by launch option{typeof over === 'string' ? ': ' + over : ''}</span> : null}
+      </div>
+    );
+  }
   return (
     <div className="setrow">
       <label htmlFor={id}>{label}</label>

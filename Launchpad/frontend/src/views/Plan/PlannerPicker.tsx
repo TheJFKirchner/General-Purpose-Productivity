@@ -1,12 +1,12 @@
 /* The planner's control row under its chat box: the shared CLI-then-model picker (components/ModelPicker.tsx) with
    the planner's own items after the models: "Auto-promote to <top model>" with a Rules link (the criteria,
-   read-only), then "New plan". Beside the picker button sits the Auto answers switch (components/AutoAnswersSwitch.tsx).
+   read-only), then "New plan". (The Auto answers switch is not here: it sits beside Autopilot.)
    What a pick means is the server's call (planner_choose): an unstarted plan takes it at once, the top model on a
    running plan is promotion by hand, anything else applies to the next new plan (the row then says so). The server
    sends a flat list of harness-and-model options (planner_choice); sel.plannerPickerView groups it by CLI. */
 import { useEffect, useRef, useState } from 'react';
 import { actions, sel, useComputed, useCurrentSession } from '../../store';
-import { AutoAnswersSwitch, Markdown, ModelPicker, openModal } from '../../components';
+import { Markdown, ModelPicker, openModal } from '../../components';
 import { Plus } from '../../components/icons';
 
 export function PlannerPicker() {
@@ -43,7 +43,6 @@ export function PlannerPicker() {
 
   return (
     <ModelPicker id="pk" rowId="plannerControls" view={v} who="Planner" tag={v.promoted ? 'promoted' : null} resetKey={sid}
-        trailing={sid ? <AutoAnswersSwitch sessionId={sid} /> : null}
         onPick={id => actions.choosePlanner(id)} onClose={resetNp}
         extra={(close, button) => <>
           <div className="pk-auto">

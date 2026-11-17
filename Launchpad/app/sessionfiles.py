@@ -32,8 +32,10 @@ import re
 import secrets
 from pathlib import Path
 
+from . import costs
+
 ROOT_NAME = ".launchpad"
-HOW_ANSWERED = {"user": "Answered by the user", "auto": "Answered automatically (recommended)",
+HOW_ANSWERED = {"user": "Answered by the user", "auto": "Decided by the {agent} (Auto answers on)",
                 "timer": "Timed out (no answer; the recommendation was used as an assumption)"}
 
 
@@ -163,7 +165,7 @@ class SessionFolder:
         where = f" · step {step}" if step else ""
         body = one_line(notes, 600) if str(notes or "").strip() else "(no routing problems noted)"
         self._append(self.ops_manual, "Operations manual",
-                     f"## {agent} ({role}{where})\n- tool calls: {tool_calls} · cost: ${cost_usd:.4f}\n- {body}\n")
+                     f"## {agent} ({role}{where})\n- tool calls: {tool_calls} · cost: {costs.usd(cost_usd)}\n- {body}\n")
 
     def add_decision(self, text: str) -> None:
         """A decision the user made in the app (e.g. a visual pick)."""
@@ -214,7 +216,7 @@ class SessionFolder:
             lines.append(f"- Your note: {one_line(note, 1000)}")
         if assumption:
             lines.append(f"- Assumption taken: {one_line(assumption, 600)}")
-        lines += ["", "## How it was answered", HOW_ANSWERED.get(how, how), ""]
+        lines += ["", "## How it was answered", HOW_ANSWERED.get(how, how).replace("{agent}", agent or asked_by), ""]
         slug = question_slug(title)
         for _ in range(20):                                    # another writer may take the number first: retry
             name = f"{self._next_question_no():03d}-{slug}.md"
@@ -244,7 +246,7 @@ class SessionFolder:
             return [f"- {one_line(i, 600)}" for i in items] or ["- none"]
 
         lines = [f"# Step {n}: {title}", "",
-                 f"Status: **{report['status']}** · builder: {agent} · tool calls: {tool_calls} · cost: ${cost_usd:.4f}",
+                 f"Status: **{report['status']}** · builder: {agent} · tool calls: {tool_calls} · cost: {costs.usd(cost_usd)}",
                  "", "## Built"]
         lines += [f"- **{one_line(b['item'], 200)}**: {one_line(b['does'], 600)}" for b in report["built"]] or ["- nothing"]
         lines += ["", "## Assumptions", *bullets(report["assumptions"]), "",

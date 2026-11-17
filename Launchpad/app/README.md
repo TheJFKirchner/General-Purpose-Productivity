@@ -6,19 +6,21 @@ Entry point: `python -m app.launch` (options in the `launch.py` docstring). Over
 |---|---|
 | `launch.py` | entry point: store + launch options, server thread, pywebview window |
 | `server.py` | FastAPI: page, assets, vendor files, websocket; localhost + access code + origin check; header = websocket contract |
-| `hub.py` | all sessions and chats, event broadcast, reconnect snapshot, UI message dispatch, approve / stop / new session, the planner picker (`planner_choose`, `planner_choice`), the CLI chat's picker (`cli_choose`, `cli_choice`; unstarted chats reloaded, `chat_model`) |
-| `plan.py` | plan.md render, parse, validate, status updates, targeted edits |
+| `hub.py` | all sessions and chats, event broadcast, reconnect snapshot, UI message dispatch, approve / stop / new session, the planner picker (`planner_choose`, `planner_choice`), the CLI chat's picker (`cli_choose`, `cli_choice`; unstarted chats reloaded, `chat_model`), undefined roles (`record_role_use`, `roles_list`, `role_dismiss` / `role_merge`, `review_start` / `review_decide` through the Role Reviewer, `agent_draft` / `agent_create` with `role` on the define path) |
+| `plan.py` | plan.md render, parse, validate, status updates, targeted edits; per step optional `agent`, `skills`, `role` (never `agent` and `role` together) |
+| `tally.py` | undefined roles: the per-user tally (`<home>/.launchpad/roles.json`, lock + re-read + atomic replace so two Launchpad processes keep each other's updates), what a use records, visibility (listed at 2 uses; dismiss; rest after keep / not yet until 5 more uses or a new problem use; merge), the planner's role list; review cases in `<home>/.launchpad/role-cases/` |
 | `sessionfiles.py` | the files in `<folder>/.launchpad/<session-id>/`, incl. one `questions/NNN-<slug>.md` per answered question (`add_question`; numbering from disk) |
-| `incoming.py` | question / permission / plan queue with server-side timers; the per-session Auto answers switch answers questions that have a recommendation at once (`set_auto_answers` in `hub.py`) |
-| `meter.py` | per-agent tokens, cost and tool-call counts |
+| `incoming.py` | question / permission / plan queue with server-side timers; the per-session Auto answers switch (builders only) answers plan-step workers' questions with the worker's own recommendation at once (`ask(auto_ok=True)`, `set_auto_answers` in `hub.py`) |
+| `meter.py` | per-agent tokens, cost and tool-call counts (the engine's per-turn cost, via agentlib's Reply, stays the one source of a cost) |
+| `costs.py` | the one place cost totals are added up and formatted: which roles count toward a session, the usage events (app / session / chat) `hub.emit_totals` sends, `usd()` / `wire()`; the page only displays them |
 | `activity.py` | one-line summaries for the live activity feed and `activity.log` |
 | `settings.py` | active settings for this launch |
-| `store.py` | per-user store: connected folders (+ which are ticked as additional), settings (incl. the planner picker's `planner_harness`, `planner_start_model`, `planner_auto_promote`, and the CLI chat picker's `pilot_harness`, `pilot_model`), agent use counts, per-agent skill settings (`<home>/.launchpad/settings.json`) |
+| `store.py` | per-user store: connected folders (+ which are ticked as additional), settings (incl. the planner picker's `planner_harness`, `planner_start_model`, `planner_auto_promote`, the CLI chat picker's `pilot_harness`, `pilot_model`, and `reviewer_model`), agent use counts, per-agent skill settings (`<home>/.launchpad/settings.json`) |
 | `skills.py` | skill discovery in a session's folders (`.claude/skills`, else `.agents/skills`; primary wins a name clash), per-agent allowlists, the planner's skill list |
 
 | `files.py` | File Explorer back end: roots, safe paths, conflict-safe `.md` saves, backups |
 | `gitrepos.py` | Repos panel back end (Files tab): finds git repos in the connected folders (folder itself + two levels down), reads status (branch, ahead / behind, changed files with +/- counts), commit / push / fetch through `git` argument-list subprocesses (no shell, timeouts, no prompts, no force push / pull / branch switch); the hub runs it off-thread (`git_scan`, `git_refresh`, `git_fetch`, `git_commit`, `git_push`) |
-| `demo.py` | fake-engine scripts for `--fake` |
+| `demo.py` | fake-engine scripts for `--fake`, incl. the sample undefined roles (`seed_tally`, demo temp home only) and the fake Role Reviewer |
 | `requirements.txt` | Python dependencies |
 
 Other folders:

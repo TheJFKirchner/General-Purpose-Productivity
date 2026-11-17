@@ -16,7 +16,7 @@ export function sess(c: Ctx, id: Id | null | undefined): Session | null {
     s = {
       id, letter: letterFor(c.st.order.length), folder: '', dirId: null, cwd: '', planTitle: '', status: 'planning', meta: null, roundTag: '',
       draft: null, draftV: 0, draftRev: null, runDraftV: null, runRev: null, run: null, report: null, approving: false, stopping: false,
-      reportSent: false, snapReportSent: false, snapTotal: null, plannerCost: null, cleared: false, flash: 0, flashN: null, created: Date.now(),
+      reportSent: false, snapReportSent: false, total: null, plannerCost: null, crewAgents: 0, crewTok: { i: 0, o: 0, cr: 0, cw: 0 }, stepTotals: {}, cleared: false, flash: 0, flashN: null, created: Date.now(),
       autopilot: false, autoAnswers: false, plannerId: null, plannerStatus: 'idle', plannerModel: null, promoted: false, promoReason: null, promoBy: null,
       promoting: false, plannerHarness: null, plannerStart: null, plannerTop: null, plannerLabel: null, plannerOption: null,
       plannerStarted: false, plannerAuto: false, switchableTo: [], codeSending: false, codeSentV: null, visualSets: [], visSel: null, visSeen: 0, log: [], typing: false,

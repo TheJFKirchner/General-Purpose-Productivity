@@ -5,7 +5,7 @@
    (view-local, not in the store). Hovering the orbit pauses it; reduced motion keeps it still. */
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { actions, sel, useComputed, type Agent, type RunStep, type Session } from '../../store';
-import { AutopilotSwitch, Letter, SunIcon } from '../../components';
+import { AutoAnswersSwitch, AutopilotSwitch, Letter, SunIcon } from '../../components';
 import { useAnimationFrame } from '../../lib/hooks';
 import { REDUCED, tokShort, tparts, usd } from '../../lib/format';
 import { P_LABEL } from '../../lib/labels';
@@ -116,7 +116,7 @@ export function RunList() {
     const runs = sel.inFlight(st), finished = sel.allSessions(st).filter(sel.isFinished).length;
     const p = sel.curPlanner(st), ps = sel.curPlannerStatus(st);
     return {
-      ps, plannerLine: `· ${P_LABEL[ps] || ps} · ${tokShort(tparts(p))}`, plannerCost: usd(p && p.cost_usd), finished,
+      ps, plannerLine: `· ${P_LABEL[ps] || ps} · ${tokShort(tparts(p))}`, plannerCost: usd(st.current != null ? sel.plannerCostOf(st, st.current) : 0), finished,
       runs: runs.map(s => {
         const wait = sel.waitingCount(st, s.id), cur = sel.currentStep(s), steps = s.run ? s.run.steps : [], m = steps.length;
         const workers = sel.moonsOf(st, s.id).filter(a => a.status === 'working').map(a => a.name);
@@ -141,7 +141,7 @@ export function RunList() {
             <span className={`st${r.wait ? ' wait' : ''}`}>{r.line}</span>
             <span className="segs" aria-hidden="true">{r.segs.map((x, k) => <i key={k} className={x} />)}</span>
           </button>
-          <div className="apline"><AutopilotSwitch sessionId={r.id} /></div>
+          <div className="apline"><AutopilotSwitch sessionId={r.id} /><AutoAnswersSwitch sessionId={r.id} /></div>
         </li>
       ))}
       {!v.runs.length ? <li className="fl-note">No runs in flight. Approve a plan to launch one.</li> : null}

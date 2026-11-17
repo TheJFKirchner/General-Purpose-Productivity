@@ -4,7 +4,8 @@
    All records are keyed objects (not Map/Set) so the state stays plain JSON-like data. */
 import type {
   ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CliChoiceEvent, CrewAgentDef, DirEntry, Directory, FileContentEvent,
-  FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoundAnswer, SettingValue, SkillInfo, StepStatus, VisualOption,
+  FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoleCase, RoleDecision, RoleEntry, RoundAnswer, RunUsage,
+  ReviewTest, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
 /** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / CLI switch. */
@@ -21,8 +22,6 @@ export type PlannerEntry =
   | { kind: 'sys'; id: string; text: string; cls?: 'promo' | 'err' }
   | { kind: 'visnote'; id: string; text: string; setId: string }
   | { kind: 'round'; id: string; roundId: string }
-  /** a question the Auto answers switch answered with the recommendation (compact line) */
-  | { kind: 'auto'; id: string; agent: string; step: number | null; title: string; answer: string }
   /** a plan draft card; `draft` is the draft as it was when the card was made; state open = live (see selectors.planCardView) */
   | { kind: 'plancard'; id: string; draft: Draft; draftV: number; rev: number; state: PlanCardState };
 
@@ -39,7 +38,7 @@ export interface Round {
 }
 
 /** agent / agent_display: the agent assigned to the step (null = the Builder). */
-export interface RunStep { n: number; title: string; status: StepStatus; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null; skills?: string[]; skills_unknown?: string[] }
+export interface RunStep { n: number; title: string; status: StepStatus; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null; skills?: string[]; skills_unknown?: string[]; role?: string }
 export interface Run { name: string; started: number; finished?: number; steps: RunStep[] }
 export interface Report { path: string; markdown: string; total: number | null }
 
@@ -81,8 +80,14 @@ export interface Session {
   stopping: boolean;
   reportSent: boolean;
   snapReportSent: boolean;
-  snapTotal: number | null;
+  /** the server's totals for this session (usage scope session, snapshot, run_finished): total = every agent but the planner;
+      plannerCost = the planner's own share; crewAgents / crewTok = those agents' count and token parts. Never summed here. */
+  total: number | null;
   plannerCost: number | null;
+  crewAgents: number;
+  crewTok: { i: number; o: number; cr: number; cw: number };
+  /** step number -> its builders' totals (usage scope session steps) */
+  stepTotals: Record<string, ChatTotals>;
   cleared: boolean;          // "Move to Landed" in Missions
   flash: number;             // time of the last step that turned done (orbit / system burst)
   flashN: number | null;
@@ -121,7 +126,8 @@ export interface Session {
 }
 
 /* ---------- Incoming queue ---------- */
-export type QueueUi = 'open' | 'sent' | 'timedout' | 'autopilot' | 'auto' | 'ended';
+/** auto = timed out and took the recommendation; decided = a plan-step worker's question settled by Auto answers (builders only) */
+export type QueueUi = 'open' | 'sent' | 'timedout' | 'autopilot' | 'auto' | 'decided' | 'ended';
 export interface QueueItem {
   id: Id;
   kind: 'question' | 'permission' | 'info' | 'report' | 'plan';
@@ -138,6 +144,10 @@ export interface QueueItem {
   expires_at?: string | null;
   tool?: string;
   command?: string;
+  /** Role Reviewer questions only (no session): the review, the role under review, the test it is for */
+  review_id?: string;
+  role?: string;
+  test?: ReviewTest | '';
   at: number;
   ui: QueueUi;
   answer?: string;
@@ -148,6 +158,9 @@ export interface QueueItem {
 /* ---------- agents + activity ---------- */
 export type Agent = Omit<AgentUsageEvent, 'type'>;
 export type Activity = Omit<ActivityEvent, 'type'>;
+
+/** One CLI chat's totals as the server sent them (usage scope chat). */
+export interface ChatTotals { cost: number; tools: number; n: number; i: number; o: number; cr: number; cw: number }
 
 /* ---------- CLI chats (the chat screen's CLI side) ---------- */
 export type FlightEntry =
@@ -212,6 +225,32 @@ export interface CrewForm {
   drafting: boolean;
   draftError: string | null;
   drafted: boolean;
+  /** the tally role this agent defines (define path): agent_draft / agent_create carry it; null = a plain new agent */
+  role: string | null;
+  /** the drafting call's own tokens and cost (agent_drafted.usage), shown with the draft */
+  cost: RunUsage | null;
+}
+
+/* ---------- undefined roles: the list and one review per role ---------- */
+export interface RolesState { loaded: boolean; threshold: number; resurface: number; entries: RoleEntry[] }
+/** starting = review_start sent; running = the reviewer is reading; case = the case is in; failed / refused = a plain message, the role stays reviewable */
+export type ReviewStatus = 'starting' | 'running' | 'case' | 'failed' | 'refused';
+export interface RoleReview {
+  role: string;
+  reviewId: string | null;
+  status: ReviewStatus;
+  model: string;
+  /** review_progress lines, oldest first (the last few) */
+  progress: string[];
+  phase: string;
+  case: RoleCase | null;
+  error: string | null;
+  /** the decision sent, until review_decided */
+  deciding: RoleDecision | null;
+  /** review_decided: the user's decision (the role then rests, or the agent is being defined) */
+  decided: { decision: RoleDecision; reviewerVerdict: RoleDecision | null } | null;
+  /** define path: the agent was saved (agent_saved with this role): its name and the case's folder-relative path */
+  saved: { agent: string; casePath: string | null } | null;
 }
 
 /* ---------- settings, files, editor ---------- */
@@ -339,7 +378,9 @@ export interface AppState {
   tokens: number;
   cost: number;
   usageEv: { input_tokens?: number; output_tokens?: number; cache_read_tokens?: number; cache_write_tokens?: number; tokens?: number } | null;
-  usageFromServer: boolean;
+  /** usage scope app: the cost per agent role; usage scope chat: that CLI chat's totals (the server sums, the page shows) */
+  byRole: Record<string, number>;
+  chatTotals: Record<Id, ChatTotals>;
   acts: Activity[];                       // oldest first, last 600
   lastAct: Record<Id, Id>;                // agent_id -> activity id
   /* Incoming */
@@ -362,6 +403,10 @@ export interface AppState {
 
   crewUses: Record<string, number>;       // agent name -> use count (crew_list, then live agent_uses)
   crewForm: CrewForm;
+  /* undefined roles (roles_list) and their reviews; roleOpen = the role whose review screen shows in Crew */
+  roles: RolesState;
+  reviews: Record<string, RoleReview>;
+  roleOpen: string | null;
   crewRemoving: string | null;            // agent_remove sent, waiting for agent_removed
   crewError: string | null;               // the last agent_removed failure
   crewFlash: string | null;               // a card just added (highlighted for a moment)

@@ -35,14 +35,30 @@ Launchpad is a local desktop app. The user chats with a **planner**, approves th
 5. **Plan draft**: the planner writes `plan.md` (validated by `app/plan.py`); the page shows it; the user approves or sends back. A revised draft can be approved again.
 6. **Orchestrator run**: on approve, `agents/orchestrator/run.py` starts the orchestrator, whose only tools are `run_builder` and `write_report`. Each step runs one **Builder** (or the folder agent the plan names; a missing one falls back to the Builder). Write and shell actions pass Launchpad's guards and may raise a permission card.
 7. **Report**: step reports and `report.md` are written by code into the session folder; `report.md` lists the run's question files.
-8. **Questions and Auto answers**: every answered (or timed-out) planner, builder or CLI question is saved by code as its own file in `<session folder>/questions/` (`sessionfiles.add_question`). The per-session Auto answers switch (state in the hub, replayed in the snapshot) makes `incoming.py` and the planner answer questions that have a recommendation at once; the page shows a compact line for each. Permission cards are never touched (that is Autopilot).
+8. **Questions and Auto answers**: every answered (or timed-out) planner, builder or CLI question is saved by code as its own file in `<session folder>/questions/` (`sessionfiles.add_question`). The per-session Auto answers switch (state in the hub, replayed in the snapshot) is for builders only: `incoming.py` answers every question a plan-step worker asks (blocking ones too; the step never shows blocked) with the worker's own recommendation at once, saved as a question file marked as the worker's own decision and listed in the run's report, and the page shows a compact marked line in Incoming. `ask_question` rejects an empty recommendation or reason. Planner rounds, CLI chat questions and permission cards are never touched (permissions are Autopilot).
+9. **Cost totals**: a cost comes from the engine per turn (agentlib Reply -> `Meter`); `costs.py` is the only place those are added up (session total = every agent but the planner, the planner's share, per CLI chat, app-wide) and formatted on the Python side; `hub.emit_totals` sends them live (usage scope app / session / chat) and on connect, and the page displays what it is sent.
+10. **Undefined roles**: a plan step with no fitting listed agent may carry a `role` slug (set by the planner, which is shown the tally's 20 most recent role names). When such a step ends on the Builder, the step runner records the use in the per-user tally (`app/tally.py`): session, run, step, skills, how it ended, questions asked, assumptions logged, questions timed out; a draft written after a run marks that run's uses as sent back. A step naming an agent that does not exist is tallied under that name; steps run by registered agents are not tallied. The Crew tab lists roles used twice or more (`roles_list`).
+
+```
+ review_start {role} -> Reviews.start (agents/role_reviewer/reviewer.py)
+      build_brief: tally lines + paths (5 most recent uses + every problem use; SKILL.md; Builder; defined agents)
+      Role Reviewer (read-only, every Read / Grep / Glob checked against the brief; planner's CLI, reviewer_model)
+        -> questions? -> question cards (Incoming.ask, never auto-answered) -> answers -> final case
+      -> case file (<home>/.launchpad/role-cases/) -> review_case
+ review_decide {role, define|keep|not_yet} -> tally verdict (keep / not yet: rests until 5 more uses or a problem use)
+ define: agent_draft {dir_id, role} (drafter + case as context) -> user edits -> agent_create {dir_id, fields, role}
+      -> entry removed, case copy at <folder>/.claude/agent-cases/<name>.md
+```
+
+The reviewer's cost goes through the standard `Meter` with no session, so it counts in the app-wide total only.
 
 ## Where the other agents fit
 
 - **Explorer** (haiku, read-only): called by the planner's `explore` tool; returns structured file links only, which code adds to the flight log.
 - **Visualizer** (haiku, no tools): the planner's `show_visuals` starts it; it draws options (ECharts, Chart.js, D3, ...) shown beside the chat in sealed iframes. A pick sends one line back to the planner.
 - **CLI session** (role `pilot`, `app/agents/claude_code/`): a plain chat in the CLI harness in a connected folder (the Planner / CLI switch on the Plan tab); separate from the planner. "Send plan to CLI" opens it with a plan as the first message. The same CLI-then-model picker sits under its chat box (without auto-promote and New plan; `app/agents/claude_code/choices.py`, same harness table): per-user `pilot_harness` (default the launch engine's CLI) and `pilot_model`, independent of the planner's choice; a chat's CLI and model are fixed at its first message (an unstarted chat is reloaded at once, a chat in progress keeps its own and the choice is for the next new chat); `--fake` forces the fake engine.
-- **Drafter** (haiku, no tools): the Crew tab's "Draft for me" fills the new-folder-agent form; nothing is saved until the user saves.
+- **Drafter** (haiku, no tools): the Crew tab's "Draft for me" fills the new-folder-agent form; nothing is saved until the user saves. On the define path of a role review it also gets the case as context.
+- **Role Reviewer** (sonnet by default, on the planner's CLI; Read / Grep / Glob only, kept to the paths of its brief): judges one undefined role on five fixed tests, starting from "a skill plus the Builder is enough"; writes a case; the user decides.
 - **Folder agents**: `<folder>/.claude/agents/*.md` files, run only as plan-step workers through the Builder's code.
 
 Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/agents/README.md).
@@ -56,7 +72,8 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 ## Supporting modules (flat in `app/`)
 
 - `plan.py` plan.md render / parse / validate / targeted edits · `sessionfiles.py` the session folder files
-- `incoming.py` the question / permission / plan queue with server-side timers · `meter.py` per-agent tokens, cost, tool calls
+- `incoming.py` the question / permission / plan queue with server-side timers · `meter.py` per-agent tokens, cost, tool calls · `costs.py` cost totals and their formatting
+- `tally.py` the undefined-roles tally (per user; visibility rules; the planner's role list)
 - `activity.py` live one-line feed of every tool call · `settings.py` active settings · `store.py` per-user store
 - `skills.py` skill discovery in a session's folders + per-agent allowlists
 - `files.py` File Explorer back end (safe paths, conflict-safe `.md` saves, backups) · `gitrepos.py` the Repos panel's git back end (a plain utility, not an agent: argument-list subprocesses only, repo ids issued by its own scan, paths checked inside the repo, never force push / pull / switch branch / reset; shown in the right-hand panel while the Files tab is open) · `demo.py` scripts for `--fake`
@@ -64,7 +81,8 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 ## State on disk
 
 - `<folder>/.launchpad/<session-id>/`: written at run time inside each connected folder, ignored by git through its own `.gitignore`: `plan.md`, `flight-log.md`, `steps/`, `assumptions.md`, `operations-manual.md`, `report.md`, `activity.log`, `decisions.md`, `questions/` (one `NNN-<slug>.md` per answered question, kept across runs), `visuals/` (an older run's steps and report move to `run-<k>/`).
-- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`) and `backups/` of hand-edited files. `LAUNCHPAD_HOME` moves it.
+- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) and `role-cases/` (one markdown case per review, with cost, date and the user's decision). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles seeded there).
+- `<folder>/.claude/agent-cases/<agent>.md`: the review case of an agent created on the define path (beside `.claude/agents/`, never loaded as an agent).
 
 - No database; the in-memory hub state is rebuilt for a reconnecting page from the snapshot.
 

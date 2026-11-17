@@ -3,8 +3,9 @@
    Fields the vanilla page tolerated as optional (older servers, demo, history replays) are optional here too. */
 
 export type Id = string;
-/** Role ids (unchanged); display names: Planner, Explorer, Orchestrator, Builder, CLI (role pilot), Visualizer; drafter = the agent drafter. */
-export type Role = 'planner' | 'astronaut' | 'orchestrator' | 'builder' | 'pilot' | 'visual' | 'drafter';
+/** Role ids (unchanged); display names: Planner, Explorer, Orchestrator, Builder, CLI (role pilot), Visualizer; drafter = the agent drafter;
+    reviewer = the Role Reviewer (reviews an undefined role; no session, app-wide cost only). */
+export type Role = 'planner' | 'astronaut' | 'orchestrator' | 'builder' | 'pilot' | 'visual' | 'drafter' | 'reviewer';
 export type StepStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'failed';
 export type RunEndStatus = 'done' | 'stopped' | 'failed' | 'blocked';
 export type ChatMode = 'default' | 'accept_edits' | 'plan';
@@ -32,7 +33,10 @@ export interface PlanStep { n: number; title: string; status?: StepStatus; agent
   /** skill names the plan names for the step (absent = none): its worker gets them on top of its own allowlist */
   skills?: string[];
   /** the step's skills not found in the session's folders (ignored at run time; shown greyed) */
-  skills_unknown?: string[] }
+  skills_unknown?: string[];
+  /** the step's role slug (absent = none; never with a non-null agent): a specialism no listed agent fits; runs on the Builder,
+      tallied under this name (roles_list). Shown as a chip on the step. */
+  role?: string }
 
 /** One skill found in a session's folders (crew_list.skills). shadowed = an earlier folder has one of the same name. */
 export interface SkillInfo { name: string; description?: string; path?: string; folder_name?: string; dir_id?: Id | null; source?: 'claude' | 'agents' | string; shadowed?: boolean }
@@ -43,6 +47,45 @@ export type SkillSetting = 'all' | 'cli' | string[];
 export type Purpose = 'planning' | 'exploring' | 'building' | 'reviewing' | 'other';
 /** The fields of the "Add an agent" form (agent_draft reply, agent_create). */
 export interface AgentFields { name: string; description: string; purpose: Purpose | ''; model: string; tools: string[]; instructions: string }
+/** One agent run's own figures (a role review, a drafting call). */
+export interface RunUsage extends TokenCounts { tokens: number; cost: number }
+
+/* ---------- undefined roles (tally + Role Reviewer) ---------- */
+export type RoleDecision = 'define' | 'keep' | 'not_yet';
+export type RoleState = 'few_uses' | 'dismissed' | 'resting' | 'defining' | 'listed';
+export type StepOutcome = 'done' | 'failed' | 'blocked';
+/** One recorded use of a role (newest first in roles_list). sent_back = the session's plan was revised after that run;
+    named_agent = tallied under the name of an agent that does not exist. */
+export interface RoleUse {
+  id: string; at: string; dir_id: Id | null; folder: string; session_id: Id; run: number | null; step: number | null; title: string;
+  skills: string[]; outcome: StepOutcome; questions: number; assumptions: number; timed_out: number; sent_back: boolean; named_agent: boolean;
+}
+export interface RoleSample { text: string; session_id: Id; step: number | null; title: string; at: string }
+/** One tally entry. visible = show under "Used but not defined"; state / uses_to_list explain why not. */
+export interface RoleEntry {
+  name: string; base_agent: string; purpose: Purpose | string; skills: string[]; folders: { dir_id: Id | null; name: string }[];
+  uses_total: number; first_used: string; last_used: string; samples: RoleSample[];
+  verdict: { decision: RoleDecision; reviewer_verdict: RoleDecision | null; at: string; uses_at: number; case_file: string | null } | null;
+  dismissed: boolean;
+  last_review: { review_id: string; verdict: RoleDecision; case_file: string | null; cost: number; tokens: number; at: string } | null;
+  uses: RoleUse[]; problems: number;
+  state: RoleState; visible: boolean; uses_to_list: number; resurfaced: boolean; reviewing: boolean; review_id: string | null;
+}
+export type ReviewTest = 'value' | 'logic' | 'history' | 'fixes' | 'independent';
+export type EvidenceStrength = 'none' | 'weak' | 'moderate' | 'strong';
+export interface ReviewSection { test: ReviewTest; title: string; finding: string; evidence: { quote: string; source: string }[]; strength: EvidenceStrength }
+/** The Role Reviewer's case. sections: always five, in ReviewTest order. proposal only for define; skill_notes only for keep. */
+export interface RoleCase {
+  case_id: string; review_id: string; role: string; date: string;
+  reviewer: { name: string; harness: string; model: string; label: string };
+  uses_total: number; uses_recorded: number; opened: string[]; missing: string[];
+  sections: ReviewSection[]; verdict: RoleDecision; reason: string; history_thin: boolean; skill_notes: string;
+  proposal: { name: string; purpose: Purpose | ''; description: string; instructions: string } | null;
+  questions: { test: ReviewTest | ''; question: string; why: string; recommended: string; answer?: string }[];
+  usage: RunUsage;
+  decision: { decision: RoleDecision; at: string; agent?: string; folder?: string } | null;
+  case_file: string | null;
+}
 /** One validation problem from the server: usually "field: message" text (the agent-file check), or an object. */
 export type AgentProblem = string | { field?: string; message?: string; text?: string };
 
@@ -162,7 +205,18 @@ export interface PlannerMessageEvent { type: 'planner_message'; text: string; se
 export interface UserMessageEvent { type: 'user_message'; text: string; session_id?: Id }   // history replays only
 export interface TypingEvent { type: 'typing'; on: boolean; session_id?: Id }
 export interface QuestionRoundEvent extends QuestionRoundBody { type: 'question_round'; session_id?: Id }
-export interface UsageEvent extends TokenCounts { type: 'usage'; scope?: 'app'; tokens: number; cost: number }
+/** Cost totals, summed on the server only (app/costs.py) and sent live; the page displays them and adds nothing up.
+    app = everything (by_role = cost per agent role); session = that session's total (every agent but the planner) and the
+    planner's own share; chat = that CLI chat's totals. */
+export interface AppUsageEvent extends TokenCounts { type: 'usage'; scope?: 'app'; tokens: number; cost: number; by_role?: Record<string, number> }
+export interface StepUsage extends TokenCounts { cost: number; tool_calls: number; agents: number }
+export interface SessionUsageEvent extends TokenCounts {
+  type: 'usage'; scope: 'session'; session_id: Id; cost: number; planner_cost: number; agents: number;
+  /** the step agents (builders) of each step, keyed by step number */
+  steps: Record<string, StepUsage>;
+}
+export interface ChatUsageEvent extends TokenCounts { type: 'usage'; scope: 'chat'; chat_id: Id; cost: number; tokens: number; tool_calls: number; agents: number }
+export type UsageEvent = AppUsageEvent | SessionUsageEvent | ChatUsageEvent;
 export interface CrewEvent { type: 'crew'; agents: { name: string; role?: Role | string; status?: string; session_id?: Id | null }[] }
 export interface PlanMetaEvent { type: 'plan_meta'; name?: string; mode?: string; status?: string; session_id?: Id }
 export interface SystemEvent { type: 'system'; text: string; session_id?: Id | null; chat_id?: Id | null }
@@ -246,15 +300,15 @@ export interface ChatModelEvent extends ChatModelFields { type: 'chat_model'; ch
 export interface AutopilotEvent { type: 'autopilot'; session_id: Id; on: boolean }
 /** The Auto answers switch of a session (after set_auto_answers; also in the snapshot as sessions[].auto_answers). */
 export interface AutoAnswersEvent { type: 'auto_answers'; session_id: Id; on: boolean }
-/** One question the switch answered with the agent's recommendation: a compact line in the planner chat. id = the question's id
-    (a round question's, or the Incoming card's); round_id = the planner round it belonged to (a card still showing is closed). */
+/** One plan-step worker's question decided under Auto answers (builders only): its own recommended answer was taken. Shown as a
+    compact, marked line in Incoming (not in the planner chat). id = the question's queue id; a card still showing is settled. */
 export interface AutoAnswerEvent {
-  type: 'auto_answer'; session_id: Id; id: string; agent: string; step: number | null; title: string; answer: string; round_id: string | null;
+  type: 'auto_answer'; session_id: Id; id: string; agent: string; step: number | null; title: string; answer: string;
 }
 export interface StepUpdateEvent {
   type: 'step_update'; session_id: Id; n: number; status?: StepStatus; built?: string[]; report_path?: string;
   agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: Purpose | string | null;
-  skills?: string[]; skills_unknown?: string[];
+  skills?: string[]; skills_unknown?: string[]; role?: string;
 }
 export interface QueueItemEvent {
   type: 'queue_item';
@@ -276,6 +330,10 @@ export interface QueueItemEvent {
   command?: string;                            // run permission cards
   suggestions?: PermissionSuggestion[];        // chat permission cards
   markdown?: string;                           // chat plan cards
+  /** Role Reviewer questions (session_id and chat_id null; never auto-answered): the review, the role, the test it is for */
+  review_id?: string;
+  role?: string;
+  test?: ReviewTest | '';
 }
 export interface QueueResolvedEvent { type: 'queue_resolved'; id: Id; answer: string | null; by?: 'user' | 'timer' | 'autopilot' | 'auto' }
 export interface ByModel extends TokenCounts { model: string; cost_usd: number }
@@ -317,9 +375,22 @@ export interface CrewListEvent { type: 'crew_list'; agents: CrewAgentDef[]; dir_
   skills?: SkillInfo[] }
 /** An agent's use count changed (keyed by agent name). */
 export interface AgentUsesEvent { type: 'agent_uses'; name: string; uses: number }
-export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?: Id; fields?: Partial<AgentFields>; error?: string }
-/** ok: a fresh crew_list follows. Not ok: error + problems (the agent-file check). */
-export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id; name?: string; error?: string; problems?: AgentProblem[] }
+/** usage = the drafting call's own tokens and cost; role = echoed on the define path (agent_draft with role). */
+export interface AgentDraftedEvent { type: 'agent_drafted'; ok: boolean; dir_id?: Id; fields?: Partial<AgentFields>; error?: string; usage?: RunUsage; role?: string }
+/** ok: a fresh crew_list follows (and roles_list on the define path). Not ok: error + problems (the agent-file check).
+    role / case_path (define path): the tally entry is gone; case_path = ".claude/agent-cases/<name>.md" in that folder. */
+export interface AgentSavedEvent { type: 'agent_saved'; ok: boolean; dir_id?: Id; name?: string; error?: string; problems?: AgentProblem[]; role?: string; case_path?: string }
+/** The undefined-roles tally, every entry (most recently used first), with visibility. */
+export interface RolesListEvent { type: 'roles_list'; threshold: number; resurface_uses: number; entries: RoleEntry[] }
+export interface ReviewStartedEvent { type: 'review_started'; review_id: string; role: string; model: string; harness: string }
+export interface ReviewProgressEvent { type: 'review_progress'; review_id: string; role: string; phase: 'reading' | 'asking' | 'finalising'; text: string }
+/** The finished case (also replayed on connect: the latest case per role). */
+export interface ReviewCaseEvent { type: 'review_case'; review_id: string; role: string; case: RoleCase }
+/** The review errored; the role stays reviewable. */
+export interface ReviewFailedEvent { type: 'review_failed'; review_id: string; role: string; error: string }
+/** review_start refused: one already running for the role (review_id = it) or the role is not in the tally. */
+export interface ReviewRefusedEvent { type: 'review_refused'; role: string; review_id: string | null; error: string }
+export interface ReviewDecidedEvent { type: 'review_decided'; role: string; decision: RoleDecision; reviewer_verdict: RoleDecision | null; review_id: string | null; case_file: string | null }
 export interface AgentRemovedEvent { type: 'agent_removed'; ok: boolean; dir_id?: Id; name?: string; error?: string }
 export interface ChatStartedEvent extends ChatModelFields {
   type: 'chat_started'; chat_id: Id; mode?: ChatMode; cwd?: string; dir_id?: Id | null; busy?: boolean;
@@ -342,7 +413,9 @@ export type ServerEvent =
   | PlannerModelEvent | PlannerChoiceEvent | CliChoiceEvent | AutopilotEvent | AutoAnswersEvent | AutoAnswerEvent | StepUpdateEvent | QueueItemEvent | QueueResolvedEvent | AgentUsageEvent
   | ActivityEvent | RunFinishedEvent | CrewListEvent | ChatStartedEvent | ChatModelEvent | ChatTypingEvent | ChatDeltaEvent
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
-  | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent;
+  | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent
+  | RolesListEvent | ReviewStartedEvent | ReviewProgressEvent | ReviewCaseEvent | ReviewFailedEvent | ReviewRefusedEvent
+  | ReviewDecidedEvent;
 
 export type ServerEventType = ServerEvent['type'];
 
@@ -354,6 +427,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'agent_usage', 'activity', 'run_finished', 'crew_list', 'chat_started', 'chat_model', 'chat_typing', 'chat_delta', 'chat_message',
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
   'git_repos', 'git_result',
+  'roles_list', 'review_started', 'review_progress', 'review_case', 'review_failed', 'review_refused', 'review_decided',
 ];
 
 /* ---------- UI -> here ---------- */
@@ -393,8 +467,15 @@ export type UiMessage =
   | { type: 'save_file'; root: string; path: string; text: string; base_version: string | number | null }
   | { type: 'list_backups'; root: string; path: string }
   | { type: 'restore_backup'; root: string; path: string; backup_id: string }
-  | { type: 'agent_draft'; dir_id: Id; text: string }
-  | { type: 'agent_create'; dir_id: Id; fields: AgentFields }
+  /** role (define path): the drafter also gets the role's samples, skills and latest review case; text may be "" then */
+  | { type: 'agent_draft'; dir_id: Id; text: string; role?: string }
+  /** role (define path): the tally role this agent defines (entry removed, case copy saved beside the agent) */
+  | { type: 'agent_create'; dir_id: Id; fields: AgentFields; role?: string }
+  | { type: 'roles_get' }
+  | { type: 'role_dismiss'; role: string }
+  | { type: 'role_merge'; role: string; into: string }
+  | { type: 'review_start'; role: string }
+  | { type: 'review_decide'; role: string; decision: RoleDecision }
   | { type: 'agent_remove'; dir_id: Id; name: string }
   | { type: 'set_agent_skills'; name: string; skills: 'all' | string[]; dir_id?: Id }
   | { type: 'git_scan' }

@@ -65,7 +65,8 @@ LAUNCH_OPTIONS = {"question_timeout": "question_timeout_s", "permission_timeout"
                   "planner_top": "planner_top_model", "planner_harness": "planner_harness",
                   "auto_promote": "planner_auto_promote", "promotion_window": "promotion_window_turns",
                   "promotion_criteria": "promotion_criteria_path", "pilot_model": "pilot_model",
-                  "pilot_harness": "pilot_harness", "visual_model": "visual_model"}
+                  "pilot_harness": "pilot_harness", "visual_model": "visual_model",
+                  "reviewer_model": "reviewer_model"}
 
 
 def demo_directories() -> list[Path]:
@@ -154,16 +155,21 @@ def build_settings(args):
     settings = Settings(project=project, engine="fake" if args.fake else "claude", planner_model=args.model, **values)
     if args.fake:
         from . import demo                    # imports agentlib.fake, which registers the "fake" engine
+        from .tally import Tally
         demo.install(project)
         demo_app_root()                        # the editor in the demo edits a copy, never the real agent files
+        demo.seed_tally(Tally.beside(store), store)    # sample undefined roles, in the demo's own temp home only
     print(f"Settings and connected folders: {launchpad_home() / 'settings.json'}", flush=True)
     return settings, store, overridden
 
 
 def reset_demo_home(home: Path) -> None:
-    """Best-effort wipe of the fake demo's own per-user folder (settings.json with folders + use counts, backups)."""
+    """Best-effort wipe of the fake demo's own per-user folder (settings.json with folders + use counts, backups, the
+    undefined-roles tally and its review cases)."""
     import shutil
-    for p in (home / "settings.json", home / "backups"):
+    from .tally import CASES_DIR, FILE_NAME
+    for p in (home / "settings.json", home / "backups", home / FILE_NAME, home / (FILE_NAME + ".lock"),
+              home / CASES_DIR):
         try:
             if p.is_dir():
                 shutil.rmtree(p)
@@ -221,6 +227,8 @@ def main() -> None:
     ap.add_argument("--promotion-criteria", default=None, help="replacement criteria file (markdown)")
     ap.add_argument("--visual-model", default=None, help="visual agent (Visualizer) model override (default: haiku)")
     ap.add_argument("--pilot-model", default=None, help="CLI chat model override (default: sonnet, from its file)")
+    ap.add_argument("--reviewer-model", default=None,
+                    help="Role Reviewer model (setting; default sonnet; runs on the planner's chosen CLI)")
     ap.add_argument("--pilot-harness", default=None,
                     help="CLI the CLI chat runs on (setting; default: the launch engine's; --fake still uses the fake engine)")
     ap.add_argument("--fake", action="store_true", help="scripted demo on the fake engine (zero tokens)")

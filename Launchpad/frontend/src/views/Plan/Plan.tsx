@@ -31,7 +31,7 @@ export default function Plan() {
       modeLine: c ? `${sel.sLabel(c)}${dl ? ' · in ' + dl : ''} · ${what}` : 'Planning',
       modeTitle: c ? ((sel.dirById(st, c.dirId) || { path: '' }).path || c.cwd || '') : '',
       roundTag: (c ? c.roundTag : st.preRoundTag) || 'Getting started',
-      plannerCost: usd(p && p.cost_usd),
+      plannerCost: usd(st.current != null ? sel.plannerCostOf(st, st.current) : 0),
       plannerTok: tokShort(tparts(p)),
       sessCost: usd(st.current != null ? sel.sessionTotal(st, st.current) : 0),
       visBtn: sets.length > 0 && !sel.visShown(st),
