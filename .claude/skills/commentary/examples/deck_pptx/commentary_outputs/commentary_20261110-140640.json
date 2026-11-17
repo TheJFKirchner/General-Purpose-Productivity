@@ -1,0 +1,695 @@
+{
+ "deliverable": "q3_cost_review",
+ "medium": "deck",
+ "snapshot": null,
+ "saved_at": "2026-11-10T14:06:40.000000+00:00",
+ "saved_by": "demo_user",
+ "reason": "session",
+ "units": [
+  {
+   "id": "exec_summary",
+   "generator": "3",
+   "placement": "slide 1",
+   "covers": "the three things the committee must know about October cost",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "October allowed cost rose 4.2% to $46.1M, up $1.9M, and the increase is cost per member, not membership growth.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 4.2,
+         "kind": "direct",
+         "ref": "dx_trend"
+        },
+        {
+         "value": 46.1,
+         "kind": "direct",
+         "ref": "dx_trend"
+        },
+        {
+         "value": 1.9,
+         "kind": "direct",
+         "ref": "dx_trend"
+        }
+       ],
+       "tables": [],
+       "verified_values": [
+        4.2,
+        46100000.0,
+        1900000.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Circulatory drove the most change, up $0.8M, about 43% of the increase. Mental health and oncology each added $0.4M.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.8,
+         "kind": "direct",
+         "ref": "dx_category"
+        },
+        {
+         "value": 43,
+         "kind": "direct",
+         "ref": "dx_category"
+        },
+        {
+         "value": 0.4,
+         "kind": "direct",
+         "ref": "dx_category"
+        }
+       ],
+       "tables": [],
+       "verified_values": [
+        800000.0,
+        43.0,
+        400000.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Inpatient cost rose 7.0% on admits up 4.5%, so both volume and cost per admit rose. GLP-1 spend rose 12.1%.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 7,
+         "kind": "direct",
+         "ref": "dx_setting"
+        },
+        {
+         "value": 4.5,
+         "kind": "direct",
+         "ref": "dx_setting"
+        },
+        {
+         "value": 12.1,
+         "kind": "direct",
+         "ref": "rx_mix"
+        }
+       ],
+       "tables": [],
+       "verified_values": [
+        7.0,
+        4.5,
+        12.1
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "4e6505733fa518d8",
+     "plan_hash": "be7d550ac142dfb5",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:40Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "dx_trend",
+   "generator": "1",
+   "placement": "slide 2",
+   "covers": "how October diagnosis cost and PMPM moved versus September and the 12-month trend",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "October allowed cost rose 4.2% to $46.1M, up $1.9M from September.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 4.2,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:allowed_cost_pct_chg"
+        },
+        {
+         "value": 46.1,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:allowed_cost"
+        },
+        {
+         "value": 1.9,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:allowed_cost_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_month"
+       ],
+       "verified_values": [
+        4.2,
+        46143648.0,
+        1859917.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "PMPM rose 4.0% to $248.27, up $9.49, while membership grew only 0.2%. The increase is cost per member, not growth.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 4,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:pmpm_pct_chg"
+        },
+        {
+         "value": 248.27,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:pmpm"
+        },
+        {
+         "value": 9.49,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:pmpm_chg"
+        },
+        {
+         "value": 0.2,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-10:members_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_month"
+       ],
+       "verified_values": [
+        3.9744,
+        248.27,
+        9.49,
+        0.2178
+       ],
+       "flags": []
+      },
+      {
+       "text": "October is the highest PMPM in the 12 months, against $228.16 in November 2025. September's $238.78 was the prior high.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 228.16,
+         "kind": "direct",
+         "ref": "dx_by_month:2025-11:pmpm"
+        },
+        {
+         "value": 238.78,
+         "kind": "direct",
+         "ref": "dx_by_month:2026-09:pmpm"
+        }
+       ],
+       "tables": [
+        "dx_by_month"
+       ],
+       "verified_values": [
+        12.0,
+        228.16,
+        238.78
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "6eb3a7941c014c34",
+     "plan_hash": "2c3d8567454a7d91",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:27Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "dx_category",
+   "generator": "1",
+   "placement": "slide 3",
+   "covers": "which diagnosis categories drove the month-over-month change",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Circulatory drove the most change, up $0.8M or 9.2%, about 43% of the total increase.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.8,
+         "kind": "direct",
+         "ref": "dx_by_category:Circulatory:allowed_chg"
+        },
+        {
+         "value": 9.2,
+         "kind": "direct",
+         "ref": "dx_by_category:Circulatory:allowed_pct_chg"
+        },
+        {
+         "value": 43,
+         "kind": "derived",
+         "op": "share",
+         "inputs": [
+          "dx_by_category:Circulatory:allowed_chg",
+          "dx_by_category:Total:allowed_chg"
+         ]
+        }
+       ],
+       "tables": [
+        "dx_by_category"
+       ],
+       "verified_values": [
+        797233.0,
+        9.1837,
+        42.86390199132542
+       ],
+       "flags": []
+      },
+      {
+       "text": "Mental health added $0.4M (up 11.9%) and oncology added $0.4M (up 6.3%). Together with circulatory they explain most of the rise.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.4,
+         "kind": "direct",
+         "ref": "dx_by_category:Mental health:allowed_chg"
+        },
+        {
+         "value": 11.9,
+         "kind": "direct",
+         "ref": "dx_by_category:Mental health:allowed_pct_chg"
+        },
+        {
+         "value": 0.4,
+         "kind": "direct",
+         "ref": "dx_by_category:Oncology:allowed_chg"
+        },
+        {
+         "value": 6.3,
+         "kind": "direct",
+         "ref": "dx_by_category:Oncology:allowed_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_category"
+       ],
+       "verified_values": [
+        404883.0,
+        11.8858,
+        400341.0,
+        6.2815
+       ],
+       "flags": []
+      },
+      {
+       "text": "Respiratory was the only decline, down $0.2M or 4.0%. Musculoskeletal and Other moved little.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.2,
+         "kind": "direct",
+         "ref": "dx_by_category:Respiratory:allowed_chg"
+        },
+        {
+         "value": 4,
+         "kind": "direct",
+         "ref": "dx_by_category:Respiratory:allowed_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_category"
+       ],
+       "verified_values": [
+        -172553.0,
+        -4.0264
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "4210c5987bed287d",
+     "plan_hash": "007dfa833a0a1831",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:27Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "dx_setting",
+   "generator": "1",
+   "placement": "slide 4",
+   "covers": "whether the increase is price or volume, by care setting",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Inpatient cost rose 7.0% on admits up 4.5%, so both volume and cost per admit rose.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 7,
+         "kind": "direct",
+         "ref": "dx_by_setting:Inpatient:allowed_pct_chg"
+        },
+        {
+         "value": 4.5,
+         "kind": "direct",
+         "ref": "dx_by_setting:Inpatient:admits_or_visits_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_setting"
+       ],
+       "verified_values": [
+        6.977,
+        4.5455
+       ],
+       "flags": []
+      },
+      {
+       "text": "Outpatient cost rose 5.1% on visits up 2.4%. Cost per visit grew faster than volume.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 5.1,
+         "kind": "direct",
+         "ref": "dx_by_setting:Outpatient:allowed_pct_chg"
+        },
+        {
+         "value": 2.4,
+         "kind": "direct",
+         "ref": "dx_by_setting:Outpatient:admits_or_visits_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_setting"
+       ],
+       "verified_values": [
+        5.0791,
+        2.3923
+       ],
+       "flags": []
+      },
+      {
+       "text": "Professional rose 0.7% on visits up 0.5%, and emergency room rose 1.2% on visits up 1.0%. Both are mostly volume.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.7,
+         "kind": "direct",
+         "ref": "dx_by_setting:Professional:allowed_pct_chg"
+        },
+        {
+         "value": 0.5,
+         "kind": "direct",
+         "ref": "dx_by_setting:Professional:admits_or_visits_pct_chg"
+        },
+        {
+         "value": 1.2,
+         "kind": "direct",
+         "ref": "dx_by_setting:Emergency room:allowed_pct_chg"
+        },
+        {
+         "value": 1,
+         "kind": "direct",
+         "ref": "dx_by_setting:Emergency room:admits_or_visits_pct_chg"
+        }
+       ],
+       "tables": [
+        "dx_by_setting"
+       ],
+       "verified_values": [
+        0.6842,
+        0.5219,
+        1.1836,
+        0.9804
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [
+      "no unit price or case-mix data, so price is inferred from cost versus volume"
+     ],
+     "error": null,
+     "input_hash": "427ab461b6683a5b",
+     "plan_hash": "df671ecec2179826",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:27Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "dx_conditions",
+   "generator": "1",
+   "placement": "slide 5",
+   "covers": "which top conditions had the largest change in cost per patient",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Sepsis rose most, up $2,340 per patient (14.3%) to $18,700. Lung cancer followed, up $1,721 (8.7%) to $21,500.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 2340,
+         "kind": "direct",
+         "ref": "top_conditions:Sepsis:cost_per_patient_chg"
+        },
+        {
+         "value": 14.3,
+         "kind": "direct",
+         "ref": "top_conditions:Sepsis:cost_per_patient_pct_chg"
+        },
+        {
+         "value": 18700,
+         "kind": "direct",
+         "ref": "top_conditions:Sepsis:cost_per_patient_oct"
+        },
+        {
+         "value": 1721,
+         "kind": "direct",
+         "ref": "top_conditions:Lung cancer:cost_per_patient_chg"
+        },
+        {
+         "value": 8.7,
+         "kind": "direct",
+         "ref": "top_conditions:Lung cancer:cost_per_patient_pct_chg"
+        },
+        {
+         "value": 21500,
+         "kind": "direct",
+         "ref": "top_conditions:Lung cancer:cost_per_patient_oct"
+        }
+       ],
+       "tables": [
+        "top_conditions"
+       ],
+       "verified_values": [
+        2340.0,
+        14.3032,
+        18700.0,
+        1721.0,
+        8.7011,
+        21500.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Breast cancer rose $854 per patient (6.4%). COPD fell $212 (4.7%), the largest decline among these conditions.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 854,
+         "kind": "direct",
+         "ref": "top_conditions:Breast cancer:cost_per_patient_chg"
+        },
+        {
+         "value": 6.4,
+         "kind": "direct",
+         "ref": "top_conditions:Breast cancer:cost_per_patient_pct_chg"
+        },
+        {
+         "value": 212,
+         "kind": "direct",
+         "ref": "top_conditions:COPD:cost_per_patient_chg"
+        },
+        {
+         "value": 4.7,
+         "kind": "direct",
+         "ref": "top_conditions:COPD:cost_per_patient_pct_chg"
+        }
+       ],
+       "tables": [
+        "top_conditions"
+       ],
+       "verified_values": [
+        854.0,
+        6.3989,
+        -212.0,
+        -4.6986
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "55853a31764bde0b",
+     "plan_hash": "7b0a8cbd1d4389eb",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:27Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "rx_mix",
+   "generator": "2",
+   "placement": "slide 6",
+   "covers": "what drove the change in pharmacy spend, by drug class",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "GLP-1 drove the increase: spend rose $370,000, or 12.1%, to $3,420,000.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 370000,
+         "kind": "direct",
+         "ref": "rx_by_class:GLP-1:spend_chg"
+        },
+        {
+         "value": 12.1,
+         "kind": "direct",
+         "ref": "rx_by_class:GLP-1:spend_pct_chg"
+        },
+        {
+         "value": 3420000,
+         "kind": "direct",
+         "ref": "rx_by_class:GLP-1:spend_oct"
+        }
+       ],
+       "tables": [
+        "rx_by_class"
+       ],
+       "verified_values": [
+        370000.0,
+        12.1311,
+        3420000.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Oncology specialty added $40,000 (1.4%) and generics added $10,000 (0.9%), both small gains.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 40000,
+         "kind": "direct",
+         "ref": "rx_by_class:Oncology specialty:spend_chg"
+        },
+        {
+         "value": 1.4,
+         "kind": "direct",
+         "ref": "rx_by_class:Oncology specialty:spend_pct_chg"
+        },
+        {
+         "value": 10000,
+         "kind": "direct",
+         "ref": "rx_by_class:Generics (all):spend_chg"
+        },
+        {
+         "value": 0.9,
+         "kind": "direct",
+         "ref": "rx_by_class:Generics (all):spend_pct_chg"
+        }
+       ],
+       "tables": [
+        "rx_by_class"
+       ],
+       "verified_values": [
+        40000.0,
+        1.3937,
+        10000.0,
+        0.8772
+       ],
+       "flags": []
+      },
+      {
+       "text": "Immunology biologics fell $50,000 (2.0%) and insulins fell $30,000 (4.7%), offsetting part of the GLP-1 rise.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 50000,
+         "kind": "direct",
+         "ref": "rx_by_class:Immunology biologics:spend_chg"
+        },
+        {
+         "value": 2,
+         "kind": "direct",
+         "ref": "rx_by_class:Immunology biologics:spend_pct_chg"
+        },
+        {
+         "value": 30000,
+         "kind": "direct",
+         "ref": "rx_by_class:Insulins:spend_chg"
+        },
+        {
+         "value": 4.7,
+         "kind": "direct",
+         "ref": "rx_by_class:Insulins:spend_pct_chg"
+        }
+       ],
+       "tables": [
+        "rx_by_class"
+       ],
+       "verified_values": [
+        -50000.0,
+        -1.9763,
+        -30000.0,
+        -4.6875
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "1e9baa50540d05e5",
+     "plan_hash": "3ee85a076bc0e237",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:06:07Z",
+     "created_by": "demo_user"
+    }
+   ]
+  }
+ ]
+}

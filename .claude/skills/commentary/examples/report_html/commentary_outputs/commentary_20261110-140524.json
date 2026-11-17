@@ -1,0 +1,422 @@
+{
+ "deliverable": "support_ops_oct",
+ "medium": "report",
+ "snapshot": null,
+ "saved_at": "2026-11-10T14:05:24.000000+00:00",
+ "saved_by": "demo_user",
+ "reason": "session",
+ "units": [
+  {
+   "id": "volume",
+   "generator": "1",
+   "placement": "section: volume and response times",
+   "covers": "how ticket volume, first response time and CSAT moved over the last weeks, and when the change started",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "The change started the week of October 12. Tickets jumped 15.8% to 7,018, then peaked at 7,647 the following week.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 15.8,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-12:tickets_pct_chg"
+        },
+        {
+         "value": 7018,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-12:tickets"
+        },
+        {
+         "value": 7647,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-19:tickets"
+        }
+       ],
+       "tables": [
+        "tickets_by_week"
+       ],
+       "verified_values": [
+        12.0,
+        15.7895,
+        7018.0,
+        7647.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Median first response time rose from 3.0 hours to 5.8 hours that same week, then peaked at 7.2 hours.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 3,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-05:median_first_response_hours"
+        },
+        {
+         "value": 5.8,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-12:median_first_response_hours"
+        },
+        {
+         "value": 7.2,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-19:median_first_response_hours"
+        }
+       ],
+       "tables": [
+        "tickets_by_week"
+       ],
+       "verified_values": [
+        3.0,
+        5.8,
+        7.2
+       ],
+       "flags": []
+      },
+      {
+       "text": "CSAT fell from 0.875 to 0.79 by October 19, then edged up to 0.81 as tickets eased to 7,139.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.875,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-05:csat"
+        },
+        {
+         "value": 0.79,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-19:csat"
+        },
+        {
+         "value": 0.81,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-26:csat"
+        },
+        {
+         "value": 7139,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-26:tickets"
+        }
+       ],
+       "tables": [
+        "tickets_by_week"
+       ],
+       "verified_values": [
+        0.875,
+        0.79,
+        19.0,
+        0.81,
+        7139.0
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "b19f326a9d0228f7",
+     "plan_hash": "cb22e4e418229ac7",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:05:23Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "channels",
+   "generator": "1",
+   "placement": "section: channels",
+   "covers": "which channels absorbed the extra volume and how their CSAT compares",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Chat absorbed most of the extra volume. Its tickets rose by 3,100 (37.8%) to 11,300, while email added 700.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 3100,
+         "kind": "direct",
+         "ref": "by_channel:Chat:tickets_chg"
+        },
+        {
+         "value": 37.8,
+         "kind": "direct",
+         "ref": "by_channel:Chat:tickets_pct_chg"
+        },
+        {
+         "value": 11300,
+         "kind": "direct",
+         "ref": "by_channel:Chat:tickets_oct"
+        },
+        {
+         "value": 700,
+         "kind": "direct",
+         "ref": "by_channel:Email:tickets_chg"
+        }
+       ],
+       "tables": [
+        "by_channel"
+       ],
+       "verified_values": [
+        3100.0,
+        37.8049,
+        11300.0,
+        700.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Chat also has the lowest CSAT at 0.78, against 0.84 for email and 0.89 for phone.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.78,
+         "kind": "direct",
+         "ref": "by_channel:Chat:csat_oct"
+        },
+        {
+         "value": 0.84,
+         "kind": "direct",
+         "ref": "by_channel:Email:csat_oct"
+        },
+        {
+         "value": 0.89,
+         "kind": "direct",
+         "ref": "by_channel:Phone:csat_oct"
+        }
+       ],
+       "tables": [
+        "by_channel"
+       ],
+       "verified_values": [
+        0.78,
+        0.84,
+        0.89
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "5b5e2d0013bb8df7",
+     "plan_hash": "15c5c5e3f4dc0acd",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:05:23Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "backlog",
+   "generator": "2",
+   "placement": "section: backlog by team",
+   "covers": "which teams' backlogs grew most in four weeks and how old their oldest tickets are",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Integrations and Mobile app drove the growth. Integrations rose by 670 tickets to 1,190, and its oldest ticket is 23 days old. Mobile app rose by 450 to 860, with a 17-day-old oldest ticket. Billing added 20, oldest 9 days. Accounts and Enterprise shrank.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 670,
+         "kind": "derived",
+         "op": "difference",
+         "inputs": [
+          "backlog_by_team:23|Integrations:open_backlog",
+          "backlog_by_team:23|Integrations:backlog_4w_ago"
+         ]
+        },
+        {
+         "value": 1190,
+         "kind": "direct",
+         "ref": "backlog_by_team:23|Integrations:open_backlog"
+        },
+        {
+         "value": 23,
+         "kind": "direct",
+         "ref": "backlog_by_team:23|Integrations:oldest_ticket_days"
+        },
+        {
+         "value": 450,
+         "kind": "derived",
+         "op": "difference",
+         "inputs": [
+          "backlog_by_team:17|Mobile app:open_backlog",
+          "backlog_by_team:17|Mobile app:backlog_4w_ago"
+         ]
+        },
+        {
+         "value": 860,
+         "kind": "direct",
+         "ref": "backlog_by_team:17|Mobile app:open_backlog"
+        },
+        {
+         "value": 17,
+         "kind": "direct",
+         "ref": "backlog_by_team:17|Mobile app:oldest_ticket_days"
+        },
+        {
+         "value": 20,
+         "kind": "derived",
+         "op": "difference",
+         "inputs": [
+          "backlog_by_team:9|Billing:open_backlog",
+          "backlog_by_team:9|Billing:backlog_4w_ago"
+         ]
+        },
+        {
+         "value": 9,
+         "kind": "direct",
+         "ref": "backlog_by_team:9|Billing:oldest_ticket_days"
+        }
+       ],
+       "tables": [
+        "backlog_by_team"
+       ],
+       "verified_values": [
+        670.0,
+        1190.0,
+        23.0,
+        450.0,
+        860.0,
+        20.0,
+        9.0
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "f1d6fc788181a39e",
+     "plan_hash": "a6697310a367eb0f",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:05:24Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "sla",
+   "generator": "2",
+   "placement": "section: SLA position",
+   "covers": "whether median first response time and CSAT are inside their targets, by how much, and for how many weeks they have been outside",
+   "filters": [],
+   "commentary": [
+    {
+     "filters": {},
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Median first response is 6.1 hours, 2.1 hours over the 4.0-hour target.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 6.1,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-26:median_first_response_hours"
+        },
+        {
+         "value": 2.1,
+         "kind": "derived",
+         "op": "difference",
+         "inputs": [
+          "tickets_by_week:2026-10-26:median_first_response_hours",
+          "sla_targets:median_first_response_hours|at or below:target"
+         ]
+        },
+        {
+         "value": 4,
+         "kind": "direct",
+         "ref": "sla_targets:median_first_response_hours|at or below:target"
+        }
+       ],
+       "tables": [
+        "tickets_by_week",
+        "sla_targets"
+       ],
+       "verified_values": [
+        6.1,
+        2.0999999999999996,
+        4.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "CSAT is 0.81, 0.04 below the 0.85 target. Both metrics have been outside target for 3 weeks.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.81,
+         "kind": "direct",
+         "ref": "tickets_by_week:2026-10-26:csat"
+        },
+        {
+         "value": 0.04,
+         "kind": "derived",
+         "op": "difference",
+         "inputs": [
+          "sla_targets:csat|at or above:target",
+          "tickets_by_week:2026-10-26:csat"
+         ]
+        },
+        {
+         "value": 0.85,
+         "kind": "direct",
+         "ref": "sla_targets:csat|at or above:target"
+        },
+        {
+         "value": 3,
+         "kind": "derived",
+         "op": "sum",
+         "inputs": [
+          "tickets_by_week:2026-10-12:csat",
+          "tickets_by_week:2026-10-19:csat",
+          "tickets_by_week:2026-10-26:csat"
+         ]
+        }
+       ],
+       "tables": [
+        "tickets_by_week",
+        "sla_targets"
+       ],
+       "verified_values": [
+        0.81,
+        0.039999999999999925,
+        0.85,
+        3.0
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "f58a10fe15faa545",
+     "plan_hash": "df8eb93b6720daab",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:05:24Z",
+     "created_by": "demo_user"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,3 @@
+metric,target,direction
+median_first_response_hours,4.0,at or below
+csat,0.85,at or above

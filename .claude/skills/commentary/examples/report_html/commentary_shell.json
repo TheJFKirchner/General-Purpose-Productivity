@@ -1,0 +1,74 @@
+{
+  "deliverable": "support_ops_oct",
+  "medium": "report",
+  "deliverable_files": [
+    "support_report.html"
+  ],
+  "generators": {
+    "1": {
+      "audience": "head of customer support and their team leads"
+    },
+    "2": {
+      "audience": "head of customer support"
+    }
+  },
+  "units": [
+    {
+      "id": "volume",
+      "generator": 1,
+      "placement": "section: volume and response times",
+      "covers": "how ticket volume, first response time and CSAT moved over the last weeks, and when the change started",
+      "tables": [
+        "data/tickets_by_week.parquet"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 3,
+        "max_words": 28
+      }
+    },
+    {
+      "id": "channels",
+      "generator": 1,
+      "placement": "section: channels",
+      "covers": "which channels absorbed the extra volume and how their CSAT compares",
+      "tables": [
+        "data/by_channel.parquet"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 2,
+        "max_words": 28
+      }
+    },
+    {
+      "id": "backlog",
+      "generator": 2,
+      "placement": "section: backlog by team",
+      "covers": "which teams' backlogs grew most in four weeks and how old their oldest tickets are",
+      "tables": [
+        "data/backlog_by_team.csv"
+      ],
+      "style": {
+        "format": "paragraph",
+        "bullets": 1,
+        "max_words": 70
+      }
+    },
+    {
+      "id": "sla",
+      "generator": 2,
+      "placement": "section: SLA position",
+      "covers": "whether median first response time and CSAT are inside their targets, by how much, and for how many weeks they have been outside",
+      "tables": [
+        "data/tickets_by_week.parquet",
+        "data/sla_targets.csv"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 2,
+        "max_words": 25
+      }
+    }
+  ]
+}

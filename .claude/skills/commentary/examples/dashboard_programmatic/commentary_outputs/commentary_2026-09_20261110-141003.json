@@ -1,0 +1,711 @@
+{
+ "deliverable": "dx_cost_dashboard",
+ "medium": "dashboard",
+ "snapshot": "2026-09",
+ "saved_at": "2026-11-10T14:10:03.000000+00:00",
+ "saved_by": "demo_user",
+ "reason": "batch",
+ "units": [
+  {
+   "id": "overview",
+   "generator": "1",
+   "placement": "tab: overview / header",
+   "covers": "how total allowed cost and PMPM moved this month versus last month and the trend since November",
+   "filters": [
+    "paid_month"
+   ],
+   "commentary": [
+    {
+     "filters": {
+      "paid_month": "2026-09"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Total allowed cost was flat at $112.65M, up just $3,355 (0.0%) from August.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 112.65,
+         "kind": "derived",
+         "op": "ratio",
+         "inputs": [
+          "claims_total:2026-09:allowed_cost"
+         ]
+        },
+        {
+         "value": 3355,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:allowed_cost_chg"
+        },
+        {
+         "value": 0,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "claims_total"
+       ],
+       "verified_values": [
+        112650000.0,
+        3355.0,
+        0.003
+       ],
+       "flags": []
+      },
+      {
+       "text": "PMPM fell $1.29 (0.2%) to $603.83, because membership grew 0.2% while cost stayed flat.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 1.29,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:pmpm_chg"
+        },
+        {
+         "value": 0.2,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:pmpm_pct_chg"
+        },
+        {
+         "value": 603.83,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:pmpm"
+        },
+        {
+         "value": 0.2,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:members_pct_chg"
+        }
+       ],
+       "tables": [
+        "claims_total"
+       ],
+       "verified_values": [
+        -1.29,
+        -0.2132,
+        603.83,
+        0.2165
+       ],
+       "flags": []
+      },
+      {
+       "text": "Since November, PMPM rose from $566.17 to $603.83, up 6.7%. It has held near $605 since July.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 566.17,
+         "kind": "direct",
+         "ref": "claims_total:2025-11:pmpm"
+        },
+        {
+         "value": 603.83,
+         "kind": "direct",
+         "ref": "claims_total:2026-09:pmpm"
+        },
+        {
+         "value": 6.7,
+         "kind": "derived",
+         "op": "pct_change",
+         "inputs": [
+          "claims_total:2026-09:pmpm",
+          "claims_total:2025-11:pmpm"
+         ]
+        },
+        {
+         "value": 605,
+         "kind": "direct",
+         "ref": "claims_total:2026-08:pmpm"
+        }
+       ],
+       "tables": [
+        "claims_total"
+       ],
+       "verified_values": [
+        566.17,
+        603.83,
+        6.651712383206472,
+        605.12
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "b3939c29ec4950ee",
+     "plan_hash": "1b3ad3dc8eee51f0",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:09:48Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "lob_trend",
+   "generator": "2",
+   "placement": "tab: line of business / trend",
+   "covers": "how this line of business's PMPM and membership moved versus last month",
+   "filters": [
+    "paid_month",
+    "line_of_business"
+   ],
+   "commentary": [
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Commercial"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "PMPM fell 0.9% to $409.27, down $3.64 from August, after a small rise last month.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.9,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:pmpm_pct_chg"
+        },
+        {
+         "value": 409.27,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:pmpm"
+        },
+        {
+         "value": 3.64,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:pmpm_chg"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        -0.8815,
+        409.27,
+        -3.64
+       ],
+       "flags": []
+      },
+      {
+       "text": "Membership grew by 483 to 99,312, up 0.5%, recovering the prior month's loss of 371.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 483,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:members_chg"
+        },
+        {
+         "value": 99312,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:members"
+        },
+        {
+         "value": 0.5,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Commercial:members_pct_chg"
+        },
+        {
+         "value": 371,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-08|Commercial:members_chg"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        483.0,
+        99312.0,
+        0.4887,
+        -371.0
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "9cc74dff872652d5",
+     "plan_hash": "ec2c2c3aa57bc0da",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:09:49Z",
+     "created_by": "demo_user"
+    },
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Medicaid"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "PMPM fell $1.41 (0.3%) to $459.99, a second straight monthly decline after August's larger drop.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 1.41,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:pmpm_chg"
+        },
+        {
+         "value": 0.3,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:pmpm_pct_chg"
+        },
+        {
+         "value": 459.99,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:pmpm"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        -1.41,
+        -0.3056,
+        459.99
+       ],
+       "flags": []
+      },
+      {
+       "text": "Membership grew by 194 (0.4%) to 45,309, so total allowed cost edged up 0.1% to $20.8M.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 194,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:members_chg"
+        },
+        {
+         "value": 0.4,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:members_pct_chg"
+        },
+        {
+         "value": 45309,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:members"
+        },
+        {
+         "value": 0.1,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:allowed_cost_pct_chg"
+        },
+        {
+         "value": 20.8,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicaid:allowed_cost"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        194.0,
+        0.43,
+        45309.0,
+        0.1231,
+        20841687.0
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "65809faa1204826a",
+     "plan_hash": "ec2c2c3aa57bc0da",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:10:03Z",
+     "created_by": "demo_user"
+    },
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Medicare"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Medicare PMPM rose 0.9% to $1,219.94, up $11.23 from August.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 0.9,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:pmpm_pct_chg"
+        },
+        {
+         "value": 1219.94,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:pmpm"
+        },
+        {
+         "value": 11.23,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:pmpm_chg"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        0.9291,
+        1219.94,
+        11.23
+       ],
+       "flags": []
+      },
+      {
+       "text": "Membership fell 274 (0.6%) to 41,939, the first drop since April, so allowed cost grew only 0.3%.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 274,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:members_chg"
+        },
+        {
+         "value": 0.6,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:members_pct_chg"
+        },
+        {
+         "value": 41939,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:members"
+        },
+        {
+         "value": 0.3,
+         "kind": "direct",
+         "ref": "claims_by_lob:2026-09|Medicare:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "claims_by_lob"
+       ],
+       "verified_values": [
+        -274.0,
+        -0.6491,
+        41939.0,
+        0.274
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "656cc885de7aefee",
+     "plan_hash": "ec2c2c3aa57bc0da",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:09:59Z",
+     "created_by": "demo_user"
+    }
+   ]
+  },
+  {
+   "id": "lob_categories",
+   "generator": "2",
+   "placement": "tab: line of business / categories",
+   "covers": "which diagnosis categories changed most this month for this line of business",
+   "filters": [
+    "paid_month",
+    "line_of_business"
+   ],
+   "commentary": [
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Commercial"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Musculoskeletal rose most in dollars, up $296,929 (4.9%), reversing August's drop. Circulatory also rose $215,477 (2.8%).",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 296929,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Musculoskeletal:allowed_cost_chg"
+        },
+        {
+         "value": 4.9,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Musculoskeletal:allowed_cost_pct_chg"
+        },
+        {
+         "value": 215477,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Circulatory:allowed_cost_chg"
+        },
+        {
+         "value": 2.8,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Circulatory:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        296929.0,
+        4.9386,
+        215477.0,
+        2.8073
+       ],
+       "flags": []
+      },
+      {
+       "text": "Respiratory fell $240,460 (6.7%), its second straight monthly decline. Mental health and oncology moved little.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 240460,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Respiratory:allowed_cost_chg"
+        },
+        {
+         "value": 6.7,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Commercial|Respiratory:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        -240460.0,
+        -6.6719
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "f00d25d86a606792",
+     "plan_hash": "04b85df6f0cc73df",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:09:49Z",
+     "created_by": "demo_user"
+    },
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Medicaid"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Musculoskeletal fell most, down $227,887 (7.0%) to $3.04M. Circulatory also dropped $134,751 (3.4%).",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 227887,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Musculoskeletal:allowed_cost_chg"
+        },
+        {
+         "value": 7,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Musculoskeletal:allowed_cost_pct_chg"
+        },
+        {
+         "value": 3.04,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Musculoskeletal:allowed_cost"
+        },
+        {
+         "value": 134751,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Circulatory:allowed_cost_chg"
+        },
+        {
+         "value": 3.4,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Circulatory:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        -227887.0,
+        -6.9734,
+        3040058.0,
+        -134751.0,
+        -3.3785
+       ],
+       "flags": []
+      },
+      {
+       "text": "Oncology rose most, up $112,262 (4.1%) to $2.87M. Mental health and respiratory each grew about 1.5% to 1.7%.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 112262,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Oncology:allowed_cost_chg"
+        },
+        {
+         "value": 4.1,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Oncology:allowed_cost_pct_chg"
+        },
+        {
+         "value": 2.87,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Oncology:allowed_cost"
+        },
+        {
+         "value": 1.5,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Respiratory:allowed_cost_pct_chg"
+        },
+        {
+         "value": 1.7,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicaid|Mental health:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        112262.0,
+        4.0649,
+        2874003.0,
+        1.4902,
+        1.6595
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "3c0e590054c2cc7b",
+     "plan_hash": "04b85df6f0cc73df",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:10:03Z",
+     "created_by": "demo_user"
+    },
+    {
+     "filters": {
+      "paid_month": "2026-09",
+      "line_of_business": "Medicare"
+     },
+     "version": 1,
+     "source": "generated",
+     "status": "ok",
+     "bullets": [
+      {
+       "text": "Mental health fell most, down $268K (6.4%), reversing August's 6.2% rise. Musculoskeletal also declined, down $195K.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 268,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Mental health:allowed_cost_chg"
+        },
+        {
+         "value": 6.4,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Mental health:allowed_cost_pct_chg"
+        },
+        {
+         "value": 6.2,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-08|Medicare|Mental health:allowed_cost_pct_chg"
+        },
+        {
+         "value": 195,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Musculoskeletal:allowed_cost_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        -268198.0,
+        -6.3634,
+        6.1855,
+        -195453.0
+       ],
+       "flags": []
+      },
+      {
+       "text": "Circulatory added $273K (2.8%), while Respiratory rose $209K (4.8%) and Oncology rose $195K (3.1%), the latter two recovering August declines.",
+       "unverified": false,
+       "numbers": [
+        {
+         "value": 273,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Circulatory:allowed_cost_chg"
+        },
+        {
+         "value": 2.8,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Circulatory:allowed_cost_pct_chg"
+        },
+        {
+         "value": 209,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Respiratory:allowed_cost_chg"
+        },
+        {
+         "value": 4.8,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Respiratory:allowed_cost_pct_chg"
+        },
+        {
+         "value": 195,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Oncology:allowed_cost_chg"
+        },
+        {
+         "value": 3.1,
+         "kind": "direct",
+         "ref": "category_by_lob:2026-09|Medicare|Oncology:allowed_cost_pct_chg"
+        }
+       ],
+       "tables": [
+        "category_by_lob"
+       ],
+       "verified_values": [
+        272842.0,
+        2.8145,
+        208778.0,
+        4.7772,
+        194938.0,
+        3.1177
+       ],
+       "flags": []
+      }
+     ],
+     "missing": [],
+     "error": null,
+     "input_hash": "206d2a9ba887d4cf",
+     "plan_hash": "04b85df6f0cc73df",
+     "model": "claude-sonnet-5-5",
+     "created_at": "2026-11-10T14:09:59Z",
+     "created_by": "demo_user"
+    }
+   ]
+  }
+ ]
+}

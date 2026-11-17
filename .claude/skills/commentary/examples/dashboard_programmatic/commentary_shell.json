@@ -1,0 +1,74 @@
+{
+  "deliverable": "dx_cost_dashboard",
+  "medium": "dashboard",
+  "as_of": {
+    "table": "claims_total",
+    "field": "paid_month",
+    "rule": "max"
+  },
+  "show_unverified": false,
+  "generators": {
+    "1": {
+      "audience": "finance leadership",
+      "use_prior": true,
+      "dimensions": [
+        "paid_month"
+      ],
+      "samples": [
+        "samples/exec_tone.txt"
+      ]
+    },
+    "2": {
+      "audience": "line-of-business finance leads",
+      "use_prior": true,
+      "dimensions": [
+        "paid_month",
+        "line_of_business"
+      ]
+    }
+  },
+  "units": [
+    {
+      "id": "overview",
+      "generator": 1,
+      "placement": "tab: overview / header",
+      "covers": "how total allowed cost and PMPM moved this month versus last month and the trend since November",
+      "tables": [
+        "data/claims_total.csv"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 3,
+        "max_words": 25
+      }
+    },
+    {
+      "id": "lob_trend",
+      "generator": 2,
+      "placement": "tab: line of business / trend",
+      "covers": "how this line of business's PMPM and membership moved versus last month",
+      "tables": [
+        "data/claims_by_lob.csv"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 2,
+        "max_words": 25
+      }
+    },
+    {
+      "id": "lob_categories",
+      "generator": 2,
+      "placement": "tab: line of business / categories",
+      "covers": "which diagnosis categories changed most this month for this line of business",
+      "tables": [
+        "data/category_by_lob.csv"
+      ],
+      "style": {
+        "format": "bullets",
+        "bullets": 2,
+        "max_words": 25
+      }
+    }
+  ]
+}
