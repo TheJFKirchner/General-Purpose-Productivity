@@ -18,7 +18,7 @@ it('Settings is a view with its sections in order, names the tools, and has no d
   expect(getState().ui.view).toBe('settings');
   expect(qa('#setBody > section h3').map(h => h.textContent)).toEqual(['Connections', 'MCP library', 'Working directories', 'Settings']);
   expect(qa('.conn-row b').map(b => b.textContent)).toEqual(['Claude Code', 'Cursor']);
-  expect(q('#tab-settings')?.getAttribute('aria-pressed')).toBe('true');
+  expect(q('#tab-settings')?.getAttribute('aria-selected')).toBe('true');
   expect(sentOf('get_mcp').length).toBeGreaterThan(0);
 });
 

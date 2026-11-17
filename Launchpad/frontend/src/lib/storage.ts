@@ -3,6 +3,8 @@
    - lp.editorView  pen editor layout: side | edit | preview */
 export const LS_FILES = 'lp.files';
 export const LS_EDITOR_VIEW = 'lp.editorView';
+/** Sidebar navigation: true = collapsed to icons only. */
+export const LS_SIDEBAR = 'lp.sidebarCollapsed';
 
 export function lsGet<T>(key: string, fallback: T): T {
   try {

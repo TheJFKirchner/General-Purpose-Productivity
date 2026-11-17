@@ -4,7 +4,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { sel, useComputed, useLaunchpad, type View } from './store';
 import { DirMenu, ModalHost, TipHost, Toasts } from './components';
-import { Header, panelId, tabId } from './components/Header';
+import { Header } from './components/Header';
+import { Sidebar, panelId, tabId } from './components/Sidebar';
 import ChatScreen from './views/Chat/Chat';
 import Missions from './views/Missions/Missions';
 import Crew from './views/Crew/Crew';
@@ -34,6 +35,8 @@ export default function App() {
     <>
       <div className="app">
         <Header />
+        <div className="app-body">
+        <Sidebar />
         <main>
           {/* every view stays mounted (typed text, scroll and local state survive a tab switch, as in the vanilla
               page); .view-slot is display:contents, so each view's <section class="view card"> is main's flex child */}
@@ -45,6 +48,7 @@ export default function App() {
           <Aside />
           <VisualsPanel />
         </main>
+        </div>
       </div>
       <ModalHost />
       <EditorModal />

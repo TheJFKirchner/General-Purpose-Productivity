@@ -40,7 +40,7 @@ them); without them the page runs the demo. Nothing loads from the internet: eve
 
 | `src/views/Aside/`, `src/views/Visuals/` | the right-hand panels shown beside the screens: Aside = Incoming queue, orbit, activity feed, and on the Files tab (`ui.view === 'files'`) `Repos.tsx` instead of orbit + Incoming: the Repos panel (one collapsible card per git repo grouped under its connected folder: branch, status chips Up to date / N ahead / N behind / Changes / Not linked, changed files with tick boxes and +/- counts, "Commit message" box, Commit / Commit and push / Push, Refresh, Check remote; clicking a file opens it in Files via `actions.gitOpenFile`) plus the `WaitingLine` ("N waiting", opens the Plan tab where Incoming shows). Reads `st.git` and `sel.gitGroups` / `gitChips` / `gitIsOpen`; sends through `actions.gitScan` / `gitRefresh` / `gitFetch` / `gitCommit` / `gitPush`; opening the Files tab sends `git_scan`. Demo data: `src/demo/gitDemo.ts`; Visuals = the visual options panel (`frames.ts` builds the sandboxed frames) |
 | `src/test/demoApp.tsx` | shared harness for view tests (renders `App` on the demo, helpers `q`, `click`, `sentOf` ...). Tests sit next to what they test: `*.test.ts(x)` beside the component / view / store file |
-| `src/App.tsx`, `src/components/Header.tsx` | shell: header + tabs, all views (kept mounted, `hidden` tab panels), aside, visuals slot, overlays |
+| `src/App.tsx`, `src/components/Header.tsx`, `src/components/Sidebar.tsx` | shell: header (brand, connection, usage), the left sidebar navigation, all views (kept mounted, `hidden` tab panels), aside, visuals slot, overlays. `Sidebar.tsx` holds `NAV`, the one list of views (label, icon, `group` main | bottom): a new view = one entry there + its slot in `App.tsx` + its name in `View`. Collapsed = icons only (names stay for screen readers, tooltips via `data-tip="text:..."`), kept in localStorage `lp.sidebarCollapsed`; at 1240 px and below it is icons only whatever the choice (no toggle), at 980 px and below it becomes a row above the views |
 
 ## State and hooks
 
@@ -157,7 +157,7 @@ inside the Missions SVG systems.
 **Accessible primitives**
 - Dialogs: `components/Dialog.tsx` wraps Radix Dialog (focus trap, Esc, outside click, focus back to the opener, the
   page hidden from screen readers while open). Styled only by `.scrim` / `.modal`; every dialog needs a `DialogTitle`.
-- Tabs: the header is a WAI-ARIA tablist (`role=tab`, `aria-selected`, roving tabindex, Left / Right / Home / End);
+- Tabs: the sidebar is a vertical WAI-ARIA tablist (`role=tab`, `aria-selected`, roving tabindex, Up / Down / Home / End; Settings is the last tab, shown at the bottom);
   each view slot in `App.tsx` is its `role=tabpanel`.
 - Menu: `DirMenu` is `role=menu` with `menuitem`s (Up / Down / Home / End; Esc returns focus to the opener). The model pickers (`ModelPicker`, planner and CLI chat) are `aria-haspopup=menu` on their button (Up / Down on it open the menu on the current choice) and a `role=menu`: the "CLI" dropdown is a `menuitem` with `aria-haspopup=menu` / `aria-expanded` whose nested `role=menu` (opened inline, so the menu's scroll box never clips it) holds one `menuitemradio` per CLI (unavailable ones `aria-disabled`, still focusable; Enter / Space / Right open it, Left or Esc close it and focus returns to the dropdown); then the model `menuitemradio`s, and in the planner's a `menuitemcheckbox` (auto-promote), Rules and New plan `menuitem`s; Up / Down / Home / End and Tab / Shift+Tab reach every item, Esc or a click outside closes the menu and focus returns to the button.
 - Switch: `AutopilotSwitch` and `AutoAnswersSwitch` are `role=switch` with `aria-checked`, shown side by side (the two are told apart: Auto answers has its own label, a `CircleHelp` icon from `components/icons.ts`, an `aria-label` and a tooltip saying it answers builders' questions with their own recommendation and that Autopilot is the one for permission requests). The chat screen's Planner / CLI switch is a two-tab `role=tablist` (Left / Right / Home / End); each tab's label says when its side is waiting on you (coral count) or working (dot).
@@ -171,9 +171,9 @@ inside the Missions SVG systems.
 end, `.warn` for errors, and a coral bar under the header when the connection is lost. Titles wrap
 (`overflow-wrap:anywhere`), one-line meta truncates with an ellipsis. Scrollbars are thin, `--line2` on transparent.
 
-**Layout**: holds from 1100 to 1920 px wide (pywebview opens at 1360 x 880, minimum 980 x 640). The header stays on one
-row: the usage pill truncates (the full figures are in its tooltip). At 1240 px and below the tab icons, the "Whole app"
-label, the connection text and the Settings label are hidden (still announced) and the aside narrows to 360 px.
+**Layout**: holds from 980 to 1920 px wide (pywebview opens at 1360 x 880, minimum 980 x 640). The header (brand, connection, usage, avatar) stays on one
+row: the usage pill truncates (the full figures are in its tooltip); the section navigation is the left sidebar. At 1240 px and below the sidebar is icons only, the "Whole app"
+label and the connection text are hidden (still announced) and the aside narrows to 360 px.
 
 **Fonts and security**: Sora and Inter are bundled (`src/fonts.css`), nothing loads from the internet and the page CSP
 in `app/server.py` (`font-src 'self'`) did not change. Radix uses inline styles, which that CSP already allows. The
