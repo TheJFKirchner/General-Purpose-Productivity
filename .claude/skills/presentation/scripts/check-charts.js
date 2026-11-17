@@ -72,8 +72,11 @@ function checkChart(option) {
       warnings.push(`series ${i + 1} highlights ${n} of ${s.data.length} items; a highlight on most items is not a highlight`);
     }
   });
-  if (option.tooltip || option.toolbox || option.dataZoom || option.timeline || option.brush) {
-    warnings.push('tooltip, toolbox, dataZoom, timeline and brush are for exploring; remove them');
+  if (option.tooltip) {
+    warnings.push("'tooltip' is set by the deck (a light one-line hover); remove it from the chart JSON");
+  }
+  if (option.toolbox || option.dataZoom || option.timeline || option.brush) {
+    warnings.push('toolbox, dataZoom, timeline and brush are for exploring; remove them');
   }
   return { errors, warnings };
 }

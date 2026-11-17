@@ -10,7 +10,9 @@ Read all of this before adding any chart. Charts are drawn by ECharts, which the
 - The text beside or under the chart says what it proves, with the number, in the same words the chart uses.
 - A visual the user picked from an analysis or dashboard is rebuilt as the one cut they chose: see "Visuals from an analysis or dashboard". Never screenshot, embed or link the live one.
 - Numbers come from a source listed in `plan.md`. Never from memory; never rounded differently on two slides.
-- No tooltips, toolbox, zoom, or legends that need reading. Label the bars and the line ends directly. The deck turns hover effects off.
+- No toolbox, zoom, or legends that need reading. Label the bars and the line ends directly: the slide must read in full with no pointer on it.
+- Light hover is built in. Pointing at a bar, point or slice shows a one-line tooltip (its name and value); on a line chart a thin marker follows the pointer and lists each line's value. The marks themselves do not change. Do not set `tooltip`, `emphasis` or `silent` in chart JSON.
+- The tooltip takes its number format from the series' `label.formatter` (`"{c}%"`), else from the value axis's `axisLabel.formatter`. Give every series one of them, and a `name` when there are two or more series.
 - Colours are theme variables only. Never a hex value in chart JSON.
 
 ## Visuals from an analysis or dashboard
@@ -27,7 +29,7 @@ The usual case. The visual exists; the user has said which one and which cut (`p
 | Not on a slide | Why |
 | --- | --- |
 | Dropdowns, filters, tabs, toggles, sliders | A slide shows one cut, chosen for a reason |
-| Tooltips, zoom, clickable legends | The audience cannot hover; the point must be readable as shown |
+| Zoom, clickable legends, anything that must be hovered to be understood | A room cannot hover; the point must be readable as shown. The built-in tooltip only repeats what is on the slide |
 | An embedded or linked live dashboard, a screenshot of one | It changes after the meeting, and carries controls and clutter |
 | A second cut "for reference" | A second cut is a second slide, with its own reason, or a backup |
 

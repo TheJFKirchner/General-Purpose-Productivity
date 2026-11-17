@@ -411,7 +411,8 @@ html.reveal-print .section-bar { display: none; }
   .section-bar { display: none; }
 }
 
-.chart { position: relative; flex: 1; min-height: 0; min-width: 0; pointer-events: none; }
+.chart { position: relative; flex: 1; min-height: 0; min-width: 0; }
+html.is-export .chart { pointer-events: none; }
 
 /* Commentary: bullets that talk the audience through the visual beside them */
 .commentary { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
@@ -444,3 +445,36 @@ html.reveal-print .section-bar { display: none; }
 /* ?export in the URL (screenshots, PDF): no bar animation, so it is never caught mid-fade */
 html.is-export .section-bar,
 html.is-export .section-bar * { transition: none !important; }
+
+/* ===========================================
+   LIGHT HOVER - a small response under the pointer, nothing more.
+   Charts show a one-line tooltip (set by the deck). Off for export.
+   =========================================== */
+.card,
+.callout { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+
+.card:hover,
+.callout:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--navy) 10%, transparent);
+}
+
+.card:hover { border-color: color-mix(in srgb, var(--primary-color) 45%, var(--line-color)); }
+
+.rows > div { transition: background-color 0.18s ease; }
+.rows > div:hover { background-color: color-mix(in srgb, var(--tint-bg) 55%, transparent); }
+
+.reveal table.data tbody td { transition: background-color 0.18s ease; }
+.reveal table.data tbody tr:hover td { background-color: color-mix(in srgb, var(--tint-bg) 55%, transparent); }
+.reveal table.data tbody tr.is-key:hover td { background-color: var(--tint-bg); }
+
+.steps > div { transition: border-top-color 0.18s ease; }
+.steps > div:hover { border-top-color: var(--primary-color); }
+
+.reveal .stat p.stat-value { transition: transform 0.18s ease; transform-origin: left bottom; }
+.stat:hover p.stat-value { transform: scale(1.03); }
+
+html.is-export .card,
+html.is-export .callout,
+html.is-export .rows > div,
+html.is-export .stat p.stat-value { transition: none !important; transform: none !important; box-shadow: none !important; }
