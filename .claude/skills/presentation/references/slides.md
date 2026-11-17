@@ -64,6 +64,7 @@ HTML rules:
 - A slide with little on it: make the content bigger. Do not add content to fill it.
 - Commentary bullets go in `<div class="commentary">` beside or under the visual: an optional `<h3>` label, a `<ul>`, and an optional `<p class="so-what">`. How many: the storyboard block's "On the page" line.
 - No icons or images as decoration.
+- Light hover is built into `styles.css`: cards and callouts lift slightly, rows and table rows tint, a step's line turns to the accent colour, a big figure grows a touch. Add no other hover, animation or click behaviour to a slide. It is off in `?export`.
 - No controls on a slide: no `<select>`, `<input>`, `<button>`, `<details>`, tabs or `<iframe>`. Every visual is one hard-coded cut (`references/charts.md`, "Visuals from an analysis or dashboard").
 - The kicker is the slide's section name, exactly as in the bottom bar.
 

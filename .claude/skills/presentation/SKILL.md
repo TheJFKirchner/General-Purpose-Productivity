@@ -144,7 +144,8 @@ Always yours (you hold the gates): the interview, the storyboard, the walk-throu
 - The audience decides depth. Cut background the audience already has.
 - Every slide makes one point, stated in its headline. A slide with no point is cut.
 - A visual shows one metric or one relationship and proves its slide's headline. No exploratory charts.
-- Every visual is one fixed cut, hard-coded, chosen for a stated reason. No dropdowns, filters, tabs, toggles, tooltips or links to a live dashboard on a slide.
+- Every visual is one fixed cut, hard-coded, chosen for a stated reason. No dropdowns, filters, tabs, toggles or links to a live dashboard on a slide.
+- Light hover only, and it is built in: a one-line tooltip on chart marks, a slight lift on cards, a tint on rows. A slide must read in full with no pointer on it.
 - Every number on a slide traces to a source listed in `plan.md`.
 - Text follows `references/writing.md`; the user's tone document overrides it.
 - Colours and fonts live only in `styles.css`. Slides and chart JSON use its variables, never their own colours.

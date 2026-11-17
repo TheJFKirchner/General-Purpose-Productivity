@@ -278,8 +278,7 @@
         Object.keys(node).forEach(function (key) {
           var v = node[key];
           if (typeof v === 'string') {
-            var m = v.match(/^var((--[w-]+))$/);
-            if (m) node[key] = css(m[1]) || v;
+            if (v.indexOf('var(--') === 0 && v.charAt(v.length - 1) === ')') node[key] = css(v.slice(4, -1)) || v;
           } else if (v && typeof v === 'object') {
             resolveVars(v, depth + 1);
           }
@@ -315,15 +314,59 @@
         resolveVars(option, 0);
         var yName = option.yAxis && !Array.isArray(option.yAxis) && option.yAxis.name && option.yAxis.show !== false;
         if (!option.grid) option.grid = { left: yName ? 46 : 8, right: 28, top: 30, bottom: option.legend ? 44 : 8, containLabel: true };
-        /* Slides are not dashboards: no hover states or tooltips (they also flicker inside a scaled slide). */
-        option.tooltip = { show: false };
-        [].concat(option.series || []).forEach(function (s) { s.silent = true; s.emphasis = { disabled: true }; });
-        if (isExport) option.animation = false;
+        /* Light hover: one small tooltip naming the item and its value. Nothing else reacts, so nothing
+           flickers: the marks keep their look (no emphasis state) and the tooltip never takes the pointer. */
+        var seriesList = [].concat(option.series || []);
+        var valueAxis = [option.yAxis, option.xAxis].filter(function (a) { return a && !Array.isArray(a) && a.type === 'value'; })[0];
+        var axisFormat = valueAxis && valueAxis.axisLabel && typeof valueAxis.axisLabel.formatter === 'string' ? valueAxis.axisLabel.formatter : null;
+        function fill(template, p, v) {
+          return template.split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name).split('{a}').join(p.seriesName || '').split('{@[0]}').join(v);
+        }
+        seriesList.forEach(function (s) {
+          s.emphasis = { disabled: true };
+          if (s.itemStyle && s.itemStyle.opacity === 0) s.silent = true;   /* hidden waterfall base */
+          else delete s.silent;
+        });
+        function valueText(p) {
+          var v = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value;
+          if (v == null || v === '-') return null;
+          var s = seriesList[p.seriesIndex] || {};
+          var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+          var shared = s.label && typeof s.label.formatter === 'string' ? s.label.formatter : null;
+          return own ? fill(own, p, v) : shared ? fill(shared, p, v) : axisFormat ? fill(axisFormat, p, v) : String(v);
+        }
+        function strong(text) { return '<span style="font-weight:600">' + text + '</span>'; }
+        function isNamed(p) { return p.seriesName && p.seriesName.indexOf('series') !== 0; }
+        /* Lines are read along the time axis (their points are usually hidden); everything else by item. */
+        var byAxis = seriesList.length > 0 && seriesList.every(function (s) { return s.type === 'line'; }) &&
+          option.xAxis && !Array.isArray(option.xAxis) && option.xAxis.type === 'category';
+        option.tooltip = isExport ? { show: false } : {
+          trigger: byAxis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted-color'), width: 1, type: 'solid' }, label: { show: false } },
+          backgroundColor: css('--text-color'), borderWidth: 0, padding: [7, 12],
+          textStyle: { color: css('--background-color'), fontSize: 14, fontFamily: css('--body-font') },
+          extraCssText: 'pointer-events:none;border-radius:8px;box-shadow:none;',
+          formatter: function (p) {
+            if (Array.isArray(p)) {
+              var rows = p.filter(function (q) { return valueText(q) != null; }).map(function (q) {
+                return (isNamed(q) ? q.seriesName + ': ' : '') + strong(valueText(q));
+              });
+              return rows.length ? p[0].name + '<br>' + rows.join('<br>') : '';
+            }
+            if (p.componentType !== 'series' || valueText(p) == null) return '';
+            var named = isNamed(p) && seriesList.length > 1 ? p.seriesName + ' · ' : '';
+            return named + (p.name ? p.name + ': ' : '') + strong(valueText(p));
+          }
+        };
+        if (isExport) { option.animation = false; seriesList.forEach(function (s) { s.silent = true; }); }
         if (!box._chart) {
           var holder = document.createElement('div');
           holder.style.cssText = 'position:absolute;inset:0;';
           box.appendChild(holder);
-          box._chart = echarts.init(holder, 'deck', { renderer: 'svg', width: box.clientWidth, height: box.clientHeight });
+          /* Canvas when live (hover never rebuilds the marks under the pointer); crisp SVG for export. */
+          box._chart = echarts.init(holder, 'deck', isExport
+            ? { renderer: 'svg', width: box.clientWidth, height: box.clientHeight }
+            : { renderer: 'canvas', devicePixelRatio: Math.max(2, (window.devicePixelRatio || 1) * 2), width: box.clientWidth, height: box.clientHeight });
         } else {
           box._chart.clear();
           box._chart.resize({ width: box.clientWidth, height: box.clientHeight });
