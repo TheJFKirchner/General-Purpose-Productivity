@@ -1,0 +1,8 @@
+{
+  "id": "G1",
+  "parent": null,
+  "title": "Revenue by product line",
+  "library": "chartjs",
+  "kind": "chart",
+  "code": "const PALETTE = ['#1F4E79', '#2E75B6', '#5B9BD5', '#9DC3E6', '#44546A', '#8497B0', '#A5A5A5', '#D6DCE5'];\nconst totals = {};\nfor (const r of rows) {\n  totals[r.product_line] = (totals[r.product_line] || 0) + (Number(r.revenue) || 0);\n}\nconst items = Object.entries(totals).sort((a, b) => b[1] - a[1]);\nel.style.position = 'relative';\nconst canvas = document.createElement('canvas');\nel.appendChild(canvas);\nlib.defaults.font.family = 'Segoe UI, Arial, sans-serif';\nlib.defaults.color = '#333F4F';\nnew lib(canvas, {\n  type: 'bar',\n  data: {\n    labels: items.map(d => d[0]),\n    datasets: [{ label: 'Revenue', data: items.map(d => d[1]), backgroundColor: PALETTE[1], borderRadius: 2 }]\n  },\n  options: {\n    indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,\n    layout: { padding: { top: 4, right: 12 } },\n    plugins: {\n      title: {\n        display: true, text: 'Revenue by product line', align: 'start', color: '#1F4E79',\n        font: { size: 14, weight: '600' }, padding: { bottom: 12 }\n      },\n      legend: { display: false },\n      tooltip: { callbacks: { label: c => 'Revenue: ' + Math.round(c.parsed.x).toLocaleString() } }\n    },\n    scales: {\n      x: { beginAtZero: true, grid: { color: '#E5E9F0' }, title: { display: true, text: 'Revenue' } },\n      y: { grid: { display: false } }\n    }\n  }\n});"
+}

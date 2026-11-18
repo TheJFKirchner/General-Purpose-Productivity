@@ -1,0 +1,8 @@
+{
+  "id": "G1",
+  "parent": null,
+  "title": "Monthly revenue by region",
+  "library": "echarts",
+  "kind": "chart",
+  "code": "const PALETTE = ['#1F4E79', '#2E75B6', '#5B9BD5', '#9DC3E6', '#44546A', '#8497B0', '#A5A5A5', '#D6DCE5'];\nconst month = r => String(r.order_date).slice(0, 7);\nconst months = [...new Set(rows.map(month))].sort();\nconst regions = [...new Set(rows.map(r => r.region))].sort();\nconst totals = {};\nfor (const r of rows) {\n  const key = r.region + '|' + month(r);\n  totals[key] = (totals[key] || 0) + (Number(r.revenue) || 0);\n}\nconst chart = lib.init(el);\nchart.setOption({\n  animation: false,\n  color: PALETTE,\n  textStyle: { fontFamily: 'Segoe UI, Arial, sans-serif', color: '#333F4F' },\n  tooltip: { trigger: 'axis', valueFormatter: v => (v == null ? '' : Math.round(v).toLocaleString()) },\n  title: { text: 'Monthly revenue by region', left: 0, top: 4, textStyle: { fontSize: 14, fontWeight: 600, color: '#1F4E79' } },\n  legend: { top: 32, left: 0 },\n  grid: { left: 64, right: 24, top: 76, bottom: 40 },\n  xAxis: { type: 'category', data: months, axisLine: { lineStyle: { color: '#8497B0' } } },\n  yAxis: {\n    type: 'value',\n    splitLine: { lineStyle: { color: '#E5E9F0' } },\n    axisLabel: { formatter: v => (v >= 1000 ? v / 1000 + 'k' : v) }\n  },\n  series: regions.map(reg => ({\n    name: reg, type: 'line', showSymbol: false,\n    data: months.map(m => Math.round(totals[reg + '|' + m] || 0))\n  }))\n});\nnew ResizeObserver(() => chart.resize()).observe(el);"
+}
