@@ -71,9 +71,11 @@ def mark_current():
 def venv_works():
     """False when .venv's Python is gone or broken, as after the Python it was made from was
     upgraded or removed (a Homebrew upgrade on a Mac, say)."""
+    # No window: the app runs this check from pythonw, where a console child would flash one.
+    options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     try:
         return subprocess.call([str(venv_python()), "-c", ""], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=30) == 0
+                               stderr=subprocess.DEVNULL, timeout=30, **options) == 0
     except (OSError, subprocess.SubprocessError):
         return False
 

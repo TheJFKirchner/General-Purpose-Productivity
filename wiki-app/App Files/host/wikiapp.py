@@ -678,7 +678,10 @@ def open_folder(folder):
 
 def setup_needed():
     """Started without a launcher (a pinned taskbar button): if requirements.txt changed since the
-    last setup, hand over to the launcher, which shows the install and then starts the app."""
+    last setup, hand over to the launcher, which shows the install and then starts the app.
+    On Windows the launcher always starts the app this way, so its console only flashes."""
+    if os.environ.get("WIKIAPP_SETUP"):
+        return False  # the launcher has just run setup.py: don't hand back (no loop)
     sys.path.insert(0, str(APP_FILES))
     try:
         import setup
@@ -686,6 +689,7 @@ def setup_needed():
             return False
         launcher = APP_FILES.parent / ("WikiApp.cmd" if os.name == "nt" else "WikiApp.command")
         if os.name == "nt":
+            os.environ["WIKIAPP_SETUP"] = "1"  # tells WikiApp.cmd to run setup.py in its window
             os.startfile(launcher)
         else:
             import subprocess
