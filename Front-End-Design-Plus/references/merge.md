@@ -4,9 +4,10 @@
 
 | File | Contents |
 |---|---|
-| `result.json` | `{library, done, saved: [{id, title, library, kind, file}], board}`: the saved IDs in order, each with the path of its recipe file. `done` is false if the page was closed without Done. |
+| `result.json` | `{library, done, saved: [{id, title, library, kind, file}]}`: the saved IDs in order, each with the path of its recipe file. `done` is false if the page was closed without Done. |
 | `<id>.json` | One saved recipe: `{id, parent, title, library, kind, code}`. No data. |
-| `board.json` | Every card, for resuming. Not needed for merging. |
+
+These are all that is left of the session: unsaved cards and the chat are not kept.
 
 - `kind` is `chart` or `table`. A table always has `library: "html"`, whatever the session library.
 - `code` is the body of `render(el, rows, lib)`: `el` is an empty, sized box; `rows` is the array of row objects from the data file; `lib` is the library global.
@@ -41,4 +42,4 @@
 
 - Open the deliverable (or run its build) and confirm each merged visual draws.
 - Search the merged code for typed-in data values; there should be none (recipes aggregate from `rows`).
-- Leave the temp session folder in place until the user is happy; it holds the board for resuming.
+- Tell the user the saved `<id>.json` files are the only record of the session, and give the output folder's path. Leave it in place: a later session continues from a saved visual by passing its file as `--existing`.

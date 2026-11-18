@@ -34,14 +34,14 @@ The skill is user-invoked only: type `/front-end-design-plus` in Claude Code. It
 - **By hand, on the sample data (from this folder):**
 
   ```
-  python -m whiteboard --data sample/orders.csv --library echarts --out <a temp folder>
+  python -m whiteboard --data sample/orders.csv --library echarts --out <a new, empty temp folder>
   ```
 
   Other flags: `--style "<note>"` (colours, font, light or dark), `--existing <file>` (the visual as it is today, as a `render` body or a recipe JSON; it is pinned as "Current visual", G1; the skill always passes it when the visual exists), `--no-open` (do not open a browser), `--port N`, and `--fake` (or `WHITEBOARD_FAKE=1`) for the scripted fake engine: no sign-in and no tokens. `python -m whiteboard --help` lists every flag.
 - **Finish:** press Done. The launcher exits and its last line is `RESULT: <path to result.json>`. If the tab is closed without Done, it stops by itself after about 90 seconds and `result.json` has `done: false`, still listing what was saved.
-- **Resume:** run again with the same `--out` folder and library. A different library on the same folder is refused.
+- **No resuming:** every launch is a fresh board, and the output folder must be new or empty (a folder that already holds files is refused). To carry on from a visual saved last time, pass its `<id>.json` as `--existing`; it opens as the "Current visual".
 
-The output folder ends up with `result.json` (the saved IDs), one `<id>.json` per saved visual, and `board.json` (every card, for resuming).
+The output folder ends up with `result.json` (the saved IDs) and one `<id>.json` per saved visual. These are the only record of a session; unsaved cards and the chat are not kept.
 
 ## The six libraries
 

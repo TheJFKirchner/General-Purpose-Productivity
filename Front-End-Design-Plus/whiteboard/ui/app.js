@@ -22,7 +22,7 @@
   var state = {
     library: 'echarts', columns: [], style: '', rows: [],
     cards: [], saved: {}, busy: false, reported: {}, frames: [], loading: false, beat: null,
-    round: 0, expanded: false, requests: [], model: '', engine: '', usage: null
+    doneAsked: false, round: 0, expanded: false, requests: [], model: '', engine: '', usage: null
   };
 
   // ---------- helpers ----------
@@ -246,8 +246,8 @@
   // and positions them with CSS `order`, so a card's frame is only ever created or destroyed,
   // never moved (moving an iframe in the DOM reloads it, which would flicker).
   var STORE_KEY = 'whiteboard.showEarlier';
-  function loadExpanded() { try { return window.localStorage.getItem(STORE_KEY) === '1'; } catch (e) { return false; } }
-  function storeExpanded(v) { try { window.localStorage.setItem(STORE_KEY, v ? '1' : '0'); } catch (e) { /* ignored */ } }
+  function loadExpanded() { try { return window.sessionStorage.getItem(STORE_KEY) === '1'; } catch (e) { return false; } }
+  function storeExpanded(v) { try { window.sessionStorage.setItem(STORE_KEY, v ? '1' : '0'); } catch (e) { /* ignored */ } }
 
   function roundOf(c) { return typeof c.round === 'number' ? c.round : 0; }
   function shorten(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
@@ -326,6 +326,7 @@
     $('empty').hidden = total > 0;
     $('grid').hidden = total === 0;
     $('count').textContent = !total ? '' : (shown === total ? '(' + total + ')' : shown + ' of ' + total);
+    if (state.doneAsked && (savedCount() > 0 || !total)) resetDoneAsk();
     return added;
   }
 
@@ -571,9 +572,28 @@
   });
 
   // ---------- done ----------
+  function savedCount() {
+    return state.cards.filter(function (c) { return state.saved[c.id]; }).length;
+  }
+  function resetDoneAsk() {
+    state.doneAsked = false;
+    $('done').textContent = 'Done';
+    $('done-note').textContent = 'Only saved cards are kept.';
+    $('done-note').classList.remove('warn');
+  }
   $('done').addEventListener('click', function () {
+    if (!state.doneAsked && state.cards.length && savedCount() === 0) {
+      state.doneAsked = true;
+      $('done').textContent = 'Finish anyway';
+      $('done-note').textContent = 'Nothing is saved. Finish anyway?';
+      $('done-note').classList.add('warn');
+      return;
+    }
+    var n = savedCount();
     $('done').disabled = true;
     api('/api/done', {}).catch(function () { /* the server may already be stopping */ }).then(function () {
+      $('finished-text').textContent = (n ? 'Saved ' + n + ' visual' + (n === 1 ? '' : 's') + '.' : 'Nothing was saved.') +
+        ' Unsaved cards are not kept. You can close this tab now.';
       setBusy(true);
       $('status').textContent = '';
       $('finished').hidden = false;
@@ -684,10 +704,8 @@
       state.loading = false;
       layout();
       $('grid').scrollTop = 0;
-      if (cards.length) {
-        addMsg('note', (s.chat || []).length
-          ? 'Resumed with ' + cards.length + ' card' + (cards.length === 1 ? '' : 's') + '.'
-          : 'Starting from the existing visual' + (cards.length === 1 ? '' : 's') + '.');
+      if (!(s.chat || []).length && cards.some(function (c) { return c.round === 0; })) {
+        addMsg('note', 'Starting from the existing visual.');
       }
       $('input').focus();
     }).catch(function (e) {

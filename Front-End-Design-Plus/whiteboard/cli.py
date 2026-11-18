@@ -2,7 +2,8 @@
 [--existing <file>] [--fake] [--no-open] [--port N] [--model M]
 
 Exit codes: 0 after Done, Ctrl+C, or the page going away (result.json then has done: false); 2 for a bad
-launch (unsupported library, unreadable data, board.json for another library). The last line printed is
+launch (unsupported library, unreadable data, an output folder holding files from an earlier session).
+Every launch starts a fresh board; only saved visuals (<id>.json) and result.json are written. The last line printed is
 "RESULT: <out>/result.json"; that line is the signal the session is over.
 
 Environment (for tests and demos): WHITEBOARD_FAKE=1 (agentlib fake engine, scripted demo replies, zero
@@ -20,7 +21,7 @@ from pathlib import Path
 
 from . import LIBRARIES
 from .agent import DEFAULT_MODEL, Designer
-from .board import Board, BoardMismatch
+from .board import Board, OutputNotEmpty
 from .data import DataError, load
 from .server import CONNECT_S, IDLE_S, Whiteboard
 
@@ -70,8 +71,12 @@ def load_existing(path: str | Path, library: str) -> dict:
         code = data["code"]
         title = str(data.get("title") or "").strip() or title
         kind = data.get("kind") if data.get("kind") in ("chart", "table") else kind
-        if data.get("library") == "html" and library != "html" and kind == "chart":
+        saved_lib = data.get("library")
+        if saved_lib == "html" and library != "html" and kind == "chart":
             kind = "table"
+        elif saved_lib and saved_lib != "html" and saved_lib != library:
+            raise LaunchError(f"--existing {p.name} was made for library '{saved_lib}', not '{library}'. "
+                              f"Launch with --library {saved_lib} to keep working on it.")
     if not code.strip():
         raise LaunchError(f"--existing {p.name} is empty.")
     return {"title": title, "kind": kind, "code": code}
@@ -92,9 +97,9 @@ def parse_args(argv=None) -> argparse.Namespace:
                                  description="Open the whiteboard page for designing charts and tables.")
     ap.add_argument("--data", required=True, help="CSV, or JSON array of row objects")
     ap.add_argument("--library", required=True, help=f"one of: {', '.join(LIBRARIES)}")
-    ap.add_argument("--out", required=True, help="output folder (board.json, <id>.json, result.json)")
+    ap.add_argument("--out", required=True, help="new or empty output folder (<id>.json per saved visual, result.json)")
     ap.add_argument("--style", default=None, help="optional style note for the agent")
-    ap.add_argument("--existing", default=None, help="current code of the visual being tweaked (becomes G1)")
+    ap.add_argument("--existing", default=None, help="the visual being tweaked, e.g. a saved <id>.json (becomes G1, the current visual)")
     ap.add_argument("--fake", action="store_true", help="agentlib fake engine: scripted replies, zero tokens")
     ap.add_argument("--no-open", action="store_true", help="do not open a browser")
     ap.add_argument("--port", type=int, default=int(os.environ.get("WHITEBOARD_PORT") or 0),
@@ -116,11 +121,11 @@ def build(args: argparse.Namespace) -> Whiteboard:
     board = Board(Path(args.out).expanduser().resolve(), library)
     try:
         board.open()
-    except BoardMismatch as e:
+    except OutputNotEmpty as e:
         raise LaunchError(str(e)) from None
     except (OSError, ValueError) as e:
         raise LaunchError(f"Cannot use output folder {args.out}: {e}") from None
-    if existing and not board.resumed:
+    if existing:
         board.add(existing["title"], existing["code"], existing["kind"], card_id="G1", round=0)
 
     engine = "fake" if fake else "claude"
@@ -158,10 +163,10 @@ def main(argv=None) -> int:
     b = app.board
     mode = "fake engine (no tokens)" if app.engine == "fake" else f"model {args.model}"
     print(f"Whiteboard: {url}", flush=True)
-    print(f"  library {b.library}, {len(app.table.rows)} rows, {len(b.cards)} card(s)"
-          f"{' (resumed)' if b.resumed else ''}, {mode}", flush=True)
-    print(f"  output: {b.out}", flush=True)
-    print("  Press Done in the page to finish (Ctrl+C also stops it).", flush=True)
+    start = "starting from the current visual (G1)" if b.cards else "new board"
+    print(f"  library {b.library}, {len(app.table.rows)} rows, {start}, {mode}", flush=True)
+    print(f"  output: {b.out} (saved visuals and result.json only)", flush=True)
+    print("  Press Done in the page to finish (Ctrl+C also stops it). Unsaved cards are not kept.", flush=True)
     app.serve(open_browser=not (args.no_open or flag("WHITEBOARD_NO_OPEN")))
     if app.result is None:  # stopped without Done: still leave a result reflecting what was saved
         app.result = b.finish(done=False)

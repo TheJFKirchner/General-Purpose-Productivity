@@ -53,8 +53,8 @@ def test_multi_card_request_gives_several_ids(tmp_path, csv_file):
     assert "Three cards." in streamed and "Done." in streamed
     assert evs[-1]["type"] == "done" and evs[-1]["cards"] == ["G1", "G2", "G3"]
     assert set(evs[-1]) == {"type", "cards", "round", "usage", "model"}
-    saved = json.loads(board.board_file.read_text(encoding="utf-8"))
-    assert [c["id"] for c in saved["cards"]] == ["G1", "G2", "G3"] and saved["next_id"] == 4
+    assert [c["id"] for c in board.snapshot()] == ["G1", "G2", "G3"] and board.next_id == 4
+    assert list(board.out.iterdir()) == []                 # nothing on disk until something is saved
 
 
 def test_iteration_records_parent_and_agent_sees_board(tmp_path, csv_file):
@@ -134,50 +134,25 @@ def test_save_writes_recipe_and_result(tmp_path, csv_file):
     assert json.loads(board.result_file.read_text(encoding="utf-8"))["done"] is True
 
 
-def test_resume_from_board_json(tmp_path, csv_file):
-    fake.script(AGENT_NAME, [[card("A"), card("B"), card("C", parent="G1")]])
-    board, d = make(tmp_path, csv_file)
-
-    async def go(designer, msg):
-        evs = await collect(designer.chat(msg))
-        await designer.close()
-        return evs
-
-    run(go(d, "three"))
-    board.save("G1")
-    board.delete("G3")
-
-    fake.reset()
-    fake.script(AGENT_NAME, [[card("D", parent="G2")]])
-    board2, d2 = make(tmp_path, csv_file)
-    assert board2.resumed and [c["id"] for c in board2.cards] == ["G1", "G2"]
-    assert board2.saved == ["G1"]
-    prompt = d2.make_agent().instructions
-    assert "### G1: A" in prompt and BAR in prompt          # the agent sees the recipes it made before
-    evs = run(go(d2, "try G2 again"))
-    new = [e for e in evs if e["type"] == "card"][0]
-    assert new["id"] == "G4" and new["parent"] == "G2"     # IDs never reused, even after a delete
 
 
-def test_chat_history_is_kept_and_given_to_a_resumed_session(tmp_path, csv_file):
-    seen = []
+def test_chat_history_is_kept_in_memory_and_given_to_a_restarted_agent(tmp_path, csv_file):
     fake.script(AGENT_NAME, [[fake.say("G1: sales by region."), card("Sales by region")],
-                             lambda msg: seen.append(msg) or [fake.say("ok")]])
+                             [fake.fail("gateway down")]])
     board, d = make(tmp_path, csv_file)
 
-    async def go(designer, msg):
-        await collect(designer.chat(msg))
-        await designer.close()
+    async def go():
+        await collect(d.chat("sales by region please"))
+        await collect(d.chat("and again"))    # the engine fails: the next turn starts a new agent session
 
-    run(go(d, "sales by region please"))
-    assert [m["role"] for m in board.chat] == ["user", "agent"]
+    run(go())
+    assert [m["role"] for m in board.chat] == ["user", "agent", "user"]
     assert board.chat[0]["text"] == "sales by region please"          # no board header in the visible chat
     assert board.chat[1]["text"] == "G1: sales by region."
-
-    board2, d2 = make(tmp_path, csv_file)
-    assert board2.chat == board.chat
-    prompt = d2.make_agent().instructions
+    assert d._session is None
+    prompt = d.make_agent().instructions
     assert "Conversation so far" in prompt and "- user: sales by region please" in prompt
+    assert list(board.out.iterdir()) == []                            # the chat is never written to disk
 
 
 def test_first_session_prompt_does_not_repeat_the_current_message(tmp_path, csv_file):
@@ -211,7 +186,6 @@ def test_unsave_keeps_the_card(tmp_path, csv_file):
     assert not (board.out / "G1.json").exists() and board.get("G1") is not None
     assert json.loads(board.result_file.read_text(encoding="utf-8"))["saved"] == []
     assert board.unsave("G1")["ok"]                                     # unsaving twice is harmless
-    assert json.loads(board.board_file.read_text(encoding="utf-8"))["saved"] == []
 
 
 def test_rounds_per_message_and_fix_keeps_round(tmp_path, csv_file):
@@ -236,13 +210,11 @@ def test_rounds_per_message_and_fix_keeps_round(tmp_path, csv_file):
     assert fixed["card"]["round"] == 1 and fixed["round"] == 2      # the fix keeps the card's round
     assert [(c["id"], c["round"]) for c in board.snapshot()] == [("G1", 1), ("G2", 1), ("G3", 2)]
     assert last[-1]["round"] == 3 and board.round == 3               # a message with no cards is a round too
-    saved = json.loads(board.board_file.read_text(encoding="utf-8"))
-    assert saved["round"] == 3 and [c["round"] for c in saved["cards"]] == [1, 1, 2]
     board.save("G1")
     assert "round" not in json.loads((board.out / "G1.json").read_text(encoding="utf-8"))
 
 
-def test_usage_is_cumulative_over_chat_and_fix_turns_and_survives_resume(tmp_path, csv_file):
+def test_usage_is_cumulative_over_chat_and_fix_turns(tmp_path, csv_file):
     fake.script(AGENT_NAME, [[card("A")], [fake.call("add_card", {"title": "A", "code": BAR, "replaces": "G1"})]])
     board, d = make(tmp_path, csv_file)
 
@@ -262,12 +234,7 @@ def test_usage_is_cumulative_over_chat_and_fix_turns_and_survives_resume(tmp_pat
         assert u["cost_usd"] > 0
     assert u1["cache_write_tokens"] > 0 and u2["cache_read_tokens"] > 0   # prompt sent once, then cached
     assert u2["total_tokens"] > u1["total_tokens"] and u2["cost_usd"] > u1["cost_usd"]
-    assert json.loads(board.board_file.read_text(encoding="utf-8"))["usage"] == board.usage
-
-    fake.reset()
-    board2 = Board(tmp_path / "out", "echarts")
-    board2.open()
-    assert board2.usage_view() == u2 and board2.model == "fake engine"
+    assert board.usage_view() == u2 and board.model == "fake engine"
 
 
 def test_usage_passes_agentlib_numbers_through(tmp_path, csv_file):
@@ -336,34 +303,8 @@ def test_existing_recipe_without_title_gets_one(tmp_path):
     assert load_existing(js, "echarts")["title"] == "Current visual"
 
 
-def test_board_from_before_rounds_loads_cards_as_round_1(tmp_path, csv_file):
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "board.json").write_text(json.dumps({
-        "version": 1, "library": "echarts", "next_id": 3, "saved": [], "chat": [],
-        "cards": [{"id": "G1", "parent": None, "title": "A", "library": "echarts", "kind": "chart", "code": BAR},
-                  {"id": "G2", "parent": "G1", "title": "B", "library": "echarts", "kind": "chart", "code": BAR}],
-    }), encoding="utf-8")
-    fake.script(AGENT_NAME, [[card("C")]])
-    board, d = make(tmp_path, csv_file)
-    assert [c["round"] for c in board.snapshot()] == [1, 1] and board.round == 1
-    assert "The current visual" not in d.make_agent().instructions
-
-    async def go():
-        evs = await collect(d.chat("one more"))
-        await d.close()
-        return evs
-
-    new = [e for e in run(go()) if e["type"] == "card"][0]
-    assert (new["id"], new["round"]) == ("G3", 2)
 
 
-def test_resume_refuses_other_library(tmp_path):
-    Board(tmp_path / "out", "echarts").open()
-    import pytest
-    from whiteboard.board import BoardMismatch
-    with pytest.raises(BoardMismatch, match="library 'echarts'"):
-        Board(tmp_path / "out", "plotly").open()
 
 
 def test_card_error_goes_back_once_and_fix_keeps_id(tmp_path, csv_file):
@@ -436,3 +377,52 @@ def test_engine_failure_becomes_error_event_and_session_restarts(tmp_path, csv_f
     evs, session = run(go())
     assert [e["type"] for e in evs] == ["card", "error", "done"]
     assert "gateway down" in evs[1]["error"] and session is None
+
+
+def test_output_folder_must_be_empty_or_missing(tmp_path):
+    from whiteboard.board import OutputNotEmpty
+    Board(tmp_path / "missing", "echarts").open()                     # missing: created
+    assert (tmp_path / "missing").is_dir()
+    (tmp_path / "empty").mkdir()
+    Board(tmp_path / "empty", "echarts").open()                       # empty: fine
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "readme.txt").write_text("x", encoding="utf-8")
+    Board(tmp_path / "notes", "echarts").open()                       # no *.json: fine
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "G2.json").write_text("{}", encoding="utf-8")
+    (old / "result.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(OutputNotEmpty, match="new, empty output folder"):
+        Board(old, "echarts").open()
+    assert (old / "G2.json").read_text(encoding="utf-8") == "{}"      # untouched
+
+
+def test_result_has_no_board_path(tmp_path):
+    board = Board(tmp_path / "out", "echarts")
+    board.open()
+    board.add("A", BAR)
+    board.save("G1")
+    result = board.finish(done=False)
+    assert set(result) == {"library", "done", "saved"} and result["done"] is False
+    assert sorted(p.name for p in board.out.iterdir()) == ["G1.json", "result.json"]
+
+
+def test_saved_recipe_from_earlier_session_is_accepted_as_existing(tmp_path, csv_file):
+    from whiteboard.cli import LaunchError, load_existing
+    earlier = Board(tmp_path / "earlier", "echarts")
+    earlier.open()
+    earlier.add("Revenue by region", BAR)
+    earlier.add("Revenue, stacked", BAR + " // stacked", parent="G1")
+    earlier.save("G2")
+    saved = tmp_path / "earlier" / "G2.json"
+    before = saved.read_text(encoding="utf-8")
+
+    existing = load_existing(saved, "echarts")
+    assert existing == {"title": "Revenue, stacked", "kind": "chart", "code": BAR + " // stacked"}
+    board = Board(tmp_path / "new", "echarts")
+    board.open()
+    g1 = board.add(existing["title"], existing["code"], existing["kind"], card_id="G1", round=0)
+    assert (g1["id"], g1["round"], g1["parent"], g1["title"]) == ("G1", 0, None, "Revenue, stacked")
+    assert saved.read_text(encoding="utf-8") == before                # the saved file is not changed
+    with pytest.raises(LaunchError, match="made for library 'echarts'"):
+        load_existing(saved, "plotly")

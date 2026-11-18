@@ -29,7 +29,7 @@
   <main class="board">
     <div class="board-bar">
       <div class="board-title">Cards <span id="count" class="count"></span></div>
-      <button type="button" id="done" class="btn">Done</button>
+      <div class="done-wrap"><span class="done-note" id="done-note">Only saved cards are kept.</span><button type="button" id="done" class="btn">Done</button></div>
     </div>
     <div class="earlier" id="earlier" hidden><button type="button" class="link-btn" id="earlier-btn">Show earlier cards</button></div>
     <div class="grid" id="grid"></div>
@@ -55,7 +55,7 @@
 <div class="finished" id="finished" hidden>
   <div class="finished-box">
     <h2>Done</h2>
-    <p>Your saved cards are written. You can close this tab now.</p>
+    <p id="finished-text">Done. You can close this tab now.</p>
   </div>
 </div>
 <script src="app.js"></script>

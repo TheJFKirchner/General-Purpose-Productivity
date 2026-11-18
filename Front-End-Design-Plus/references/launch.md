@@ -15,8 +15,8 @@
 | File | What goes in it |
 |---|---|
 | `<tmp>/fedp-<short name>/data.csv` | The whole table behind the visual: every column the user might want to chart, not only the ones the current visual uses, and the real rows after the deliverable's own filtering and joins. CSV with a header row, or a JSON array of row objects (`data.json`). Keep the deliverable's column names so recipes merge without renaming. |
-| `<tmp>/fedp-<short name>/existing.js` | Always, whenever the visual already exists in the deliverable; only a brand-new visual has none. The existing visual as a `render(el, rows, lib)` body (example below), or a recipe JSON with a `code` field. It opens pinned as "Current visual", card G1, the starting point. |
-| `<tmp>/fedp-<short name>/out/` | Output folder. The whiteboard creates it. |
+| `<tmp>/fedp-<short name>/existing.js` | Always, whenever the visual already exists in the deliverable; only a brand-new visual has none. (Continuing from a saved visual: use its `<id>.json` instead, see the end of this file.) The existing visual as a `render(el, rows, lib)` body (example below), or a recipe JSON with a `code` field. It opens pinned as "Current visual", card G1, the starting point. |
+| `<tmp>/fedp-<short name>/out-<yyyymmdd-hhmm>/` | Output folder, new for every launch. It must not exist yet or be empty: the launcher refuses a folder that already holds files (exit code 2). The whiteboard creates it. |
 
 - `<tmp>` is the system temp folder (`%TEMP%` on Windows, `$TMPDIR` or `/tmp` elsewhere).
 - Write the data with a short script; do not print the rows into the conversation.
@@ -38,11 +38,10 @@ Turning an existing visual into a body: replace the library global with `lib`, t
 
 ```
 cd <skill folder>
-python -m whiteboard --data "<tmp>/fedp-x/data.csv" --library echarts --out "<tmp>/fedp-x/out" --existing "<tmp>/fedp-x/existing.js" [--style "<note>"]
+python -m whiteboard --data "<tmp>/fedp-x/data.csv" --library echarts --out "<tmp>/fedp-x/out-20261118-1430" --existing "<tmp>/fedp-x/existing.js" [--style "<note>"]
 ```
 
 - Leave out `--existing` only for a brand-new visual with nothing to start from.
-
 - Run it as a background command; it opens a browser page and keeps running until the user presses Done.
 - Tell the user: the whiteboard is open in their browser; ask for several visuals, iterate by ID ("G2 but stacked"), save the ones they like, then press Done.
 - It prints `Whiteboard: <address>` first. `--no-open` skips opening the browser (give the user that address); `--port N` picks the port (default: any free port).
@@ -55,9 +54,10 @@ python -m whiteboard --data "<tmp>/fedp-x/data.csv" --library echarts --out "<tm
 - It has ended when the launcher process exits. Its last output line is `RESULT: <path to result.json>`; read that file next, then see [merge.md](merge.md).
 - `result.json` is written as the user works, so it can exist earlier with `done: false`. Do not act on it before the process exits.
 - If the user closes the tab without Done, the server stops by itself after about 90 seconds. `result.json` then has `done: false` but still lists everything saved.
+- Only the saved visuals (`<id>.json`) and `result.json` remain. Unsaved cards and the chat are gone; the board does not resume.
 
-## Resuming
+## Continuing from a saved visual
 
-- Launch again with the same `--out` folder and the same `--library`: the board, its IDs and saved marks come back.
-- The same folder with a different library is refused (exit code 2); use a new output folder.
-- Rewrite the data file first if the deliverable's data has changed; recipes redraw on the new rows.
+- Nothing reloads by itself. When the user points at a saved visual (for example "carry on from G4 of last time"), pass that `<id>.json` as `--existing`; it opens as the "Current visual", G1, on a fresh board.
+- Use a new output folder, as for any launch, and the saved recipe's `library` as `--library`.
+- Rewrite the data file first if the deliverable's data has changed; the recipe redraws on the new rows.

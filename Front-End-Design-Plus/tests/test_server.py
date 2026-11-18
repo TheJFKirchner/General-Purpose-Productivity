@@ -117,7 +117,7 @@ def test_session_data_chat_save_done(tmp_path, csv_file):
             app.stop()
 
 
-def test_existing_becomes_g1_and_resume_keeps_board(tmp_path, csv_file):
+def test_existing_becomes_g1_then_its_saved_variant_seeds_a_fresh_launch(tmp_path, csv_file):
     existing = tmp_path / "existing.js"
     existing.write_text("lib.init(el).setOption({});", encoding="utf-8")
     out = tmp_path / "out"
@@ -135,24 +135,34 @@ def test_existing_becomes_g1_and_resume_keeps_board(tmp_path, csv_file):
         assert [(c["id"], c["parent"], c["round"]) for c in new] == [("G2", "G1", 1)]
         done = events[-1][1]
         assert done["round"] == 1 and done["usage"]["turns"] == 1 and done["model"] == "fake engine"
+        post(app, "/api/save", {"id": "G2"})
         post(app, "/api/done", {})
         thread.join(10)
     finally:
         if thread.is_alive():
             app.stop()
-    app2, thread2 = start(csv_file, out, "--existing", str(existing))
+    saved = out / "G2.json"
+    before = saved.read_text(encoding="utf-8")
+
+    # Relaunching on the same folder is refused: nothing is loaded or overwritten.
+    r = run_cli("--data", str(csv_file), "--library", "echarts", "--out", str(out), "--no-open")
+    assert r.returncode == 2 and "new, empty output folder" in r.stderr and "--existing" in r.stderr
+    assert saved.read_text(encoding="utf-8") == before
+
+    # The saved visual comes back only through --existing, unchanged, as the round-0 current visual,
+    # on a fresh board: no old cards, no chat, usage at zero.
+    app2, thread2 = start(csv_file, tmp_path / "out2", "--existing", str(saved))
     try:
         s = json.loads(get(app2, "/api/session")[2])
-        assert [c["id"] for c in s["cards"]] == ["G1", "G2"]          # resumed; G1 not added twice
-        assert [c["round"] for c in s["cards"]] == [0, 1] and s["round"] == 1
-        assert s["chat"][0]["text"] == "make it horizontal"            # the chat comes back too
-        assert s["usage"]["turns"] == 1 and s["usage"]["total_tokens"] > 0   # usage carries over
-        _, text = post(app2, "/api/chat", {"message": "and G2 in navy"})
-        done = sse(text)[-1][1]
-        assert done["round"] == 2 and done["usage"]["turns"] == 2
-        assert [d["round"] for k, d in sse(text) if k == "card"] == [2]
+        recipe = json.loads(before)
+        assert [(c["id"], c["round"], c["title"], c["code"]) for c in s["cards"]] == [
+            ("G1", 0, recipe["title"], recipe["code"])]
+        assert s["chat"] == [] and s["round"] == 0 and s["usage"]["turns"] == 0
+        _, text = post(app2, "/api/chat", {"message": "in navy"})
+        assert [(d["id"], d["parent"], d["round"]) for k, d in sse(text) if k == "card"] == [("G2", "G1", 1)]
     finally:
         app2.stop()
+    assert saved.read_text(encoding="utf-8") == before
 
 
 def test_static_files_and_traversal(tmp_path, csv_file):
@@ -220,7 +230,8 @@ def test_heartbeat_keeps_alive_then_silence_ends_with_done_false(tmp_path, csv_f
         assert app.ended_by.startswith("the page was silent")
         result = json.loads((out / "result.json").read_text(encoding="utf-8"))
         assert result["done"] is False and [x["id"] for x in result["saved"]] == ["G1"]
-        assert json.loads((out / "board.json").read_text(encoding="utf-8"))["chat"][0]["text"] == "sales"
+        # Unsaved cards are simply gone: only the saved visual and result.json remain.
+        assert sorted(p.name for p in out.iterdir()) == ["G1.json", "result.json"]
     finally:
         if thread.is_alive():
             app.stop()

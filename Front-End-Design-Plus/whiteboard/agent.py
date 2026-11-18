@@ -100,7 +100,7 @@ def read_reference(library: str, folder: Path = REFERENCES) -> str | None:
     return re.sub(r"^(#{1,4}) ", r"##\1 ", text, flags=re.M)
 
 
-CHAT_IN_PROMPT = 12          # earlier messages shown to a new session (after a resume or a restart)
+CHAT_IN_PROMPT = 12          # earlier messages shown to a new agent session after a restart
 CHAT_TEXT_LIMIT = 300
 
 
@@ -137,7 +137,7 @@ def build_prompt(library: str, table: Table, style: str | None, cards: list[dict
             text = " ".join(m["text"].split())
             text = text if len(text) <= CHAT_TEXT_LIMIT else text[:CHAT_TEXT_LIMIT] + "..."
             lines.append(f"- {m['role']}: {text}")
-        parts.append("## Conversation so far (before this session started; most recent last)\n" + "\n".join(lines))
+        parts.append("## Conversation so far (before the agent restarted; most recent last)\n" + "\n".join(lines))
     ref = read_reference(library, references)
     if ref:
         parts.append(f"## Library notes: {library}\n{ref}")
@@ -250,7 +250,7 @@ class Designer:
         return {"usage": self.board.usage_view(), "model": self.model_name(), "round": self.board.round}
 
     def _record(self, reply, message: str) -> None:
-        """Add one turn's usage to the session total (board.json keeps it across resumes)."""
+        """Add one turn's usage to the total for this launch."""
         fresh, self._fresh = self._fresh, False
         if reply is None:
             return
@@ -361,7 +361,7 @@ class Designer:
             self._record(getattr(e, "reply", None), message)
             while self._outbox:
                 yield self._outbox.pop(0)
-            # The conversation is not saved, so it cannot be resumed: start afresh next turn. The new
+            # The agent's conversation is not saved, so it cannot be reopened: start afresh next turn. The new
             # prompt lists every card on the board, so IDs still mean the same thing.
             await self.close()
             msg = f"The agent could not run: {getattr(e, 'short', None) or e}"

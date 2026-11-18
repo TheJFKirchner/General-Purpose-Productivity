@@ -14,7 +14,7 @@ API (JSON unless stated):
   POST /api/card-error {id, error}   once per card: the agent fixes it
                              -> {ok, fixed, card, cards, text, round, usage, model}
   usage = {input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost_usd, turns},
-  cumulative for the whole whiteboard session (kept in board.json across resumes)
+  cumulative for this launch (in memory only; every launch starts at zero)
   POST /api/save {id} · /api/unsave {id} · /api/delete {id} · /api/done
   POST /api/heartbeat        {ok}; the page posts it every 15 s
 
@@ -250,11 +250,17 @@ def make_handler(app: Whiteboard):
         def do_POST(self):
             app.touch()
             path = urlparse(self.path).path
+            # Read the body first, even for a refused request: answering with it unread can make the
+            # connection reset instead of delivering the reply (seen on Windows).
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length > 0 else b""
+            except (ValueError, OSError):
+                return self._json(400, {"error": "bad request body"})
             if not self._same_origin():
                 return self._json(403, {"error": "requests from other sites are refused"})
             try:
-                length = int(self.headers.get("Content-Length") or 0)
-                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+                body = json.loads(raw) if raw else {}
                 if not isinstance(body, dict):
                     body = {}
             except (ValueError, json.JSONDecodeError):
