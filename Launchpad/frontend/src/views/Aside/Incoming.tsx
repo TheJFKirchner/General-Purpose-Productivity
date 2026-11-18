@@ -8,7 +8,7 @@ import { Badge, Empty, Markdown, Pill, Tag, openReport } from '../../components'
 import { useNow } from '../../lib/hooks';
 import { ago, cleanName, mmss, usd } from '../../lib/format';
 import { REVIEW_TESTS, S_LABEL, agentLabel } from '../../lib/labels';
-import { CircleHelp, FileText, Inbox, Send, Users } from '../../components/icons';
+import { CircleHelp, FileText, Inbox, Send, UserCheck, Users } from '../../components/icons';
 
 const FILTERS: { f: 'all' | 'permission' | 'question'; label: string }[] = [
   { f: 'all', label: 'All' }, { f: 'permission', label: 'Permissions' }, { f: 'question', label: 'Questions' },
@@ -82,7 +82,7 @@ function Dismiss({ id }: { id: string }) {
 export function QueueCard({ c, scope }: { c: CardView; scope?: 'review' }) {
   const { i, s, hidden } = c;
   const open = i.ui === 'open';
-  const needsYou = i.kind === 'question' || i.kind === 'permission';
+  const needsYou = i.kind === 'question' || i.kind === 'permission' || i.kind === 'review';
   const testTitle = i.test ? REVIEW_TESTS.find(t => t.test === i.test)?.title : '';
   const who = [agentLabel(cleanName(i.agent)), i.step != null ? `step ${i.step}` : '', testTitle || ''].filter(Boolean).join(' · ');
   const runTxt = s ? sel.sLabel(s) : 'The run';
@@ -92,7 +92,7 @@ export function QueueCard({ c, scope }: { c: CardView; scope?: 'review' }) {
       <div className="top">
         <Tag kind={i.kind} />
         {i.review_id != null && i.role ? <span className="chip role-chip" title={`A question from the Role Reviewer about the role ${i.role}`}><Users />{i.role}</span> : null}
-        {s ? <span className="chip" title={sel.sName(s)}>{sel.sLabel(s)}</span> : null}
+        {s ? <span className={`chip${s.wf ? ' wfchip' : ''}`} title={sel.sName(s)}>{sel.sLabel(s)}</span> : null}
         <span className="who">{who}</span>
         <Age at={i.at} />
       </div>
@@ -109,14 +109,27 @@ function CardBody({ c, runTxt, scope }: { c: CardView; runTxt: string; scope?: '
     return (
       <>
         <h3>{s ? `${sel.sLabel(s)} finished · ${S_LABEL[s.status] || s.status}` : 'Run finished'}</h3>
-        <p className="why">{s ? sel.sName(s) : ''}{s ? ` · session total ${usd(c.total)}` : ''}{c.pc ? ` · planner ${usd(c.pc)} (separate)` : ''}</p>
+        <p className="why">{s ? (s.wf ? (s.wf.test ? 'Test run of a workflow' : 'Workflow run') : sel.sName(s)) : ''}{s ? ` · ${s.wf ? 'cost' : 'session total'} ${usd(c.total)}` : ''}{c.pc ? ` · planner ${usd(c.pc)} (separate)` : ''}</p>
         <div className="row">
           <Pill variant="soft" size="sm" icon={<FileText />} onClick={() => { if (i.session_id != null) openReport(i.session_id); }}>Read report</Pill>
-          <Pill size="sm" icon={s && s.reportSent ? undefined : <Send />} disabled={!!s && s.reportSent} onClick={() => { if (i.session_id != null) actions.sendReport(i.session_id); }}>
-            {s && s.reportSent ? 'Sent to planner' : 'Send to planner'}
-          </Pill>
+          {s && s.wf ? null : (
+            <Pill size="sm" icon={s && s.reportSent ? undefined : <Send />} disabled={!!s && s.reportSent} onClick={() => { if (i.session_id != null) actions.sendReport(i.session_id); }}>
+              {s && s.reportSent ? 'Sent to planner' : 'Send to planner'}
+            </Pill>
+          )}
           <Pill variant="ghost" size="sm" onClick={() => actions.dismissItem(i.id)}>Dismiss</Pill>
         </div>
+      </>
+    );
+  }
+  if (i.kind === 'review' && open) {
+    const wfName = i.workflow ? `${i.workflow.name}${i.workflow.test ? ' (test run)' : ''}` : runTxt;
+    return (
+      <>
+        <h3>{i.title || 'Sign-off needed'}</h3>
+        {i.body ? <Markdown className="qbody" text={i.body} /> : null}
+        <div className="blockline"><span className="dot" />Needs you · {wfName} is waiting for your sign-off</div>
+        <div className="row"><Pill variant="primary" size="sm" icon={<UserCheck />} onClick={() => { if (i.run_id) actions.openWorkflowReview(i.run_id); }}>Open the review</Pill></div>
       </>
     );
   }

@@ -45,7 +45,7 @@ The app is a web page inside a window opened by its host, `host/wikiapp.py`: Pyt
 |---|---|
 | Windows 10 or 11, or a recent macOS | Tested on Windows 11. macOS support is written but not yet tested on a Mac (§11). |
 | Python 3.11 or newer | agentlib needs 3.11 (`setup.py` refuses older). Tested with Python 3.13 from the Microsoft Store. On a Mac, use python.org or Homebrew; the system's `python3` is too old. |
-| Python packages | Listed in `App Files/requirements.txt`, with the tested versions: `pywebview` 6.2.1 and `pyyaml` 6.0.3 (`pywin32` on Windows). They're installed into `App Files/.venv` by `App Files/setup.py`, which the launchers run before every start. It returns at once unless `requirements.txt`, or which agentlib folder is used, changed. pywebview pulls in `pythonnet` (to use WebView2 through .NET) on Windows, and `pyobjc` (WebKit) on macOS. |
+| Python packages | Listed in `App Files/requirements.txt`, with the tested versions: `pywebview` 6.2.1 and `pyyaml` 6.0.3 (`pywin32` on Windows). They're installed into `App Files/.venv` by `App Files/setup.py`, which `WikiApp.command` runs before every start and `WikiApp.cmd` runs only on the first start (afterwards the host checks it silently and reopens the launcher with `WIKIAPP_SETUP=1` when an install is needed, so the console only flashes). It returns at once unless `requirements.txt`, or which agentlib folder is used, changed. pywebview pulls in `pythonnet` (to use WebView2 through .NET) on Windows, and `pyobjc` (WebKit) on macOS. |
 | The system web view | Windows: Microsoft Edge WebView2 Runtime (ships with Windows 11 and current Windows 10) and .NET Framework 4.x (built in). macOS: WebKit (built in). |
 
 No installer, no admin rights, no registry entries. Node.js isn't needed.
@@ -66,7 +66,7 @@ The app itself never imports `claude_agent_sdk` and never runs `claude -p`: ever
 
 ```
 wiki-app\                    The app: a folder of the General-Purpose-Productivity repo, next to agentlib\
-├─ WikiApp.cmd                 Starts the app on Windows (runs setup.py, then the host)
+├─ WikiApp.cmd                 Starts the app on Windows (setup.py on the first start, then the host)
 ├─ WikiApp.command             Starts the app on macOS (the same; LF line endings, executable)
 ├─ App Files\                  The whole app
 │  ├─ setup.py                 Makes .venv, installs requirements.txt, finds and installs agentlib

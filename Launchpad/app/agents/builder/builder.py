@@ -349,6 +349,9 @@ async def run_step(run, n: int, brief: str) -> dict:
             raise
         ctx = StepContext(run, n, None, f"agent '{worker['name']}' could not be loaded ({one_line(str(e), 160)})")
         agent = load_worker(run, ctx)
+    # assigned MCP servers that passed their last test; each skipped one is a warning here and in the step report
+    mcp_issues = await run.hub.give_mcp(agent, who=f"{ctx.agent_name} (step {n})", session_id=run.ls.id,
+                                        name=ctx.worker["name"])
     run.steps[n]["agent_display"] = ctx.agent_name
     run.steps[n]["agent_purpose"] = ctx.worker["purpose"]
     run.steps[n]["agent_fallback"] = bool(ctx.fallback)
@@ -370,7 +373,7 @@ async def run_step(run, n: int, brief: str) -> dict:
         "issues": [f"Builder ended without submit_report{': ' + ctx.error if ctx.error else ''}"]}
     fallback_issue = ([f"Plan named another agent but {ctx.fallback}; the step ran on the "
                        f"{crew.display('builder')} instead."] if ctx.fallback else [])
-    report["issues"] = fallback_issue + list(report["issues"]) + ctx.refused
+    report["issues"] = fallback_issue + list(report["issues"]) + ctx.refused + mcp_issues
     report["agent"] = ctx.agent_name
     path = run.folder.write_step_report(n, ctx.title, report, agent=meter.name, tool_calls=meter.tool_calls,
                                         cost_usd=meter.cost_usd)

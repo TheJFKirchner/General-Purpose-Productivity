@@ -58,6 +58,7 @@ async def draft_with_usage(hub, folder: Path, text: str, context: str = "") -> t
     agent = crew.load("drafter", engine=hub.settings.engine, project=folder, output_schema=DRAFT_SCHEMA,
                       save_conversation=False)
     meter = Meter(hub, session_id=None, role="drafter", name=crew.display("drafter"))
+    meter.usage_info = {"label": "Agent drafting", "folder": str(folder)}        # the usage log (no session to ask)
     await meter.set_status("working")
     reply = None
     try:

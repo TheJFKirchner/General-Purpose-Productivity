@@ -202,3 +202,5 @@
 @media (max-width:980px){
   .af-row2,.af-purposes{grid-template-columns:1fr}
 }
+.skl-t small .mcp-ic{width:var(--icon-xs);height:var(--icon-xs);vertical-align:-2px}
+.cd-sec .warn+.warn,.cd-sec .warn+.skl{margin-top:var(--sp-2)}

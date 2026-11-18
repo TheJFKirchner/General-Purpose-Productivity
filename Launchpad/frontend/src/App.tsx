@@ -1,10 +1,11 @@
 /* App shell: header + tab views + the right-hand aside + the visuals panel slot, and the page-wide overlays
-   (modal, pen editor, settings, folder menu, tooltip, toasts). Each screen lives in src/views/<Name>/. The "plan" tab
+   (modal, pen editor, folder menu, tooltip, toasts). Each screen lives in src/views/<Name>/. The "plan" tab
    is the chat screen (views/Chat): the Planner / CLI switch over both conversations. */
 import { useEffect, type ReactNode } from 'react';
 import { sel, useComputed, useLaunchpad, type View } from './store';
 import { DirMenu, ModalHost, TipHost, Toasts } from './components';
-import { Header, panelId, tabId } from './components/Header';
+import { Header } from './components/Header';
+import { Sidebar, panelId, tabId } from './components/Sidebar';
 import ChatScreen from './views/Chat/Chat';
 import Missions from './views/Missions/Missions';
 import Crew from './views/Crew/Crew';
@@ -12,7 +13,9 @@ import Files from './views/Files/Files';
 import EditorModal from './views/Files/EditorModal';
 import Aside from './views/Aside/Aside';
 import VisualsPanel from './views/Visuals/Visuals';
-import SettingsModal from './views/Settings/Settings';
+import Settings from './views/Settings/Settings';
+import Workflows from './views/Workflows/Workflows';
+import Usage from './views/Usage/Usage';
 
 export default function App() {
   const view = useLaunchpad(st => st.ui.view);
@@ -34,6 +37,8 @@ export default function App() {
     <>
       <div className="app">
         <Header />
+        <div className="app-body">
+        <Sidebar />
         <main>
           {/* every view stays mounted (typed text, scroll and local state survive a tab switch, as in the vanilla
               page); .view-slot is display:contents, so each view's <section class="view card"> is main's flex child */}
@@ -41,13 +46,16 @@ export default function App() {
           <Slot v="missions" view={view}><Missions /></Slot>
           <Slot v="crew" view={view}><Crew /></Slot>
           <Slot v="files" view={view}><Files /></Slot>
+          <Slot v="workflows" view={view}><Workflows /></Slot>
+          <Slot v="usage" view={view}><Usage /></Slot>
+          <Slot v="settings" view={view}><Settings /></Slot>
           <Aside />
           <VisualsPanel />
         </main>
+        </div>
       </div>
       <ModalHost />
       <EditorModal />
-      <SettingsModal />
       <DirMenu />
       <TipHost />
       <Toasts />

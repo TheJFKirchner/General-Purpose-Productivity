@@ -1,7 +1,7 @@
 /* Derived values, ported from the vanilla page. Pure functions of the state: call them with the state you got from
    useLaunchpad() (or getState()). They also work on immer drafts inside the reducer. */
 import type { AppState, Agent, ChatItem, PlannerEntry, QueueItem, Session, VisualSet } from './types';
-import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, Purpose, RoleDecision, RoleEntry } from '../contract';
+import type { AgentFields, AgentProblem, CrewAgentDef, GitRepo, McpServer, Purpose, RoleDecision, RoleEntry } from '../contract';
 import { baseName, cleanName, modelName, tparts, type TokParts } from '../lib/format';
 import { PURPOSES, WRITE_TOOLS } from '../lib/labels';
 
@@ -13,7 +13,7 @@ export const curSess = (st: S): Session | null => (st.current != null && st.sess
 /** Display name of a session (a newer draft's title wins while its run shows the older plan). */
 export const sName = (s: Session): string =>
   (s.run && s.draft && s.draft.title && s.runDraftV !== s.draftV ? s.draft.title : '') || (s.run && s.run.name) || (s.draft && s.draft.title) || s.planTitle || 'New plan';
-export const sLabel = (s: Session): string => (s.run ? 'Run ' : 'Session ') + s.letter;
+export const sLabel = (s: Session): string => s.wf ? `${s.wf.name}${s.wf.test ? ' (test run)' : ''}` : (s.run ? 'Run ' : 'Session ') + s.letter;
 export const isFinished = (s: Session): boolean => ['done', 'stopped', 'failed', 'blocked'].includes(s.status);
 export const inFlight = (st: S): Session[] => allSessions(st).filter(s => s.status === 'running');
 export const agentsOf = (st: S, sid: string | null | undefined): Agent[] => Object.values(st.agents).filter(a => a.session_id === sid);
@@ -66,8 +66,13 @@ export function planCardView(s: Session, e: Extract<PlannerEntry, { kind: 'planc
 }
 
 /* ---------- Incoming ---------- */
-export const qOpen = (i: QueueItem): boolean => i.ui === 'open' && (i.kind === 'question' || i.kind === 'permission');
-export const waitingCount = (st: S, sid: string): number => st.queue.filter(i => qOpen(i) && i.session_id === sid).length;
+export const qOpen = (i: QueueItem): boolean => i.ui === 'open' && (i.kind === 'question' || i.kind === 'permission' || i.kind === 'review');
+/** A workflow run with a review stage waiting for sign-off (the blocked step says so even before the card arrives). */
+export const reviewWaiting = (s: Session): boolean => !!s.run && s.run.steps.some(x => x.status === 'blocked' && x.waiting_for === 'review');
+export const waitingCount = (st: S, sid: string): number => {
+  const n = st.queue.filter(i => qOpen(i) && i.session_id === sid).length, s = st.sessions[sid];
+  return n || (s && s.status === 'running' && reviewWaiting(s) ? 1 : 0);
+};
 export const openCount = (st: S): number => st.queue.filter(qOpen).length;
 export const anyBlocking = (st: S): boolean => st.queue.some(i => qOpen(i) && !!i.blocking);
 /** Is this agent waiting on the user? Matched by queue_item.agent_id; name only as a fallback. */
@@ -422,3 +427,30 @@ export function relPath(p: string): string {
   const raw = String(p || ''), parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
   return /^([a-z]:|[\\/])/i.test(raw) ? '…/' + parts.slice(-3).join('/') : parts.join('/');
 }
+
+
+/* ---------- MCP library ---------- */
+/** Servers whose last test passed: the only ones the Crew picker offers. */
+export const mcpConnected = (st: S): McpServer[] => st.mcp.servers.filter(x => x.status === 'connected');
+/** One agent's assigned servers, each with its library entry (null = no longer in the library). */
+export function mcpAssigned(st: S, agent: string): { name: string; server: McpServer | null; ok: boolean }[] {
+  return (st.mcp.assignments[agent] || []).map(name => {
+    const server = st.mcp.servers.find(x => x.name === name) || null;
+    return { name, server, ok: !!server && server.status === 'connected' };
+  });
+}
+/** The assigned servers of an agent that are not connected (failed, untested, testing or gone): the card warning. */
+export const mcpProblems = (st: S, agent: string) => mcpAssigned(st, agent).filter(x => !x.ok && x.server?.status !== 'testing');
+
+/* ---------- workflows ---------- */
+/** The run a workflow's card shows (its newest), or null. */
+export const wfRunOf = (st: S, workflowId: string) => st.wf.runs[st.wf.latest[workflowId]] || null;
+/** Why the last Run / review of a workflow was refused, or ''. */
+export const wfRunError = (st: S, workflowId: string): string => st.wf.runErrors[workflowId] || '';
+export const wfActive = (r: { status: string } | null | undefined) => !!r && (r.status === 'running' || r.status === 'awaiting_review');
+/** Runs waiting for a person to review (sidebar badge, card marker). */
+export const wfWaiting = (st: S): number => Object.values(st.wf.latest).filter(id => st.wf.runs[id]?.status === 'awaiting_review').length;
+/** Runs going or waiting. */
+export const wfRunning = (st: S): number => Object.values(st.wf.latest).filter(id => wfActive(st.wf.runs[id])).length;
+/** Index of the stage waiting for review in a run, or -1. */
+export const wfReviewStage = (r: { stages: { status: string }[] }): number => r.stages.findIndex(s => s.status === 'awaiting_review');

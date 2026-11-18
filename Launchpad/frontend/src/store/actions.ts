@@ -1,10 +1,10 @@
 /* UI actions: everything a screen does that changes state and/or sends a message. Views call these (or plain
    send() for messages with no local state change); they never write the store themselves.
    Ported from the vanilla click handlers; the same messages go out. */
-import type { AgentFields, ChatMode, Id, RoundAnswer } from '../contract';
+import type { AgentFields, ChatMode, Id, McpConfig, McpKind, ReviewAnswerOut, RoundAnswer, WorkflowDraft } from '../contract';
 import { getState, later, run, send, toast, type Ctx } from './core';
 import type { ChatSide, QueueItem, View } from './types';
-import type { GitOp, UiMessage } from '../contract';
+import type { GitOp, UiMessage, UsageBucket, UsagePeriod, UsageSplit } from '../contract';
 import {
   addBubble, addSys, answerQ, chatBubble, closeEditor, curChatOf, dropItem, fxBoot, fxLoad, fxSelect, noteVisPick, openVis,
   requestCrew, sendChat, setChatMode, setCurrent, submitIfDone,
@@ -15,7 +15,7 @@ import { newReview, reviewOf } from './roles';
 import type { RoleDecision } from '../contract';
 import { MODES, WRITE_TOOLS } from '../lib/labels';
 import { REDUCED } from '../lib/format';
-import { LS_EDITOR_VIEW, lsSet } from '../lib/storage';
+import { LS_ASIDE, LS_EDITOR_VIEW, lsSet } from '../lib/storage';
 
 /* Repos panel: ask for the repo list (also when the Files tab opens); a lost answer must not leave the panel waiting */
 function gitScan(c: Ctx): void {
@@ -41,7 +41,9 @@ export const actions = {
     run(c => {
       c.st.ui.view = v;
       if (v === 'files') { if (!c.st.settings) send({ type: 'get_settings' }); fxBoot(c); gitScan(c); }
-      if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); }
+      if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); send({ type: 'get_mcp' }); }
+      if (v === 'workflows') send({ type: 'workflows_get' });
+      if (v === 'settings') { send({ type: 'get_settings' }); send({ type: 'get_mcp' }); c.st.ui.settingsMsg = null; }
       if (v === 'plan' && c.st.ui.chatSide === 'code' && !c.st.crewDefs && !c.st.crewLoading) requestCrew(c);
     });
   },
@@ -201,6 +203,8 @@ export const actions = {
 
   /* ---------- Incoming ---------- */
   setQueueFilter(f: 'all' | 'permission' | 'question') { run(c => { c.st.ui.queueFilter = f; }); },
+  /** Close the right-hand panel to a slim strip, or open it again (kept across a reload). */
+  setAsideClosed(closed: boolean) { lsSet(LS_ASIDE, closed); run(c => { c.st.ui.asideClosed = closed; }); },
   /** Answer a question card (an option, the recommendation or free text). */
   answerItem(id: Id, value: string) {
     run(c => {
@@ -590,14 +594,59 @@ export const actions = {
   },
 
   /* ---------- Settings ---------- */
-  openSettings() { run(c => { send({ type: 'get_settings' }); c.st.ui.settingsOpen = true; c.st.ui.settingsMsg = null; }); },
-  closeSettings() { run(c => { c.st.ui.settingsOpen = false; }); },
+  /** Settings is a view (the header button): same as setView('settings'). */
+  openSettings() { actions.setView('settings'); },
+
+  /* ---------- Connections and the MCP library ---------- */
+  testConnection(id: string) { run(c => { if (send({ type: 'test_connection', id })) c.st.connTests[id] = { status: 'testing' }; }); },
+  /** Save a server (add, or edit with the name it had). The page waits for the next mcp_library. */
+  saveMcpServer(server: { name: string; kind: McpKind; config: McpConfig }, originalName?: string) {
+    run(c => { c.st.mcp.error = null; send(originalName ? { type: 'save_mcp_server', server, original_name: originalName } : { type: 'save_mcp_server', server }); });
+  },
+  removeMcpServer(name: string) { send({ type: 'remove_mcp_server', name }); },
+  testMcpServer(name: string) { run(c => { if (send({ type: 'test_mcp_server', name })) { const s = c.st.mcp.servers.find(x => x.name === name); if (s) { s.status = 'testing'; s.detail = null; } } }); },
+  listMcpImports(source: string) { run(c => { if (send({ type: 'list_mcp_imports', source })) c.st.mcpImports[source] = { loading: true }; }); },
+  closeMcpImports(source: string) { run(c => { delete c.st.mcpImports[source]; }); },
+  importMcpServers(source: string, names: string[]) { if (names.length) send({ type: 'import_mcp_servers', source, names }); },
+  /* ---------- workflows ---------- */
+  workflowsGet() { send({ type: 'workflows_get' }); },
+  /** Ask for the Usage screen's data (the server answers usage_data, and re-sends it unasked when new spend is recorded, until usage_stop). */
+  usageGet(q: { period: UsagePeriod; bucket: UsageBucket; split: UsageSplit; session?: string | null }) {
+    run(c => {
+      const session = q.session || null;
+      if (send({ type: 'usage_get', period: q.period, bucket: q.bucket, split: q.split, session })) { c.st.usage.pending += 1; c.st.usage.want = { period: q.period, bucket: q.bucket, split: q.split, session }; }
+    });
+  },
+  /** The Usage screen was left: no more unasked usage_data. */
+  usageStop() { run(c => { c.st.usage.want = null; send({ type: 'usage_stop' }); }); },
+  /** From an Incoming review card: show the Workflows tab with that run's review open. */
+  openWorkflowReview(runId: string) { run(c => { c.st.ui.view = 'workflows'; c.st.wf.openReview = runId; send({ type: 'workflows_get' }); }); },
+  clearOpenReview() { run(c => { c.st.wf.openReview = null; }); },
+  /** Browse for an output folder: the picked path only fills the form's field (never connected as a working directory). */
+  pickOutputFolder() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; c.st.ui.pickFor = 'output'; toast(c, 'Choose a folder in the picker window…'); } }); },
+  clearPickedOutput() { run(c => { c.st.ui.pickedOutput = null; }); },
+  /** Save (add, or edit with the id it had). The server answers workflows_list (error on a refusal). */
+  saveWorkflow(folder: string, workflow: WorkflowDraft, originalId?: string) {
+    run(c => { c.st.wf.error = null; send(originalId ? { type: 'workflow_save', folder, workflow, original_id: originalId } : { type: 'workflow_save', folder, workflow }); });
+  },
+  removeWorkflow(id: string) { send({ type: 'workflow_remove', id }); },
+  runWorkflow(id: string, inputs: Record<string, string>, test: boolean, unattended: boolean) {
+    run(c => { c.st.wf.error = null; const w = c.st.wf.list.find(x => x.id === id); if (w) delete c.st.wf.runErrors[w.id]; send({ type: 'workflow_run', id, inputs, test, unattended }); });
+  },
+  stopWorkflow(runId: string) { send({ type: 'workflow_stop', run_id: runId }); },
+  /** Approve or send back one review stage (the server remembers the name: workflows_list reviewer_name). */
+  reviewWorkflow(o: { runId: string; stage: number; answers: ReviewAnswerOut[]; name: string; note: string; decision: 'approve' | 'send_back'; backTo?: number }) {
+    send({ type: 'workflow_review', run_id: o.runId, stage: o.stage, answers: o.answers, name: o.name.trim(), note: o.note.trim(), decision: o.decision, ...(o.backTo != null ? { back_to: o.backTo } : {}) });
+  },
+  setAgentMcp(agent: string, servers: string[]) {
+    run(c => { if (send({ type: 'set_agent_mcp', agent, servers })) c.st.mcp.assignments[agent] = servers; });
+  },
   setSettingsAddPath(path: string) { run(c => { c.st.ui.settingsAddPath = path; }); },
   addDirectory(path: string) {
     const p = String(path || '').trim(); if (!p) return;
     run(c => { if (send({ type: 'add_directory', path: p })) { c.st.ui.settingsAdding = p; toast(c, 'Adding the folder…'); } });
   },
-  pickDirectory() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; toast(c, 'Choose a folder in the picker window…'); } }); },
+  pickDirectory() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; c.st.ui.pickFor = null; toast(c, 'Choose a folder in the picker window…'); } }); },
   /** One setting changed (the view checks numbers first). */
   setSetting(key: string, value: unknown) { run(c => { if (send({ type: 'set_settings', patch: { [key]: value } })) toast(c, 'Setting sent'); }); },
   makeDefaultDir(dirId: Id) { send({ type: 'set_settings', patch: { default_dir_id: dirId } }); },

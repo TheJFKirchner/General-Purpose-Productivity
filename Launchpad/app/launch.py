@@ -71,21 +71,24 @@ LAUNCH_OPTIONS = {"question_timeout": "question_timeout_s", "permission_timeout"
 
 def demo_directories() -> list[Path]:
     """Two scratch folders for the fake demo (File Explorer, sessions in either), in the temp folder. "Demo shop" has
-    one folder agent (copy-reviewer, app/demo.py) that the demo plan names for a step and a skill in .claude/skills;
-    "Demo clinic" has one in .agents/skills (tick it as additional to see both). Every launch restores them to
+    one folder agent (copy-reviewer, app/demo.py) that the demo plan names for a step, a skill in .claude/skills and
+    the sample workflow + the shipped example workflow (workflows/, with the sample's method pages and data); "Demo
+    clinic" has a skill in .agents/skills (tick it as additional to see both). Every launch restores them to
     exactly these contents (earlier sessions, created agents and edits are removed, best-effort)."""
     import shutil
     import tempfile
-    from .demo import FOLDER_AGENT_FILE, FOLDER_AGENT_NAME
+    from .demo import FOLDER_AGENT_FILE, FOLDER_AGENT_NAME, example_workflow_file, workflow_files
     base = Path(tempfile.gettempdir()) / "launchpad-demo"
     out = []
+    example_rel, example_text = example_workflow_file()
     for name, files in (("Demo shop", {"README.md": "# Demo shop\nA small web shop (made up).\n",
                                        "notes/ideas.md": "# Ideas\n- CSV export on the orders page\n",
                                        "app.py": "print('shop')\n",
                                        f".claude/agents/{FOLDER_AGENT_NAME}.md": FOLDER_AGENT_FILE,
                                        ".claude/skills/house-style/SKILL.md": (
                                            "---\nname: house-style\ndescription: The shop's writing and naming "
-                                           "rules (made up)\n---\n- Short sentences; prices with two decimals\n")}),
+                                           "rules (made up)\n---\n- Short sentences; prices with two decimals\n"),
+                                       **workflow_files(), example_rel: example_text}),
                         ("Demo clinic", {"README.md": "# Demo clinic\nClinic operations scripts (made up).\n",
                                          "data/appointments.csv": "date,clinic,booked\n2026-11-01,North,42\n",
                                          ".agents/skills/csv-checks/SKILL.md": (
@@ -152,24 +155,35 @@ def build_settings(args):
         if v is not None:
             values[name] = v
             overridden.add(name)
-    settings = Settings(project=project, engine="fake" if args.fake else "claude", planner_model=args.model, **values)
+    settings = Settings(project=project, engine="fake" if args.fake else "claude", planner_model=args.model,
+                        demo=bool(args.fake), **values)
     if args.fake:
         from . import demo                    # imports agentlib.fake, which registers the "fake" engine
         from .tally import Tally
         demo.install(project)
         demo_app_root()                        # the editor in the demo edits a copy, never the real agent files
         demo.seed_tally(Tally.beside(store), store)    # sample undefined roles, in the demo's own temp home only
+        from .usagelog import UsageLog
+        demo.seed_usage(UsageLog.beside(store), store)  # five weeks of made-up usage history, temp home only
+        import tempfile
+        from . import mcpimport
+        from .mcplib import McpLibrary
+        claude_home = Path(tempfile.gettempdir()) / "launchpad-demo" / "claude-home"
+        mcpimport.CLAUDE_HOME = claude_home            # "Import from Claude Code" reads a sample, never the real home
+        demo.seed_mcp(McpLibrary.beside(store), [Path(d["path"]) for d in store.directories()], claude_home)
     print(f"Settings and connected folders: {launchpad_home() / 'settings.json'}", flush=True)
     return settings, store, overridden
 
 
 def reset_demo_home(home: Path) -> None:
     """Best-effort wipe of the fake demo's own per-user folder (settings.json with folders + use counts, backups, the
-    undefined-roles tally and its review cases)."""
+    undefined-roles tally and its review cases, the MCP library, the usage log)."""
     import shutil
+    from .mcplib import FILE_NAME as MCP_FILE
     from .tally import CASES_DIR, FILE_NAME
+    from .usagelog import DIR_NAME as USAGE_DIR
     for p in (home / "settings.json", home / "backups", home / FILE_NAME, home / (FILE_NAME + ".lock"),
-              home / CASES_DIR):
+              home / CASES_DIR, home / MCP_FILE, home / (MCP_FILE + ".lock"), home / USAGE_DIR):
         try:
             if p.is_dir():
                 shutil.rmtree(p)

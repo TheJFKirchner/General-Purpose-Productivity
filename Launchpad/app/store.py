@@ -17,6 +17,7 @@
 - The undefined-roles tally and review cases live beside this file, in their own files (app/tally.py)
 - additional_dir_ids [dir_id]: folders ticked as "additional" (global; a session uses them minus its primary)
 - agent_skills {agent name: "all" | [skill names]}: per-agent skill allowlist (defaults in app/skills.py)
+- reviewer_name: the name typed at the last workflow review sign-off (app/workflows/manager.py; prefills the next)
 """
 from __future__ import annotations
 
@@ -86,13 +87,14 @@ class Store:
     def __init__(self, path: Path | None):
         self.path = Path(path) if path else None
         self.data = {"version": 1, "directories": [], "default_dir": None, "values": {}, "agent_uses": {},
-                     "additional_dir_ids": [], "agent_skills": {}}
+                     "additional_dir_ids": [], "agent_skills": {}, "reviewer_name": ""}
         if self.path and self.path.is_file():
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self.data.update({k: loaded[k] for k in ("directories", "default_dir", "values", "agent_uses",
-                                                             "additional_dir_ids", "agent_skills") if k in loaded})
+                                                             "additional_dir_ids", "agent_skills", "reviewer_name")
+                                      if k in loaded})
                     for k, typ in (("agent_uses", dict), ("agent_skills", dict), ("additional_dir_ids", list)):
                         if not isinstance(self.data.get(k), typ):
                             self.data[k] = typ()
@@ -186,6 +188,18 @@ class Store:
             raise ValueError("give the agent name")
         self.data.setdefault("agent_skills", {})[str(name)] = value
         self.save()
+
+    # ---------------------------------------------------------------- workflow sign-off name
+    def reviewer_name(self) -> str:
+        """The name typed at the last workflow review sign-off (prefills the next one)."""
+        v = self.data.get("reviewer_name")
+        return v if isinstance(v, str) else ""
+
+    def set_reviewer_name(self, name: str) -> None:
+        name = str(name or "").strip()
+        if name and name != self.reviewer_name():
+            self.data["reviewer_name"] = name
+            self.save()
 
     # ---------------------------------------------------------------- values
     def values(self) -> dict:

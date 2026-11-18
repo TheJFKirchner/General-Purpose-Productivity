@@ -130,8 +130,9 @@
                  built?, report_path?}
       - from in_progress on, agent_display = the agent actually running the step (after any fallback); a fallback
         is also an issue in the step report and report.md (Steps table has an Agent column)
-    queue_item {id, session_id, chat_id, kind: question|permission|plan|info, agent, agent_id, step, title, body,
-                rec, options?, blocking, timeout_s, expires_at}
+    queue_item {id, session_id, chat_id, kind: question|permission|plan|info|review, agent, agent_id, step, title,
+                body, rec, options?, blocking, timeout_s, expires_at}
+      - kind review = a workflow run waiting for a review sign-off (see Workflows > Missions below)
       - agent = plain display name of the step's agent ("Builder", or a folder agent's); the page adds the step
       - run items: session_id set, chat_id null; chat items: chat_id set, session_id null, timeout_s null
       - permission: rec null (no recommended choice), plus tool; run cards also command; chat cards also
@@ -207,6 +208,50 @@
         building and other = the Builder's gated tools and checks; custom_tools = Launchpad's step tools
       - sent again after a save of one of the app's files, after agent_create / agent_remove, and after a save of a
         folder's .claude/agents/*.md (that folder's list)
+      - mcp_supported (bool) = the engine this agent runs on can take MCP servers per run (agentlib; claude yes, fake
+        and Cursor no: assignments are kept but do nothing; say so on the card); engine_label = that engine's name
+        ("Claude", "Cursor", "Fake engine (demo)"). Planner = the planner's harness, CLI = the CLI chat's, others = the
+        launch engine
+    connection_test {id, installed, version, reachable, usable, detail}  (reply to test_connection; Settings >
+                    Connections. Any of version / reachable / usable / detail may be null = not checked; version =
+                    the number only, e.g. "2.1.160")
+      - one test script per CLI tool (app/connections/<tool>.py, each runnable alone from a terminal); the list of
+        tools comes from the server (mcp_library connections), so a new tool needs no page change. Connections is the
+        ONE place the page names the real tools ("Claude Code", "Cursor"); everywhere else it still says "CLI"
+      - claude_code: installed (claude on PATH, else the copy bundled with the SDK) + version + reachable = one minimal
+        request through agentlib (a fraction of a cent; the fake engine in the demo: zero tokens); usable = both
+      - cursor: install check only (cursor-agent / agent); reachable null; usable false while agentlib's Cursor engine
+        is a stub, with the reason in detail
+      - nothing runs until the user clicks Test; a second click while one runs is answered by the running test
+    mcp_library {servers:[{name, kind: command|url, config, status: connected|failed|untested|testing, detail,
+                 tool_count, tools:[names], tested_at}], assignments: {<agent name>: [server names]},
+                 connections:[{id, name}], import_sources:[{id, name}], error?}
+      - reply to every MCP message (below); also on connect and whenever a test starts or ends (broadcast)
+      - config: kind command {command, args:[..], env:{..}}; kind url {url, headers:{..}, type?: "sse"} (no type =
+        streamable HTTP; a URL whose path ends in /sse defaults to sse; an edit without type keeps the stored one).
+        Secret values arrive as "********": every env / header value (a value that is only a ${VAR} reference is shown),
+        secret-looking --flag=value / --flag value args, URL credentials and secret-looking query values. Send a
+        masked value back exactly as received to keep the stored secret; a mask with nothing stored is refused
+      - status testing = a test is running (the stored result stays in force for runs until it ends); detail = "N tools"
+        when connected, else the error; tool_count null unless connected; tested_at ISO time of the last finished test
+      - assignments: agent names as in crew_list `name` (launchpad-builder, launchpad-planner, launchpad-pilot,
+        copy-reviewer, ...). No agent has any server by default (absent = none)
+      - connections = the CLI tools for Settings > Connections; import_sources = "Import from <name>" buttons
+      - error = why the last request was refused (bad name, name taken, unknown server, hidden value not stored, ...);
+        absent when it worked. For anything but a save the same text also arrives as system "MCP: ..."
+      - stored in <home>/.launchpad/mcp.json (never settings.json, never a project); under --fake a temp sample library
+    mcp_imports {source, servers:[{name, kind, summary, scope: local|project|user, exists}]}  (reply to
+                list_mcp_imports; summary = the command line or URL, masked, " · " where it came from; exists = a server of
+                that name is already in the library (importing it is skipped))
+      - claude_code source: each connected folder's local scope (~/.claude.json projects["<folder>"].mcpServers) and
+        <folder>/.mcp.json, then user scope (~/.claude.json mcpServers); the first of a name wins (Claude Code's own
+        precedence). Only stdio / http / sse entries; ${VAR} references copied as they are (expanded at test / run)
+    MCP at run time: right before ANY crew agent starts (planner, Explorer, orchestrator, builders and folder step
+      agents, Visualizer, CLI chat; identical rule) it gets its assigned servers whose last finished test passed. Each
+      other assigned server is skipped: system {text: "MCP server '<name>' was not given to the <agent>: <reason>. It
+      runs without it.", session_id | chat_id} (once per session / chat, agent, server and reason; a step's warning is
+      also in its step report's issues). An engine that cannot take MCP servers (fake, Cursor): nothing given, no
+      warning. MCP tools are pre-approved (no permission cards, Launchpad's write guard does not see them)
     agent_uses {name, uses}  (whenever a count changes: planner session started, explore, step, run, visual render,
                 CLI chat's first turn)
     agent_drafted {ok: true, dir_id, fields: {name, description, purpose, model, tools:[..], instructions},
@@ -329,6 +374,20 @@
                   via list_backups / restore_backup {root: dir_id, path: ".claude/agents/<name>.md"})
     chat_from_plan {session_id} -> chat_started (mode plan, from_session_id) in the session's folder, the plan sent as
                   the first message; the draft stays approvable. Refused (system) if the session has no draft
+    test_connection {id} -> connection_test  (id from mcp_library connections: claude_code | cursor)
+    get_mcp {} -> mcp_library  (the Settings page sends it when it opens)
+    save_mcp_server {server: {name, kind, config}, original_name?} -> mcp_library (untested), then mcp_library
+                  (testing), then mcp_library (connected | failed): every save is tested. original_name = edit (a new
+                  name = rename, followed into every assignment); refused -> mcp_library with error
+    remove_mcp_server {name} -> mcp_library  (also removed from every agent)
+    test_mcp_server {name} -> mcp_library (status testing), then mcp_library (the result). A test = start the server,
+                  list its tools, stop it (agentlib.mcp_check; zero tokens; 30 s limit). Every server is also re-tested
+                  once in the background when the app starts
+    list_mcp_imports {source} -> mcp_imports
+    import_mcp_servers {source, names:[..]} -> mcp_library, then each imported server is tested (names already in the
+                  library or no longer found are skipped: system "MCP import: ...")
+    set_agent_mcp {agent, servers:[names]} -> mcp_library  (the whole list for that agent; [] = none; unknown names
+                  refused; failing servers may stay assigned (the card warns), the page offers only connected ones)
     set_autopilot {session_id, on: bool}
     set_auto_answers {session_id, on: bool} -> auto_answers (+ auto_answer lines and queue_resolved by "auto" for the
                   plan-step questions already waiting). Builders only. Per session, off by default, separate from
@@ -355,6 +414,249 @@
         files over 1 MB or binary are listed but never sent; restore = a save of the backup (current kept as backup);
         saves keep the file's own line endings (CRLF stays CRLF; new files LF)
       - fake demo: root "app" serves a temporary copy of the agent files and criteria, never the real ones  (before launch and during a run; on also approves the run's open cards)
+
+  Workflows (Features/2026-11-17-workflows.md; back end app/workflows/, format in app/workflows/README.md)
+    A workflow = ONE JSON file <connected folder>/workflows/<slug>.json: the single definition (the form writes it; it
+    may be edited by hand). Found in the primary folder + the folders ticked as additional (Settings), like skills and
+    agents. A straight line of stages, two kinds: agent and review. Nothing else (no branching, loops, schedules)
+    UI -> here
+    workflows_get {} -> workflows_list
+    workflow_save {folder: dir_id, workflow: {name, description?, output_folder, unattended_default?: bool,
+                   inputs?: [{name, label?, kind?, required?, default?, options?, help?}], files?: [path strings],
+                   stages: [{kind: agent|review, title, agent?, instruction?, files?: [path strings],
+                   checklist?: [{text, kind?: tick|answer} | text]}]}, original_id?} -> workflows_list
+      - new (no original_id): written to <folder>/workflows/<slug>.json, slug made from the name (lower case a-z 0-9
+        and "-"); refused when that file already exists (choose another name)
+      - edit (original_id = a workflow id): rewrites that file (the old version is backed up first into
+        <home>/.launchpad/backups/, where File Explorer saves go; list_backups {root: its folder, path:
+        "workflows/<slug>.json"} lists them; restore_backup only restores .md files, so a JSON backup is restored
+        by hand); the slug and
+        file name never change on an edit; another folder = written there under the same slug, the old file backed up
+        and deleted (refused when the target exists). Allowed while it runs (a run keeps the definition it started with)
+      - refused (workflows_list with error; nothing written): no name, no output_folder, no stages, a stage without a
+        title or with another kind, an agent stage without agent or instruction, a bad input (name not
+        [a-z][a-z0-9_]*, duplicate, unknown kind, choice without options), an attached file that is not .md /
+        .markdown, folder not connected / not a primary-or-additional folder, original_id unknown. Missing attached
+        files and unknown agents ARE saved: they show as error warnings on the card and block Run
+      - files may also be sent as [{path}] objects (as received in workflows_list); extra fields are ignored
+    workflow_remove {id} -> workflows_list  (the file is backed up, then deleted; refused while that workflow runs)
+    workflow_run {id, inputs: {<input name>: string}, test: bool, unattended: bool}
+                 -> workflow_run_state {run}  |  refused: workflow_run_state {run: null, workflow_id: id, error}
+      - refused when: unknown id; the workflow has error warnings (error lists them); a run of it is in progress (ONE
+        run per workflow at a time; a run waiting at a review counts); a required input empty; a date not YYYY-MM-DD,
+        a number not a number, a choice not one of its options, a file input not found; an attached file missing
+        (re-checked at the start: every attachment is read then); the output folder cannot be made; a test run whose
+        `test` folder was not made by Launchpad (below). Nothing is created or deleted when a run is refused
+      - inputs: by input name, strings; a missing one takes its default; unknown names are ignored. Every agent stage
+        is given all inputs; they are saved in the run record
+      - real run: run folder = <output_path>/<YYYY-MM-DD_HHMM> (created; "_2", "_3", ... when taken)
+      - test (true): run folder = <output_path>/test, always the same one. Emptied COMPLETELY at the start of every
+        test run, but ONLY when it holds Launchpad's marker file `.launchpad-test-folder` (written when Launchpad made
+        the folder). A `test` folder without the marker is never touched: the run is refused with "The folder <path>
+        was not created by Launchpad, so it will not be emptied. Rename or remove it, or choose another output
+        folder." Every record of a test run is labelled "Test run"
+      - unattended (true): the run's AGENT stages get the existing Auto answers behaviour (each question answered at
+        once with the agent's own recommendation) and Autopilot (each permission request approved, logged). Review
+        stages ALWAYS stop and wait for a person, whatever is set. The page pre-ticks it from unattended_default
+    workflow_stop {run_id} -> workflow_run_state  (running or waiting at a review -> status stopped; the running agent
+        is stopped and its stage shows failed with error "Stopped"; open question / permission cards are withdrawn).
+        Refused (error, unchanged run) when the run is not in progress or unknown (run null then)
+    workflow_review {run_id, stage: index, answers: [{ticked?: bool, answer?: string}], name, note?, decision:
+                     approve|send_back, back_to?: index} -> workflow_run_state
+      - only for the stage the run waits at (run.status awaiting_review, run.current_stage == stage)
+      - answers: one per checklist item, same order; tick items use ticked, answer items use answer (a tick item may
+        carry an optional answer as a comment)
+      - approve: every tick item ticked, every answer item answered (non-empty) and name required; the review record
+        is saved and the run goes on with the next stage (or finishes)
+      - send_back: name, note and back_to required; back_to = the index of an EARLIER AGENT stage; the checklist may
+        be incomplete (what was filled in is recorded). That stage and every stage after it run again (review stages
+        between them stop again), each re-run agent stage is given the note and its rejected result; rejected results
+        are kept (never overwritten): the re-run writes attempt 2, 3, ... and the old attempt is marked rejected
+      - refused (error; the run is unchanged and sent again): not waiting at that stage, an unticked / unanswered
+        item on approve, no name, send_back without note or with a bad back_to, an unknown decision
+      - name is remembered per user (workflows_list reviewer_name prefills the next sign-off)
+    here -> UI
+    workflows_list {workflows: [workflow], folders: [{dir_id, name, path, is_primary}], agents: {<dir_id>: [{name,
+                    display_name, purpose, builtin}]}, reviewer_name, error?}
+      - reply to workflows_get / workflow_save / workflow_remove; also sent on connect, after a run starts or ends,
+        and after a change of the connected / additional folders
+      - folders = where a workflow can live and be saved: the primary folder, then the folders ticked as additional
+        (only folders that exist), in that order; workflows from all of them are listed (primary first, then by name)
+      - agents[dir_id] = what an agent stage of a workflow in that folder may name (the Add / Edit form's agent
+        list): the Builder (launchpad-builder) and the Explorer (launchpad-astronaut, read-only), then that folder's
+        own agents (.claude/agents/*.md) that can take a plan step (purpose exploring | building | reviewing | other;
+        broken files left out). Planner, Orchestrator, Visualizer and CLI are not stage agents
+      - reviewer_name = the name typed at the last sign-off (per user), "" when none
+      - error = why the last save / remove was refused (absent when it worked)
+    workflow = {id, slug, name, description, folder, folder_name, path, output_folder, output_path, unattended_default,
+                inputs: [input], files: [attached file], stages: [stage], warnings: [warning], can_run,
+                running_run_id, last_run_id}
+      - id = "<dir_id>/<slug>" (opaque); slug = file name without .json; folder = the dir_id of its connected folder;
+        folder_name = that folder's name; path = "workflows/<slug>.json" relative to the folder (read_file shows it)
+      - output_folder = as written (relative to the workflow's folder, or absolute; may be outside every connected
+        folder, e.g. a shared drive); output_path = the absolute folder it resolves to ("" when output_folder is empty)
+      - can_run = no warning of level error. running_run_id = its run in progress (also waiting at a review) or null;
+        last_run_id = its latest run this launch or null (that run's workflow_run_state has been sent)
+    input = {name, label, kind: text|date|number|file|choice, required, default, options: [strings], help}
+      - name: [a-z][a-z0-9_]*, unique; label defaults to the name; options only for choice ([] otherwise); default
+        and help "" when not given; required defaults to true. date = YYYY-MM-DD; file = a path (relative to the
+        workflow's folder, or absolute) that must exist when Run is pressed
+    attached file = {path, resolved, exists, name}
+      - path = as written (relative to the workflow's folder, or absolute; .md or .markdown); resolved = absolute path;
+        exists = found right now; name = the file name. Links, never copies: read at the start of every run (so a
+        corrected page is used next time). Workflow-level files go to every agent stage, a stage's files to that stage
+    stage = {index, kind: agent|review, title} + agent stage: {agent, agent_display, agent_purpose, instruction,
+            files: [attached file]} + review stage: {checklist: [checklist item]}
+      - index = 0-based position; stages run in this order. agent_display / agent_purpose = that agent's display
+        name and purpose (unknown agent: the name as written and "other", plus an unknown_agent error warning)
+    checklist item = {text, kind: tick|answer}  (tick = must be ticked to approve; answer = needs a written answer).
+      An empty checklist = a plain stop and sign-off
+    warning = {level: error|warning, code, message, stage: index|null, field: string|null}
+      - codes: invalid_file (not readable / not JSON / not an object: the card then shows name = slug, no stages),
+        invalid (a field is wrong; message says which), no_output_folder, missing_file (an attached file is not
+        there), unknown_agent (not in agents[folder]); level warning: unknown_field (ignored; dropped on the next form
+        save). Any error-level warning disables Run
+    workflow_run_state {run, error?, workflow_id?}
+      - pushed to every client whenever a run changes (started, a stage starts / ends, a review waits / is signed, a
+        send-back, finished, stopped); on connect the latest run of every workflow (this launch) is replayed, so a run
+        in progress, also one waiting at a review, survives a page reload. Runs live in memory: quitting Launchpad
+        ends them (their run folders stay)
+      - error = why a request was refused (run null for a refused workflow_run, with workflow_id; else the unchanged run)
+    run = {id, workflow_id, workflow_name, test, folder, mission_id, inputs: {name: value}, unattended, autopilot,
+           auto_answers, status: running|awaiting_review|done|failed|stopped, current_stage: index|null, started_at,
+           finished_at, summary_file, error, cost_usd, stages: [stage run]}
+      - folder = absolute path of the run folder; summary_file = absolute path of its run-summary.md (rewritten at
+        every change); started_at / finished_at = ISO times (finished_at null while in progress); error = why it
+        failed / stopped, else null; autopilot / auto_answers = the two switches now (both = unattended at start)
+      - mission_id = the session id its Missions events use ("wf-<run id>"; see Missions below)
+    stage run = {index, kind, title, status: waiting|running|done|failed|awaiting_review, agent, agent_display,
+                 result_file, result_markdown, attempts: [{attempt, result_file, status, rejected, note}], checklist,
+                 review, reviews, error, cost_usd}
+      - result_file = the current attempt's result (absolute path) or null; result_markdown = that file's text (what
+        the review screen shows; the run folder may be outside every connected folder, so read_file cannot reach it;
+        cut at 100 000 characters with a closing line saying so) or null; attempts = every attempt so far, oldest
+        first (rejected true = a review sent it back; note = that reviewer's note). Review stages: agent null,
+        agent_display "Review", result_file null, result_markdown null, attempts []
+      - review stages: checklist = the items; review = the current pass's review record or null; reviews = every
+        record of this stage, oldest first (send-backs included). Agent stages: checklist [], review null, reviews []
+    review record = {decision: approve|send_back, name, note, at, answers: [{text, kind, ticked, answer}], back_to:
+                     index|null, record_file}  (record_file = absolute path of the review's markdown file)
+    Run folder (the record a person keeps; may be outside every connected folder; agents may write there):
+      NN-<stage-slug>.md (each agent stage's result, NN = index + 1; attempt k >= 2: NN-<stage-slug>-k.md),
+      NN-<stage-slug>-review.md (later passes -k), run-summary.md (workflow, test label, inputs, unattended, stages
+      with status / attempts / reviews, attachments read, data files, costs), run.json (the run object above),
+      questions/ (questions the agents asked, with answers), assumptions.md, plus any data files the agents wrote.
+      Launchpad's own bookkeeping (activity.log, operations-manual.md with costs) stays in <workflow's
+      folder>/.launchpad/workflow-runs/<run id>/
+    Missions: a workflow run also shows as a run in Missions, under session_id = run.mission_id: run_started {name:
+      "Workflow: <name>" (+ " (test run)"), steps: one per stage (n = index + 1; review stages agent null,
+      agent_display "Review", agent_purpose "reviewing"), run: 1, revision: 0, autopilot, auto_answers, workflow},
+      followed at once by autopilot {session_id, on} and auto_answers {session_id, on} (the two switches' state; both
+      = unattended at start); step_update per stage change (waiting -> todo, running -> in_progress,
+      awaiting_review -> blocked, done, failed); run_finished {..., workflow} at the end (report_path =
+      run-summary.md, absolute; markdown = its text; planner_cost_usd 0); agent_usage / activity / queue_item /
+      auto_answer / usage scope session carry the same session_id. It sends NO session_started and is not in the
+      snapshot's sessions (not a planning session). run_stop {session_id: mission_id} = workflow_stop; set_autopilot /
+      set_auto_answers {session_id: mission_id} switch those for the rest of the run (review stages still stop) ->
+      autopilot / auto_answers events + workflow_run_state. Replayed on connect after the snapshot (run_started,
+      autopilot, auto_answers, then run_finished when finished)
+      - workflow = {id, name, run_id, test} (workflow id, its name, the run id, test run or not) on run_started and
+        run_finished (and on the review card below) = THE marker of a workflow run: present only for workflow runs,
+        absent for a planner's plan. With it the page labels the run and its report card as the workflow (not
+        "Orchestrator") and hides planner-only actions (Send to planner); no planner or orchestrator is involved
+      - waiting for a review sign-off: the review stage's step (run_started steps / step_update) has status blocked
+        plus waiting_for: "review" (absent otherwise), and Incoming gets the "needs you" card: queue_item {id,
+        session_id: mission_id, chat_id: null, kind: "review", agent: "Review", agent_id: null, step: n (index + 1),
+        title: "Sign-off needed: <stage title>", body (one line: the workflow, the stage, sign off in the Workflows
+        view), rec: null, blocking: true, timeout_s: null, expires_at: null, workflow, run_id, stage: index}. It stays
+        open (replayed on connect like other open cards) until the review is signed or the run stops: then
+        queue_resolved {id, answer: "approve" | "send_back" | null (stopped), by: "user"}. The page shows it as
+        "needs you" and opens the review screen for run_id / stage; queue_response cannot sign it (answered with
+        system "Sign off this review (approve or send back) in the Workflows view.")
+    Form helpers (existing messages, nothing new): list_dir {root: dir_id, path} browses a connected folder for
+      attached files, input files and an output folder (paths relative to that folder are what the file wants);
+      pick_directory -> directory_picked {path} picks an output folder anywhere (only when settings
+      can_pick_directory; the page uses the path as typed text and does NOT send add_directory for it); anything
+      else = type the path (absolute paths are fine)
+
+  Usage screen (Features/2026-11-17-usage-monitor.md; back end app/usagelog.py)
+    The usage log: one line per agent call (every reply the app meters: planner, Explorer, orchestrator, builders and
+    folder step agents, Visualizer, CLI chat, Role Reviewer, drafter, workflow stages), written by app/meter.py at the
+    same moment the call is added to the live totals, to <home>/.launchpad/usage/<YYYY-MM>.jsonl (per user, never in a
+    project, never sent anywhere). Earlier spend is not reconstructed. The live totals (usage scope app / session /
+    chat, agent_usage, run_finished, report costs) are unchanged and still summed by app/costs.py; the log is a record
+    beside them, and a session's lines add up to the same figures (cost + planner_cost of usage scope session; cost of
+    usage scope chat)
+    UI -> here
+    usage_get {period?: "7d"|"30d"|"90d"|"all" (default "30d"), bucket?: "day"|"week" (default "day"),
+               split?: "cli"|"model"|"agent" (default "agent"), session?: session id|null (narrows everything but the
+               sessions list to that one session)} -> usage_data
+      - the page sends it when the Usage screen opens and whenever a control or the narrowing changes. The server
+        remembers the latest request and pushes usage_data for it again, unasked, when new spend is recorded (at most
+        once every 2 s, a few seconds after the call), until usage_stop. An unknown value is replaced by its default
+        (request in the reply says what was used)
+    usage_stop {}  (the Usage screen closed: no more unasked usage_data; nothing is sent back)
+    here -> UI
+    usage_data {request: {period, bucket, split, session}, range: {start: "YYYY-MM-DD", end: "YYYY-MM-DD"}|null,
+                buckets: [bucket], series: [series], totals: {cost, input_tokens, output_tokens, cache_read_tokens,
+                cache_write_tokens, calls, sessions}, sessions: [session], sessions_total, measures: [measure],
+                skipped_lines, pushed: bool, error?}
+      - reply to usage_get; also pushed (pushed true) when new spend is recorded while a usage_get is remembered (to
+        every client: a page whose controls no longer match request ignores it or sends usage_get again)
+      - range = the dates covered, inclusive, local time: 7d / 30d / 90d = today and the 6 / 29 / 89 days before it;
+        all = the day of the first recorded call to today; null when nothing at all is recorded (then buckets,
+        series and sessions are [] and every total 0: show "nothing recorded yet")
+      - every date and time is the computer's local time zone; weeks start on Monday
+      - bucket = {key, label, start, end, partial}: every day (or week) of the range in order, empty ones included
+        (values 0). day: key = start = end = "YYYY-MM-DD", label "17 Nov". week: key = that week's Monday
+        "YYYY-MM-DD", label "Week of 16 Nov"; start / end = the days of that week inside the range (the first and last
+        week may be cut by the range: partial true, else false). A label gains the year ("17 Nov 2025") when it is not
+        the current year
+      - series = {key, label, values: {cost: [..], input_tokens: [..], output_tokens: [..], cache_read_tokens: [..],
+        cache_write_tokens: [..]}, totals: {cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+        calls}, members: [labels]}: one array entry per bucket, same order as buckets, all five measures (switching the
+        measure needs no request). cost in dollars (six decimals), tokens as integers; input_tokens = uncached input only
+        - split cli: key = the harness id ("claude", "cursor"; "fake" = the zero-token demo engine), label "Claude",
+          "Cursor", "Fake engine (demo)"
+        - split model: key = label = the model's readable name ("Sonnet 4.5", "Opus 4.1", "Haiku 4.5"; an id it
+          cannot read is shown as written). One reply that used several models is split per model (agentlib's
+          usage_by_model), so each model carries its own tokens and cost
+        - split agent: key = label = the agent's display name: "Planner", "Explorer", "Orchestrator", "Builder",
+          "Visualizer", "CLI", "Role Reviewer", "Agent drafter", a folder agent's display name ("Copy reviewer"); calls made
+          inside a workflow run are their own groups: "Workflow: <agent display name>" ("Workflow: Builder")
+        - order: by total cost over the request, largest first. At most 7 series: when there are more than 7 groups the
+          6 largest are named and the rest are summed into ONE series {key: "__other__", label: "Other", members: the
+          labels it holds}; members = [] for named series. Ranking is always by cost (whatever measure is shown)
+      - totals = the whole request (range, and the session when narrowed): the sum of every series; calls = agent calls;
+        sessions = how many sessions those calls belong to
+      - measures = [{key, label, unit}] in this order: cost "Cost" usd, input_tokens "Input tokens" tokens,
+        output_tokens "Output tokens" tokens, cache_read_tokens "Cache read tokens" tokens, cache_write_tokens "Cache
+        write tokens" tokens (the measure picker's options)
+      - session = {id, kind: plan|chat|workflow|review|other, kind_label: "Plan"|"CLI chat"|"Workflow run"|"Review"|
+        "Other", label, folder: {dir_id, name, path}|null, run_folder: absolute path|null, started_at, last_at, running,
+        cost, planner_cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, calls, agents: [names],
+        models: [names], clis: [labels]}
+        - id = the session id (plan: the planning session's id; workflow run: "wf-<run id>", its Missions id; CLI chat:
+          the chat id; review / other: the agent run's own id, e.g. "reviewer-1a2b3c4d") = what usage_get session takes
+        - label: plan = the plan's name ("Planning session" before a draft); workflow = "<workflow name>, run <id>"
+          (+ " (test run)"); CLI chat = "CLI chat"; review = "Role review: <role>"; other = what it was ("Agent
+          drafting")
+        - folder = the connected folder it ran in (primary; dir_id may no longer be connected); null for calls with no
+          folder. run_folder = its session / chat / workflow-run record folder when it has one
+        - started_at / last_at = ISO local times of its first / latest recorded call; running = it is in progress in
+          this launch right now (a run, a planner or chat turn, a workflow run, a review); false otherwise
+        - cost and the token counts = EVERY agent of that session, planner included (all its calls in the log, not cut
+          to the range); planner_cost = the planner's share (so cost - planner_cost = the app's own session total,
+          usage scope session cost); calls = agent calls
+        - listed: every session with at least one call inside the range (ignores the session narrowing, so the table
+          stays put while a row is selected), from every folder; running first, then latest last_at first; at most
+          500 (sessions_total = how many there were)
+      - skipped_lines = damaged or half-written log lines that were skipped while reading (they never stop a read)
+      - error = the log could not be read at all (permissions, disk): lists are then [] and totals 0
+    CSV ("Download CSV", built by the page from the last usage_data; no message): what the chart shows, one row per
+      bucket and series (empty values as 0), columns: period start, period end (bucket start / end), group (series
+      label; "Other" as shown), cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens; header
+      row first. A narrowed chart exports only that session
   HTTP
     GET / (page; Content-Security-Policy inherited by the visual frames: no network beyond this app)
       = frontend/dist/index.html (React build) when it exists, else prototype/launchpad-orbit.html (vanilla)
@@ -509,6 +811,10 @@ def create_app(port: int, code: str, settings: Settings, store=None, overridden=
             pass
         finally:
             hub.disconnect(send)
+
+    @app.on_event("startup")
+    async def _startup():
+        hub.start_background()          # re-test every MCP server in the library (once per launch)
 
     @app.on_event("shutdown")
     async def _shutdown():

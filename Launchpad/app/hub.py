@@ -10,7 +10,7 @@
   report_to_planner, run_stop, new_session, chat_new, chat_message, chat_set_mode, chat_stop,
   visual_pick, visual_tweak, visual_retry, set_autopilot, set_auto_answers, planner_promote, planner_choose, cli_choose,
   agent_draft, agent_create, agent_remove, chat_from_plan, set_agent_skills,
-  git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py)
+  git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py), usage_get, usage_stop
 - Agent use counter: count_use(name) -> store + agent_uses event (planner session, explore, step, run, visual
   render, CLI chat)
 - Planner picker (app/agents/planner/choices.py): planner_choose -> a planner nobody has written to yet takes any
@@ -31,6 +31,21 @@
   written after a run marks that run's uses sent back; roles_get / role_dismiss / role_merge change the list
   (roles_list); review_start / review_decide run the Role Reviewer (app/agents/role_reviewer/reviewer.py Reviews);
   agent_draft {role} adds the case as drafter context, agent_create {role} removes the entry and saves the case copy
+- Connections (app/connections/): test_connection {id} runs that tool's own test script -> connection_test
+- MCP library (app/mcplib.py, per-user mcp.json beside settings.json; in memory without a user file and under --fake
+  unless that home is a temp folder; imports app/mcpimport.py): get_mcp, save_mcp_server, remove_mcp_server,
+  test_mcp_server, list_mcp_imports, import_mcp_servers, set_agent_mcp -> mcp_library (+ mcp_imports). A server is
+  tested on add, on edit, on request, and every server once in the background when the app starts
+  (start_background: server startup, else the first connection). give_mcp(agent, who) right before any crew agent
+  starts: its assigned servers whose last test passed; each skipped one is a system warning in that session / chat
+  (once per owner, server and reason)
+- Workflows (app/workflows/manager.py Workflows): workflows_get, workflow_save, workflow_remove, workflow_run,
+  workflow_stop, workflow_review. A run's Missions events use its mission id ("wf-<run id>"): session_like(id) finds
+  a session or a workflow run's owner (Auto answers, auto_answer lines, activity logs); run_stop / set_autopilot /
+  set_auto_answers on that id act on the run; connect replays runs after the sessions
+- Usage screen (app/usagelog.py; per-user log <home>/.launchpad/usage/, written by Meter.add_reply; in memory without a
+  user file and under --fake unless that home is a temp folder): usage_get -> usage_data (remembered in usage_watch and
+  pushed again, debounced, after new spend via usage_changed) · usage_stop forgets it. usage_running(sid) = in progress now
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -43,10 +58,13 @@ import sys
 import traceback
 from collections import deque
 
+from . import connections
 from . import costs
+from . import mcpimport, mcplib
 from . import plan as plan_mod
 from . import skills as skills_mod
 from . import tally as tally_mod
+from . import usagelog
 from .activity import log_line
 from .agents import crew, folder_agents
 from .agents.claude_code import choices as cli_choices
@@ -63,9 +81,11 @@ from .incoming import Incoming
 from .sessionfiles import SessionFolder, new_session_id
 from .settings import Settings
 from .store import SPECS, Store
+from .workflows.manager import Workflows
 
 ACTIVITY_SNAPSHOT = 300          # recent activity events replayed to a reconnecting UI
 AUTO_LINES_SNAPSHOT = 200        # recent auto_answer lines (builder questions answered by Auto answers) replayed too
+USAGE_PUSH_DELAY_S = 2.0         # unasked usage_data at most this often while the Usage screen is open
 
 
 class LaunchSession:
@@ -215,8 +235,23 @@ class Hub:
         if settings.engine == "fake" and not tally_mod.in_temp(self.tally.path):
             self.tally = tally_mod.Tally(None)           # the demo never writes a real tally
         self.reviews = Reviews(self)                     # Role Reviewer runs + latest cases
+        self.mcp = mcplib.McpLibrary.beside(self.store)  # MCP library, beside settings.json (app/mcplib.py)
+        if settings.engine == "fake" and not tally_mod.in_temp(self.mcp.path):
+            self.mcp = mcplib.McpLibrary(None)           # the demo never writes a real MCP library
+        self.usage = usagelog.UsageLog.beside(self.store)  # per-user usage log, beside settings.json (app/usagelog.py)
+        if settings.engine == "fake" and not tally_mod.in_temp(self.usage.folder):
+            self.usage = usagelog.UsageLog(None)         # the demo never writes a real usage log
+        self.usage_watch: dict | None = None             # the latest usage_get (pushed again on new spend) until usage_stop
+        self.usage_push: asyncio.Task | None = None      # the pending unasked usage_data
+        self.mcp_started = False                         # background test of every server (once per launch)
+        self.mcp_warned: set = set()                     # (owner, who, server, reason) warnings already shown
+        self.connection_tests: set[str] = set()          # connection tests running now
+        self.background: set[asyncio.Task] = set()
+        self.mcp_tasks: dict[str, asyncio.Task] = {}      # server name -> its running (or last) test
         self.sessions: dict[str, LaunchSession] = {}   # in the order the front end letters them (Run A, B, ...)
         self.chats: dict[str, PilotChat] = {}       # regular sessions (Pilot), several may coexist
+        self.workflows = Workflows(self)            # workflow files + runs (app/workflows/)
+        self.demo_seeded = False                    # --fake: the sample workflow run (once per launch)
         self.current: LaunchSession = self._new()
 
     def directory(self, did: str | None) -> tuple[str, Path]:
@@ -229,6 +264,17 @@ class Hub:
         if not path.is_dir():
             raise ValueError(f"folder not found on disk: {path}")
         return did, path.resolve()
+
+    def session_like(self, sid: str | None):
+        """A planning session, or the owner of a workflow run whose mission id this is (id, auto_answers, folder);
+        None otherwise."""
+        if not sid:
+            return None
+        ls = self.sessions.get(sid)
+        if ls is not None:
+            return ls
+        run = self.workflows.mission(sid)
+        return run.ls if run is not None else None
 
     def extra_dirs(self, primary: str | None) -> tuple[list[str], list[Path]]:
         """The additional folders for a session or chat whose primary is `primary`: (dir_ids, paths); ticked
@@ -245,7 +291,8 @@ class Hub:
     def busy(self, did: str) -> bool:
         """A run, a planner turn or a chat turn is going in that directory."""
         return (any(ls.dir_id == did and (ls.running or ls.chat.lock.locked()) for ls in self.sessions.values())
-                or any(c.dir_id == did and c.lock.locked() for c in self.chats.values()))
+                or any(c.dir_id == did and c.lock.locked() for c in self.chats.values())
+                or any(r.in_progress and r.wf["folder"] == did for r in self.workflows.runs.values()))
 
     def settings_event(self) -> dict:
         extra = set(self.store.additional_ids())
@@ -260,6 +307,9 @@ class Hub:
 
     def run_name(self, session_id: str) -> str:
         """The app's own letter for a session's run ("A", "B", ... "AA"), as the front end shows it ("Run A")."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            return f"workflow {run.wf['name']}" + (" (test run)" if run.test else "") + f", run {run.id}"
         n = list(self.sessions).index(session_id) + 1 if session_id in self.sessions else 0
         s = ""
         while n > 0:
@@ -296,8 +346,14 @@ class Hub:
         self.recent_activity.append(ev)
         if ev["status"] != "started":
             owner = self.sessions.get(ev.get("session_id") or "") or self.chats.get(ev.get("chat_id") or "")
+            run = self.workflows.mission(ev.get("session_id"))
+            if owner is None and run is not None:
+                owner = run
             if owner is not None:
-                owner.folder.add_activity(log_line(ev, started or ev["ts"]))
+                try:
+                    owner.folder.add_activity(log_line(ev, started or ev["ts"]))
+                except OSError:
+                    pass
         await self.emit(ev)
 
     def session_costs(self, session_id: str) -> tuple[float, float]:
@@ -323,7 +379,7 @@ class Hub:
         that just changed (its session: total + planner share; its CLI chat); no meter = all of them (on connect)."""
         await self.emit(costs.app_usage(self.meters))
         if meter is None:
-            for sid in self.sessions:
+            for sid in [*self.sessions, *self.workflows.missions]:
                 await self.emit(costs.session_usage(self.meters, sid))
             for cid in self.chats:
                 await self.emit(costs.chat_usage(self.meters, cid))
@@ -331,6 +387,44 @@ class Hub:
             await self.emit(costs.session_usage(self.meters, meter.session_id))
         elif meter.chat_id:
             await self.emit(costs.chat_usage(self.meters, meter.chat_id))
+
+    # ---------------------------------------------------------------- usage screen (app/usagelog.py)
+    def usage_running(self, sid: str) -> bool:
+        """Is that usage-log session in progress in this launch right now (a run, a planner / chat turn, a workflow
+        run incl. one waiting at a review, a review)?"""
+        ls = self.sessions.get(sid)
+        if ls is not None and (ls.running or ls.chat.lock.locked()):
+            return True
+        run = self.workflows.mission(sid)
+        if run is not None and run.in_progress:
+            return True
+        chat = self.chats.get(sid)
+        if chat is not None and (chat.lock.locked() or (chat.turn_task is not None and not chat.turn_task.done())):
+            return True
+        return any(usagelog.meter_key(m) == sid and (m.status == "working" or (m.status == "waiting"
+                                                                                and m.role != "planner"))
+                   for m in self.meters)
+
+    async def usage_event(self, req: dict, *, pushed: bool = False) -> dict:
+        """usage_data for a request; the log is read off the event loop (only new bytes after the first read)."""
+        running = {sid for sid in [*self.sessions, *self.workflows.missions, *self.chats,
+                                   *(usagelog.meter_key(m) for m in self.meters)] if self.usage_running(sid)}
+        return await asyncio.to_thread(usagelog.build, self.usage, req, running=running.__contains__, pushed=pushed)
+
+    async def usage_changed(self) -> None:
+        """A usage line was written: while a Usage screen is open (usage_watch), push usage_data again, at most once
+        per USAGE_PUSH_DELAY_S (one pending push collects every line written meanwhile)."""
+        if self.usage_watch is None or (self.usage_push is not None and not self.usage_push.done()):
+            return
+        self.usage_push = self._spawn(self._usage_push_later())
+
+    async def _usage_push_later(self) -> None:
+        await asyncio.sleep(USAGE_PUSH_DELAY_S)
+        if self.usage_watch is not None:
+            try:
+                await self.emit(await self.usage_event(self.usage_watch, pushed=True))
+            except Exception as e:  # noqa: BLE001 -- a push is a convenience; never break anything
+                print(f"Launchpad: usage_data push failed ({type(e).__name__}: {e})", file=sys.stderr)
 
     async def emit_crew(self) -> None:
         agents = [{"name": m.name, "role": m.role, "status": m.status, "session_id": m.session_id}
@@ -361,7 +455,9 @@ class Hub:
         if len(self.sessions) > 1:
             snapshot.append(self.current.started_event())       # last one = the current session
         snapshot += [c.started_event() for c in self.chats.values()]
+        snapshot += self.workflows.connect_events()     # workflow runs (Missions + workflow_run_state) + the list
         snapshot.append(self.roles_event())
+        snapshot.append(self.mcp_event())
         snapshot += self.reviews.events()
         snapshot += [m.event() for m in self.meters] + self.incoming.open_events() + list(self.auto_lines) + list(self.recent_activity)
         lock = self.clients[send]
@@ -370,6 +466,7 @@ class Hub:
                 await send(ev)
         await self.emit_crew()
         await self.emit_totals()
+        self.start_background()
 
     def disconnect(self, send) -> None:
         self.clients.pop(send, None)
@@ -390,7 +487,11 @@ class Hub:
         elif kind == "plan_approve":
             await self.approve(str(msg.get("session_id") or self.current.id))
         elif kind == "queue_response":
-            if not await self.incoming.respond(msg):
+            item = self.incoming.items.get(str(msg.get("id")))
+            if item is not None and item.kind == "review":
+                await self.system("Sign off this review (approve or send back) in the Workflows view.",
+                                  item.session_id)
+            elif not await self.incoming.respond(msg):
                 await self.emit({"type": "system", "text": "That request is no longer open."})
         elif kind == "queue_dismiss":
             pass                                                  # info cards need no answer
@@ -403,6 +504,19 @@ class Hub:
             await self._agent_message(kind, msg)
         elif kind in ("roles_get", "role_dismiss", "role_merge", "review_start", "review_decide"):
             await self._role_message(kind, msg)
+        elif kind in ("workflows_get", "workflow_save", "workflow_remove", "workflow_run", "workflow_stop",
+                      "workflow_review"):
+            await self.workflows.handle(kind, msg)
+        elif kind == "test_connection":
+            await self.test_connection(str(msg.get("id") or ""))
+        elif kind == "usage_get":
+            self.usage_watch = usagelog.clean_request(msg)
+            await self.emit(await self.usage_event(self.usage_watch))
+        elif kind == "usage_stop":
+            self.usage_watch = None
+        elif kind in ("get_mcp", "save_mcp_server", "remove_mcp_server", "test_mcp_server", "list_mcp_imports",
+                      "import_mcp_servers", "set_agent_mcp"):
+            await self._mcp_message(kind, msg)
         elif kind == "set_agent_skills":
             try:
                 self.store.set_agent_skills(str(msg.get("name") or ""), skills_mod.clean_setting(msg.get("skills")))
@@ -617,6 +731,183 @@ class Hub:
             await self.system(f"Roles: {e}")
         await self.emit_roles()
 
+    # ---------------------------------------------------------------- connections + MCP library
+    async def test_connection(self, cid: str) -> None:
+        """One CLI tool's own test script (app/connections/) -> connection_test. One run per tool at a time."""
+        if connections.find(cid) is None:
+            await self.emit({"type": "connection_test", "id": cid, "installed": False, "version": None,
+                             "reachable": None, "usable": False, "detail": f"Unknown connection '{cid}'."})
+            return
+        if cid in self.connection_tests:
+            return                                          # the running test's result answers this click too
+        self.connection_tests.add(cid)
+        try:
+            await self.emit(await connections.run(cid, self.settings.engine))
+        finally:
+            self.connection_tests.discard(cid)
+
+    def mcp_event(self, error: str | None = None) -> dict:
+        extra = {"connections": connections.listing(), "import_sources": mcpimport.listing()}
+        if error:
+            extra["error"] = error
+        try:
+            return self.mcp.event(**extra)
+        except OSError as e:                                # an unreadable file must not break the page
+            return {"type": "mcp_library", "servers": [], "assignments": {}, **extra,
+                    "error": f"could not read the MCP library ({e})"}
+
+    def _spawn(self, coro) -> asyncio.Task:
+        t = asyncio.get_running_loop().create_task(coro)
+        self.background.add(t)
+        t.add_done_callback(self.background.discard)
+        return t
+
+    def start_background(self) -> None:
+        """Re-test every server in the library once per launch, in the background (statuses arrive as mcp_library).
+        The fake demo also seeds its sample workflow run here (once)."""
+        if getattr(self.settings, "demo", False) and not self.demo_seeded:
+            self.demo_seeded = True
+            from . import demo
+            self._spawn(demo.seed_workflow_run(self))
+        if self.mcp_started:
+            return
+        self.mcp_started = True
+        if self.mcp.names():
+            self._spawn(self.mcp_test_all())
+
+    def mcp_start_test(self, name: str, *, restart: bool = False, gate=None) -> asyncio.Task:
+        """One test task per server. A test already running answers a new request too; restart (after a save)
+        cancels it and tests the new config once it has stopped."""
+        running = self.mcp_tasks.get(name)
+        if running is not None and not running.done():
+            if not restart:
+                return running
+            running.cancel()
+        t = self._spawn(self.mcp_test(name, after=running if restart else None, gate=gate))
+        self.mcp_tasks[name] = t
+        return t
+
+    async def mcp_idle(self) -> None:
+        """Wait until no MCP test is running (tests, shutdown)."""
+        while any(not t.done() for t in self.mcp_tasks.values()):
+            await asyncio.gather(*self.mcp_tasks.values(), return_exceptions=True)
+
+    async def mcp_test(self, name: str, *, after: asyncio.Task | None = None, gate=None) -> None:
+        """Start the server, list its tools, stop it (agentlib, zero tokens): status testing, then the result."""
+        if after is not None:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await after
+        async with gate or contextlib.nullcontext():
+            server = self.mcp.get(name)
+            if server is None:
+                return
+            self.mcp.testing.add(name)
+            await self.emit(self.mcp_event())
+            try:
+                try:
+                    result = await mcplib.TESTER(mcplib.agent_config(server))
+                except Exception as e:  # noqa: BLE001 -- a tester bug is a failed test, never a crash
+                    result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+                now = self.mcp.get(name)
+                if now is not None and (now.get("kind"), now.get("config")) == (server.get("kind"), server.get("config")):
+                    self.mcp.set_result(name, result)       # not edited or removed meanwhile
+            finally:
+                self.mcp.testing.discard(name)
+            await self.emit(self.mcp_event())
+
+    async def mcp_test_all(self, limit: int = 4) -> None:
+        gate = asyncio.Semaphore(limit)
+        tasks = [self.mcp_start_test(n, gate=gate) for n in self.mcp.names()]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _mcp_message(self, kind: str, msg: dict) -> None:
+        name = str(msg.get("name") or "").strip()
+        try:
+            if kind == "save_mcp_server":
+                saved = self.mcp.save(msg.get("server") or {}, msg.get("original_name"))
+                orig = str(msg.get("original_name") or "").strip()
+                if orig and orig != saved and orig in self.mcp_tasks:
+                    self.mcp_tasks.pop(orig).cancel()       # renamed: the old name's test is moot
+                await self.emit(self.mcp_event())           # the saved server (untested) at once
+                self.mcp_start_test(saved, restart=True)    # tested on add and on edit (testing, then the result)
+                return
+            if kind == "remove_mcp_server":
+                self.mcp.remove(name)
+                if name in self.mcp_tasks:
+                    self.mcp_tasks.pop(name).cancel()
+            elif kind == "test_mcp_server":
+                if self.mcp.get(name) is None:
+                    raise ValueError(f"there is no server named '{name}'")
+                self.mcp_start_test(name)                   # sends mcp_library (testing), then the result
+                return
+            elif kind == "list_mcp_imports":
+                sid = str(msg.get("source") or "")
+                folders = [Path(d["path"]) for d in self.store.directories() if Path(d["path"]).is_dir()]
+                cands = await asyncio.to_thread(mcpimport.candidates, sid, folders)
+                await self.emit({"type": "mcp_imports", "source": sid,
+                                 "servers": mcpimport.page_view(cands, set(self.mcp.names()))})
+                return
+            elif kind == "import_mcp_servers":
+                await self._mcp_import(str(msg.get("source") or ""), msg.get("names"))
+                return
+            elif kind == "set_agent_mcp":
+                self.mcp.set_agent(str(msg.get("agent") or ""), msg.get("servers"))
+        except ValueError as e:
+            await self.emit(self.mcp_event(error=str(e)))
+            if kind != "save_mcp_server":
+                await self.system(f"MCP: {e}")
+            return
+        await self.emit(self.mcp_event())
+
+    async def _mcp_import(self, sid: str, names) -> None:
+        """Copy the ticked candidates into the library (a name already there is skipped), then test each one."""
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise ValueError("names must be a list of server names")
+        folders = [Path(d["path"]) for d in self.store.directories() if Path(d["path"]).is_dir()]
+        cands = {c["name"]: c for c in await asyncio.to_thread(mcpimport.candidates, sid, folders)}
+        added, problems = [], []
+        for n in dict.fromkeys(names):
+            c = cands.get(n)
+            if c is None:
+                problems.append(f"{n}: no longer found in {mcpimport.source(sid)['name']}")
+            elif self.mcp.get(n) is not None:
+                problems.append(f"{n}: already in the library (skipped)")
+            else:
+                try:
+                    added.append(self.mcp.save({"name": n, "kind": c["kind"], "config": c["config"]}))
+                except ValueError as e:
+                    problems.append(f"{n}: {e}")
+        if problems:
+            await self.system("MCP import: " + "; ".join(problems))
+        await self.emit(self.mcp_event(error="; ".join(problems) if problems and not added else None))
+        for n in added:
+            self.mcp_start_test(n)
+
+    async def give_mcp(self, agent, *, who: str, session_id: str | None = None, chat_id: str | None = None,
+                       name: str | None = None) -> list[str]:
+        """Right before `agent` starts: its assigned MCP servers whose last test passed (crew.attach_mcp). Each
+        skipped server -> one system warning in that session / chat (once per owner, agent, server and reason);
+        returns the warning lines (the step runner also puts them in the step report). Never raises."""
+        try:
+            skipped = crew.attach_mcp(self, agent, name)
+        except Exception as e:  # noqa: BLE001 -- an unreadable library must not stop a run
+            skipped = [{"server": "(library)", "reason": f"the MCP library could not be read ({e})"}]
+        lines = []
+        for s in skipped:
+            text = f"MCP server '{s['server']}' was not given to the {who}: {s['reason']}. It runs without it."
+            lines.append(text)
+            key = (session_id or chat_id, who, s["server"], s["reason"])
+            if key in self.mcp_warned:
+                continue
+            self.mcp_warned.add(key)
+            ev = {"type": "system", "text": text}
+            if session_id:
+                ev["session_id"] = session_id
+            if chat_id:
+                ev["chat_id"] = chat_id
+            await self.emit(ev)
+        return lines
+
     async def _settings_message(self, kind: str, msg: dict) -> None:
         try:
             if kind == "set_settings":
@@ -653,6 +944,8 @@ class Hub:
         except ValueError as e:
             await self.system(f"Settings: {e}")
         await self.emit(self.settings_event())
+        if kind in ("set_settings", "add_directory", "remove_directory"):
+            await self.emit(self.workflows.list_event())          # the folders workflows live in may have changed
 
     async def _file_message(self, kind: str, msg: dict) -> None:
         root, path = str(msg.get("root") or ""), str(msg.get("path") or "")
@@ -833,6 +1126,10 @@ class Hub:
 
     async def set_autopilot(self, session_id: str, on: bool) -> None:
         """Valid before launch and during a run. Turning it on approves the run's open permission cards."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.set_switch(run, "autopilot", on)
+            return
         ls = self.sessions.get(session_id)
         if ls is None:
             await self.system("That session is not open.")
@@ -844,6 +1141,10 @@ class Hub:
 
     async def set_auto_answers(self, session_id: str, on: bool) -> None:
         """Per-session switch, for builders only. Turning it on answers the plan-step questions already waiting."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.set_switch(run, "auto_answers", on)
+            return
         ls = self.sessions.get(session_id)
         if ls is None:
             await self.system("That session is not open.")
@@ -857,7 +1158,7 @@ class Hub:
                             answer: str) -> None:
         """One plan-step question decided by its worker under Auto answers: one auto_answer line, shown in Incoming
         (kept for a reconnect; never in the planner chat)."""
-        ls = self.sessions.get(session_id)
+        ls = self.session_like(session_id)
         if ls is None:
             return
         ev = {"type": "auto_answer", "session_id": ls.id, "id": id, "agent": agent, "step": step, "title": title,
@@ -866,6 +1167,10 @@ class Hub:
         await self.emit(ev)
 
     async def stop(self, session_id: str) -> None:
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.stop(run.id)
+            return
         ls = self.sessions.get(session_id)
         if ls is None or not ls.running:
             await self.system("No run is going in that session.", session_id)
@@ -887,6 +1192,9 @@ class Hub:
         await ls.chat.handle({"type": "user_message", "text": msg, "history": "Run report sent to the planner."})
 
     async def close(self) -> None:
+        for t in list(self.background):
+            t.cancel()
+        await self.workflows.close()
         for ls in self.sessions.values():
             await ls.visuals.close()
             if ls.running:

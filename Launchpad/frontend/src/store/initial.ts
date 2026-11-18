@@ -1,7 +1,7 @@
 /* Initial state (the File Explorer layout and the editor pane come back from localStorage). */
 import type { AppState, CrewForm, EditorPane, EditorState, FxState, GitState } from './types';
 import type { AgentFields } from '../contract';
-import { LS_EDITOR_VIEW, LS_FILES, lsGet } from '../lib/storage';
+import { LS_ASIDE, LS_EDITOR_VIEW, LS_FILES, lsGet } from '../lib/storage';
 
 const emptyAgentFields = (): AgentFields => ({ name: '', description: '', purpose: '', model: 'sonnet', tools: [], instructions: '' });
 
@@ -36,10 +36,10 @@ export function initialState(): AppState {
     seq: 0,
     ui: {
       view: 'plan', chatSide: 'planner', conn: { text: 'Demo mode', color: 'var(--green)' }, demo: true,
-      queueFilter: 'all', feedRun: '', feedAgent: '', hov: null, sel: null, focus: null, focusScroll: false,
+      queueFilter: 'all', feedRun: '', feedAgent: '', asideClosed: lsGet<boolean>(LS_ASIDE, false) === true, hov: null, sel: null, focus: null, focusScroll: false,
       stopConfirm: null, apConfirm: null, pickerChoosing: null, cliChoosing: null, newPlanBusy: false, newChatBusy: false,
       vis: { open: false, wide: false, width: 0 },
-      settingsOpen: false, settingsMsg: null, settingsAdding: null, settingsAddPath: '', picking: false,
+      settingsMsg: null, settingsAdding: null, settingsAddPath: '', picking: false, pickFor: null, pickedOutput: null,
       dirMenu: null, toasts: [],
     },
     replaying: false, quiet: false,
@@ -50,6 +50,9 @@ export function initialState(): AppState {
     crewDefs: null, crewLoading: false, crewDirId: null, crewDirPick: null, toolChoices: [], crewSkills: [], crewUses: {},
  crewForm: initialCrewForm(),
     roles: { loaded: false, threshold: 2, resurface: 5, entries: [] }, reviews: {}, roleOpen: null,
+    mcp: { loaded: false, servers: [], assignments: {}, connections: [], importSources: [], error: null }, connTests: {}, mcpImports: {},
+    wf: { openReview: null, loaded: false, list: [], folders: [], agents: {}, reviewerName: '', runs: {}, latest: {}, error: null, runErrors: {} },
+    usage: { data: null, pending: 0, want: null },
     crewRemoving: null, crewError: null, crewFlash: null,
     settings: null, fx: initialFx(), files: {}, editor: initialEditor(), git: initialGit(),
   };

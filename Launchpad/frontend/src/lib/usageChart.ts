@@ -1,0 +1,332 @@
+/* Usage screen helpers (pure, tested): measure names and number formats in the user's own locale, the colour of each
+   series, the bucket fill, the chart option, the sessions sort and the CSV. The server groups, buckets and sums; nothing is
+   added up here except a bucket's total for the tooltip and the CSV (the sum of the series shown). */
+import type { EChartsCoreOption } from 'echarts/core';
+import { USAGE_MEASURES, USAGE_OTHER_KEY, type UsageBucket, type UsageBucketInfo, type UsageDataEvent, type UsageMeasure, type UsageSeries, type UsageSession, type UsageSplit } from '../contract';
+import { LS_USAGE_CHART, lsGet, lsSet } from './storage';
+
+export const MEASURE_LABEL: Record<UsageMeasure, string> = {
+  cost: 'Total cost', input_tokens: 'Input tokens', output_tokens: 'Output tokens', cache_read_tokens: 'Cache read tokens', cache_write_tokens: 'Cache write tokens',
+};
+/** The kind as the table says it: the server's kind_label (Plan, CLI chat, Workflow run, Review, Other). */
+export const kindLabel = (s: { kind: string; kind_label?: string }): string => s.kind_label || s.kind;
+export const isOther = (s: { key: string }): boolean => s.key === USAGE_OTHER_KEY;
+
+/* ---------- colours ---------- */
+/* A categorical set from Okabe-Ito hues (distinguishable with the common kinds of colour blindness), toned to the Orbit
+   look. Chart colours cannot read CSS variables (the SVG renderer wants literals), so the set lives here, the one place
+   besides the feed select's chevron. The server names at most 6 series plus "Other" (grey), so the set has 8 colours,
+   every one a different hue, and no two series on screen ever share one. The order puts strongly contrasting hues first,
+   because the largest series (named first by the server) are handed the first free colours and sit next to each other in the stack. */
+export const PALETTE = ['#3B3FB6', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#8F8200', '#7A5230'];
+export const OTHER_COLOUR = '#9A9DB0';
+const memory = new Map<string, string>();
+/** The colours for the series on screen, in series order. A series keeps the colour it had before unless another series on screen
+    already holds it; a name without one (or whose old one is taken) gets the first palette colour not in use on screen. */
+export function coloursFor(split: UsageSplit, series: { key: string }[]): string[] {
+  const used = new Set<string>();
+  const out: (string | null)[] = series.map(s => {
+    if (isOther(s)) return OTHER_COLOUR;
+    const c = memory.get(`${split}\u0000${s.key}`);
+    if (c && !used.has(c)) { used.add(c); return c; }
+    return null;
+  });
+  return out.map((c, i) => {
+    if (c) return c;
+    const free = PALETTE.find(p => !used.has(p)) ?? PALETTE[i % PALETTE.length];
+    used.add(free);
+    memory.set(`${split}\u0000${series[i].key}`, free);
+    return free;
+  });
+}
+export const resetColours = (): void => memory.clear();
+/** "#3B3FB6" + alpha -> "rgba(59,63,182,a)" (the area gradients). */
+export function rgba(hex: string, a: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** A colour mixed toward white by t (0..1): the bar's gentle hover lift. */
+export function lighten(hex: string, t: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16), f = (c: number) => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0');
+  return `#${f((n >> 16) & 255)}${f((n >> 8) & 255)}${f(n & 255)}`;
+}
+
+/* ---------- number and date formats (the user's locale) ---------- */
+const cur = (min: number, max: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: min, maximumFractionDigits: max });
+const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+const whole = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+const cur2 = cur(2, 2), cur0 = cur(0, 0), cur4 = cur(2, 4);
+
+/** exact = tooltips, totals, tables; axis = tick labels (currency without needless decimals, compact tokens). */
+export function fmtValue(m: UsageMeasure, v: number, how: 'exact' | 'axis' = 'exact'): string {
+  const x = Number.isFinite(v) ? v : 0;
+  if (m === 'cost') {
+    if (how === 'axis') return Number.isInteger(x) ? cur0.format(x) : cur2.format(x);
+    return x > 0 && x < 0.01 ? cur4.format(x) : cur2.format(x);
+  }
+  return how === 'axis' ? compact.format(x) : whole.format(x);
+}
+/** Compact form for the table: "12.3K" / "$1.20". */
+export const fmtShort = (m: UsageMeasure, v: number): string => (m === 'cost' ? fmtValue(m, v) : compact.format(Number.isFinite(v) ? v : 0));
+
+/** "2026-11-17" as a local date (not UTC, so the day does not shift). */
+export function parseDay(s: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(s);
+}
+const dShort = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const dLong = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const dWeek = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const dTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+/* dates come from the bucket's start day and are written in the user's locale (the server's English label is only a fallback) */
+const okDay = (s: string) => /^\d{4}-\d{2}-\d{2}/.test(s);
+export const axisDate = (b: UsageBucketInfo): string => (okDay(b.start) ? dShort.format(parseDay(b.start)) : b.label);
+export const tipDate = (b: UsageBucketInfo, bucket: UsageBucket): string => {
+  if (!okDay(b.start)) return b.label;
+  return bucket === 'week' ? `Week of ${dWeek.format(parseDay(b.key))}${b.partial ? ' (part of the week)' : ''}` : dLong.format(parseDay(b.start));
+};
+export function startedText(iso: string): string { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : dTime.format(d); }
+export const folderName = (f: string): string => f.split(/[\\/]/).filter(Boolean).pop() || f;
+
+/* ---------- buckets: every day (or week) of the period, so the lines span it ---------- */
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const dayKey = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const mondayOf = (d: Date) => addDays(d, -((d.getDay() + 6) % 7));
+const LABEL_FMT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+/** The server already sends every bucket of the range, empty ones included (app/server.py header, "bucket"). This is the
+    page's safety net for a reply that skips empty ones: the missing days (or Monday weeks) between range.start and
+    range.end are added with zeros, in order. A reply that is already complete, has no range, or holds a bucket the page
+    cannot place in the range is returned as it is (the same object). Totals are not touched (empty buckets add nothing). */
+export function fillBuckets<T extends Pick<UsageDataEvent, 'buckets' | 'series' | 'range'>>(d: T, bucket: UsageBucket): T {
+  const r = d.range;
+  if (!r || !okDay(r.start) || !okDay(r.end)) return d;
+  const from = parseDay(r.start), to = parseDay(r.end);
+  if (to < from) return d;
+  const want: UsageBucketInfo[] = [];
+  for (let x = bucket === 'week' ? mondayOf(from) : from; x <= to && want.length < 5000; x = addDays(x, bucket === 'week' ? 7 : 1)) {
+    const key = dayKey(x);
+    if (bucket === 'day') want.push({ key, label: LABEL_FMT.format(x), start: key, end: key, partial: false });
+    else {
+      const sun = addDays(x, 6), s = x < from ? from : x, e = sun > to ? to : sun;
+      want.push({ key, label: `Week of ${LABEL_FMT.format(x)}`, start: dayKey(s), end: dayKey(e), partial: x < from || sun > to });
+    }
+  }
+  if (d.buckets.length === want.length && want.every((w, i) => d.buckets[i].key === w.key)) return d;
+  const wanted = new Set(want.map(w => w.key));
+  if (d.buckets.some(b => !wanted.has(b.key))) return d;
+  const at = new Map(d.buckets.map((b, i) => [b.key, i] as const));
+  const buckets = want.map(w => { const i = at.get(w.key); return i == null ? w : d.buckets[i]; });
+  const series = d.series.map(s => {
+    const values = {} as UsageSeries['values'];
+    for (const m of USAGE_MEASURES) values[m] = want.map(w => { const i = at.get(w.key); return i == null ? 0 : +(s.values && s.values[m] && s.values[m][i]) || 0; });
+    return { ...s, values };
+  });
+  return { ...d, buckets, series };
+}
+
+/* ---------- series ---------- */
+export const valuesOf = (s: UsageSeries, m: UsageMeasure, n: number): number[] => Array.from({ length: n }, (_, i) => +(s.values && s.values[m] && s.values[m][i]) || 0);
+export function bucketTotals(series: UsageSeries[], m: UsageMeasure, n: number): number[] {
+  return Array.from({ length: n }, (_, i) => series.reduce((t, s) => t + (+(s.values && s.values[m] && s.values[m][i]) || 0), 0));
+}
+export const esc = (t: string): string => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+/** Whether the chart has anything to draw for the measure. */
+export const hasData = (d: Pick<UsageDataEvent, 'buckets' | 'series'>, m: UsageMeasure): boolean => d.buckets.length > 0 && d.series.some(s => valuesOf(s, m, d.buckets.length).some(v => v > 0));
+/** Points that get a visible marker (the others only show on hover), so a sparse log still reads as deliberate: every
+    point with data when there are three buckets or fewer (one bucket draws no line at all), and the one point of a series
+    seen in a single bucket of the period. A series with data on several days shows its shape through its band instead. */
+export function lonePoints(v: number[]): boolean[] {
+  const n = v.length, used = v.filter(x => x > 0).length;
+  return v.map(x => x > 0 && (n <= 3 || used === 1));
+}
+/** Every k-th date label on the x axis: about seven at most, so the ticks thin out as the period grows (ECharts also hides overlaps). */
+export const labelInterval = (n: number): number => (n <= 8 ? 0 : Math.ceil(n / 7) - 1);
+
+/** Colours and type read from the Orbit tokens by the chart component (a chart cannot read CSS variables itself). */
+export interface ChartTheme { ink: string; muted: string; line: string; card: string; line2?: string; font?: string; shadow?: string; radius?: string }
+/** The two forms of the one chart: smooth stacked areas (default) or stacked bars. */
+export type ChartType = 'line' | 'bar';
+/** intro = the one-time draw-in when the chart first appears; switch = one quick transition when Line / Bar changes;
+    update = a quick morph (same buckets: measure, legend, a push); none = drawn at once (other buckets, or reduced motion). */
+export type ChartMotion = 'intro' | 'switch' | 'update' | 'none';
+export interface ChartOpts {
+  motion?: ChartMotion; hidden?: readonly string[]; type?: ChartType;
+  /** reduced motion: no hover glide, no tooltip transition, no state fades */
+  reduced?: boolean;
+  /** the x pixel of bucket i in the drawn chart (the chart component supplies it), so the tooltip can sit beside the bucket */
+  pixelOf?: (i: number) => number | null;
+}
+
+/** The remembered Line / Bar choice (localStorage lp.usageChart; anything else reads as Line). */
+export const loadChartType = (): ChartType => (lsGet<string>(LS_USAGE_CHART, 'line') === 'bar' ? 'bar' : 'line');
+export const saveChartType = (t: ChartType): void => lsSet(LS_USAGE_CHART, t);
+
+const MOTION: Record<ChartMotion, Record<string, unknown>> = {
+  intro: { animation: true, animationDuration: 600, animationEasing: 'cubicOut', animationDurationUpdate: 220, animationEasingUpdate: 'cubicOut' },
+  switch: { animation: true, animationDuration: 320, animationEasing: 'cubicOut', animationDurationUpdate: 220, animationEasingUpdate: 'cubicOut' },
+  update: { animation: true, animationDuration: 0, animationDurationUpdate: 220, animationEasingUpdate: 'cubicOut' },
+  none: { animation: false },
+};
+const gradient = (c: string) => ({ type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: rgba(c, 0.3) }, { offset: 1, color: rgba(c, 0.02) }] });
+/** Bars: never wider than this (a 7-day view is not seven slabs); the gap between buckets is BAR_GAP of the band. */
+export const BAR_MAX = 36;
+const BAR_GAP = 0.45;
+/** Radius of the rounded top corners, on the top-most visible segment of each bar only. */
+export const BAR_RADIUS = 4;
+
+/** For each bucket, the index (into series) of the top-most visible series with a value there, or -1 (an empty bucket). */
+export function topSegments(vals: number[][], shown: number[], n: number): number[] {
+  return Array.from({ length: n }, (_, i) => { for (let j = shown.length - 1; j >= 0; j--) if (vals[shown[j]][i] > 0) return shown[j]; return -1; });
+}
+
+/** The ECharts option for one (data, measure) pair, as smooth stacked areas (monotone, so a curve never dips below zero or
+    rises past its real values) or stacked bars (rounded top on the top-most visible segment, a soft band behind the
+    hovered bucket that glides, no dimming of the other series). Both forms share the colours, axes, gridlines, type and
+    the tooltip card (series largest first, the bucket total in bold), triggered by bucket and placed beside it.
+    One series per visible series, id = series key, so a redraw morphs instead of redrawing. */
+export function buildOption(d: Pick<UsageDataEvent, 'buckets' | 'series'>, m: UsageMeasure, bucket: UsageBucket, split: UsageSplit, th: ChartTheme, opts: ChartOpts = {}): EChartsCoreOption {
+  const n = d.buckets.length;
+  const cols = coloursFor(split, d.series);
+  const vals = d.series.map(s => valuesOf(s, m, n));
+  const hide = new Set(opts.hidden ?? []);
+  const shown = d.series.map((_, k) => k).filter(k => !hide.has(d.series[k].key));
+  const font = th.font || 'Inter, system-ui, sans-serif';
+  const one = n === 1;
+  const bar = opts.type === 'bar';
+  const calm = !opts.reduced;
+  const keys = d.buckets.map(b => b.key);
+  /* the bucket a tooltip call is about: dataIndex when ECharts gives one, else the axis value */
+  const indexOf = (params: unknown): number => {
+    const p = (Array.isArray(params) ? params[0] : params) as { dataIndex?: number; axisValue?: string } | undefined;
+    if (!p) return -1;
+    if (typeof p.dataIndex === 'number') return p.dataIndex;
+    return keys.indexOf(String(p.axisValue));
+  };
+  /* the tooltip sits beside the hovered bucket (right, or left when there is no room), near the top, inside the chart:
+     it does not cover the bar or the points, and it only moves when the bucket changes */
+  const position = (point: number[], params: unknown, _el: unknown, _rect: unknown, size: { contentSize: number[]; viewSize: number[] }) => {
+    const [cw, ch] = size.contentSize, [vw, vh] = size.viewSize;
+    const i = indexOf(params);
+    const at = i >= 0 && opts.pixelOf ? opts.pixelOf(i) : null;
+    const cx = at != null && Number.isFinite(at) ? at : point[0];
+    let half = 10;
+    if (bar) {
+      const p0 = opts.pixelOf && n > 1 ? opts.pixelOf(0) : null, p1 = opts.pixelOf && n > 1 ? opts.pixelOf(1) : null;
+      const band = p0 != null && p1 != null ? Math.abs(p1 - p0) : 0;
+      half = Math.min(BAR_MAX, band ? band * (1 - BAR_GAP) : BAR_MAX) / 2;
+    }
+    let x = cx + half + 14;
+    if (x + cw > vw - 4) x = cx - half - 14 - cw;
+    x = Math.max(4, Math.min(x, vw - cw - 4));
+    const y = Math.max(4, Math.min(12, vh - ch - 4));
+    return [x, y];
+  };
+  const tops = bar ? topSegments(vals, shown, n) : [];
+  return {
+    ...MOTION[opts.motion ?? 'intro'],
+    /* hover states (the slight lift on a bar segment, the points) fade in and out instead of switching */
+    stateAnimation: { duration: calm ? 160 : 0, easing: 'cubicOut' },
+    textStyle: { fontFamily: font, color: th.muted },
+    grid: { left: 4, right: 16, top: 16, bottom: 4, containLabel: true },
+    xAxis: {
+      type: 'category', data: keys, boundaryGap: bar || one,
+      axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
+      axisLabel: { color: th.muted, fontSize: 11, margin: 14, interval: labelInterval(n), hideOverlap: true, formatter: (_: string, i: number) => (d.buckets[i] ? axisDate(d.buckets[i]) : '') },
+    },
+    yAxis: {
+      type: 'value', min: 0, splitNumber: 4, minInterval: m === 'cost' ? 0.01 : 1,
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: th.muted, fontSize: 11, margin: 12, formatter: (v: number) => fmtValue(m, v, 'axis') },
+      splitLine: { show: true, lineStyle: { color: th.line, width: 1 } },
+    },
+    tooltip: {
+      /* by bucket, never by item: crossing the gaps between bars or segments keeps the same card. The bar band sits at z 1,
+         behind the bars (series are z 2; ECharts puts the axis pointer at z 50, over them, by default) */
+      trigger: 'axis', triggerOn: 'mousemove', confine: true, transitionDuration: calm ? 0.2 : 0, hideDelay: 120,
+      padding: [10, 14], borderWidth: 0, backgroundColor: th.card,
+      textStyle: { color: th.ink, fontSize: 12, fontFamily: font },
+      extraCssText: `box-shadow:${th.shadow || '0 8px 24px rgba(34,36,58,.14)'};border-radius:${th.radius || '12px'};pointer-events:none;`,
+      position,
+      axisPointer: bar
+        ? { type: 'shadow', snap: true, z: 1, shadowStyle: { color: th.line2 || th.line, opacity: 0.45 }, label: { show: false }, animation: calm, animationDurationUpdate: 180, animationEasingUpdate: 'cubicOut' }
+        : { type: 'line', snap: true, lineStyle: { color: th.line2 || th.line, width: 1, type: 'solid' }, label: { show: false }, animation: calm, animationDurationUpdate: 180, animationEasingUpdate: 'cubicOut' },
+      formatter: (params: unknown) => {
+        const i = Math.max(0, indexOf(params));
+        const rows = shown.map(k => ({ s: d.series[k], k, v: vals[k][i] })).filter(r => r.v > 0).sort((a, b) => b.v - a.v);
+        const total = rows.reduce((t, r) => t + r.v, 0);
+        const row = (left: string, right: string, extra = '') => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:20px;line-height:1.5;${extra}">${left}<span style="font-variant-numeric:tabular-nums">${right}</span></div>`;
+        const head = `<div style="font-size:11px;font-weight:600;color:${th.muted};margin-bottom:6px">${esc(d.buckets[i] ? tipDate(d.buckets[i], bucket) : '')}</div>`;
+        if (!rows.length) return `<div style="min-width:180px">${head}<div style="color:${th.muted}">Nothing recorded</div></div>`;
+        const lines = rows.map(r => {
+          const more = r.s.members.length ? `<div style="font-size:11px;color:${th.muted};padding-left:16px;max-width:240px;white-space:normal">${esc(r.s.members.slice(0, 3).join(', '))}${r.s.members.length > 3 ? ` +${r.s.members.length - 3} more` : ''}</div>` : '';
+          return row(`<span style="display:inline-flex;align-items:center;gap:8px;min-width:0"><span style="width:8px;height:8px;border-radius:50%;flex:none;background:${cols[r.k]}"></span>${esc(r.s.label)}</span>`, esc(fmtValue(m, r.v))) + more;
+        }).join('');
+        const label = hide.size ? 'Total shown' : 'Total';
+        return `<div style="min-width:200px">${head}${lines}${row(`<b>${label}</b>`, `<b>${esc(fmtValue(m, total))}</b>`, `margin-top:6px;padding-top:6px;border-top:1px solid ${th.line}`)}</div>`;
+      },
+    },
+    series: shown.map(k => {
+      const c = cols[k];
+      if (bar) {
+        return {
+          id: d.series[k].key, type: 'bar', name: d.series[k].label, stack: 'total',
+          /* rounded top corners only where this series is the top-most visible segment of the bar (an empty bucket draws nothing) */
+          data: vals[k].map((v, i) => (tops[i] === k ? { value: v, itemStyle: { borderRadius: [BAR_RADIUS, BAR_RADIUS, 0, 0] } } : v)),
+          barMaxWidth: BAR_MAX, barCategoryGap: `${BAR_GAP * 100}%`,
+          itemStyle: { color: c, borderRadius: 0 },
+          /* no focus / blur: the other series never dim; hover only lifts the hovered bucket's segments slightly (faded in by stateAnimation) */
+          emphasis: { focus: 'none', itemStyle: { color: lighten(c, 0.12) } },
+        };
+      }
+      const lone = lonePoints(vals[k]);
+      return {
+        id: d.series[k].key, type: 'line', name: d.series[k].label, stack: 'total',
+        /* a lone point is always visible; an empty one stays hidden on hover too (it would sit on the series below) */
+        data: vals[k].map((v, i) => (lone[i] ? { value: v, itemStyle: { opacity: 1 } } : v > 0 ? v : { value: v, emphasis: { itemStyle: { opacity: 0 } } })),
+        smooth: 0.4, smoothMonotone: 'x',
+        /* points exist everywhere but are invisible (opacity 0) until hover, except the lone ones above */
+        showSymbol: true, showAllSymbol: true, symbol: 'circle', symbolSize: one ? 10 : 7,
+        lineStyle: { width: 2, color: c, cap: 'round', join: 'round' },
+        itemStyle: { color: c, borderColor: th.card, borderWidth: 1.5, opacity: 0 },
+        areaStyle: { color: gradient(c), opacity: 1 },
+        emphasis: { focus: 'none', scale: 1.2, lineStyle: { width: 2 }, itemStyle: { opacity: 1 } },
+      };
+    }),
+  };
+}
+
+/* ---------- sessions table ---------- */
+export type SessionSort = { key: 'time' | 'cost'; dir: 'asc' | 'desc' };
+/** Running sessions first, then by the chosen column. */
+export function sortSessions(list: UsageSession[], s: SessionSort): UsageSession[] {
+  const f = s.dir === 'asc' ? 1 : -1;
+  const v = (x: UsageSession) => (s.key === 'cost' ? +x.cost || 0 : Date.parse(x.started_at) || 0);
+  return [...list].sort((a, b) => (+b.running - +a.running) || ((v(a) - v(b)) * f));
+}
+
+/* ---------- CSV: what the chart is showing (the server's contract: one row per bucket and series, empty values as 0, header first) ---------- */
+const cell = (v: string | number): string => {
+  if (typeof v === 'number') return String(v);
+  const t = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;          // a label that looks like a formula stays text in a spreadsheet
+  return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+export function buildCsv(d: Pick<UsageDataEvent, 'buckets' | 'series'>): string {
+  const n = d.buckets.length;
+  const rows: (string | number)[][] = [['period_start', 'period_end', 'group', 'cost_usd', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']];
+  for (let i = 0; i < n; i++) for (const s of d.series) rows.push([d.buckets[i].start, d.buckets[i].end, s.label, ...(['cost', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens'] as UsageMeasure[]).map(m => valuesOf(s, m, n)[i])]);
+  return '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+export const csvName = (split: UsageSplit, bucket: UsageBucket, session: boolean): string => `launchpad-usage-by-${split}-per-${bucket}${session ? '-one-session' : ''}.csv`;
+
+export function downloadText(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

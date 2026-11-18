@@ -14,6 +14,9 @@
   (by "auto", no card; the hub emits one auto_answer line). auto_open() does the same for such questions already
   waiting when the switch is turned on. Planner rounds, CLI chat questions, permission and plan items are never
   affected
+- post(...) / withdraw(id): a card nobody answers here, kind "review" = a workflow run waiting for a review sign-off
+  (app/workflows/runner.py): it shows in Incoming and counts as "needs you" until the run withdraws it (signed off or
+  stopped); queue_response cannot resolve it (the sign-off is workflow_review)
 """
 from __future__ import annotations
 
@@ -28,7 +31,7 @@ class Item:
     id: str
     session_id: str | None
     chat_id: str | None
-    kind: str                      # question | permission | plan | info
+    kind: str                      # question | permission | plan | info | review
     agent: str
     agent_id: str | None
     step: int | None
@@ -41,6 +44,7 @@ class Item:
     expires_at: str | None
     extra: dict = field(default_factory=dict)
     auto_ok: bool = False          # asked by a plan-step worker: the Auto answers switch may answer it
+    posted: bool = False           # post(): no one waits on it; removed when resolved
     future: asyncio.Future | None = None
 
     def event(self) -> dict:
@@ -92,9 +96,26 @@ class Incoming:
         finally:
             self.items.pop(item.id, None)
 
+    async def post(self, *, kind: str, agent: str, title: str, body: str, session_id: str | None = None,
+                   step: int | None = None, extra: dict | None = None) -> str:
+        """A card shown until withdraw(): blocking, no timer, no recommendation -> its id."""
+        item = Item(id=f"q{next(self._ids)}", session_id=session_id, chat_id=None, kind=kind, agent=agent,
+                    agent_id=None, step=step, title=title, body=body, rec=None, options=None, blocking=True,
+                    timeout_s=None, expires_at=None, extra=dict(extra or {}), posted=True,
+                    future=asyncio.get_running_loop().create_future())
+        self.items[item.id] = item
+        await self.hub.emit(item.event())
+        return item.id
+
+    async def withdraw(self, item_id: str, answer=None, by: str = "user") -> None:
+        item = self.items.get(item_id)
+        if item is not None:
+            await self._resolve(item, answer, by)
+
     def auto_applies(self, session_id: str | None) -> bool:
-        """Is the Auto answers switch on for this session?"""
-        ls = getattr(self.hub, "sessions", {}).get(session_id) if session_id else None
+        """Is the Auto answers switch on for this session (or workflow run, by its mission id)?"""
+        find = getattr(self.hub, "session_like", None)
+        ls = (find(session_id) if find else getattr(self.hub, "sessions", {}).get(session_id)) if session_id else None
         return bool(ls is not None and getattr(ls, "auto_answers", False))
 
     async def auto_open(self, session_id: str) -> int:
@@ -110,6 +131,8 @@ class Incoming:
         return n
 
     async def _resolve(self, item: Item, answer, by: str, response: dict | None = None) -> None:
+        if item.posted:
+            self.items.pop(item.id, None)
         if item.future.done():
             return
         item.future.set_result((answer, by, dict(response or {})))
@@ -118,7 +141,7 @@ class Incoming:
 
     async def respond(self, msg: dict) -> bool:
         item = self.items.get(str(msg.get("id")))
-        if item is None:
+        if item is None or item.posted:
             return False
         answer = msg.get("decision") if item.kind in ("permission", "plan") else msg.get("answer")
         if answer is None:

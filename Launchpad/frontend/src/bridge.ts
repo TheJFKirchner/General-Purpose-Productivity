@@ -36,7 +36,7 @@ export function connect(): void {
   actions.setDemo(false);
   actions.setConn('Connecting…', 'var(--lilac)');
   ws = new WebSocket(`ws://127.0.0.1:${encodeURIComponent(port)}/ws?code=${encodeURIComponent(code)}`);
-  ws.onopen = () => { actions.setConn('Connected', 'var(--green)'); send({ type: 'get_settings' }); };
+  ws.onopen = () => { actions.setConn('Connected', 'var(--green)'); send({ type: 'get_settings' }); send({ type: 'workflows_get' }); };
   ws.onclose = () => actions.setConn('Disconnected', 'var(--coral)');
   ws.onmessage = e => { try { dispatch(JSON.parse(e.data)); } catch (err) { console.error(err); } };
 }

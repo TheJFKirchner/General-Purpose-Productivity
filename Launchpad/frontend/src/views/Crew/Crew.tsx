@@ -18,6 +18,7 @@ import { ADDABLE_PURPOSES, PURPOSES, PURPOSE_HINT, PURPOSE_LABEL, roleLabel } fr
 import AgentForm from './AgentForm';
 import RoleReview from './RoleReview';
 import { UsedRoles } from './UsedRoles';
+import { McpPicker } from './McpPicker';
 
 type Filter = 'all' | Purpose;
 
@@ -157,7 +158,7 @@ function CrewCards({ defs, loading, query, filter, canAdd, onOpen }: {
 }
 
 function HeroCard({ a, onOpen }: { a: CrewAgentDef; onOpen: (name: string) => void }) {
-  const v = useComputed(st => ({ uses: sel.usesOf(st, a), model: sel.crewModel(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), flash: st.crewFlash === a.name }));
+  const v = useComputed(st => ({ uses: sel.usesOf(st, a), model: sel.crewModel(st, a), folder: sel.isBuiltin(a) ? '' : folderName(st, a), flash: st.crewFlash === a.name, mcpBad: sel.mcpProblems(st, a.name).length }));
   const p = sel.purposeOf(a), builtin = sel.isBuiltin(a), w = (a.warnings || []).length;
   const name = a.display_name || a.name;
   return (
@@ -168,6 +169,7 @@ function HeroCard({ a, onOpen }: { a: CrewAgentDef; onOpen: (name: string) => vo
         <PurposeTag purpose={p} icon={false} />
         {!builtin && a.step_worker === false ? <span className="chip warnc" title="This file has problems (see its warnings), so plans cannot use it until it is fixed"><AlertTriangle />Not usable</span>
           : w ? <span className="chip warnc" title={`${w} warning${w > 1 ? 's' : ''} from loading this file`}><AlertTriangle />{w}</span> : null}
+        {v.mcpBad ? <span className="chip warnc mcp-warn" title={`${v.mcpBad} assigned MCP server${v.mcpBad > 1 ? 's are' : ' is'} not connected. The agent runs without ${v.mcpBad > 1 ? 'them' : 'it'}.`}><AlertTriangle />MCP {v.mcpBad}</span> : null}
         <span className={`src${builtin ? '' : ' folder'}`} title={builtin ? 'One of Launchpad\'s own agents' : `.claude/agents/${a.name}.md in ${v.folder}`}>
           {builtin ? <><Rocket />Built in</> : <><FolderOpen />{v.folder}</>}
         </span>
@@ -295,9 +297,12 @@ function CrewDetail({ a, raw, setRaw, onBack }: { a: CrewAgentDef; raw: boolean;
         <h3>Custom tools <span>{custom.length}</span></h3>
         {custom.length ? <ul className="ctools">{custom.map((t, i) => <li key={i}><code>{t.name}</code>{t.description ? <p>{t.description}</p> : null}</li>)}</ul> : <p className="none">None.</p>}
       </section>
+      <McpPicker a={a} />
       <section className="cd-sec">
-        <h3>MCP servers <span>{mcp.length}</span></h3>
-        {mcp.length ? <ul className="ctools">{mcp.map((m, i) => <li key={i}><code>{m.name}</code><pre>{cfg(m.config)}</pre></li>)}</ul> : <p className="none">None.</p>}
+        <h3>MCP servers from the agent's file <span>{a.role === 'pilot' && builtin ? 'set by the CLI' : mcp.length}</span></h3>
+        {mcp.length ? <ul className="ctools">{mcp.map((m, i) => <li key={i}><code>{m.name}</code><pre>{cfg(m.config)}</pre></li>)}</ul>
+          : a.role === 'pilot' && builtin ? <p className="none">The CLI reads its own MCP setup; Launchpad does not list it here. Servers ticked under Library MCP servers are added to it.</p>
+          : <p className="none">None defined in this agent's file. Servers from the library are chosen above.</p>}
       </section>
       <section className="cd-sec">
         <div className="cd-row">

@@ -37,6 +37,7 @@ Launchpad is a local desktop app. The user chats with a **planner**, approves th
 7. **Report**: step reports and `report.md` are written by code into the session folder; `report.md` lists the run's question files.
 8. **Questions and Auto answers**: every answered (or timed-out) planner, builder or CLI question is saved by code as its own file in `<session folder>/questions/` (`sessionfiles.add_question`). The per-session Auto answers switch (state in the hub, replayed in the snapshot) is for builders only: `incoming.py` answers every question a plan-step worker asks (blocking ones too; the step never shows blocked) with the worker's own recommendation at once, saved as a question file marked as the worker's own decision and listed in the run's report, and the page shows a compact marked line in Incoming. `ask_question` rejects an empty recommendation or reason. Planner rounds, CLI chat questions and permission cards are never touched (permissions are Autopilot).
 9. **Cost totals**: a cost comes from the engine per turn (agentlib Reply -> `Meter`); `costs.py` is the only place those are added up (session total = every agent but the planner, the planner's share, per CLI chat, app-wide) and formatted on the Python side; `hub.emit_totals` sends them live (usage scope app / session / chat) and on connect, and the page displays what it is sent.
+   - **Usage log** (`usagelog.py`): `Meter.add_reply`, the one place every agent reply is metered, also appends one line per call to the per-user log `<home>/.launchpad/usage/<YYYY-MM>.jsonl` (time, session or chat id, kind, folder, agent, model, CLI, cost, four token counts; a multi-model reply carries its per-model split). It adds a record; the totals above are computed exactly as before. The Usage screen asks `usage_get` and gets `usage_data` (buckets by day or week, series split by CLI, model or agent with "Other", totals, every session across folders), pushed again after new spend while it is open.
 10. **Undefined roles**: a plan step with no fitting listed agent may carry a `role` slug (set by the planner, which is shown the tally's 20 most recent role names). When such a step ends on the Builder, the step runner records the use in the per-user tally (`app/tally.py`): session, run, step, skills, how it ended, questions asked, assumptions logged, questions timed out; a draft written after a run marks that run's uses as sent back. A step naming an agent that does not exist is tallied under that name; steps run by registered agents are not tallied. The Crew tab lists roles used twice or more (`roles_list`).
 
 ```
@@ -69,10 +70,36 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 - **Skills** (`app/skills.py`): found only in the session's folders, primary first. Per folder: `.claude/skills` when it has a `.claude` folder (then `.agents` is ignored), else `.agents/skills`. A name found twice: the earlier folder wins, the other is listed as shadowed.
 - **Who gets which**: each crew agent has a skill setting ("all" or a list of names; Planner all, everyone else none), set in the Crew tab and stored per user. The planner's first message lists the skills; a plan step may name some (`skills` in plan.md), and that step's worker gets its own allowlist plus those. Agents receive them through agentlib (`Agent(skills=..., skill_dirs=...)`, lean setup: names and descriptions in the prompt, read on demand). The CLI chat keeps the harness's own skill discovery.
 
+## Settings: Connections and the MCP library
+
+- **Connections** (`app/connections/`): one small test script per CLI tool, each runnable alone from a terminal and listed (id + name) in `connections/__init__.py`; the page gets the list on `mcp_library` and sends `test_connection {id}`. Claude Code: program found, version, then one minimal request through agentlib (`check_connection`; the fake engine in the demo). Cursor: install check only; not usable while agentlib's Cursor engine is a stub. This is the one place the UI names the real tools.
+- **MCP library** (`app/mcplib.py`, `<home>/.launchpad/mcp.json`): servers added by form or imported (`app/mcpimport.py`, a list of sources; Claude Code's local, project and user scopes). Secrets never reach the page (masked; a masked value sent back keeps the stored one). A test starts the server, lists its tools and stops it (`agentlib.mcp_check`, zero tokens), on add, edit, click, and for every server in the background at app start.
+- **At run time**: right before any crew agent starts (planner, Explorer, orchestrator, builders, folder step agents, Visualizer, CLI chat), `hub.give_mcp` -> `crew.attach_mcp` passes its assigned servers whose last finished test passed to agentlib's `mcp_servers`. Others are skipped with a system warning (and a line in the step report); the run goes on. Engines that cannot take MCP servers (fake, Cursor) skip assignments silently; Crew cards say so (`mcp_supported`).
+
+```
+Settings page --save / test / import--> hub._mcp_message -> mcplib (mcp.json) -> mcp_test -> agentlib.mcp_check (thread)
+                                                                          \-> mcp_library (testing, then the result)
+agent about to start -> hub.give_mcp -> crew.attach_mcp -> mcplib.for_agent -> agent.mcp_servers (+ warnings)
+```
+
+## Workflows
+
+- **What**: a recurring report or study registered once as `<connected folder>/workflows/<slug>.json` (primary + additional folders): a straight line of agent stages and review stages, named inputs, attached markdown files (links), an output folder. The file is the single definition; the Workflows view's form writes it. Format and module map: [app/workflows/README.md](../app/workflows/README.md).
+- **Run** (`app/workflows/runner.py`): a new path, not plan approval. Each agent stage runs one Crew agent (Builder, Explorer or a folder step worker) through the same `StepContext` as a plan step (questions, permission cards, Builder guards, read-only rules, Auto answers, Autopilot), with Launchpad's stage tools; its first message carries the instruction, inputs, attachments (read at the start of the run), earlier results and any send-back note; code writes its result file. A review stage waits for a sign-off (checklist, name, note): approve goes on, send-back re-runs from the chosen agent stage and keeps the rejected attempts. Unattended = Auto answers + Autopilot for agent stages; reviews always stop.
+- **Records**: each run gets a dated folder (test runs: one `test` folder, emptied each time, only when it holds Launchpad's marker) with result files, review records, `run-summary.md`, `run.json`, questions and data files; the run folder may be outside every connected folder and agents may write there without a card. Bookkeeping (activity log, costs) goes to `<folder>/.launchpad/workflow-runs/<run id>/`.
+- **Live state**: runs live in memory in the hub (`app/workflows/manager.py`), one per workflow at a time, replayed on reconnect; each also shows in Missions under session id `wf-<run id>` through the ordinary run events.
+
+```
+Workflows view --workflow_run--> manager.start (checks, test folder, run folder) -> WorkflowRun.go
+   agent stage -> StageContext (StepContext) -> crew.load / load_step_worker -> agentlib -> submit_report -> NN-<stage>.md
+   review stage -> awaiting_review ... workflow_review -> record -> approve: next stage | send_back: re-run from back_to
+   every change -> workflow_run_state + run-summary.md (+ step_update for Missions)
+```
+
 ## Supporting modules (flat in `app/`)
 
 - `plan.py` plan.md render / parse / validate / targeted edits · `sessionfiles.py` the session folder files
-- `incoming.py` the question / permission / plan queue with server-side timers · `meter.py` per-agent tokens, cost, tool calls · `costs.py` cost totals and their formatting
+- `incoming.py` the question / permission / plan queue with server-side timers · `meter.py` per-agent tokens, cost, tool calls (and the usage-log line per reply) · `costs.py` cost totals and their formatting · `usagelog.py` the per-user usage log and the Usage screen's chart data
 - `tally.py` the undefined-roles tally (per user; visibility rules; the planner's role list)
 - `activity.py` live one-line feed of every tool call · `settings.py` active settings · `store.py` per-user store
 - `skills.py` skill discovery in a session's folders + per-agent allowlists
@@ -81,8 +108,9 @@ Agent files, role ids and the `crew.py` loader: [app/agents/README.md](../app/ag
 ## State on disk
 
 - `<folder>/.launchpad/<session-id>/`: written at run time inside each connected folder, ignored by git through its own `.gitignore`: `plan.md`, `flight-log.md`, `steps/`, `assumptions.md`, `operations-manual.md`, `report.md`, `activity.log`, `decisions.md`, `questions/` (one `NNN-<slug>.md` per answered question, kept across runs), `visuals/` (an older run's steps and report move to `run-<k>/`).
-- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) and `role-cases/` (one markdown case per review, with cost, date and the user's decision). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles seeded there).
+- `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) `role-cases/` (one markdown case per review, with cost, date and the user's decision) and `mcp.json` (the MCP library: servers with their secrets, last test results, agent assignments; same lock + atomic replace) and `usage/<YYYY-MM>.jsonl` (the usage log: one JSON line per agent call, appended under a lock file, kept indefinitely, never sent anywhere; damaged lines are skipped when read; each month file is parsed once per launch, then only new bytes). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles, a sample MCP library and five weeks of made-up usage history seeded there).
 - `<folder>/.claude/agent-cases/<agent>.md`: the review case of an agent created on the define path (beside `.claude/agents/`, never loaded as an agent).
+- `<folder>/workflows/<slug>.json`: workflow definitions (the user's files). Each run's records go to the folder the workflow names (`<output>/<YYYY-MM-DD_HHMM>/` or `<output>/test/` with the marker `.launchpad-test-folder`); bookkeeping to `<folder>/.launchpad/workflow-runs/<run id>/`. `settings.json` also keeps `reviewer_name` (the last sign-off name).
 
 - No database; the in-memory hub state is rebuilt for a reconnecting page from the snapshot.
 

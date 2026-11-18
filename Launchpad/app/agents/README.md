@@ -53,7 +53,7 @@ Role ids, front-matter names and websocket fields did not change when the folder
 
 1. Make `app/agents/<folder>/` with `agent.md` (standard front matter: `name: launchpad-<role>`, `description`, `tools`, `model`; the body is the prompt), an `__init__.py`, the agent's Python code and a `README.md` like the others
 2. Add the role to `crew.ROLES` (folder, front-matter name, display name) and `crew.BUILTIN_PURPOSE`; use `crew.HELPERS` instead for a helper that is not a crew card
-3. Load it with `crew.load("<role>", engine=..., project=..., tools=[...], **crew.session_kw(ls, <its agent name>, role="<role>"))` from the code that runs it (session_kw: additional folders + skills), with a `Meter` for its usage
+3. Load it with `crew.load("<role>", engine=..., project=..., tools=[...], **crew.session_kw(ls, <its agent name>, role="<role>"))` from the code that runs it (session_kw: additional folders + skills), with a `Meter` for its usage; right before it starts, `await hub.give_mcp(agent, who=<display name>, session_id=...)` (its assigned MCP servers that passed their last test, warnings for the rest; `crew.attach_mcp`)
 
 4. If it should appear in the Crew tab, add it to the `built` dict in `crew.crew_list`
 5. Add a fake-engine script for its front-matter name in `app/demo.py` and tests under `tests/` (zero tokens)

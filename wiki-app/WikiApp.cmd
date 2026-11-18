@@ -1,11 +1,17 @@
 @echo off
-rem Starts WikiApp on Windows. Before each start, setup.py checks the app's Python environment
-rem (App Files\.venv); the first time, it creates it and installs the packages (a minute or two).
+rem Starts WikiApp on Windows. The first time, setup.py creates the app's Python environment
+rem (App Files\.venv) and installs the packages (a minute or two) in this window.
+rem After that this window only flashes: it hands straight over to the app, which checks the
+rem setup itself without a window and reopens this launcher with WIKIAPP_SETUP=1 when packages
+rem need installing.
 setlocal
 set "APP=%~dp0App Files"
 set "VENV=%APP%\.venv\Scripts"
 
-if exist "%VENV%\python.exe" goto check
+if exist "%VENV%\python.exe" (
+    if defined WIKIAPP_SETUP goto check
+    goto start
+)
 
 rem First start: find Python. "py" comes with Python from python.org; "python" also finds the
 rem Microsoft Store one.

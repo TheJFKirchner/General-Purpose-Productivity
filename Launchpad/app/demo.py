@@ -28,6 +28,19 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
   their session folders are made up, so the reviewer says they are gone); the fake Role Reviewer walks all three
   verdicts: frontend-dev -> keep, copy-editor -> not_yet, data-migrator -> one question card, then define (the
   drafter then fills the form from the case)
+- workflows: "Demo shop" holds a sample workflow (DEMO_WORKFLOW: Explorer, Builder, copy-reviewer, a sign-off review
+  with a checklist, a closing summary-email stage) with its method pages and data, and the shipped example
+  (app/workflows/example-workflow.json), both in the primary demo folder so they show without ticking anything. seed_workflow_run() starts the sample with its first three stages
+  already finished, so the card and Missions show a run waiting at the sign-off; approving runs the last stage on the
+  fake Builder; Run / Test run work as in the real app (workflow_stage_turn scripts the stage agents)
+- Settings > Connections: Claude Code's test finds the real program and version (read-only) and sends its one
+  request to the fake engine; Cursor's is the real install check. MCP library: seed_mcp() fills the demo's temp home
+  with three servers (two local demo servers that really pass their test, one URL server that fails), assignments
+  for the Builder and copy-reviewer, and a sample Claude Code setup to import from (never the real home folder).
+  Agents run on the fake engine, which cannot take MCP servers, so assignments do nothing in the demo
+- Usage screen: seed_usage() writes five weeks of made-up usage-log lines (usage_history: plans, CLI chats, workflow
+  runs, reviews, drafting; Sonnet / Opus / Haiku; one CLI) into the demo's own temp home; the demo's own fake calls are
+  logged on top of it (CLI "Fake engine (demo)")
 """
 from __future__ import annotations
 
@@ -333,6 +346,285 @@ def seed_tally(tally, store) -> None:
                 "outcome": outcome, "questions": questions, "assumptions": assumptions, "timed_out": timed_out})
 
 
+# ---------------------------------------------------------------- usage history (sample, temp only)
+USAGE_DAYS = 35                      # made-up history: five weeks up to today
+# model id -> $ per million tokens (input, output, cache read, cache write); made-up but believable
+USAGE_MODELS = {"claude-sonnet-4-5": (3.0, 15.0, 0.30, 3.75), "claude-opus-4-5": (5.0, 25.0, 0.50, 6.25),
+                "claude-haiku-4-5": (1.0, 5.0, 0.10, 1.25)}
+USAGE_PLANS = ("Refresh the landing page", "Order export to CSV", "Fix the checkout totals", "Tidy the product pages",
+               "Newsletter sign-up form", "Speed up the search page", "Returns policy page", "Stock alert emails")
+USAGE_ROLES = ("frontend-dev", "copy-editor", "data-migrator")
+
+
+def usage_history(dirs: list[dict], today=None, seed: int = 17) -> list[dict]:
+    """Believable made-up usage-log lines for the demo (app/usagelog.py line format): plan sessions (planner on Sonnet,
+    sometimes promoted to Opus; orchestrator, builders, Explorer, Visualizer, the copy-reviewer folder agent), CLI
+    chats, workflow runs, role reviews and drafting calls over USAGE_DAYS days, more on weekdays. One CLI only (the
+    others are not usable), so the variety is in models and agents."""
+    import datetime as dt
+    import random
+    from .agents import crew
+    from .usagelog import VERSION
+    rng = random.Random(seed)
+    today = today or dt.date.today()
+    dirs = dirs or [{"dir_id": None, "path": "", "name": "Demo shop"}]
+    rows: list[dict] = []
+    now = dt.datetime.now()
+
+    def call(t, sid, kind, label, d, role, agent, model, size=1.0, step=None, stage=None, run_folder=None):
+        rates = USAGE_MODELS[model]
+        u = {"input_tokens": int(rng.randint(6, 60) * size), "output_tokens": int(rng.randint(400, 3500) * size),
+             "cache_read_tokens": int(rng.randint(15_000, 160_000) * size),
+             "cache_write_tokens": int(rng.randint(1_500, 25_000) * size)}
+        cost = sum(u[k] * r for k, r in zip(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"),
+                                            rates)) / 1e6
+        rows.append({"v": VERSION, "ts": t.astimezone().isoformat(timespec="seconds"), "session": sid, "kind": kind,
+                     "label": label, "dir_id": d["dir_id"], "folder": d["path"], "folder_name": d["name"],
+                     "run_folder": run_folder, "role": role, "agent": agent, "step": step, "stage": stage,
+                     "model": model, "cli": "claude", "engine": "claude", "cost": round(cost, 6), **u})
+        return t + dt.timedelta(minutes=rng.randint(1, 9), seconds=rng.randint(0, 59))
+
+    for back in range(USAGE_DAYS - 1, -1, -1):
+        day = today - dt.timedelta(days=back)
+        weekday = day.weekday() < 5
+        for k in range(rng.randint(2, 5) if weekday else rng.randint(0, 2)):
+            t = dt.datetime.combine(day, dt.time(rng.randint(8, 18), rng.randint(0, 59)))
+            if t > now:
+                continue
+            d = dirs[rng.randrange(len(dirs))]
+            sid = f"{t.strftime('%Y%m%d-%H%M%S')}-demo{k}"
+            kind = rng.choices(("plan", "chat", "workflow", "review", "other"), (5, 4, 2, 1, 1))[0]
+            folder = Path(d["path"]) / ".launchpad" / sid if d["path"] else None
+            rf = str(folder) if folder else None
+            if kind == "plan":
+                label = rng.choice(USAGE_PLANS)
+                top = rng.random() < 0.4
+                for i in range(rng.randint(2, 5)):
+                    t = call(t, sid, kind, label, d, "planner", crew.display("planner"),
+                             "claude-opus-4-5" if top and i else "claude-sonnet-4-5", 0.6, run_folder=rf)
+                if rng.random() < 0.5:
+                    t = call(t, sid, kind, label, d, "astronaut", crew.display("astronaut"), "claude-haiku-4-5", 0.8,
+                             run_folder=rf)
+                if rng.random() < 0.3:
+                    t = call(t, sid, kind, label, d, "visual", crew.display("visual"), "claude-haiku-4-5", 0.4,
+                             run_folder=rf)
+                if rng.random() < 0.8:                                          # approved and run
+                    steps = rng.randint(2, 4)
+                    for n in range(1, steps + 1):
+                        t = call(t, sid, kind, label, d, "orchestrator", crew.display("orchestrator"),
+                                 "claude-sonnet-4-5", 0.3, run_folder=rf)
+                        worker = "Copy reviewer" if n == steps and rng.random() < 0.4 else crew.display("builder")
+                        for _ in range(rng.randint(1, 3)):
+                            t = call(t, sid, kind, label, d, "builder", worker, "claude-sonnet-4-5", 1.2, step=n,
+                                     run_folder=rf)
+            elif kind == "chat":
+                model = "claude-opus-4-5" if rng.random() < 0.3 else "claude-sonnet-4-5"
+                for _ in range(rng.randint(2, 8)):
+                    t = call(t, sid, kind, "CLI chat", d, "pilot", crew.display("pilot"), model, 0.9, run_folder=rf)
+            elif kind == "workflow":
+                wid = f"{t.strftime('%Y%m%d-%H%M%S')}-{rng.randrange(16**4):04x}"
+                sid = f"wf-{wid}"
+                label = f"Weekly stock report, run {wid}"
+                for n, (agent, stage, model) in enumerate((
+                        (crew.display("astronaut"), "Gather this week's numbers", "claude-haiku-4-5"),
+                        (crew.display("builder"), "Write the report", "claude-sonnet-4-5"),
+                        ("Copy reviewer", "Check the wording", "claude-sonnet-4-5")), 1):
+                    t = call(t, sid, kind, label, d, "builder", agent, model, 1.0, step=n, stage=stage,
+                             run_folder=str(Path(d["path"]) / "reports" / wid) if d["path"] else None)
+            elif kind == "review":
+                sid = f"reviewer-{rng.randrange(16**8):08x}"
+                role = rng.choice(USAGE_ROLES)
+                for _ in range(rng.randint(1, 2)):
+                    t = call(t, sid, kind, f"Role review: {role}", d, "reviewer", crew.display("role_reviewer"),
+                             "claude-sonnet-4-5", 0.7)
+            else:
+                sid = f"drafter-{rng.randrange(16**8):08x}"
+                call(t, sid, kind, "Agent drafting", d, "drafter", crew.display("drafter"), "claude-haiku-4-5", 0.2)
+    return rows
+
+
+def seed_usage(log, store) -> None:
+    """Made-up usage history for the Usage screen, in the demo's own temp home only (never a real log); the demo home
+    is wiped at every --fake launch, so it is always five weeks up to today."""
+    from .tally import in_temp
+    if log.folder is None or not in_temp(log.folder) or log.files():
+        return
+    log.append_many(usage_history(store.directories()))
+
+
+# ---------------------------------------------------------------- MCP library + Claude Code import (sample, temp only)
+DEMO_MCP_SERVER = Path(__file__).resolve().parent / "demo_mcp_server.py"
+
+
+def demo_mcp_servers() -> list[dict]:
+    """The demo's sample MCP library: two real local servers (app/demo_mcp_server.py: their background test passes,
+    zero tokens, no network) and one URL server nothing answers (its test fails; masked header)."""
+    import sys
+    return [
+        {"name": "notes", "kind": "command",
+         "config": {"command": sys.executable, "args": [str(DEMO_MCP_SERVER), "--set", "notes"], "env": {}}},
+        {"name": "glossary", "kind": "command",
+         "config": {"command": sys.executable, "args": [str(DEMO_MCP_SERVER), "--set", "glossary"],
+                    "env": {"GLOSSARY_TOKEN": "demo-token-not-real"}}},
+        {"name": "warehouse", "kind": "url",
+         "config": {"url": "http://127.0.0.1:9/mcp", "headers": {"Authorization": "Bearer demo-not-a-real-token"}}},
+    ]
+
+
+DEMO_MCP_ASSIGNMENTS = {"launchpad-builder": ["notes"], FOLDER_AGENT_NAME: ["glossary", "warehouse"]}
+
+
+def seed_mcp(lib, folders: list[Path], claude_home: Path) -> None:
+    """The demo's MCP library (in its own temp home only, never a real one; reset to the sample on every launch) and a
+    sample Claude Code setup to import
+    from (claude_home/.claude.json: one user server, one local-scope server for the first demo folder; the first demo
+    folder's .mcp.json: one project server). Import commands are made up and URLs end in .invalid, so testing an
+    imported server fails fast and never downloads or sends anything."""
+    import json
+    from .tally import in_temp
+    if lib.path is None or not in_temp(lib.path) or not in_temp(claude_home):
+        return
+    for name in lib.names():                    # every launch starts from the fresh sample (temp home only)
+        lib.remove(name)
+    if not lib.names():
+        for s in demo_mcp_servers():
+            lib.save(s)
+        for agent, names in DEMO_MCP_ASSIGNMENTS.items():
+            lib.set_agent(agent, names)
+    claude_home.mkdir(parents=True, exist_ok=True)
+    shop = Path(folders[0]) if folders else None
+    projects = {}
+    if shop is not None:
+        projects[shop.resolve().as_posix()] = {"mcpServers": {
+            "shop-db": {"type": "stdio", "command": "shop-db-mcp", "args": ["--read-only"], "env": {}}}}
+        (shop / ".mcp.json").write_text(json.dumps({"mcpServers": {
+            "figma": {"type": "http", "url": "https://mcp.figma.invalid/mcp",
+                      "headers": {"Authorization": "Bearer ${FIGMA_TOKEN}"}}}}, indent=1), encoding="utf-8")
+    (claude_home / ".claude.json").write_text(json.dumps({
+        "mcpServers": {
+            "github": {"type": "stdio", "command": "github-mcp-demo", "args": [],
+                       "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}},
+            "notes": {"type": "stdio", "command": "notes-mcp", "args": []}},
+        "projects": projects}, indent=1), encoding="utf-8")
+
+
+# ---------------------------------------------------------------- workflows (sample workflow + a run waiting at its review)
+DEMO_WORKFLOW_SLUG = "monthly-sales-report"
+DEMO_WORKFLOW = {
+    "format": 1, "name": "Monthly sales report",
+    "description": "Builds the month's sales figures from the order export, has the copy reviewer prepare a memo, "
+                   "stops for the sales lead's sign-off, then writes the summary email.",
+    "output_folder": "reports/monthly-sales", "unattended_default": False,
+    "inputs": [
+        {"name": "month_end", "label": "Month end", "kind": "date", "required": True, "default": "2026-10-31",
+         "options": [], "help": "Last day of the month the report covers."},
+        {"name": "orders_file", "label": "Order export", "kind": "file", "required": True,
+         "default": "data/orders-2026-10.csv", "options": [], "help": "CSV export from the shop."},
+        {"name": "region", "label": "Region", "kind": "choice", "required": True, "default": "All",
+         "options": ["All", "North", "South"], "help": ""}],
+    "files": ["docs/sales-report-method.md"],
+    "stages": [
+        {"kind": "agent", "title": "Find the inputs", "agent": "launchpad-astronaut",
+         "instruction": "Find the order export named in the inputs and last month's report, and say what each holds.",
+         "files": []},
+        {"kind": "agent", "title": "Build the figures", "agent": "launchpad-builder",
+         "instruction": "Total the orders for the month by product line and region, excluding refunds, as the method "
+                        "says. Save the table as figures.csv in the run folder and put the table in your result.",
+         "files": ["docs/figure-rules.md"]},
+        {"kind": "agent", "title": "Prepare the review memo", "agent": FOLDER_AGENT_NAME,
+         "instruction": "Check the figures against the method: what you verified, what looks off, and questions for "
+                        "the sales lead.", "files": []},
+        {"kind": "review", "title": "Sales lead sign-off", "checklist": [
+            {"text": "Totals tie to the order export", "kind": "tick"},
+            {"text": "Refunds are excluded", "kind": "tick"},
+            {"text": "Anything unusual this month?", "kind": "answer"}]},
+        {"kind": "agent", "title": "Write the summary email", "agent": "launchpad-builder",
+         "instruction": "Write a five-line summary email of the month's sales for the team, from the figures and "
+                        "the reviewer's notes.", "files": []}],
+}
+DEMO_WORKFLOW_FILES = {
+    f"workflows/{DEMO_WORKFLOW_SLUG}.json": None,                          # filled from DEMO_WORKFLOW
+    "docs/sales-report-method.md": "# Sales report method (made up)\n- Month = calendar month of the order date\n"
+                                   "- Refunds are excluded\n- Totals in pounds, two decimals\n",
+    "docs/figure-rules.md": "# Figure rules (made up)\n- One row per product line and region\n- Round at the end\n",
+    "data/orders-2026-10.csv": "date,product,region,amount,refund\n2026-10-02,Mugs,North,24.00,0\n"
+                               "2026-10-09,Prints,South,61.50,0\n2026-10-15,Mugs,South,12.00,1\n",
+}
+DEMO_SEED_RESULTS = {
+    0: "- `data/orders-2026-10.csv`: the October order export (date, product, region, amount, refund flag); 3 rows.\n"
+       "- No earlier report was found in `reports/monthly-sales/`; this is the first run.",
+    1: "| Product line | North | South | Total |\n|---|---|---|---|\n| Mugs | 24.00 | 0.00 | 24.00 |\n"
+       "| Prints | 0.00 | 61.50 | 61.50 |\n| **Total** | **24.00** | **61.50** | **85.50** |\n\n"
+       "One refunded order (Mugs, South, 12.00) was excluded. Table saved as `figures.csv` in the run folder.",
+    2: "## Verified\n- Totals add up to 85.50 across both regions.\n- The refunded order is left out, as the method says.\n\n"
+       "## Looks off\n- South had no mug sales apart from the refund; worth a glance.\n\n"
+       "## Questions for the sales lead\n- Should the refunded order appear as a note in the email?",
+}
+
+
+def workflow_files() -> dict[str, str]:
+    """Files the demo puts in "Demo shop" for its sample workflow (the workflow file, its method pages, the data)."""
+    import json as _json
+    return {k: (_json.dumps(DEMO_WORKFLOW, indent=2) + "\n" if v is None else v) for k, v in DEMO_WORKFLOW_FILES.items()}
+
+
+def example_workflow_file() -> tuple[str, str]:
+    """The shipped example workflow (app/workflows/example-workflow.json), for "Demo shop" beside the sample."""
+    src = Path(__file__).resolve().parent / "workflows" / "example-workflow.json"
+    return "workflows/example-weekly-status.json", src.read_text(encoding="utf-8")
+
+
+async def seed_workflow_run(hub) -> None:
+    """--fake: start the sample workflow with its first three stages already finished, so the card and Missions
+    show a believable run waiting at the sales lead's sign-off. Best-effort: a missing folder just skips it."""
+    try:
+        wid = next((w["id"] for w in hub.workflows.scan()[0] if w["slug"] == DEMO_WORKFLOW_SLUG), None)
+        if wid is None:
+            return
+        await hub.workflows.start(wid, {"month_end": "2026-10-31", "orders_file": "data/orders-2026-10.csv",
+                                        "region": "All"}, test=False, unattended=False, seed_results=DEMO_SEED_RESULTS)
+    except Exception as e:  # noqa: BLE001 -- the demo must start even if the sample run cannot be made
+        await hub.system(f"Demo: the sample workflow run was not seeded ({type(e).__name__}: {e})")
+
+
+def _run_folder(msg: str) -> str:
+    m = re.search(r"Run folder \(write any data files here\): (.+)", msg)
+    return m.group(1).strip() if m else "."
+
+
+def workflow_stage_turn(msg: str, who: str) -> list:
+    """Fake agents in a workflow stage: a few believable tool calls, then submit_report with a markdown result."""
+    m = re.search(r"stage \d+ of \d+: (.+?)(?: \(test run\))?$", msg, re.M)
+    title = m.group(1).strip() if m else "Stage"
+    folder = _run_folder(msg)
+    note = re.search(r"- (.+?) at review \"(.+?)\": (.+)", msg)
+    redo = f"\n\nRe-done after {note.group(1)}'s note: {note.group(3)}" if note else ""
+    if who == "astronaut":
+        return [fake.call("Glob", {"pattern": "data/*.csv"}), fake.call("Read", {"file_path": "data/orders-2026-10.csv"}),
+                fake.spend(0.002), fake.call("submit_report", {
+                    "result": DEMO_SEED_RESULTS[0] + redo, "status": "done", "issues": [], "assumptions": []})]
+    if who == "reviewer":
+        return [fake.call("Read", {"file_path": "docs/sales-report-method.md"}), fake.spend(0.003),
+                fake.call("submit_report", {"result": DEMO_SEED_RESULTS[2] + redo, "status": "done",
+                                            "issues": [], "assumptions": []})]
+    if "email" in title.lower():
+        return [fake.call("Read", {"file_path": "docs/sales-report-method.md"}), fake.spend(0.006),
+                fake.call("Write", {"file_path": f"{folder}/summary-email.md", "content": "October sales"}),
+                fake.call("submit_report", {"result": (
+                    "**Subject: October sales**\n\nOctober sales came to 85.50 across both regions: Mugs 24.00 "
+                    "(North), Prints 61.50 (South). One refunded order of 12.00 was left out. Nothing unusual "
+                    "beyond the quiet month for mugs in the South. Full table attached (figures.csv)." + redo),
+                    "status": "done", "issues": [], "assumptions": ["The team reads amounts in pounds"],
+                    "files": ["summary-email.md"]})]
+    return [fake.call("Read", {"file_path": "data/orders-2026-10.csv"}), fake.call("Bash", {"command": "python -c \"print(85.5)\""}),
+            fake.call("Write", {"file_path": f"{folder}/figures.csv", "content": "line,north,south\n"}),
+            fake.call("ask_question", {"title": "Round to whole pounds?", "body": "The method says two decimals; "
+                      "the old report used whole pounds.", "recommended": "Two decimals, as the method says",
+                      "options": ["Two decimals, as the method says", "Whole pounds"], "blocking": False}),
+            fake.spend(0.01), fake.call("submit_report", {"result": DEMO_SEED_RESULTS[1] + redo, "status": "done",
+                                                          "issues": [], "assumptions": [], "files": ["figures.csv"]})]
+
+
 def _section(test: str, finding: str, strength: str, quote: str = "", source: str = "") -> dict:
     return {"test": test, "finding": finding, "strength": strength,
             "evidence": [{"quote": quote, "source": source}] if quote else []}
@@ -515,6 +807,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- astronaut
     def astronaut(msg: str) -> list:
+        if msg.startswith('Workflow "'):                  # a workflow stage (app/workflows/runner.py)
+            return workflow_stage_turn(msg, "astronaut")
         links = [{"path": f, "answer": f"{f} explains how this part of the project is organised."} for f in files
                  if f != "(none)"]
         if links:
@@ -550,6 +844,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- builder
     def builder(msg: str) -> list:
+        if msg.startswith('Workflow "'):                  # a workflow stage (app/workflows/runner.py)
+            return workflow_stage_turn(msg, "builder")
         m = re.search(r"Build step (\d+)", msg)
         n = int(m.group(1)) if m else 1
         if "round 2" in msg or n >= 4:                    # revised plans and added steps: quick, no cards
@@ -617,6 +913,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- folder agent (copy-reviewer, read-only)
     def copy_reviewer(msg: str) -> list:
+        if msg.startswith('Workflow "'):
+            return workflow_stage_turn(msg, "reviewer")
         return [fake.call("Read", {"file_path": "demo-output/landing.md"}),
                 fake.call("Grep", {"pattern": "teh|recieve|seperate", "path": "demo-output"}),
                 fake.call("Write", {"file_path": "demo-output/landing.md", "content": "fixed"}),   # refused: read-only

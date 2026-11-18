@@ -395,6 +395,8 @@ async def run_review(hub, name: str, review_id: str, progress) -> dict:
     agent = load_agent(engine=engine, project=cwd, model=model, on_permission=path_guard(roots))
     meter = Meter(hub, session_id=None, role="reviewer", name=crew.display(ROLE))
     meter.path_roots = list(roots)
+    last_use = (entry.get("uses") or [{}])[-1] or {}                # stored oldest first
+    meter.usage_info = {"label": f"Role review: {name}", "folder": last_use.get("project")}   # the usage log
     await meter.set_status("working")
     questions: list[dict] = []
 

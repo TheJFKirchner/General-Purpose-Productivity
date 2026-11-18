@@ -84,6 +84,16 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   review_failed: { review_id: 'rv2', role: 'other-role', error: 'engine down' },
   review_refused: { role: 'ghost', review_id: null, error: 'There is no role called ghost in the tally.' },
   review_decided: { role: 'sql-tuner', decision: 'not_yet', reviewer_verdict: 'keep', review_id: 'rv1', case_file: 'c1.md' },
+  connection_test: { id: 'claude_code', installed: true, version: '2.1.0', reachable: true, usable: true, detail: null },
+  mcp_library: { servers: [{ name: 'fs', kind: 'command', config: { command: 'npx' }, status: 'connected', detail: null, tool_count: 3, tested_at: null }], assignments: { 'launchpad-builder': ['fs'] },
+    connections: [{ id: 'claude_code', name: 'Claude Code' }], import_sources: [{ id: 'claude_code', name: 'Claude Code' }] },
+  mcp_imports: { source: 'claude_code', servers: [{ name: 'gh', kind: 'url', summary: 'https://x', exists: false }] },
+  usage_data: { buckets: ['2026-11-16'], series: [{ key: 'claude', label: 'Claude', cost: [1], input_tokens: [1], output_tokens: [1], cache_read_tokens: [1], cache_write_tokens: [1] }], totals: { cost: 1, input_tokens: 1, output_tokens: 1, cache_read_tokens: 1, cache_write_tokens: 1 }, sessions: [] },
+  workflows_list: { workflows: [{ id: 'd1/w1', slug: 'w1', name: 'Study', description: '', folder: 'd1', folder_name: 'proj', path: 'workflows/w1.json', output_folder: 'out', output_path: '/out', unattended_default: false,
+    inputs: [{ name: 'date', label: 'Date', kind: 'date', required: true, default: '', options: [], help: '' }], files: [], stages: [{ index: 0, kind: 'review', title: 'Check', checklist: [] }], warnings: [], can_run: true, running_run_id: 'r1', last_run_id: 'r1' }],
+    folders: [{ dir_id: 'd1', name: 'proj', path: '/proj', is_primary: true }], agents: { d1: [{ name: 'launchpad-builder', display_name: 'Builder', purpose: 'building', builtin: true }] }, reviewer_name: 'Sam' },
+  workflow_run_state: { run: { id: 'r1', workflow_id: 'd1/w1', workflow_name: 'Study', test: false, folder: '/out/r1', inputs: {}, unattended: false, status: 'awaiting_review', current_stage: 0, started_at: '2026-11-17T09:00:00', finished_at: null, error: null,
+    stages: [{ index: 0, title: 'Check', kind: 'review', status: 'awaiting_review', agent: null, agent_display: 'Review', result_file: null, result_markdown: null, attempts: [], checklist: [], review: null, reviews: [], error: null }] } },
 };
 
 describe('reducer', () => {
@@ -124,6 +134,10 @@ describe('reducer', () => {
     expect(st.reviews['sql-tuner']).toMatchObject({ status: 'case', reviewId: 'rv1', model: 'sonnet', progress: ['Reading the tally'], decided: { decision: 'not_yet', reviewerVerdict: 'keep' } });
     expect(st.reviews['sql-tuner'].case!.sections).toHaveLength(5);
     expect(st.reviews['other-role']).toMatchObject({ status: 'failed', error: 'engine down' });
+    /* connections and the MCP library */
+    expect(st.connTests.claude_code).toMatchObject({ status: 'done', result: { installed: true, version: '2.1.0' } });
+    expect(st.mcp).toMatchObject({ loaded: true, connections: [{ id: 'claude_code', name: 'Claude Code' }], assignments: { 'launchpad-builder': ['fs'] } });
+    expect(st.mcpImports.claude_code).toMatchObject({ loading: false });
     expect(st.reviews.ghost).toMatchObject({ status: 'refused' });
   });
 
