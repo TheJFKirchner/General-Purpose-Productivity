@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""brain.py - script half of brain intake and BrainSight.
+"""brain.py - script half of brain intake and BrainCite.
 
 Standard library only. No model calls. Every path it prints is relative to
 the wiki root (the one exception is `brain.py root`).
@@ -447,7 +447,7 @@ def dict_refusal(name, where, pages):
     base = re.sub(r"([-.]dictionary)$", "", name, flags=re.I)
     hint = " File table facts to the table's main page [[%s]]." % base if by_name(pages, base) else ""
     return ("REFUSED: '%s' is a data dictionary (%s). Dictionaries are off limits to brain intake, "
-            "promotion and BrainSight.%s"
+            "promotion and BrainCite.%s"
             % (name, where, hint))
 
 
@@ -1429,11 +1429,11 @@ def cmd_section(wiki, args):
 
 
 WHOLE_PAGE = "(whole page)"
-SIGHT_SIDES = (("team", "Team"), ("personal", "Personal"))
-SIGHT_HEADER = ["| Page | Section | Lines | Why read it |", "|---|---|---|---|"]
+CITE_SIDES = (("team", "Team"), ("personal", "Personal"))
+CITE_HEADER = ["| Page | Section | Lines | Why read it |", "|---|---|---|---|"]
 
 
-def parse_sight_row(line, side):
+def parse_cite_row(line, side):
     """Page | Section | Lines | Why. Section '(whole page)' = whole page (stored as '').
     Older rows with extra columns are read as page, section, ..., lines, why."""
     cells = [c.strip() for c in line.strip().strip("|").split("|")]
@@ -1448,13 +1448,13 @@ def parse_sight_row(line, side):
             "side": side or "team", "lines": cells[-2], "why": cells[-1]}
 
 
-def read_sight(wiki, path):
+def read_cite(wiki, path):
     """Return (preamble lines or None, {side: [rows]}, [other ## blocks as line lists])."""
     groups = {"team": [], "personal": []}
     if not os.path.isfile(path):
         return None, groups, []
     pre, others, side, in_rows, cur_lines = [], [], None, False, None
-    sides = {title.lower(): sd for sd, title in SIGHT_SIDES}
+    sides = {title.lower(): sd for sd, title in CITE_SIDES}
     old_groups = ("for planning", "for the work")
     for ln in read_lines(path):
         m = re.match(r"^(#{2,3})\s+(.*?)\s*$", ln)
@@ -1473,13 +1473,13 @@ def read_sight(wiki, path):
                 continue
         is_row = ln.strip().startswith("|")
         if in_rows:
-            row = parse_sight_row(ln, side) if is_row else None
+            row = parse_cite_row(ln, side) if is_row else None
             if row:
                 groups[row["side"]].append(row)
         elif cur_lines is not None:
             cur_lines.append(ln)
         elif is_row:
-            row = parse_sight_row(ln, None)
+            row = parse_cite_row(ln, None)
             if row:
                 groups[row["side"]].append(row)
         else:
@@ -1490,14 +1490,14 @@ def read_sight(wiki, path):
 
 
 def cmd_candidates(wiki, args):
-    path = args.sight if os.path.isabs(args.sight) else os.path.abspath(args.sight)
+    path = args.cite if os.path.isabs(args.cite) else os.path.abspath(args.cite)
     if not os.path.isfile(path):
-        raise BrainError("BrainSight file not found: %s; fall back to the page list (`brain.py pagelist`)"
-                         % args.sight, EXIT_MISSING)
-    _, groups, _ = read_sight(wiki, path)
+        raise BrainError("BrainCite file not found: %s; fall back to the page list (`brain.py pagelist`)"
+                         % args.cite, EXIT_MISSING)
+    _, groups, _ = read_cite(wiki, path)
     pages, _ = wiki.scan()
     n = 0
-    for side, _title in SIGHT_SIDES:
+    for side, _title in CITE_SIDES:
         if args.side and args.side != side:
             continue
         for r in groups[side]:
@@ -1536,14 +1536,14 @@ def load_rows(path):
     return [dict(zip(head, [c.strip() for c in ln.split("\t")])) for ln in lines[1:]]
 
 
-def cmd_sight_add(wiki, args):
-    spath = args.sight if os.path.isabs(args.sight) else os.path.abspath(args.sight)
+def cmd_cite_add(wiki, args):
+    spath = args.cite if os.path.isabs(args.cite) else os.path.abspath(args.cite)
     rows = load_rows(args.rows)
-    pre, groups, others = read_sight(wiki, spath)
+    pre, groups, others = read_cite(wiki, spath)
     pages, dicts = wiki.scan()
     if wiki.c("dictionaries_in_sections"):
         pages = pages + dicts
-    counts = {s: [0, 0, 0] for s, _ in SIGHT_SIDES}  # added, already there, rejected
+    counts = {s: [0, 0, 0] for s, _ in CITE_SIDES}  # added, already there, rejected
     bad_side = 0
     clean = lambda v: re.sub(r"\s+", " ", v).replace("|", "/").strip()
     for i, r in enumerate(rows, 1):
@@ -1600,16 +1600,16 @@ def cmd_sight_add(wiki, args):
             table.append(new)
         counts[side][0] += 1
         print("added: %s > %s (%s)" % (pg.name, heading or WHOLE_PAGE, side))
-    out = pre if pre is not None else ["# BrainSight%s" % (": " + args.title if args.title else ""), "",
+    out = pre if pre is not None else ["# BrainCite%s" % (": " + args.title if args.title else ""), "",
                                        "Sections and whole pages worth reading for this project, by side.",
                                        "Open one with `brain.py section \"<page>\" \"<section>\" --side team|personal`;"
                                        " for a whole page leave out the section."]
-    for side, title in SIGHT_SIDES:
+    for side, title in CITE_SIDES:
         out += ["", "## " + title, ""]
         if not groups[side]:
             out.append("None.")
             continue
-        out += SIGHT_HEADER
+        out += CITE_HEADER
         for r in groups[side]:
             out.append("| [[%s]] | %s | %s | %s |" % (r["page"], r["section"] or WHOLE_PAGE, r["lines"], r["why"]))
     for block in others:
@@ -1617,7 +1617,7 @@ def cmd_sight_add(wiki, args):
             block.pop()
         out += [""] + block
     write_lines(spath, out)
-    for side, _t in SIGHT_SIDES:
+    for side, _t in CITE_SIDES:
         a, d, b = counts[side]
         print("table %s: added %d, already there %d, rejected %d" % (side, a, d, b))
     added = sum(c[0] for c in counts.values())
@@ -1647,13 +1647,13 @@ def build_parser():
                         help="config JSON to use instead of <wiki>/%s" % CONFIG_FILE_NAME)
     top = argparse.ArgumentParser(
         prog="brain.py", formatter_class=Fmt, parents=[common],
-        description="Script half of brain intake and BrainSight. No model calls.\n"
+        description="Script half of brain intake and BrainCite. No model calls.\n"
                     "Formats are defined in brain-reference.md. Output paths are relative to the wiki root.",
-        epilog="intake flow:  pagelist [+ candidates --sight F] -> (extractor) -> summary -> approve -> collect\n"
+        epilog="intake flow:  pagelist [+ candidates --cite F] -> (extractor) -> summary -> approve -> collect\n"
                "              -> (filer per packet) -> markfiled\n"
                "promote flow: promote --list -> promote PAGE --show -> promote PAGE --lines .. -> (filer)"
                " -> markfiled --promoted NAME\n"
-               "brainsight:   sections --side team|personal -> (analysts) -> sight-add --sight F --rows R\n"
+               "braincite:   sections --side team|personal -> (analysts) -> cite-add --cite F --rows R\n"
                "              -> section PAGE [HEADING] --side ..\n\n"
                "exit codes: 0 ok | 1 invalid or refused (message says what to fix) | 2 bad arguments |"
                " 3 not found\nerrors print one line to stderr starting 'error:'.")
@@ -1759,7 +1759,7 @@ def build_parser():
     sp.add_argument("--text", action="append", metavar="LINE", help="exact line text (repeatable)")
     sp.add_argument("--template", metavar="NAME", help="team template name or path; creates the team page from it when it does not exist")
 
-    sp = add("sections", cmd_sections, "print the section index for BrainSight",
+    sp = add("sections", cmd_sections, "print the section index for BrainCite",
              "One block per page: '[[name]] path | N lines | description | twin of X' or '| twin: path'\n"
              "(N = the page's total line count, to judge whole page versus sections), then one line per\n"
              "section heading at section_level: 'Heading | start | lines'. start = 1-based line of the\n"
@@ -1778,17 +1778,17 @@ def build_parser():
     sp.add_argument("heading", metavar="HEADING", nargs="?", help="heading text, without the #s; omit for the whole page")
     sp.add_argument("--side", choices=["personal", "team"], help="needed when the page has a twin")
 
-    sp = add("candidates", cmd_candidates, "print BrainSight rows as routing candidates",
-             "Print each row of a BrainSight file as 'page | section | side | why', where section is\n"
+    sp = add("candidates", cmd_candidates, "print BrainCite rows as routing candidates",
+             "Print each row of a BrainCite file as 'page | section | side | why', where section is\n"
              "'(whole page)' for a whole-page entry. Route a section row as '## [[page]] > Section' and a\n"
              "whole-page row as '## [[page]]'. Rows whose page no longer exists are marked (page missing).\n"
              "Missing file: exit 3; fall back to the page list.")
-    sp.add_argument("--sight", required=True, metavar="FILE", help="BrainSight file (e.g. <project>/brainsight.md)")
+    sp.add_argument("--cite", required=True, metavar="FILE", help="BrainCite file (e.g. <project>/braincite.md)")
     sp.add_argument("--side", choices=["team", "personal"], help="only rows from this table")
     sp.add_argument("--out", metavar="FILE", help="write the output to FILE (relative to the wiki root; "
                     "folders are created) instead of the screen")
 
-    sp = add("sight-add", cmd_sight_add, "merge analyst rows into a BrainSight file",
+    sp = add("cite-add", cmd_cite_add, "merge analyst rows into a BrainCite file",
              "Read rows from a JSON list or a TSV file with a header (columns: page, side, why, and optional\n"
              "section; missing or empty section or '(whole page)' = whole page). Each row is checked against\n"
              "the wiki (page exists on that side, heading exists) and Lines is filled in by the script\n"
@@ -1799,7 +1799,7 @@ def build_parser():
              "A whole-page row replaces that page's section entries (prints 'replaced: ...').\n"
              "Prints 'table team|personal: added N, already there N, rejected N', then a total.\n"
              "Creates the file if missing. Exit 1 only if every row was rejected.")
-    sp.add_argument("--sight", required=True, metavar="FILE", help="BrainSight file to create or update")
+    sp.add_argument("--cite", required=True, metavar="FILE", help="BrainCite file to create or update")
     sp.add_argument("--rows", required=True, metavar="FILE", help="rows file (.json or .tsv)")
     sp.add_argument("--title", metavar="TEXT", help="project name for the title of a new file")
 

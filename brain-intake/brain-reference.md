@@ -21,7 +21,7 @@ The one shared reference for the brain skills and agents. Skills and agents poin
 | Section index level | `##` |
 | Dictionaries in section index | no |
 | Doubt tags | `#verify`, `#hunch` (`doubt_tags`) |
-| BrainSight file | `brainsight.md` in the project folder |
+| BrainCite file | `braincite.md` in the project folder |
 
 - Page name = file name without `.md`. Names are unique per side.
 - Skipped everywhere: rules, tags, templates, sources, raw, the work folder `brain-work/` (and any folder named `brain-work`), folders named `skills`, `agents`, `sql`, non-`.md` files, dictionaries.
@@ -85,7 +85,7 @@ Summary: two or three sentences.
 | `input:` | Path of the input file, relative to wiki root. `markfiled` moves it and rewrites this line. |
 | `status:` | Extractor writes `pending`. `approve` sets `approved`. `markfiled` sets `filed`. |
 | `## [[name]]` | `name` exactly as in the page list (team or personal). A team name with no twin is fine: collect creates the twin. |
-| `> Section heading` | Optional. Exact heading text from a BrainSight row or `sections`. Unknown heading = filed at page level with a warning. |
+| `> Section heading` | Optional. Exact heading text from a BrainCite row or `sections`. Unknown heading = filed at page level with a warning. |
 | `## New page: name` | Personal page proposal. Filed only when the user approves the name. Name must not clash (summary flags `EXISTS` / `NEAR`). |
 | `## Unplaced` | Kept in the record only. Never filed. |
 | `## Warnings` | Shown by `summary`. Never filed. |
@@ -95,7 +95,7 @@ Summary: two or three sentences.
 
 Extractor rules:
 
-1. Routing order: BrainSight rows (`brain.py candidates --sight <file>`) first: a section row as `## [[page]] > Section`, a whole-page row as `## [[page]]`; then the page list `brain-work/page-list.md`; then `New page:`; else `Unplaced`.
+1. Routing order: BrainCite rows (`brain.py candidates --cite <file>`) first: a section row as `## [[page]] > Section`, a whole-page row as `## [[page]]`; then the page list `brain-work/page-list.md`; then `New page:`; else `Unplaced`.
 2. One fact per bullet. Skip facts that are not durable.
 3. Every bullet stands alone: its effective date and the context needed to understand it are inside the bullet.
 4. Merge bullets that restate one mechanism into one bullet.
@@ -201,10 +201,10 @@ side: team
 - `brain.py section "<page>" --side <side>` (no heading): prints `path | (whole page)`, then the page body without frontmatter.
 - `--side` is required when the page has a twin.
 
-## 12. BrainSight file (`<project>/brainsight.md`)
+## 12. BrainCite file (`<project>/braincite.md`)
 
 ```markdown
-# BrainSight: <project>
+# BrainCite: <project>
 
 ## Team
 
@@ -231,9 +231,9 @@ side: team
 | Open an entry | `brain.py section "<page>" "<section>" --side team\|personal`; for a whole page leave out the section |
 | Twins | A twin's entry sits under Personal with the same page name as its team entry |
 | Lines | Computed by the script |
-| Updates | Only via `brain.py sight-add` |
+| Updates | Only via `brain.py cite-add` |
 
-Analyst rows file for `sight-add` (JSON list, or TSV with a header):
+Analyst rows file for `cite-add` (JSON list, or TSV with a header):
 
 ```json
 [{"page": "stop-loss", "section": "Traps", "side": "team", "why": "..."},
@@ -249,7 +249,7 @@ Analyst rows file for `sight-add` (JSON list, or TSV with a header):
 ```
 table team: added N, already there N, rejected N
 table personal: added N, already there N, rejected N
-total: N added, N already there, N rejected -> brainsight.md
+total: N added, N already there, N rejected -> braincite.md
 ```
 
 ## 13. brain.py commands
@@ -267,8 +267,8 @@ total: N added, N already there, N rejected -> brainsight.md
 | `promote PAGE (--lines 12,14-16 \| --text "line" ...) [--template NAME]` | Move lines into a team packet; create the team page from the template if missing | `team page created from template:`, `twin_of set:`, `removed N line(s)`, `empty headings dropped:`, `stripped personal tags:`, `warn: doubt tag ...`, `packet:` |
 | `sections [--side personal\|team\|both] [--out FILE]` | Section index | see section 11 |
 | `section PAGE [HEADING] [--side personal\|team]` | One section, or the whole page body when HEADING is left out | see section 11 |
-| `candidates --sight FILE [--side team\|personal] [--out FILE]` | BrainSight rows for the extractor | `page \| section-or-(whole page) \| side \| why`, `(page missing)` flag |
-| `sight-add --sight FILE --rows FILE [--title T]` | Merge analyst rows into the Team and Personal tables | `added:`, `already there:`, `replaced:`, `rejected:`, per-table counts, total |
+| `candidates --cite FILE [--side team\|personal] [--out FILE]` | BrainCite rows for the extractor | `page \| section-or-(whole page) \| side \| why`, `(page missing)` flag |
+| `cite-add --cite FILE --rows FILE [--title T]` | Merge analyst rows into the Team and Personal tables | `added:`, `already there:`, `replaced:`, `rejected:`, per-table counts, total |
 | `root` | Absolute wiki root | one path |
 
 - Global options (before or after the command): `--wiki PATH`, `--config PATH`. Default root: `$BRAIN_WIKI`, CONFIG `wiki_root`, then the current folder.
@@ -292,7 +292,7 @@ total: N added, N already there, N rejected -> brainsight.md
 
 | Flow | Steps |
 |---|---|
-| brain-file | `pagelist` -> `candidates --sight` (if a BrainSight file exists) -> extractor on session facts files -> `summary` -> user strikes / says yes -> `approve --all` -> `collect` -> one filer per packet (parallel) -> `log` per call -> `markfiled` (failed filer: section 14) |
+| brain-file | `pagelist` -> `candidates --cite` (if a BrainCite file exists) -> extractor on session facts files -> `summary` -> user strikes / says yes -> `approve --all` -> `collect` -> one filer per packet (parallel) -> `log` per call -> `markfiled` (failed filer: section 14) |
 | brain-ingest | same, extractor input = batch of `personal/raw/*` documents; `summary` shows counts only |
 | brain-promote | `promote --list` -> `promote PAGE --show` (show the flags to the user) -> user picks -> `promote PAGE --lines ...` (`--template` if no team page) -> warn on any `warn: doubt tag` -> one filer -> `markfiled --promoted NAME` |
-| brain-sight | `sections --side team` and `--side personal` (`--out`) -> one analyst per side (parallel) -> analysts write rows files (page or section entries) -> `sight-add` -> report its per-table counts |
+| brain-cite | `sections --side team` and `--side personal` (`--out`) -> one analyst per side (parallel) -> analysts write rows files (page or section entries) -> `cite-add` -> report its per-table counts |

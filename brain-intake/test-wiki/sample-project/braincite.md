@@ -1,4 +1,4 @@
-# BrainSight: Client A stop-loss renewal pack
+# BrainCite: Client A stop-loss renewal pack
 
 Sections and whole pages worth reading for this project, by side.
 Open one with `brain.py section "<page>" "<section>" --side team|personal`; for a whole page leave out the section.

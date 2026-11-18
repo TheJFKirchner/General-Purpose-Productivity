@@ -40,7 +40,7 @@ def slurp(path):
         return f.read()
 
 
-def sight_tables(text):
+def cite_tables(text):
     """{side title: ['[[page]] | Section', ...] or ['None.']} in file order."""
     out, side = {}, None
     for ln in text.splitlines():
@@ -115,7 +115,7 @@ class BrainTest(unittest.TestCase):
                                                      "sql-review-checklist", "eligibility-file-quirks")])
         self.assertEqual(names, expected)
         self.assertNotIn("dictionary", text.lower().replace("do not edit", ""))
-        for skipped in ("rules", "tags", "concept", "metric", "2026-11-12-session-mlr-rebuild", "brainsight"):
+        for skipped in ("rules", "tags", "concept", "metric", "2026-11-12-session-mlr-rebuild", "braincite"):
             self.assertNotIn("| %s |" % skipped, text)
         self.assertRegex(text, r"\| stop-loss \| personal \| personal/stop-loss.md \| .* \| stop-loss \|")
 
@@ -337,7 +337,7 @@ class BrainTest(unittest.TestCase):
         self.assertIn("target_status: created-from-template", pk)
         self.assertIn("twin_of: sql-review-checklist", self.read("personal/sql-review-checklist.md"))
 
-    # --------------------------------------------------------- brainsight
+    # --------------------------------------------------------- braincite
     def test_section_returns_only_that_section(self):
         out = self.run_brain("section", "stop-loss", "traps", "--side", "team").stdout
         self.assertTrue(out.startswith("team/stop-loss.md | Traps\n## Traps"))
@@ -369,14 +369,14 @@ class BrainTest(unittest.TestCase):
         self.assertIn("## Purpose", out)
         self.assertIn("After delivery, move durable lessons", out)
 
-    def test_sight_add_validates_dedups_and_whole_page(self):
-        sight = os.path.join(self.tmp, "proj", "brainsight.md")
+    def test_cite_add_validates_dedups_and_whole_page(self):
+        cite = os.path.join(self.tmp, "proj", "braincite.md")
         rows = os.path.join(self.tmp, "rows.json")
 
         def add(data):
             with open(rows, "w", encoding="utf-8") as f:
                 json.dump(data, f)
-            return self.run_brain("sight-add", "--sight", sight, "--rows", rows, "--title", "Test").stdout
+            return self.run_brain("cite-add", "--cite", cite, "--rows", rows, "--title", "Test").stdout
 
         out = add([
             {"page": "pmpm", "section": "Traps", "side": "team", "why": "a"},
@@ -391,41 +391,41 @@ class BrainTest(unittest.TestCase):
         self.assertIn("table team: added 3, already there 0, rejected 2", out)
         self.assertIn("table personal: added 1, already there 0, rejected 0", out)
         self.assertIn("total: 4 added, 0 already there, 3 rejected", out)
-        t = sight_tables(slurp(sight))
+        t = cite_tables(slurp(cite))
         self.assertEqual(list(t.keys()), ["Team", "Personal"])
         self.assertEqual(t["Team"], ["[[pmpm]] | Traps", "[[pmpm]] | Decisions",
                                      "[[high-cost-claimants]] | (whole page)"])
         self.assertEqual(t["Personal"], ["[[pmpm]] | Traps"])
-        self.assertIn("| Page | Section | Lines | Why read it |", slurp(sight))
-        self.assertIn("| [[high-cost-claimants]] | (whole page) | 38 | c |", slurp(sight))
-        self.assertNotIn("Topic", slurp(sight))
+        self.assertIn("| Page | Section | Lines | Why read it |", slurp(cite))
+        self.assertIn("| [[high-cost-claimants]] | (whole page) | 38 | c |", slurp(cite))
+        self.assertNotIn("Topic", slurp(cite))
         out = add([{"page": "pmpm", "section": "Traps", "side": "team", "why": "dup"},
                    {"page": "high-cost-claimants", "section": "Traps", "side": "team", "why": "covered"}])
         self.assertIn("table team: added 0, already there 2, rejected 0", out)
         self.assertIn("(covered by whole page)", out)
         out = add([{"page": "pmpm", "section": "", "side": "team", "why": "whole"}])
         self.assertIn("replaced: pmpm > Traps, Decisions (team) by (whole page)", out)
-        t = sight_tables(slurp(sight))
+        t = cite_tables(slurp(cite))
         self.assertEqual(t["Team"], ["[[pmpm]] | (whole page)", "[[high-cost-claimants]] | (whole page)"])
         self.assertEqual(t["Personal"], ["[[pmpm]] | Traps"])  # other side untouched
         tsv = os.path.join(self.tmp, "rows.tsv")
         with open(tsv, "w", encoding="utf-8") as f:
             f.write("page\tsection\tside\twhy\nstop-loss\tOverview\tpersonal\tFrame it.\n")
-        self.run_brain("sight-add", "--sight", sight, "--rows", tsv)
-        self.assertEqual(sight_tables(slurp(sight))["Personal"], ["[[pmpm]] | Traps", "[[stop-loss]] | Overview"])
+        self.run_brain("cite-add", "--cite", cite, "--rows", tsv)
+        self.assertEqual(cite_tables(slurp(cite))["Personal"], ["[[pmpm]] | Traps", "[[stop-loss]] | Overview"])
 
-    def test_candidates_reads_sample_brainsight(self):
-        sample = self.path("sample-project/brainsight.md")
-        out = self.run_brain("candidates", "--sight", sample).stdout
+    def test_candidates_reads_sample_braincite(self):
+        sample = self.path("sample-project/braincite.md")
+        out = self.run_brain("candidates", "--cite", sample).stdout
         self.assertIn("stop-loss | Overview | team | Read before", out)
         self.assertIn("stop-loss | Traps | personal | Read before", out)
         self.assertIn("q4-renewal-analysis | (whole page) | personal | Read before", out)
         self.assertIn("'## [[page]] > Section'", out)
-        out = self.run_brain("candidates", "--sight", sample, "--side", "team").stdout
+        out = self.run_brain("candidates", "--cite", sample, "--side", "team").stdout
         self.assertNotIn("| personal |", out)
-        self.run_brain("candidates", "--sight", sample, "--use", "plan", ok=2)  # removed option
-        self.run_brain("candidates", "--sight", self.path("sample-project/none.md"), ok=3)
-        t = sight_tables(slurp(sample))
+        self.run_brain("candidates", "--cite", sample, "--use", "plan", ok=2)  # removed option
+        self.run_brain("candidates", "--cite", self.path("sample-project/none.md"), ok=3)
+        t = cite_tables(slurp(sample))
         self.assertEqual(list(t.keys()), ["Team", "Personal"])
         self.assertIn("[[q4-renewal-analysis]] | (whole page)", t["Personal"])
 
@@ -448,7 +448,7 @@ class BrainTest(unittest.TestCase):
 
     def test_help_for_every_command(self):
         cmds = ["pagelist", "summary", "approve", "collect", "markfiled", "log", "promote", "sections",
-                "section", "candidates", "sight-add", "root"]
+                "section", "candidates", "cite-add", "root"]
         top = subprocess.run([sys.executable, BRAIN, "--help"], capture_output=True, text=True)
         self.assertEqual(top.returncode, 0)
         for c in cmds:
@@ -478,16 +478,22 @@ class BrainTest(unittest.TestCase):
     def test_team_write_guard_blocks_markfiled(self):
         self.run_brain("collect")
         team_page = self.read("team/ibnr.md")
+        raw = {f: open(self.path(f), "rb").read() for f in ("team/ibnr.md", "team/claims-header-dictionary.md")}
+
+        def restore(f):  # exact bytes: checked-out files may have CRLF line endings
+            with open(self.path(f), "wb") as fh:
+                fh.write(raw[f])
+
         self.write("team/ibnr.md", team_page + "- An intake agent wrote here.\n")
         p = self.run_brain("markfiled", ok=1)
         self.assertIn("team/ibnr.md", p.stderr)
         self.assertIn("nothing was filed", p.stderr)
         self.assertIn("status: approved", self.read("personal/sources/2026-11-12-session-mlr-rebuild.md"))
-        self.write("team/ibnr.md", team_page)
+        restore("team/ibnr.md")
         self.write("team/claims-header-dictionary.md", self.read("team/claims-header-dictionary.md") + "x\n")
         p = self.run_brain("markfiled", ok=1)
         self.assertIn("team/claims-header-dictionary.md", p.stderr)
-        self.write("team/claims-header-dictionary.md", self.read("team/claims-header-dictionary.md")[:-2])
+        restore("team/claims-header-dictionary.md")
         self.run_brain("markfiled")
         self.assertIn("status: filed", self.read("personal/sources/2026-11-12-session-mlr-rebuild.md"))
         # promotion: its own team page is exempt, any other team file is not
@@ -498,7 +504,7 @@ class BrainTest(unittest.TestCase):
         self.write("team/ibnr.md", team_page + "- stray\n")
         p = self.run_brain("markfiled", "--promoted", "pmpm", ok=1)
         self.assertIn("changed files other than team/pmpm.md: team/ibnr.md\n", p.stderr)
-        self.write("team/ibnr.md", team_page)
+        restore("team/ibnr.md")
         self.run_brain("markfiled", "--promoted", "pmpm")
 
     def test_promote_template_twin_link_empty_headings_and_cites(self):

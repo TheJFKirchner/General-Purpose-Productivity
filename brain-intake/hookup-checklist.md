@@ -11,11 +11,11 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 
 ## 2. Where things are copied
 
-- [ ] `skills/brain-file`, `brain-ingest`, `brain-promote`, `brain-sight` -> `~/.claude/skills/` (one folder each, holding `SKILL.md`). Check: the four appear when you type `/brain`.
+- [ ] `skills/brain-file`, `brain-ingest`, `brain-promote`, `brain-cite` -> `~/.claude/skills/` (one folder each, holding `SKILL.md`). Check: the four appear when you type `/brain`.
 - [ ] `agents/brain-extractor.md`, `brain-filer.md`, `brain-context-analyst.md` -> `~/.claude/agents/`. Check: `/agents` lists all three.
 - [ ] `scripts/brain.py` and `brain-reference.md` stay in `BRAIN_HOME`; agents are handed the reference path.
 - [ ] `add-to-main-agent.md` pasted into the main agent file.
-- [ ] Older brain skills, agents or BrainSight skills with overlapping jobs are removed or renamed (they would compete for the same requests).
+- [ ] Older brain skills, agents or wiki-reading-list skills with overlapping jobs are removed or renamed (they would compete for the same requests).
 
 ## 3. Config keys (`scripts/brain.py` CONFIG; override in `<wiki>/brain-config.json`)
 
@@ -35,15 +35,15 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 | `skip_folder_names` | `skills`, `agents`, `sql`, `templates`, `sources`, `raw`, `brain-work` | Add any folder that holds non-page markdown |
 | `page_line_limit` | `150` | Your page size rule |
 | `section_level` | `2` | Page sections are `##` headings |
-| `dictionaries_in_sections` | `false` | Keep false: BrainSight never points at dictionaries |
+| `dictionaries_in_sections` | `false` | Keep false: BrainCite never points at dictionaries |
 | `doubt_tags` | `#verify`, `#hunch` | The tags you use for guesses and unchecked facts; `promote --show` flags them |
 
 ## 4. Names written into the skill text (edit the skills if your config differs)
 
 - [ ] `personal/raw/session-facts/*.md` (brain-file step 5) and `personal/raw/*` (brain-ingest step 5).
 - [ ] `personal/sources` (extractor input) and `team/templates/*.md` (brain-promote step 5).
-- [ ] Work files in `brain-work/`: `page-list.md`, `candidates.txt`, `sections-team.txt`, `sections-personal.txt`, `sight-existing.txt`, `sight-rows-team.json`, `sight-rows-personal.json`, `brainsight-preview.md`, `packets/`, `brain-log.md`.
-- [ ] BrainSight file: `brainsight.md` in the folder the session is opened in.
+- [ ] Work files in `brain-work/`: `page-list.md`, `candidates.txt`, `sections-team.txt`, `sections-personal.txt`, `cite-existing.txt`, `cite-rows-team.json`, `cite-rows-personal.json`, `braincite-preview.md`, `packets/`, `brain-log.md`.
+- [ ] BrainCite file: `braincite.md` in the folder the session is opened in.
 
 ## 5. Models
 
@@ -63,5 +63,5 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 | 2 | `python "$BRAIN_HOME/scripts/brain.py" pagelist` | `page list: brain-work/page-list.md (N personal, N team; N dictionaries excluded)`, with N dictionaries = your count |
 | 3 | `python "$BRAIN_HOME/scripts/brain.py" sections --side team` | One block per team page (`N lines` on the page line), `Heading \| start \| lines` under it, no dictionary |
 | 4 | `python "$BRAIN_HOME/scripts/brain.py" summary --status approved` | `no approved records in personal/sources` (or records left from an unfinished run) |
-| 5 | In a scratch project folder: `/brain-sight one-line test project` | One yes question with team and personal counts, then `brainsight.md` with `## Team` and `## Personal` tables; `brain-work/brain-log.md` gains two `brain-context-analyst` rows |
+| 5 | In a scratch project folder: `/brain-cite one-line test project` | One yes question with team and personal counts, then `braincite.md` with `## Team` and `## Personal` tables; `brain-work/brain-log.md` gains two `brain-context-analyst` rows |
 | 6 | `python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" collect && echo "- x" >> "<copy>/team/pmpm.md" && python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" markfiled` | Team-write guard: `error: intake changed team or dictionary files: team/pmpm.md`, nothing filed, exit 1 |

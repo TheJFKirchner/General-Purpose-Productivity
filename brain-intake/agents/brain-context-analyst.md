@@ -1,6 +1,6 @@
 ---
 name: brain-context-analyst
-description: For the brain-sight skill. Picks the wiki pages and sections on one side (team or personal) worth reading for an ask and writes them as BrainSight rows. Replies with one line, the rows file path.
+description: For the brain-cite skill. Picks the wiki pages and sections on one side (team or personal) worth reading for an ask and writes them as BrainCite rows. Replies with one line, the rows file path.
 tools: Read, Write
 model: haiku
 ---

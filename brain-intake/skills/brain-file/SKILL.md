@@ -1,6 +1,6 @@
 ---
 name: brain-file
-description: File the pending session facts to personal wiki pages after one yes. Use at the end of a session, or whenever session facts have piled up. Routes against the project's brainsight.md first when there is one.
+description: File the pending session facts to personal wiki pages after one yes. Use at the end of a session, or whenever session facts have piled up. Routes against the project's braincite.md first when there is one.
 ---
 
 # brain-file
@@ -14,10 +14,10 @@ description: File the pending session facts to personal wiki pages after one yes
 
 1. Run `brain root`, `echo "$BRAIN_HOME"`, `whoami`, `date +%F` -> ROOT, HOME, USER, DATE.
 2. Sync in: `git -C "ROOT" pull --ff-only`. Not a git repo -> skip sync here and in step 19. Fails -> stop.
-3. SIGHT = the argument (absolute path), else `<project folder>/brainsight.md` (absolute; project folder = the folder this session is open in) if it exists, else none.
+3. CITE = the argument (absolute path), else `<project folder>/braincite.md` (absolute; project folder = the folder this session is open in) if it exists, else none.
 4. `brain summary --status approved`. Output other than `no approved records ...` -> stop; follow `brain-reference.md` §14.
 5. Glob `ROOT/personal/raw/session-facts/*.md` (names only). `brain summary`: records headed `[session, pending]` = OLD; drop facts files OLD already covers (short name = file name minus date). Nothing left and no OLD -> stop: "No session facts to file."
-6. `brain pagelist`. SIGHT set: `brain candidates --sight "SIGHT" --out brain-work/candidates.txt`; exit 3 -> SIGHT = none.
+6. `brain pagelist`. CITE set: `brain candidates --cite "CITE" --out brain-work/candidates.txt`; exit 3 -> CITE = none.
 7. Files left (else step 9): launch one `brain-extractor` with: inputs = the facts files, origin `session`, root ROOT, date DATE, user USER, page_list `ROOT/brain-work/page-list.md`, candidates `ROOT/brain-work/candidates.txt` or `none`, sources `ROOT/personal/sources`, reference `HOME/brain-reference.md`.
 8. `brain log brain-extractor --in-file <each input> --in-file "ROOT/brain-work/page-list.md" --out-text "<reply>" --note session` (add the candidates file when used).
 9. RECS = OLD plus the record names (file stems) from the extractor's `record:` lines. `brain summary RECS...`. Show its output unchanged, then ask the one question:
