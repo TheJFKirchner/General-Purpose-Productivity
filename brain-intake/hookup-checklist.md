@@ -41,6 +41,7 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 ## 4. Names written into the skill text (edit the skills if your config differs)
 
 - [ ] `personal/raw/session-facts/*.md` (brain-file step 5) and `personal/raw/*` (brain-ingest step 5).
+- [ ] Findings: each project's `CLAUDE.md` links its project plan, and `findings.md` sits beside that plan (created on the first finding). Put `how-to-build-findings.md` where new projects are set up, and copy the `findings` skill from this repo's `.claude/skills/findings/` if you want the rules as a skill.
 - [ ] `personal/sources` (extractor input) and `team/templates/*.md` (brain-promote step 5).
 - [ ] Work files in `brain-work/`: `page-list.md`, `candidates.txt`, `sections-team.txt`, `sections-personal.txt`, `cite-existing.txt`, `cite-rows-team.json`, `cite-rows-personal.json`, `braincite-preview.md`, `packets/`, `brain-log.md`.
 - [ ] BrainCite file: `braincite.md` in the folder the session is opened in.

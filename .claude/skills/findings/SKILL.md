@@ -17,9 +17,11 @@ One file, `findings.md`: what the work has established against the project plan,
 
 | Case | Rule |
 | --- | --- |
-| No project plan | No findings. Facts are still recorded as facts |
-| Given, not established by the work (a contract term, another team's assumption) | A fact, not a finding, even when the plan depends on it |
-| A decision made for this project | Not a finding; it belongs in the plan |
+| No project plan (the plan is the one linked in the project's CLAUDE.md) | No findings. Facts are still recorded as facts |
+| Given, not established by the work | Reference knowledge that outlives the project (a contract term, another team's assumption, last year's result): a fact, not a finding. Specific to this project and bearing on a plan item (the pilot's roster): a finding, with the document or person as its source |
+| A working choice (a basis, filter, threshold or assumption), or an edit to the plan itself | Not a finding; it belongs in the plan |
+| A plan item settled by the person who owns it | A finding. Source = who decided, and the date. An opinion or intention that settles nothing: not a finding |
+| A caveat on a finding | Put it in the finding's sentence. Learned later: add a new row naming the row it qualifies. A finding computed on data with a known problem says so |
 | A result that bears on no plan item | Not a finding. Tell the user in one line |
 | It is both | Record it in both places. The finding carries this project's result; the fact carries the general lesson |
 | Unsure it is a finding | Leave it out and tell the user in one line |

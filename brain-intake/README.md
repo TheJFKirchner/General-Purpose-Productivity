@@ -28,6 +28,7 @@ Gets facts into a markdown wiki cheaply, and tells a project which wiki sections
 | [brain-reference.md](brain-reference.md) | The one reference: record, packet and BrainCite formats, merge and tag rules, every command |
 | [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file: how to keep session facts and when to open a `braincite.md` entry |
 | [hookup-checklist.md](hookup-checklist.md) | Every assumed name and setting, as an install test, with a 6-step smoke test including the team-write guard |
+| [how-to-build-findings.md](how-to-build-findings.md) | Explains how to create and keep a project's `findings.md`; copy it to wherever new projects are set up |
 | [test-wiki/](test-wiki/) | Small sample wiki (personal, team, templates, one dictionary, a sample project) for trying everything |
 
 ## Install
