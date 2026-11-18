@@ -68,12 +68,25 @@
     var runner = function () {
       var parentWin = window.parent;
       function send(m) { parentWin.postMessage(m, '*'); }
-      function msg(err) { return String((err && (err.stack || err.message)) || err); }
-      var ran = false;
-      window.addEventListener('error', function (e) {
-        if (ran) send({ type: 'error', error: String(e.message || e.error) });
-      });
-      window.addEventListener('unhandledrejection', function (e) { send({ type: 'error', error: msg(e.reason) }); });
+      function msg(err) { return err && err.message ? (err.name ? err.name + ': ' : '') + err.message : String(err); }
+      // Strict reporting: only an exception thrown by the recipe's own code (synchronously, or
+      // from the promise it returns) is an error. Window "error" events (for example the browser's
+      // ResizeObserver loop warnings) are deliberately not listened to.
+      function runWhenSized(box, go) {
+        var done = false, ro = null, timer = null;
+        function check() {
+          if (done) return;
+          if (box.clientWidth > 0 && box.clientHeight > 0) {
+            done = true;
+            if (ro) ro.disconnect();
+            clearInterval(timer);
+            go();
+          }
+        }
+        if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(check); ro.observe(box); }
+        timer = setInterval(check, 100);
+        check();
+      }
       window.addEventListener('message', function (ev) {
         var m = ev.data;
         if (!m || m.type !== 'run') return;
@@ -88,24 +101,28 @@
           send({ type: 'pageerror', error: msg(err) });
           return;
         }
-        ran = true;
-        try {
-          var box = document.getElementById('box');
-          box.innerHTML = '';
-          var fn = new Function('el', 'rows', 'lib', m.code);
-          Promise.resolve(fn(box, m.rows, lib)).then(
-            function () { send({ type: 'ok' }); },
-            function (err) { send({ type: 'error', error: msg(err) }); }
-          );
-        } catch (err) {
-          send({ type: 'error', error: msg(err) });
-        }
+        var box = document.getElementById('box');
+        box.className = m.table ? 'scroll-y' : '';
+        runWhenSized(box, function () {
+          try {
+            box.innerHTML = '';
+            var fn = new Function('el', 'rows', 'lib', m.code);
+            Promise.resolve(fn(box, m.rows, lib)).then(
+              function () { send({ type: 'ok' }); },
+              function (err) { send({ type: 'error', error: msg(err) }); }
+            );
+          } catch (err) {
+            send({ type: 'error', error: msg(err) });
+          }
+        });
       });
       send({ type: 'ready' });
     };
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
       'html,body{margin:0;height:100%;background:#fff;font:13px/1.4 "Segoe UI",system-ui,Arial,sans-serif;color:#1c2733}' +
-      '#box{width:100%;height:100%;overflow:auto}' +
+      'html,body{overflow:hidden}' +
+      '#box{width:100%;height:100%;overflow:hidden;position:relative}' +
+      '#box.scroll-y{overflow-x:hidden;overflow-y:auto}' +
       'table{border-collapse:collapse;width:100%}th,td{padding:5px 9px;border-bottom:1px solid #d9e0e8;text-align:left}' +
       'th{background:#e8f0fa;color:#17497f;position:sticky;top:0}' +
       '</style></head><body><div id="box"></div>' +
@@ -130,7 +147,7 @@
           if (!f.isConnected) return;
           f.contentWindow.postMessage({
             type: 'run', code: String(card.code || ''), rows: state.rows,
-            libs: texts, global: (LIBS[lib] || LIBS.html).global
+            table: card.kind === 'table', libs: texts, global: (LIBS[lib] || LIBS.html).global
           }, '*');
         }, function (e) {
           fail(onPageProblem, 'The ' + lib + ' library file could not be loaded (' + e.message + ').');
@@ -522,7 +539,11 @@
       state.loading = false;
       refreshBoard();
       $('grid').scrollTop = 0;
-      if (cards.length) addMsg('note', 'Resumed with ' + cards.length + ' card' + (cards.length === 1 ? '' : 's') + '.');
+      if (cards.length) {
+        addMsg('note', (s.chat || []).length
+          ? 'Resumed with ' + cards.length + ' card' + (cards.length === 1 ? '' : 's') + '.'
+          : 'Starting from the existing visual' + (cards.length === 1 ? '' : 's') + '.');
+      }
       $('input').focus();
     }).catch(function (e) {
       $('meta').textContent = 'Could not load the session: ' + e.message;

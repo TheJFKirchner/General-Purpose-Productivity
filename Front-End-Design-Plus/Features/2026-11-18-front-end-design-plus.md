@@ -55,9 +55,9 @@ A user-invoked skill that opens a small local "whiteboard" page for designing ch
 
 ## Known issues after the fix round
 
-- Chart cards show scrollbars inside the card frame.
-- On one first load in the desktop app's built-in browser, a correct starter recipe was reported as failed once and sent to the agent for a fix. It did not reproduce; the suspected cause is a resize-loop warning being treated as a recipe error.
-- A new board that starts from `--existing` says "Resumed with 1 card".
+Fixed in a follow-up on the same day: scrollbars inside chart cards; a correct recipe once being reported as failed (only an exception thrown by the recipe itself, or from the promise it returns, now counts, and a recipe never runs in a zero-size frame); and a new board from `--existing` saying "Resumed".
+
+- A recipe error that happens later and outside the returned promise (for example in a timer) is no longer shown on the card or reported.
 - Not yet tried: the chartjs, vegalite, d3 and plotly libraries with the real agent (only with hand-written and starter recipes).
 
 ## Tasks
