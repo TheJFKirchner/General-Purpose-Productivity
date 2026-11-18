@@ -1,6 +1,6 @@
 ---
 name: brain-cite
-description: At the start of a project or a new request, find the wiki pages and sections worth reading and list them, with a reason for each, in the project's braincite.md (Team and Personal tables, with ids and a Reads count). Re-running adds new entries only.
+description: At the start of a project or a new request, find the wiki pages and sections worth reading and list them, with a reason for each, in the project's braincite.md (Team and Personal tables). Re-running adds new entries only.
 ---
 
 # brain-cite
@@ -27,11 +27,9 @@ description: At the start of a project or a new request, find the wiki pages and
 11. `no` -> stop; CITE is unchanged.
 12. `cp "PREVIEW" "CITE"`.
 13. Tell the main conversation, in these words:
-    - "Entries in CITE have ids (`T1`, `P2`). Read everything you need in ONE call: `brain read --cite "CITE" T1 T3 P2` (ids and direct targets such as `"page > Section"` can be mixed)."
-    - "Open an entry only when its 'why' applies to what you are about to do."
-    - "Every read is counted in the Reads column; reading something not listed adds it as an entry. Always read wiki pages through `brain read`, never with a plain file read."
-    - "When handing work to a sub-agent, pass it the path CITE and the full command `python "HOME/scripts/brain.py" --wiki "ROOT" read --cite "CITE" <ids>`, so its reads are counted too."
-    - "At the end of the session, `brain read --cite "CITE" --report` shows what was read."
+    - "Open an entry in CITE only when its 'why' applies to what you are about to do: `brain section "<page>" ["<section>"] --side <team|personal>`."
+    - "When handing work to a sub-agent, pass it the path CITE and tell it to open what its task needs."
+    - "A sub-agent without a shell can open an entry with a plain file read of the page under ROOT (`team/` or `personal/`); the entry names the page and section."
 
 ## Stop conditions
 

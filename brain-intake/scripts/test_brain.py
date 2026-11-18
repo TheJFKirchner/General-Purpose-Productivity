@@ -41,15 +41,15 @@ def slurp(path):
 
 
 def cite_tables(text):
-    """{side title: ['T1 [[page]] | Section', ...] or ['None.']} in file order."""
+    """{side title: ['[[page]] | Section', ...] or ['None.']} in file order."""
     out, side = {}, None
     for ln in text.splitlines():
         if ln.startswith("## "):
             side = ln[3:].strip()
             out[side] = []
-        elif side and re.match(r"^\| [TP]\d+ \|", ln):
+        elif side and ln.startswith("| [["):
             cells = [c.strip() for c in ln.strip("|").split("|")]
-            out[side].append("%s %s | %s" % (cells[0], cells[1], cells[2]))
+            out[side].append("%s | %s" % (cells[0], cells[1]))
         elif side and ln.strip() == "None.":
             out[side].append("None.")
     return out
@@ -167,7 +167,7 @@ class BrainTest(unittest.TestCase):
         self.assertIn("REFUSED", p.stderr)
         p = self.run_brain("promote", "claims-header-dictionary", "--lines", "10", ok=1)
         self.assertIn("REFUSED", p.stderr)
-        p = self.run_brain("read", "--no-count", "claims-header-dictionary > Change history", "--side", "team", ok=1)
+        p = self.run_brain("section", "claims-header-dictionary", "Change history", ok=1)
         self.assertIn("REFUSED", p.stderr)
         self.assertEqual(self.packets(), [])
 
@@ -337,27 +337,48 @@ class BrainTest(unittest.TestCase):
         self.assertIn("target_status: created-from-template", pk)
         self.assertIn("twin_of: sql-review-checklist", self.read("personal/sql-review-checklist.md"))
 
-    # ---------------------------------------------------------- braincite
+    # --------------------------------------------------------- braincite
+    def test_section_returns_only_that_section(self):
+        out = self.run_brain("section", "stop-loss", "traps", "--side", "team").stdout
+        self.assertTrue(out.startswith("team/stop-loss.md | Traps\n## Traps"))
+        self.assertIn("lasered member has a higher attachment point", out)
+        self.assertNotIn("## Reference", out)
+        self.assertNotIn("## Decisions", out)
+        self.assertNotIn("Reimbursement formula", out)
+        p = self.run_brain("section", "stop-loss", "Traps", ok=1)  # on both sides
+        self.assertIn("--side", p.stderr)
+        p = self.run_brain("section", "pmpm", "No such heading", "--side", "team", ok=3)
+        self.assertIn("headings: Overview, Decisions", p.stderr)
+
     def test_sections_index_excludes_dictionary_and_shows_page_lines(self):
         out = self.run_brain("sections", "--side", "team").stdout
         self.assertNotIn("dictionary", out.lower())
         self.assertIn("[[stop-loss]] team/stop-loss.md | 49 lines |", out)
         self.assertIn("twin: personal/stop-loss.md", out)
         self.assertRegex(out, r"\n  Overview \| \d+ \| \d+\n")
+        self.assertNotRegex(out, r"\| (plan|work)\n")
         out = self.run_brain("sections", "--side", "personal").stdout
         self.assertIn("twin of stop-loss", out)
         self.assertIn("  Purpose | 7 | 4\n", out)
         self.assertNotIn("team/", out.replace("twin of", ""))
 
-    def cite_add(self, cite, data, ok=True):
-        rows = os.path.join(self.tmp, "rows.json")
-        with open(rows, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-        return self.run_brain("cite-add", "--cite", cite, "--rows", rows, "--title", "Test", ok=ok).stdout
+    def test_section_without_heading_prints_whole_page(self):
+        out = self.run_brain("section", "q4-renewal-analysis").stdout
+        self.assertTrue(out.startswith("personal/q4-renewal-analysis.md | (whole page)\n# q4-renewal-analysis"))
+        self.assertNotIn("description:", out)
+        self.assertIn("## Purpose", out)
+        self.assertIn("After delivery, move durable lessons", out)
 
-    def test_cite_add_ids_validation_dedup_and_whole_page(self):
+    def test_cite_add_validates_dedups_and_whole_page(self):
         cite = os.path.join(self.tmp, "proj", "braincite.md")
-        out = self.cite_add(cite, [
+        rows = os.path.join(self.tmp, "rows.json")
+
+        def add(data):
+            with open(rows, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            return self.run_brain("cite-add", "--cite", cite, "--rows", rows, "--title", "Test").stdout
+
+        out = add([
             {"page": "pmpm", "section": "Traps", "side": "team", "why": "a"},
             {"page": "pmpm", "section": "Decisions", "side": "team", "why": "b"},
             {"page": "high-cost-claimants", "side": "team", "why": "c"},
@@ -366,134 +387,47 @@ class BrainTest(unittest.TestCase):
             {"page": "claims-header-dictionary", "section": "Change history", "side": "team", "why": "x"},
             {"page": "pmpm", "side": "nowhere", "why": "x"},
         ])
-        self.assertIn("rejected: row 5 (pmpm > Nope, team): heading 'Nope' not found", out)
+        self.assertIn("rejected: row 5 (pmpm > Nope, team): heading not found", out)
         self.assertIn("table team: added 3, already there 0, rejected 2", out)
+        self.assertIn("table personal: added 1, already there 0, rejected 0", out)
         self.assertIn("total: 4 added, 0 already there, 3 rejected", out)
         t = cite_tables(slurp(cite))
-        self.assertEqual(t["Team"], ["T1 [[pmpm]] | Traps", "T2 [[pmpm]] | Decisions",
-                                     "T3 [[high-cost-claimants]] | (whole page)"])
-        self.assertEqual(t["Personal"], ["P1 [[pmpm]] | Traps"])
-        text = slurp(cite)
-        self.assertIn("| # | Page | Section | Lines | Reads | Why read it |", text)
-        self.assertRegex(text, r"\| T3 \| \[\[high-cost-claimants\]\] \| \(whole page\) \| \d+ \| 0 \| c \|")
-        out = self.cite_add(cite, [{"page": "pmpm", "section": "Traps", "side": "team", "why": "dup"},
-                                   {"page": "high-cost-claimants", "section": "Traps", "side": "team", "why": "x"}])
+        self.assertEqual(list(t.keys()), ["Team", "Personal"])
+        self.assertEqual(t["Team"], ["[[pmpm]] | Traps", "[[pmpm]] | Decisions",
+                                     "[[high-cost-claimants]] | (whole page)"])
+        self.assertEqual(t["Personal"], ["[[pmpm]] | Traps"])
+        self.assertIn("| Page | Section | Lines | Why read it |", slurp(cite))
+        self.assertIn("| [[high-cost-claimants]] | (whole page) | 38 | c |", slurp(cite))
+        self.assertNotIn("Topic", slurp(cite))
+        out = add([{"page": "pmpm", "section": "Traps", "side": "team", "why": "dup"},
+                   {"page": "high-cost-claimants", "section": "Traps", "side": "team", "why": "covered"}])
         self.assertIn("table team: added 0, already there 2, rejected 0", out)
         self.assertIn("(covered by whole page)", out)
-        self.run_brain("read", "--cite", cite, "T1", "T1", "T2")  # T1 reads 2, T2 reads 1
-        out = self.cite_add(cite, [{"page": "pmpm", "side": "team", "why": "whole"}])
-        self.assertIn("replaced: T1 Traps, T2 Decisions by T4 pmpm > (whole page) (team)", out)
+        out = add([{"page": "pmpm", "section": "", "side": "team", "why": "whole"}])
+        self.assertIn("replaced: pmpm > Traps, Decisions (team) by (whole page)", out)
         t = cite_tables(slurp(cite))
-        self.assertEqual(t["Team"], ["T4 [[pmpm]] | (whole page)", "T3 [[high-cost-claimants]] | (whole page)"])
-        self.assertRegex(slurp(cite), r"\| T4 \| \[\[pmpm\]\] \| \(whole page\) \| \d+ \| 3 \| whole \|")
-        self.cite_add(cite, [{"page": "ibnr", "section": "Traps", "side": "team", "why": "new"}])
-        self.assertIn("T5 [[ibnr]] | Traps", cite_tables(slurp(cite))["Team"])  # T1, T2 never reused
-
-    def test_read_chained_ids_and_direct_targets_in_order(self):
-        sample = self.path("sample-project/braincite.md")
-        p = self.run_brain("read", "--cite", sample, "T3", "stop-loss > Decisions", "p1", "pmpm",
-                           "--side", "team")
-        out = p.stdout
-        heads = [ln for ln in out.splitlines() if ln.startswith("=== ")]
-        self.assertEqual(heads[0], "=== T3 team stop-loss > Traps (8 lines) ===")
-        self.assertEqual(heads[1], "=== T2 team stop-loss > Decisions (5 lines) ===")
-        self.assertRegex(heads[2], r"^=== P1 personal q4-renewal-analysis \(\d+ lines\) ===$")
-        self.assertRegex(heads[3], r"^=== T5 team pmpm \(\d+ lines\) ===$")  # unlisted: new entry
-        self.assertTrue(out.startswith("=== T3 team stop-loss > Traps (8 lines) ===\n## Traps\n\n- Specific claims"))
-        self.assertIn("=== T2 team stop-loss > Decisions (5 lines) ===\n## Decisions\n", out)
-        self.assertNotIn("## Reference", out.split("=== T2")[0])
-        self.assertNotIn("description:", out)
-        n_lines = len(out.splitlines())
-        self.assertEqual(n_lines, sum(int(re.search(r"\((\d+) lines\)", h).group(1)) + 1 for h in heads))
-        text = slurp(sample)
-        self.assertRegex(text, r"\| T3 \| \[\[stop-loss\]\] \| Traps \| 8 \| 1 \|")
-        self.assertRegex(text, r"\| T2 \| \[\[stop-loss\]\] \| Decisions \| 5 \| 1 \|")
-        self.assertRegex(text, r"\| P1 \| \[\[q4-renewal-analysis\]\] \| \(whole page\) \| \d+ \| 1 \|")
-        self.assertRegex(text, r"\| T5 \| \[\[pmpm\]\] \| \(whole page\) \| \d+ \| 1 \| "
-                               r"Read directly \(not listed by the analyst\)\. \|")
-        # a section of a page with a whole-page entry gets its own entry
-        self.run_brain("read", "--cite", sample, "pmpm > Traps", "--side", "team")
-        self.assertIn("T6 [[pmpm]] | Traps", cite_tables(slurp(sample))["Team"])
-        self.assertRegex(slurp(sample), r"\| T5 \| \[\[pmpm\]\] \| \(whole page\) \| \d+ \| 1 \|")
-
-    def test_read_counts_survive_cite_add_and_report(self):
-        sample = self.path("sample-project/braincite.md")
-        self.run_brain("read", "--cite", sample, "T1", "t1", "P2")
-        self.cite_add(sample, [{"page": "ibnr", "section": "Traps", "side": "team", "why": "x"}])
-        text = slurp(sample)
-        self.assertRegex(text, r"\| T1 \| \[\[stop-loss\]\] \| Overview \| \d+ \| 2 \|")
-        self.assertRegex(text, r"\| P2 \| \[\[stop-loss\]\] \| Traps \| \d+ \| 1 \|")
-        out = self.run_brain("candidates", "--cite", sample).stdout
-        self.assertIn("T1 | stop-loss | Overview | team | 2 reads |", out)
-        self.assertIn("T5 | ibnr | Traps | team | 0 reads |", out)
-        out = self.run_brain("read", "--cite", sample, "--report").stdout
-        self.assertIn("T1 | stop-loss > Overview | team | 6 lines | 2 reads", out)
-        self.assertIn("read: 2 entries, 18 lines in total (lines x reads)", out)
-        self.assertIn("never read: 5 of 7 entries", out)
-        before = slurp(sample)
-        out = self.run_brain("read", "--cite", sample, "--no-count", "T1", "stop-loss > Notes", "--side", "team").stdout
-        self.assertIn("=== T1 team stop-loss > Overview", out)
-        self.assertIn("=== - team stop-loss > Notes", out)
-        self.assertEqual(slurp(sample), before)
-
-    def test_read_bad_targets_dictionary_and_missing_cite(self):
-        sample = self.path("sample-project/braincite.md")
-        p = self.run_brain("read", "--cite", sample, "T3", "T99", "claims-header-dictionary", "stop-loss",
-                           "pmpm > Nope", "P2", ok=1)
-        self.assertIn("error: T99: no entry T99", p.stderr)
-        self.assertIn("error: claims-header-dictionary: REFUSED", p.stderr)
-        self.assertIn("error: stop-loss: 'stop-loss' is on both sides; pass --side team or --side personal", p.stderr)
-        self.assertIn("error: pmpm > Nope:", p.stderr)
-        self.assertEqual([ln[:6] for ln in p.stdout.splitlines() if ln.startswith("===")], ["=== T3", "=== P2"])
-        p = self.run_brain("read", "--cite", sample, "claims-header-dictionary > Change history", "--side", "team",
-                           ok=1)
-        self.assertIn("REFUSED", p.stderr)
-        self.assertEqual(p.stdout, "")
-        self.assertNotIn("dictionary", slurp(sample))
-        p = self.run_brain("read", "T1", ok=3)  # no --cite, no braincite.md in the current folder
-        self.assertIn("pass --cite", p.stderr)
-        out = self.run_brain("read", "--no-count", "pmpm > Traps", "--side", "team").stdout  # peek, no file
-        self.assertTrue(out.startswith("=== - team pmpm > Traps"))
-
-    def test_read_upgrades_old_format_in_place(self):
-        old = os.path.join(self.tmp, "old", "braincite.md")
-        os.makedirs(os.path.dirname(old))
-        with open(old, "w", encoding="utf-8") as f:
-            f.write("# BrainSight: old\n\n## Team\n\n| Page | Section | Lines | Why read it |\n|---|---|---|---|\n"
-                    "| [[stop-loss]] | Traps | 6 | Why A. |\n| [[ibnr]] | (whole page) | 39 | Why B. |\n\n"
-                    "## Personal\n\n| Page | Section | Lines | Why read it |\n|---|---|---|---|\n"
-                    "| [[pmpm]] | Traps | 2 | Why C. |\n")
-        out = self.run_brain("read", "--cite", old, "T1").stdout
-        self.assertTrue(out.startswith("=== T1 team stop-loss > Traps"))
-        text = slurp(old)
-        self.assertIn("| # | Page | Section | Lines | Reads | Why read it |", text)
-        self.assertRegex(text, r"\| T1 \| \[\[stop-loss\]\] \| Traps \| 8 \| 1 \| Why A\. \|")
-        self.assertRegex(text, r"\| T2 \| \[\[ibnr\]\] \| \(whole page\) \| 39 \| 0 \| Why B\. \|")
-        self.assertRegex(text, r"\| P1 \| \[\[pmpm\]\] \| Traps \| 2 \| 0 \| Why C\. \|")
-        self.assertIn("<!-- braincite-next: T3 P2 -->", text)
-
-    def test_read_twenty_parallel_processes_lose_no_count(self):
-        sample = self.path("sample-project/braincite.md")
-        procs = [subprocess.Popen([sys.executable, BRAIN, "--wiki", self.wiki, "read", "--cite", sample, "T3"],
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE) for _ in range(20)]
-        errs = [p.communicate()[1] for p in procs]
-        self.assertEqual([p.returncode for p in procs], [0] * 20, errs)
-        self.assertRegex(slurp(sample), r"\| T3 \| \[\[stop-loss\]\] \| Traps \| 8 \| 20 \|")
-        self.assertFalse(os.path.exists(sample + ".lock"))
-        self.assertEqual([f for f in os.listdir(os.path.dirname(sample)) if f.endswith(".tmp")], [])
+        self.assertEqual(t["Team"], ["[[pmpm]] | (whole page)", "[[high-cost-claimants]] | (whole page)"])
+        self.assertEqual(t["Personal"], ["[[pmpm]] | Traps"])  # other side untouched
+        tsv = os.path.join(self.tmp, "rows.tsv")
+        with open(tsv, "w", encoding="utf-8") as f:
+            f.write("page\tsection\tside\twhy\nstop-loss\tOverview\tpersonal\tFrame it.\n")
+        self.run_brain("cite-add", "--cite", cite, "--rows", tsv)
+        self.assertEqual(cite_tables(slurp(cite))["Personal"], ["[[pmpm]] | Traps", "[[stop-loss]] | Overview"])
 
     def test_candidates_reads_sample_braincite(self):
         sample = self.path("sample-project/braincite.md")
         out = self.run_brain("candidates", "--cite", sample).stdout
-        self.assertIn("T1 | stop-loss | Overview | team | 0 reads | Read before", out)
-        self.assertIn("P1 | q4-renewal-analysis | (whole page) | personal | 0 reads | Read before", out)
+        self.assertIn("stop-loss | Overview | team | Read before", out)
+        self.assertIn("stop-loss | Traps | personal | Read before", out)
+        self.assertIn("q4-renewal-analysis | (whole page) | personal | Read before", out)
         self.assertIn("'## [[page]] > Section'", out)
         out = self.run_brain("candidates", "--cite", sample, "--side", "team").stdout
         self.assertNotIn("| personal |", out)
-        self.run_brain("candidates", "--sight", sample, ok=2)  # old option name is gone
-        self.run_brain("sight-add", "--rows", sample, ok=2)    # old command name is gone
+        self.run_brain("candidates", "--cite", sample, "--use", "plan", ok=2)  # removed option
         self.run_brain("candidates", "--cite", self.path("sample-project/none.md"), ok=3)
-        self.assertEqual(list(cite_tables(slurp(sample)).keys()), ["Team", "Personal"])
+        t = cite_tables(slurp(sample))
+        self.assertEqual(list(t.keys()), ["Team", "Personal"])
+        self.assertIn("[[q4-renewal-analysis]] | (whole page)", t["Personal"])
 
     # ------------------------------------------------------- config, help
     def test_config_file_overrides(self):
@@ -514,7 +448,7 @@ class BrainTest(unittest.TestCase):
 
     def test_help_for_every_command(self):
         cmds = ["pagelist", "summary", "approve", "collect", "markfiled", "log", "promote", "sections",
-                "read", "candidates", "cite-add", "root"]
+                "section", "candidates", "cite-add", "root"]
         top = subprocess.run([sys.executable, BRAIN, "--help"], capture_output=True, text=True)
         self.assertEqual(top.returncode, 0)
         for c in cmds:
@@ -546,7 +480,7 @@ class BrainTest(unittest.TestCase):
         team_page = self.read("team/ibnr.md")
         raw = {f: open(self.path(f), "rb").read() for f in ("team/ibnr.md", "team/claims-header-dictionary.md")}
 
-        def restore(f):
+        def restore(f):  # exact bytes: checked-out files may have CRLF line endings
             with open(self.path(f), "wb") as fh:
                 fh.write(raw[f])
 

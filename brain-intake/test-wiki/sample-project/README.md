@@ -6,6 +6,7 @@ outside `personal/` and `team/`, so `brain.py` never indexes it.
 - Goal: build the stop-loss section of Client A's 2027 renewal pack: exposure, lasered members,
   reimbursement lag, and two attachment-point options.
 - Data: claims-header (paid amounts), member eligibility, the carrier's laser list.
-- `braincite.md` lists the wiki pages and sections this project draws on, with ids (T1.., P1..)
-  and a Reads count per entry. Its counts are all 0 in the sample.
-- Test with, from this folder: `brain.py --wiki .. candidates` and `brain.py --wiki .. read --no-count T3 P1`.
+- `braincite.md` lists the wiki sections and whole pages this project draws on, in a Team table and
+  a Personal table, with a reason to read each.
+- Test with: `brain.py candidates --cite sample-project/braincite.md` from the wiki root, and open
+  an entry with `brain.py section "stop-loss" "Traps" --side team`.

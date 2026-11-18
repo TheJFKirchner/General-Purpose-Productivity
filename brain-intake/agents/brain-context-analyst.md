@@ -10,7 +10,7 @@ model: haiku
 Inputs: `ask` (the request, or the information being looked for), `side` (`team` or `personal`), `root` (wiki root), `index` (section index file), `existing` (entries already listed, or `none`), `rows_out` (JSON path). Format rules: brain-reference.md §11, §12.
 
 1. Read `index`. Page lines: `[[name]] path | N lines | description | twin...`. Section lines under them: `Heading | start | lines`.
-2. Read `existing` if not `none` (lines `id | page | section | side | N reads | why`); skip every page or section already listed there for this side.
+2. Read `existing` if not `none`; skip every page or section already listed there for this side.
 3. From page names, descriptions and headings only, pick candidates that could matter for `ask`.
 4. Read only the candidates: Read `<root>/<path>` with offset = start, limit = lines for a section; a whole page only if it is 40 lines or fewer. Judge longer pages from the sections you read.
 5. Entry type: the whole page when it is 40 lines or fewer or most of it bears on the ask; otherwise only the sections that matter. Three or more sections of one page -> one whole-page entry instead.

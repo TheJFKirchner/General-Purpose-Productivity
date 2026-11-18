@@ -21,7 +21,7 @@ The one shared reference for the brain skills and agents. Skills and agents poin
 | Section index level | `##` |
 | Dictionaries in section index | no |
 | Doubt tags | `#verify`, `#hunch` (`doubt_tags`) |
-| BrainCite file | `braincite.md` in the project folder (lock file `braincite.md.lock` while updating) |
+| BrainCite file | `braincite.md` in the project folder |
 
 - Page name = file name without `.md`. Names are unique per side.
 - Skipped everywhere: rules, tags, templates, sources, raw, the work folder `brain-work/` (and any folder named `brain-work`), folders named `skills`, `agents`, `sql`, non-`.md` files, dictionaries.
@@ -85,7 +85,7 @@ Summary: two or three sentences.
 | `input:` | Path of the input file, relative to wiki root. `markfiled` moves it and rewrites this line. |
 | `status:` | Extractor writes `pending`. `approve` sets `approved`. `markfiled` sets `filed`. |
 | `## [[name]]` | `name` exactly as in the page list (team or personal). A team name with no twin is fine: collect creates the twin. |
-| `> Section heading` | Optional. Exact heading text from a BrainCite entry or `sections`. Unknown heading = filed at page level with a warning. |
+| `> Section heading` | Optional. Exact heading text from a BrainCite row or `sections`. Unknown heading = filed at page level with a warning. |
 | `## New page: name` | Personal page proposal. Filed only when the user approves the name. Name must not clash (summary flags `EXISTS` / `NEAR`). |
 | `## Unplaced` | Kept in the record only. Never filed. |
 | `## Warnings` | Shown by `summary`. Never filed. |
@@ -95,7 +95,7 @@ Summary: two or three sentences.
 
 Extractor rules:
 
-1. Routing order: BrainCite entries (`brain.py candidates --cite <file>`) first: a section entry as `## [[page]] > Section`, a whole-page entry as `## [[page]]`; then the page list `brain-work/page-list.md`; then `New page:`; else `Unplaced`.
+1. Routing order: BrainCite rows (`brain.py candidates --cite <file>`) first: a section row as `## [[page]] > Section`, a whole-page row as `## [[page]]`; then the page list `brain-work/page-list.md`; then `New page:`; else `Unplaced`.
 2. One fact per bullet. Skip facts that are not durable.
 3. Every bullet stands alone: its effective date and the context needed to understand it are inside the bullet.
 4. Merge bullets that restate one mechanism into one bullet.
@@ -197,44 +197,41 @@ side: team
 
 - Page line: name, path, the page's total line count, description, then `twin of X` (personal) or `twin: <path>` (team).
 - Section line: `heading | start | lines`. start = 1-based line of the heading; lines = heading through the section's last non-blank line. Read a section with offset = start, limit = lines; no command needed.
-- To open a section or page, use `brain.py read` (section 12): `read --cite FILE "page > Section" --side team`, or `read --no-count ...` for a peek that needs no BrainCite file. (`section` was removed; `read` replaces it.)
+- `brain.py section "<page>" "<heading>" --side <side>`: prints `path | heading`, then the section only.
+- `brain.py section "<page>" --side <side>` (no heading): prints `path | (whole page)`, then the page body without frontmatter.
+- `--side` is required when the page has a twin.
 
 ## 12. BrainCite file (`<project>/braincite.md`)
-
-The citation list of what a session drew on: the pages and sections worth reading, and how often each was read.
 
 ```markdown
 # BrainCite: <project>
 
-<!-- braincite-next: T3 P2 -->
-
 ## Team
 
-| # | Page | Section | Lines | Reads | Why read it |
-|---|---|---|---|---|---|
-| T1 | [[stop-loss]] | Traps | 8 | 2 | Read before writing the reimbursement calculation. |
-| T2 | [[claims-header]] | Traps | 7 | 0 | Read before writing the paid-claims query. |
+| Page | Section | Lines | Why read it |
+|---|---|---|---|
+| [[stop-loss]] | Traps | 6 | Read before writing the reimbursement calculation. |
+| [[claims-header]] | Traps | 5 | Read before writing the paid-claims query. |
 
 ## Personal
 
-| # | Page | Section | Lines | Reads | Why read it |
-|---|---|---|---|---|---|
-| P1 | [[q4-renewal-analysis]] | (whole page) | 40 | 1 | Read before planning; it sets this pack's scope and deadline. |
+| Page | Section | Lines | Why read it |
+|---|---|---|---|
+| [[q4-renewal-analysis]] | (whole page) | 44 | Read before planning; it sets this pack's scope and deadline. |
 ```
 
 | Rule | Detail |
 |---|---|
 | Two tables | `## Team` then `## Personal`. Both always present; an empty one shows `None.` |
-| Columns | `#`, Page, Section, Lines, Reads, Why read it. The `##` heading is the side |
-| Ids | `T1, T2...` (Team), `P1, P2...` (Personal). Stable, never reused; the `braincite-next` comment holds the next ids. Do not edit it |
-| Entry | A section, or a whole page: Section cell `(whole page)` |
-| Lines | Lines a `read` prints: heading to the section's last non-blank line, or the page body without frontmatter. Set by the script |
-| Reads | Times the entry was opened with `read`. 0 = suggested but never opened |
+| Columns | Page, Section, Lines, Why read it. The `##` heading is the side |
+| Entry | A section, or a whole page: Section cell `(whole page)`, Lines = the page's line count |
 | Page or section | List the whole page when most of it bears on the request or it is short (40 lines or fewer); otherwise list only the sections that matter |
 | Why read it | Name the decision or step in the request that the entry helps with. Never list fields, checks, terms or facts from it; never copy page content |
-| Order | Rows keep the order they arrive in (most important first); new rows are appended |
+| Order | Rows keep the order they arrive in (most important first); rows from a later run are appended |
+| Open an entry | `brain.py section "<page>" "<section>" --side team\|personal`; for a whole page leave out the section |
 | Twins | A twin's entry sits under Personal with the same page name as its team entry |
-| Updates | Only via `brain.py cite-add` and `brain.py read`. An older file (no `#` or Reads column) is upgraded in place the first time either touches it |
+| Lines | Computed by the script |
+| Updates | Only via `brain.py cite-add` |
 
 Analyst rows file for `cite-add` (JSON list, or TSV with a header):
 
@@ -245,9 +242,8 @@ Analyst rows file for `cite-add` (JSON list, or TSV with a header):
 
 - `page`, `side` (`team` or `personal`) and `why` are required. `section` is optional: missing, empty or `(whole page)` = whole page.
 - Each row is checked against the wiki (page exists once on that side; heading exists once). An invalid row is rejected with a one-line reason; the rest still go in.
-- New entries get the next id and Reads 0. Existing entries keep their Reads.
 - Already there: same page + side + section, or that page already has a whole-page entry on that side (`(covered by whole page)`).
-- A whole-page row for a page that has section entries replaces them at the first one's place, with a new id and the sum of their Reads: `replaced: T1 Traps, T2 Decisions by T4 pmpm > (whole page) (team)`.
+- A whole-page row for a page that has section entries replaces them, at the first one's place, and prints `replaced: <page> > A, B (<side>) by (whole page)`.
 - Output gives exact counts; report these, not the analyst's own count:
 
 ```
@@ -255,26 +251,6 @@ table team: added N, already there N, rejected N
 table personal: added N, already there N, rejected N
 total: N added, N already there, N rejected -> braincite.md
 ```
-
-### Reading: `brain.py read`
-
-- `read [--cite FILE] T1 P2 "page > Section" page ...`: prints each target in the order given and nothing else:
-
-```
-=== T1 team stop-loss > Traps (8 lines) ===
-<section text exactly as on the page>
-=== P1 personal q4-renewal-analysis (40 lines) ===
-<page body without frontmatter>
-```
-
-- Target: an id (case-insensitive), or a direct target `"page > Section"` or `page` (whole page). `--side team|personal` sets the side of direct targets; a page on both sides without `--side` is a bad target.
-- `--all` reads every entry; with `--side`, only that table.
-- Counting: each read adds 1 to the entry's Reads (twice in one call = 2). A direct target matching an entry counts against it. A direct target with no entry becomes a new entry, why `Read directly (not listed by the analyst).`, Reads 1. A section of a page that has a whole-page entry gets its own entry.
-- Bad targets (unknown id, page or heading; page on both sides; dictionary) print one `error: <target>: <reason>` line each to stderr; the good ones are still read; exit 1 at the end. Dictionaries are always refused.
-- Parallel calls are safe: the file is updated under a lock file (`<file>.lock`) and written atomically.
-- `--no-count`: peek; the file is not changed. With only direct targets it needs no BrainCite file (header id `-`).
-- No `--cite`: `braincite.md` in the current folder; if missing, exit 3 asking for `--cite`.
-- `read --cite FILE --report`: one line per entry with Reads > 0 (`T1 | stop-loss > Traps | team | 8 lines | 2 reads`), then `read: N entries, N lines in total (lines x reads)` and `never read: N of N entries`.
 
 ## 13. brain.py commands
 
@@ -290,9 +266,9 @@ total: N added, N already there, N rejected -> braincite.md
 | `promote PAGE --show` | Promotable lines with flags | `L<n> [first person] [#verify] [no source] <line>` (flags only when they apply) |
 | `promote PAGE (--lines 12,14-16 \| --text "line" ...) [--template NAME]` | Move lines into a team packet; create the team page from the template if missing | `team page created from template:`, `twin_of set:`, `removed N line(s)`, `empty headings dropped:`, `stripped personal tags:`, `warn: doubt tag ...`, `packet:` |
 | `sections [--side personal\|team\|both] [--out FILE]` | Section index | see section 11 |
-| `candidates [--cite FILE] [--side team\|personal] [--out FILE]` | BrainCite entries for the extractor | `id \| page \| section-or-(whole page) \| side \| N reads \| why`, `(page missing)` flag |
-| `cite-add [--cite FILE] --rows FILE [--title T]` | Merge analyst rows into the Team and Personal tables | `added: <id> ...`, `already there:`, `replaced:`, `rejected:`, per-table counts, total |
-| `read [--cite FILE] TARGET ... [--side team\|personal] [--no-count]` / `read --all [--side ..]` / `read --report` | Print entries or pages/sections in order and count the reads | `=== <id> <side> <page> > <Section> (N lines) ===` then the body; `error:` lines on stderr for bad targets |
+| `section PAGE [HEADING] [--side personal\|team]` | One section, or the whole page body when HEADING is left out | see section 11 |
+| `candidates --cite FILE [--side team\|personal] [--out FILE]` | BrainCite rows for the extractor | `page \| section-or-(whole page) \| side \| why`, `(page missing)` flag |
+| `cite-add --cite FILE --rows FILE [--title T]` | Merge analyst rows into the Team and Personal tables | `added:`, `already there:`, `replaced:`, `rejected:`, per-table counts, total |
 | `root` | Absolute wiki root | one path |
 
 - Global options (before or after the command): `--wiki PATH`, `--config PATH`. Default root: `$BRAIN_WIKI`, CONFIG `wiki_root`, then the current folder.
@@ -320,4 +296,3 @@ total: N added, N already there, N rejected -> braincite.md
 | brain-ingest | same, extractor input = batch of `personal/raw/*` documents; `summary` shows counts only |
 | brain-promote | `promote --list` -> `promote PAGE --show` (show the flags to the user) -> user picks -> `promote PAGE --lines ...` (`--template` if no team page) -> warn on any `warn: doubt tag` -> one filer -> `markfiled --promoted NAME` |
 | brain-cite | `sections --side team` and `--side personal` (`--out`) -> one analyst per side (parallel) -> analysts write rows files (page or section entries) -> `cite-add` -> report its per-table counts |
-| Using the entries | main conversation and sub-agents open entries with `read --cite FILE T1 P2 ...` (one call for many); end of session: `read --cite FILE --report` |

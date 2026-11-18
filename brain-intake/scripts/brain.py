@@ -12,11 +12,9 @@ import hashlib
 import io
 import json
 import os
-import random
 import re
 import shutil
 import sys
-import time
 from datetime import date, datetime
 
 # =========================================================================
@@ -1389,216 +1387,124 @@ def cmd_sections(wiki, args):
     return EXIT_OK
 
 
+def cmd_section(wiki, args):
+    allp, pages = side_pages(wiki, args.side or "both")
+    _, dicts = wiki.scan()
+    if not wiki.c("dictionaries_in_sections") and by_name(dicts, args.page):
+        raise BrainError(dict_refusal(args.page, by_name(dicts, args.page)[0].rel, allp))
+    hits = by_name(pages, args.page)
+    if not hits:
+        raise BrainError("no page named '%s'%s; run `brain.py sections`" % (
+            args.page, " on side " + args.side if args.side else ""), EXIT_MISSING)
+    if len(hits) > 1:
+        raise BrainError("'%s' exists on more than one side or folder (%s); pass --side personal or --side team"
+                         % (args.page, ", ".join(h.rel for h in hits)))
+    p = hits[0]
+    lines = read_lines(wiki.p(p.rel))
+    _, body = parse_frontmatter(lines)
+    if not args.heading or args.heading.strip().lower() == WHOLE_PAGE:
+        end = len(lines)
+        while end > body and not lines[end - 1].strip():
+            end -= 1
+        start = body
+        while start < end and not lines[start].strip():
+            start += 1
+        print("%s | %s" % (p.rel, WHOLE_PAGE))
+        print("\n".join(lines[start:end]))
+        return EXIT_OK
+    hs = headings(lines, body)
+    want = args.heading.strip().lstrip("#").strip().lower()
+    match = [k for k, h in enumerate(hs) if h[1] >= 2 and h[2].lower() == want]
+    if not match:
+        avail = ", ".join(h[2] for h in hs if h[1] >= 2)
+        raise BrainError("no heading '%s' in %s; headings: %s" % (args.heading, p.rel, avail or "none"),
+                         EXIT_MISSING)
+    if len(match) > 1:
+        raise BrainError("heading '%s' appears %d times in %s; rename one" % (args.heading, len(match), p.rel))
+    k = match[0]
+    end = section_span(lines, hs, k)
+    print("%s | %s" % (p.rel, hs[k][2]))
+    print("\n".join(lines[hs[k][0]:end]))
+    return EXIT_OK
+
+
 WHOLE_PAGE = "(whole page)"
-CITE_FILE_NAME = "braincite.md"
-CITE_SIDES = (("team", "Team", "T"), ("personal", "Personal", "P"))
-CITE_HEADER = ["| # | Page | Section | Lines | Reads | Why read it |", "|---|---|---|---|---|---|"]
-CITE_NEXT_RE = re.compile(r"^<!--\s*braincite-next:\s*T(\d+)\s+P(\d+)\s*-->\s*$")
-ID_RE = re.compile(r"^([TP])(\d+)$", re.I)
-DIRECT_WHY = "Read directly (not listed by the analyst)."
+CITE_SIDES = (("team", "Team"), ("personal", "Personal"))
+CITE_HEADER = ["| Page | Section | Lines | Why read it |", "|---|---|---|---|"]
 
 
-class CiteFile(object):
-    """A BrainCite file: preamble, Team and Personal tables, next-id counters, other blocks."""
+def parse_cite_row(line, side):
+    """Page | Section | Lines | Why. Section '(whole page)' = whole page (stored as '').
+    Older rows with extra columns are read as page, section, ..., lines, why."""
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    if len(cells) < 4 or cells[0].lower() == "page" or set(cells[0]) <= set("-: "):
+        return None
+    m = LINK_RE.search(cells[0])
+    sec = cells[1]
+    if len(cells) >= 5 and cells[2].lower() in ("personal", "team"):  # old Side column
+        side = cells[2].lower()
+    return {"page": (m.group(1) if m else cells[0]).strip(),
+            "section": "" if sec.lower() in (WHOLE_PAGE, "", "-") else sec,
+            "side": side or "team", "lines": cells[-2], "why": cells[-1]}
 
-    def __init__(self, path):
-        self.path = path
-        self.exists = os.path.isfile(path)
-        self.pre, self.others = None, []
-        self.rows = {"team": [], "personal": []}
-        self.next = {"team": 1, "personal": 1}
-        self.upgraded = False
-        if self.exists:
-            self._parse(read_lines(path))
 
-    def _parse(self, lines):
-        pre, side, in_rows, cur_lines, saw_next = [], None, False, None, False
-        sides = {title.lower(): sd for sd, title, _ in CITE_SIDES}
-        legacy = []
-        for ln in lines:
-            mn = CITE_NEXT_RE.match(ln.strip())
-            if mn:
-                self.next = {"team": int(mn.group(1)), "personal": int(mn.group(2))}
-                saw_next = True
+def read_cite(wiki, path):
+    """Return (preamble lines or None, {side: [rows]}, [other ## blocks as line lists])."""
+    groups = {"team": [], "personal": []}
+    if not os.path.isfile(path):
+        return None, groups, []
+    pre, others, side, in_rows, cur_lines = [], [], None, False, None
+    sides = {title.lower(): sd for sd, title in CITE_SIDES}
+    old_groups = ("for planning", "for the work")
+    for ln in read_lines(path):
+        m = re.match(r"^(#{2,3})\s+(.*?)\s*$", ln)
+        if m:
+            title = m.group(2).lower()
+            if title in sides:
+                side, in_rows, cur_lines = sides[title], True, None
                 continue
-            m = re.match(r"^(#{2,3})\s+(.*?)\s*$", ln)
-            if m:
-                title = m.group(2).lower()
-                if title in sides:
-                    side, in_rows, cur_lines = sides[title], True, None
-                    continue
-                if m.group(1) == "##" and title in ("for planning", "for the work"):  # older grouped file
-                    side, in_rows, cur_lines = None, True, None
-                    continue
-                if m.group(1) == "##":
-                    side, in_rows = None, False
-                    cur_lines = [ln]
-                    self.others.append(cur_lines)
-                    continue
-            is_row = ln.strip().startswith("|")
-            if in_rows or (is_row and cur_lines is None):
-                row = self._row(ln, side) if is_row else None
-                if row:
-                    (legacy if row["id"] is None else self.rows[row["side"]]).append(row)
-            elif cur_lines is not None:
-                cur_lines.append(ln)
-            else:
-                pre.append(ln)
-        while pre and not pre[-1].strip():
-            pre.pop()
-        self.pre = pre
-        for sd, _t, letter in CITE_SIDES:
-            used = [int(ID_RE.match(r["id"]).group(2)) for r in self.rows[sd]]
-            self.next[sd] = max([self.next[sd]] + [u + 1 for u in used])
-        for r in legacy:  # old format: no ids or reads yet
-            self.add(r)
-            self.upgraded = True
-        if not saw_next and self.exists:
-            self.upgraded = True
-
-    def _row(self, line, side):
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 4 or cells[0].lower() in ("page", "#") or set(cells[0]) <= set("-: "):
-            return None
-        rid, reads = None, 0
-        mid = ID_RE.match(cells[0])
-        if mid and len(cells) >= 6:
-            rid = mid.group(1).upper() + mid.group(2)
-            side = "team" if rid[0] == "T" else "personal"
-            cells = cells[1:]
-            reads = int(cells[3]) if cells[3].isdigit() else 0
-            lines_, why = cells[2], " | ".join(cells[4:]).strip()
+            if m.group(1) == "##" and title in old_groups:  # older grouped file: rows merge by side
+                side, in_rows, cur_lines = None, True, None
+                continue
+            if m.group(1) == "##":
+                side, in_rows = None, False
+                cur_lines = [ln]
+                others.append(cur_lines)
+                continue
+        is_row = ln.strip().startswith("|")
+        if in_rows:
+            row = parse_cite_row(ln, side) if is_row else None
+            if row:
+                groups[row["side"]].append(row)
+        elif cur_lines is not None:
+            cur_lines.append(ln)
+        elif is_row:
+            row = parse_cite_row(ln, None)
+            if row:
+                groups[row["side"]].append(row)
         else:
-            if len(cells) >= 5 and cells[2].lower() in ("personal", "team"):  # old Side column
-                side = cells[2].lower()
-            lines_, why = cells[-2], cells[-1]
-        m = LINK_RE.search(cells[0])
-        sec = cells[1]
-        return {"id": rid, "page": (m.group(1) if m else cells[0]).strip(),
-                "section": "" if sec.lower() in (WHOLE_PAGE, "", "-") else sec,
-                "side": side or "team", "lines": lines_, "reads": reads, "why": why}
-
-    def add(self, row, at=None):
-        letter = "T" if row["side"] == "team" else "P"
-        row["id"] = "%s%d" % (letter, self.next[row["side"]])
-        self.next[row["side"]] += 1
-        table = self.rows[row["side"]]
-        table.insert(at, row) if at is not None else table.append(row)
-        return row
-
-    def find_id(self, rid):
-        rid = rid.upper()
-        for sd in self.rows:
-            for r in self.rows[sd]:
-                if r["id"] == rid:
-                    return r
-        return None
-
-    def find(self, page, side, section):
-        for r in self.rows[side]:
-            if r["page"].lower() == page.lower() and r["section"].lower() == section.lower():
-                return r
-        return None
-
-    def all_rows(self, side=None):
-        return [r for sd, _t, _l in CITE_SIDES if side in (None, sd) for r in self.rows[sd]]
-
-    def write(self, title=None):
-        out = self.pre if self.pre is not None else [
-            "# BrainCite%s" % (": " + title if title else ""), "",
-            "Pages and sections this project draws on, by side. Reads counts each time one was opened.",
-            "Open entries with `brain.py read --cite <this file> T1 P2 ...`."]
-        out = list(out) + ["", "<!-- braincite-next: T%d P%d -->" % (self.next["team"], self.next["personal"])]
-        for sd, title_, _l in CITE_SIDES:
-            out += ["", "## " + title_, ""]
-            if not self.rows[sd]:
-                out.append("None.")
-                continue
-            out += CITE_HEADER
-            for r in self.rows[sd]:
-                out.append("| %s | [[%s]] | %s | %s | %d | %s |" % (
-                    r["id"], r["page"], r["section"] or WHOLE_PAGE, r["lines"], r["reads"], r["why"]))
-        for block in self.others:
-            while block and not block[-1].strip():
-                block.pop()
-            out += [""] + block
-        text = "\n".join(out) + "\n"
-        os.makedirs(os.path.dirname(os.path.abspath(self.path)) or ".", exist_ok=True)
-        tmp = "%s.%d.tmp" % (self.path, os.getpid())
-        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        for attempt in range(100):  # Windows: replace fails while another process has the file open
-            try:
-                os.replace(tmp, self.path)
-                return
-            except PermissionError:
-                time.sleep(0.05)
-        os.remove(tmp)
-        raise BrainError("could not write %s (file kept open by another program?)" % self.path, EXIT_MISSING)
-
-
-class FileLock(object):
-    """Lock file beside the target: exclusive create, retry, stale locks (older than 60 s) removed."""
-
-    def __init__(self, path, timeout=60.0):
-        self.lock = path + ".lock"
-        self.timeout = timeout
-        self.held = False
-
-    def __enter__(self):
-        os.makedirs(os.path.dirname(os.path.abspath(self.lock)) or ".", exist_ok=True)
-        start = time.time()
-        while True:
-            try:
-                fd = os.open(self.lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, str(os.getpid()).encode())
-                os.close(fd)
-                self.held = True
-                return self
-            except (FileExistsError, PermissionError):
-                try:
-                    if time.time() - os.path.getmtime(self.lock) > 60:
-                        os.remove(self.lock)
-                        continue
-                except OSError:
-                    pass
-                if time.time() - start > self.timeout:
-                    raise BrainError("%s is locked by another brain.py; if none is running, delete the lock file"
-                                     % os.path.basename(self.lock), EXIT_INVALID)
-                time.sleep(0.02 + random.random() * 0.03)
-
-    def __exit__(self, *exc):
-        if self.held:
-            try:
-                os.remove(self.lock)
-            except OSError:
-                pass
-        return False
-
-
-def cite_path(args, required=True):
-    p = getattr(args, "cite", None)
-    if p:
-        return os.path.abspath(p)
-    p = os.path.abspath(CITE_FILE_NAME)
-    if os.path.isfile(p) or not required:
-        return p
-    raise BrainError("no %s in the current folder; pass --cite FILE" % CITE_FILE_NAME, EXIT_MISSING)
+            pre.append(ln)
+    while pre and not pre[-1].strip():
+        pre.pop()
+    return pre, groups, others
 
 
 def cmd_candidates(wiki, args):
-    path = cite_path(args)
+    path = args.cite if os.path.isabs(args.cite) else os.path.abspath(args.cite)
     if not os.path.isfile(path):
         raise BrainError("BrainCite file not found: %s; fall back to the page list (`brain.py pagelist`)"
                          % args.cite, EXIT_MISSING)
-    cf = CiteFile(path)
+    _, groups, _ = read_cite(wiki, path)
     pages, _ = wiki.scan()
-    rows = cf.all_rows(args.side)
-    for r in rows:
-        flag = "" if by_name(pages, r["page"], r["side"]) else " (page missing)"
-        print("%s | %s | %s | %s | %d reads | %s%s" % (r["id"], r["page"], r["section"] or WHOLE_PAGE, r["side"],
-                                                       r["reads"], r["why"], flag))
-    if not rows:
+    n = 0
+    for side, _title in CITE_SIDES:
+        if args.side and args.side != side:
+            continue
+        for r in groups[side]:
+            flag = "" if by_name(pages, r["page"], side) else " (page missing)"
+            print("%s | %s | %s | %s%s" % (r["page"], r["section"] or WHOLE_PAGE, side, r["why"], flag))
+            n += 1
+    if not n:
         print("no rows; fall back to the page list")
     print("route a section row as '## [[page]] > Section' and a whole-page row as '## [[page]]'; "
           "facts that fit no row: use %s/page-list.md" % wiki.c("work_dir"))
@@ -1630,187 +1536,95 @@ def load_rows(path):
     return [dict(zip(head, [c.strip() for c in ln.split("\t")])) for ln in lines[1:]]
 
 
-def resolve_entry(wiki, pages, dicts, page, section, side):
-    """Check a page/section on a side. Returns (page obj, exact heading or '', lines, body lines) or raises."""
-    if by_name(dicts, page) or wiki.is_dictionary_file(page + ".md"):
-        d = by_name(dicts, page)
-        raise BrainError(dict_refusal(page, d[0].rel if d else "dictionary name", pages))
-    hit = by_name(pages, page, side)
-    if len(hit) != 1:
-        raise BrainError("no single %s page named '%s'" % (side, page), EXIT_MISSING)
-    pg = hit[0]
-    plines = read_lines(wiki.p(pg.rel))
-    _, body = parse_frontmatter(plines)
-    if section:
-        hs, m = find_heading(plines, section)
-        if len(m) != 1:
-            raise BrainError("heading '%s' not found once on %s" % (section, pg.rel), EXIT_MISSING)
-        idx, end = hs[m[0]][0], section_span(plines, hs, m[0])
-        return pg, hs[m[0]][2], end - idx, plines[idx:end]
-    end = len(plines)
-    while end > body and not plines[end - 1].strip():
-        end -= 1
-    start = body
-    while start < end and not plines[start].strip():
-        start += 1
-    return pg, "", end - start, plines[start:end]
-
-
 def cmd_cite_add(wiki, args):
-    path = cite_path(args, required=False)
+    spath = args.cite if os.path.isabs(args.cite) else os.path.abspath(args.cite)
     rows = load_rows(args.rows)
+    pre, groups, others = read_cite(wiki, spath)
     pages, dicts = wiki.scan()
     if wiki.c("dictionaries_in_sections"):
-        pages, dicts = pages + dicts, []
-    counts = {s: [0, 0, 0] for s, _t, _l in CITE_SIDES}  # added, already there, rejected
+        pages = pages + dicts
+    counts = {s: [0, 0, 0] for s, _ in CITE_SIDES}  # added, already there, rejected
     bad_side = 0
     clean = lambda v: re.sub(r"\s+", " ", v).replace("|", "/").strip()
-    with FileLock(path):
-        cf = CiteFile(path)
-        for i, r in enumerate(rows, 1):
-            page, section = r.get("page", "").strip().strip("[]"), r.get("section", "").strip()
-            if section.lower() in (WHOLE_PAGE, "-"):
-                section = ""
-            side = r.get("side", "").strip().lower()
-            label = "row %d (%s > %s, %s)" % (i, page, section or WHOLE_PAGE, side or "?")
-            if side not in ("personal", "team"):
-                print("rejected: %s: side must be personal or team" % label)
-                bad_side += 1
-                continue
-            try:
-                pg, heading, nlines, _ = resolve_entry(wiki, pages, dicts, page, section, side)
-            except BrainError as e:
-                print("rejected: %s: %s" % (label, e.msg))
+    for i, r in enumerate(rows, 1):
+        page, section = r.get("page", "").strip().strip("[]"), r.get("section", "").strip()
+        if section.lower() in (WHOLE_PAGE, "-"):
+            section = ""
+        side = r.get("side", "").strip().lower()
+        label = "row %d (%s > %s, %s)" % (i, page, section or WHOLE_PAGE, side or "?")
+        if side not in ("personal", "team"):
+            print("rejected: %s: side must be personal or team" % label)
+            bad_side += 1
+            continue
+        if by_name(dicts, page) and not wiki.c("dictionaries_in_sections"):
+            print("rejected: %s: %s" % (label, dict_refusal(page, by_name(dicts, page)[0].rel, pages)))
+            counts[side][2] += 1
+            continue
+        hit = by_name(pages, page, side)
+        if len(hit) != 1:
+            print("rejected: %s: no single %s page with that name" % (label, side))
+            counts[side][2] += 1
+            continue
+        pg = hit[0]
+        plines = read_lines(wiki.p(pg.rel))
+        if section:
+            hs, m = find_heading(plines, section)
+            if len(m) != 1:
+                print("rejected: %s: heading not found once on %s" % (label, pg.rel))
                 counts[side][2] += 1
                 continue
-            same = [x for x in cf.rows[side] if x["page"].lower() == pg.name.lower()]
-            if any(not x["section"] for x in same):
-                print("already there: %s > %s (%s)%s" % (pg.name, heading or WHOLE_PAGE, side,
-                                                       " (covered by whole page)" if heading else ""))
-                counts[side][1] += 1
-                continue
-            if heading and any(x["section"].lower() == heading.lower() for x in same):
-                print("already there: %s > %s (%s)" % (pg.name, heading, side))
-                counts[side][1] += 1
-                continue
-            new = {"page": pg.name, "section": heading, "side": side, "lines": str(nlines),
-                   "reads": 0, "why": clean(r.get("why", "")) or "-"}
-            if not heading and same:  # whole page replaces its section entries; new id, reads carried over
-                at = cf.rows[side].index(same[0])
-                for x in same:
-                    cf.rows[side].remove(x)
-                new["reads"] = sum(x["reads"] for x in same)
-                cf.add(new, at)
-                print("replaced: %s by %s %s > %s (%s)" % (", ".join("%s %s" % (x["id"], x["section"]) for x in same),
-                                                          new["id"], pg.name, WHOLE_PAGE, side))
-            else:
-                cf.add(new)
-            counts[side][0] += 1
-            print("added: %s %s > %s (%s)" % (new["id"], pg.name, heading or WHOLE_PAGE, side))
-        if cf.upgraded:
-            print("note: %s upgraded to the id/Reads format" % os.path.basename(path))
-        cf.write(args.title)
-    for side, _t, _l in CITE_SIDES:
+            heading = hs[m[0]][2]
+            nlines = body_count(plines, hs[m[0]][0], section_span(plines, hs, m[0]))
+        else:
+            heading, nlines = "", pg.nlines
+        table = groups[side]
+        same = [x for x in table if x["page"].lower() == pg.name.lower()]
+        if any(not x["section"] for x in same):
+            print("already there: %s > %s (%s)%s" % (pg.name, heading or WHOLE_PAGE, side,
+                                                   " (covered by whole page)" if heading else ""))
+            counts[side][1] += 1
+            continue
+        if heading and any(x["section"].lower() == heading.lower() for x in same):
+            print("already there: %s > %s (%s)" % (pg.name, heading, side))
+            counts[side][1] += 1
+            continue
+        new = {"page": pg.name, "section": heading, "side": side, "lines": str(nlines),
+               "why": clean(r.get("why", "")) or "-"}
+        if not heading and same:  # whole page replaces its section entries, at the first one's place
+            at = table.index(same[0])
+            for x in same:
+                table.remove(x)
+            table.insert(at, new)
+            print("replaced: %s > %s (%s) by %s" % (pg.name, ", ".join(x["section"] for x in same), side, WHOLE_PAGE))
+        else:
+            table.append(new)
+        counts[side][0] += 1
+        print("added: %s > %s (%s)" % (pg.name, heading or WHOLE_PAGE, side))
+    out = pre if pre is not None else ["# BrainCite%s" % (": " + args.title if args.title else ""), "",
+                                       "Sections and whole pages worth reading for this project, by side.",
+                                       "Open one with `brain.py section \"<page>\" \"<section>\" --side team|personal`;"
+                                       " for a whole page leave out the section."]
+    for side, title in CITE_SIDES:
+        out += ["", "## " + title, ""]
+        if not groups[side]:
+            out.append("None.")
+            continue
+        out += CITE_HEADER
+        for r in groups[side]:
+            out.append("| [[%s]] | %s | %s | %s |" % (r["page"], r["section"] or WHOLE_PAGE, r["lines"], r["why"]))
+    for block in others:
+        while block and not block[-1].strip():
+            block.pop()
+        out += [""] + block
+    write_lines(spath, out)
+    for side, _t in CITE_SIDES:
         a, d, b = counts[side]
         print("table %s: added %d, already there %d, rejected %d" % (side, a, d, b))
     added = sum(c[0] for c in counts.values())
     dup = sum(c[1] for c in counts.values())
     bad = sum(c[2] for c in counts.values()) + bad_side
-    print("total: %d added, %d already there, %d rejected -> %s" % (added, dup, bad, os.path.basename(path)))
+    print("total: %d added, %d already there, %d rejected -> %s" % (added, dup, bad, os.path.basename(spath)))
     return EXIT_INVALID if bad and not added and not dup else EXIT_OK
-
-
-def cmd_read(wiki, args):
-    if args.report:
-        return read_report(args)
-    if not args.targets and not args.all:
-        raise BrainError("name targets (T1, P2, \"page > Section\", page), or pass --all or --report", EXIT_USAGE)
-    has_ids = args.all or any(ID_RE.match(t.strip()) for t in args.targets)
-    path = cite_path(args, required=has_ids or not args.no_count)
-    pages, dicts = wiki.scan()
-    if wiki.c("dictionaries_in_sections"):
-        pages, dicts = pages + dicts, []
-    lock = FileLock(path) if not args.no_count else None
-    errors, outputs = [], []
-    if lock:
-        lock.__enter__()
-    try:
-        cf = CiteFile(path)
-        if has_ids and not cf.exists:
-            raise BrainError("BrainCite file not found: %s; pass --cite FILE" % path, EXIT_MISSING)
-        if args.all:
-            targets = [r["id"] for r in cf.all_rows(args.side)]
-        else:
-            targets = args.targets
-        changed = cf.upgraded
-        for t in targets:
-            t = t.strip()
-            mid = ID_RE.match(t)
-            try:
-                if mid:
-                    entry = cf.find_id(t)
-                    if not entry:
-                        raise BrainError("no entry %s in %s" % (t.upper(), os.path.basename(path)), EXIT_MISSING)
-                    page, section, side = entry["page"], entry["section"], entry["side"]
-                else:
-                    page, _, section = t.partition(">")
-                    page, section = page.strip().strip("[]"), section.strip()
-                    if section.lower() == WHOLE_PAGE:
-                        section = ""
-                    side = args.side
-                    if not side:
-                        if by_name(dicts, page) or wiki.is_dictionary_file(page + ".md"):
-                            side = "team"  # resolve_entry refuses it
-                        else:
-                            sides = sorted({p.side for p in by_name(pages, page)})
-                            if len(sides) > 1:
-                                raise BrainError("'%s' is on both sides; pass --side team or --side personal" % page)
-                            side = sides[0] if sides else "team"
-                    entry = None
-                pg, heading, nlines, body = resolve_entry(wiki, pages, dicts, page, section, side)
-                if not mid:
-                    entry = cf.find(pg.name, side, heading)
-                    if entry is None and not args.no_count:
-                        entry = cf.add({"page": pg.name, "section": heading, "side": side, "lines": str(nlines),
-                                        "reads": 0, "why": DIRECT_WHY})
-                if entry is not None and not args.no_count:
-                    entry["reads"] += 1
-                    entry["lines"] = str(nlines)
-                    changed = True
-                rid = entry["id"] if entry is not None else "-"
-                label = "%s > %s" % (pg.name, heading) if heading else pg.name
-                outputs.append(["=== %s %s %s (%d lines) ===" % (rid, side, label, len(body))] + body)
-            except BrainError as e:
-                errors.append("error: %s: %s" % (t, e.msg))
-        if changed and not args.no_count:
-            cf.write()
-    finally:
-        if lock:
-            lock.__exit__(None, None, None)
-    for block in outputs:
-        print("\n".join(block))
-    for e in errors:
-        print(e, file=sys.stderr)
-    return EXIT_INVALID if errors else EXIT_OK
-
-
-def read_report(args):
-    path = cite_path(args)
-    cf = CiteFile(path)
-    if not cf.exists:
-        raise BrainError("BrainCite file not found: %s; pass --cite FILE" % path, EXIT_MISSING)
-    rows = cf.all_rows(args.side)
-    read_rows = [r for r in rows if r["reads"] > 0]
-    total = 0
-    for r in read_rows:
-        n = int(r["lines"]) if str(r["lines"]).isdigit() else 0
-        total += n * r["reads"]
-        print("%s | %s | %s | %s lines | %d reads" % (r["id"], r["page"] + (" > " + r["section"] if r["section"] else
-                                                                          " (whole page)"), r["side"], r["lines"],
-                                                    r["reads"]))
-    print("read: %d entries, %d lines in total (lines x reads)" % (len(read_rows), total))
-    print("never read: %d of %d entries" % (len(rows) - len(read_rows), len(rows)))
-    return EXIT_OK
 
 
 def cmd_root(wiki, args):
@@ -1839,8 +1653,8 @@ def build_parser():
                "              -> (filer per packet) -> markfiled\n"
                "promote flow: promote --list -> promote PAGE --show -> promote PAGE --lines .. -> (filer)"
                " -> markfiled --promoted NAME\n"
-               "braincite:    sections --side team|personal -> (analysts) -> cite-add --cite F --rows R\n"
-               "              -> read --cite F T1 P2 \"page > Section\" ... -> read --cite F --report\n\n"
+               "braincite:   sections --side team|personal -> (analysts) -> cite-add --cite F --rows R\n"
+               "              -> section PAGE [HEADING] --side ..\n\n"
                "exit codes: 0 ok | 1 invalid or refused (message says what to fix) | 2 bad arguments |"
                " 3 not found\nerrors print one line to stderr starting 'error:'.")
     sub = top.add_subparsers(dest="cmd", metavar="COMMAND")
@@ -1955,58 +1769,39 @@ def build_parser():
     sp.add_argument("--out", metavar="FILE", help="write the output to FILE (relative to the wiki root; "
                     "folders are created) instead of the screen")
 
-    sp = add("candidates", cmd_candidates, "print BrainCite entries as routing candidates",
-             "Print each entry of a BrainCite file as 'id | page | section | side | N reads | why', where\n"
-             "section is '(whole page)' for a whole-page entry. Route a section entry as\n"
-             "'## [[page]] > Section' and a whole-page entry as '## [[page]]'; reads play no part in routing.\n"
-             "Entries whose page no longer exists are marked (page missing). Read-only.\n"
-             "No --cite: braincite.md in the current folder. Missing file: exit 3; fall back to the page list.")
-    sp.add_argument("--cite", metavar="FILE", help="BrainCite file (default: braincite.md in the current folder)")
-    sp.add_argument("--side", choices=["team", "personal"], help="only entries from this table")
+    sp = add("section", cmd_section, "print one section of one page, or the whole page",
+             "With HEADING: print one section, found by heading text (case-insensitive, any level 2-6), up\n"
+             "to the next heading of the same or higher level; first line 'path | heading'.\n"
+             "Without HEADING (or with '(whole page)'): print the whole page body without frontmatter;\n"
+             "first line 'path | (whole page)'.")
+    sp.add_argument("page", metavar="PAGE", help="page name")
+    sp.add_argument("heading", metavar="HEADING", nargs="?", help="heading text, without the #s; omit for the whole page")
+    sp.add_argument("--side", choices=["personal", "team"], help="needed when the page has a twin")
+
+    sp = add("candidates", cmd_candidates, "print BrainCite rows as routing candidates",
+             "Print each row of a BrainCite file as 'page | section | side | why', where section is\n"
+             "'(whole page)' for a whole-page entry. Route a section row as '## [[page]] > Section' and a\n"
+             "whole-page row as '## [[page]]'. Rows whose page no longer exists are marked (page missing).\n"
+             "Missing file: exit 3; fall back to the page list.")
+    sp.add_argument("--cite", required=True, metavar="FILE", help="BrainCite file (e.g. <project>/braincite.md)")
+    sp.add_argument("--side", choices=["team", "personal"], help="only rows from this table")
     sp.add_argument("--out", metavar="FILE", help="write the output to FILE (relative to the wiki root; "
                     "folders are created) instead of the screen")
 
     sp = add("cite-add", cmd_cite_add, "merge analyst rows into a BrainCite file",
              "Read rows from a JSON list or a TSV file with a header (columns: page, side, why, and optional\n"
              "section; missing or empty section or '(whole page)' = whole page). Each row is checked against\n"
-             "the wiki (page exists on that side, heading exists) and Lines is filled in by the script: the\n"
-             "lines a read prints (heading to the section's last non-blank line, or the page body without\n"
-             "frontmatter). An invalid row is rejected with a one-line reason; the rest still go in. Rows go to '## Team' or '## Personal' in the order given, with\n"
-             "the next unused id (T1.. / P1..; ids are never reused) and Reads 0. Existing Reads are kept.\n"
-             "Columns: # | Page | Section | Lines | Reads | Why read it. An empty table shows 'None.'.\n"
+             "the wiki (page exists on that side, heading exists) and Lines is filled in by the script\n"
+             "(section body lines, or the page's line count). An invalid row is rejected with a one-line\n"
+             "reason; the rest still go in. Rows go to '## Team' or '## Personal' (columns: Page | Section |\n"
+             "Lines | Why read it) in the order given; an empty table shows 'None.'.\n"
              "Already there: same page + side + section, or the page already has a whole-page entry.\n"
-             "A whole-page row replaces that page's section entries: it gets a new id and the sum of their\n"
-             "reads (prints 'replaced: ...'). A file in an older format is upgraded in place.\n"
+             "A whole-page row replaces that page's section entries (prints 'replaced: ...').\n"
              "Prints 'table team|personal: added N, already there N, rejected N', then a total.\n"
-             "Creates the file if missing. Updates under a lock file. Exit 1 only if every row was rejected.")
-    sp.add_argument("--cite", metavar="FILE", help="BrainCite file to create or update "
-                    "(default: braincite.md in the current folder)")
+             "Creates the file if missing. Exit 1 only if every row was rejected.")
+    sp.add_argument("--cite", required=True, metavar="FILE", help="BrainCite file to create or update")
     sp.add_argument("--rows", required=True, metavar="FILE", help="rows file (.json or .tsv)")
     sp.add_argument("--title", metavar="TEXT", help="project name for the title of a new file")
-
-    sp = add("read", cmd_read, "print BrainCite entries or pages/sections, and count the reads",
-             "Print each TARGET in the order given, each under one header line\n"
-             "'=== <id> <side> <page> > <Section> (N lines) ===' (no '> Section' for a whole page), then the\n"
-             "body exactly as on the page (a whole page without its frontmatter). Nothing else is printed.\n"
-             "TARGET: an entry id (T1, p2; case-insensitive), or a direct target \"page > Section\" or page\n"
-             "(whole page). --side picks the side for direct targets; a page on both sides without --side is\n"
-             "a bad target. --all reads every entry (limit with --side).\n"
-             "Counting: each successful read adds 1 to that entry's Reads. A direct target matching an entry\n"
-             "counts against it; one with no entry is added as a new entry ('Read directly (not listed by\n"
-             "the analyst).', Reads 1). A section of a page with a whole-page entry gets its own entry.\n"
-             "The file is updated under a lock file and written atomically, so parallel reads lose no count.\n"
-             "--no-count: peek; the file is not changed (direct targets then need no BrainCite file).\n"
-             "--report: entries with Reads > 0, total lines read (lines x reads), count never read.\n"
-             "Bad targets (unknown id, page or heading, dictionary) print one 'error:' line each to stderr;\n"
-             "the good ones are still read; exit 1 at the end. Dictionaries are always refused.\n"
-             "No --cite: braincite.md in the current folder, else exit 3 asking for --cite.")
-    sp.add_argument("targets", nargs="*", metavar="TARGET", help="T1, P2, \"page > Section\" or page")
-    sp.add_argument("--cite", metavar="FILE", help="BrainCite file (default: braincite.md in the current folder)")
-    sp.add_argument("--side", choices=["team", "personal"], help="side for direct targets; with --all or "
-                    "--report, only that table")
-    sp.add_argument("--all", action="store_true", help="read every entry")
-    sp.add_argument("--no-count", action="store_true", help="do not change the file")
-    sp.add_argument("--report", action="store_true", help="print what was read (Reads > 0) and what never was")
 
     add("root", cmd_root, "print the absolute wiki root",
         "Print the wiki root as an absolute path (the only absolute path brain.py prints), so a skill can\n"

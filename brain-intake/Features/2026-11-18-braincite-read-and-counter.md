@@ -1,8 +1,8 @@
 # BrainCite: chained reads and a read counter
 
-Status: built
+Status: built (name change only)
 
-Built 2026-11-18 as specified. Additions: `read --report` (what was read, total lines, entries never read), `read --all`, `read --no-count`, and the old `section` command was removed because `read` covers it. One end-to-end run with parallel sub-agents reconciled every count.
+Outcome, 2026-11-18: only the rename to BrainCite was kept. The chained `read` command, entry ids, the `Reads` counter and the end-of-session report were built and tested, then removed the same day at James's decision: his sub-agents are read-only and cannot update a counter, and the machinery was more work than it was worth. Sections are opened one at a time with `brain section`, as before. Everything below the Name decision is kept for the record and is not in the software.
 Date: 2026-11-18
 
 BrainSight is renamed BrainCite, because the file is the citation list of what a session drew on. One `read` command opens any number of listed pages and sections in a single call, and every read adds 1 to that entry's `Reads` count in the BrainCite file, so the file shows what actually went into the session.

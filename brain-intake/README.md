@@ -1,6 +1,6 @@
 # brain-intake
 
-Gets facts into a markdown wiki cheaply, and tells a project which wiki sections to read, counting each read. Facts from sessions and documents are filed to personal pages by typed skills over small-model sub-agents and one script; team pages change only through a separate promote step. Data dictionaries are never touched. Nothing runs by itself and nothing is filed without one yes. Design decisions: [Features/](Features/README.md).
+Gets facts into a markdown wiki cheaply, and tells a project which wiki sections to read. Facts from sessions and documents are filed to personal pages by typed skills over small-model sub-agents and one script; team pages change only through a separate promote step. Data dictionaries are never touched. Nothing runs by itself and nothing is filed without one yes. Design decisions: [Features/](Features/README.md).
 
 ## Skills
 
@@ -9,7 +9,7 @@ Gets facts into a markdown wiki cheaply, and tells a project which wiki sections
 | [brain-file](skills/brain-file/SKILL.md) | Files the session facts to personal pages, routing against the project's `braincite.md` first |
 | [brain-ingest](skills/brain-ingest/SKILL.md) | Turns documents in `personal/raw/` into source records, then files them the same way |
 | [brain-promote](skills/brain-promote/SKILL.md) | Moves chosen lines from a personal twin to the team page (new team pages come from a team template) |
-| [brain-cite](skills/brain-cite/SKILL.md) | At the start of a project or request, writes `braincite.md`: two tables (Team, Personal) of pages or sections to read, each with an id, when to read it, and a Reads count kept by `brain read` |
+| [brain-cite](skills/brain-cite/SKILL.md) | At the start of a project or request, writes `braincite.md`: two tables (Team, Personal) of pages or sections to read, each with when to read it |
 
 ## Sub-agents
 
@@ -23,11 +23,11 @@ Gets facts into a markdown wiki cheaply, and tells a project which wiki sections
 
 | Item | What it is |
 |---|---|
-| [scripts/brain.py](scripts/brain.py) | Every step that needs no judgement: page list, summary, approve, collect, markfiled, log, promote, sections, BrainCite entries, and `read` (one call opens many entries and counts each read). Standard library only |
+| [scripts/brain.py](scripts/brain.py) | Every step that needs no judgement: page list, summary, approve, collect, markfiled, log, promote, sections, section, BrainCite rows. Standard library only |
 | [scripts/test_brain.py](scripts/test_brain.py) | Tests for brain.py against the test wiki |
 | [brain-reference.md](brain-reference.md) | The one reference: record, packet and BrainCite formats, merge and tag rules, every command |
-| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file: how to keep session facts and how to read `braincite.md` entries with `brain read` |
-| [hookup-checklist.md](hookup-checklist.md) | Every assumed name and setting, as an install test, with a 7-step smoke test including the read counter and the team-write guard |
+| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file: how to keep session facts and when to open a `braincite.md` entry |
+| [hookup-checklist.md](hookup-checklist.md) | Every assumed name and setting, as an install test, with a 6-step smoke test including the team-write guard |
 | [test-wiki/](test-wiki/) | Small sample wiki (personal, team, templates, one dictionary, a sample project) for trying everything |
 
 ## Install

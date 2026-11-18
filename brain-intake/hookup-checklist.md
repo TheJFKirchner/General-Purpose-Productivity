@@ -35,7 +35,7 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 | `skip_folder_names` | `skills`, `agents`, `sql`, `templates`, `sources`, `raw`, `brain-work` | Add any folder that holds non-page markdown |
 | `page_line_limit` | `150` | Your page size rule |
 | `section_level` | `2` | Page sections are `##` headings |
-| `dictionaries_in_sections` | `false` | Keep false: BrainCite never points at dictionaries, and `read` always refuses them |
+| `dictionaries_in_sections` | `false` | Keep false: BrainCite never points at dictionaries |
 | `doubt_tags` | `#verify`, `#hunch` | The tags you use for guesses and unchecked facts; `promote --show` flags them |
 
 ## 4. Names written into the skill text (edit the skills if your config differs)
@@ -43,8 +43,7 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 - [ ] `personal/raw/session-facts/*.md` (brain-file step 5) and `personal/raw/*` (brain-ingest step 5).
 - [ ] `personal/sources` (extractor input) and `team/templates/*.md` (brain-promote step 5).
 - [ ] Work files in `brain-work/`: `page-list.md`, `candidates.txt`, `sections-team.txt`, `sections-personal.txt`, `cite-existing.txt`, `cite-rows-team.json`, `cite-rows-personal.json`, `braincite-preview.md`, `packets/`, `brain-log.md`.
-- [ ] BrainCite file: `braincite.md` in the folder the session is opened in (a `braincite.md.lock` file appears briefly while it is updated).
-- [ ] The old `section` command is gone: anything you wrote that calls `brain.py section` now uses `brain.py read`.
+- [ ] BrainCite file: `braincite.md` in the folder the session is opened in.
 
 ## 5. Models
 
@@ -56,7 +55,7 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 - [ ] The wiki is a git repo you can push to. If it is not, the skills skip sync.
 - [ ] `brain-work/` is a line in the wiki's `.gitignore`, so packets, logs and previews are never committed.
 
-## 7. Smoke test (run in order; step 7 on a throwaway copy of `test-wiki/`)
+## 7. Smoke test (run in order; step 6 on a throwaway copy of `test-wiki/`)
 
 | # | Command | Expected |
 |---|---|---|
@@ -64,6 +63,5 @@ Every name this build assumes about your setup. Walk it top to bottom when insta
 | 2 | `python "$BRAIN_HOME/scripts/brain.py" pagelist` | `page list: brain-work/page-list.md (N personal, N team; N dictionaries excluded)`, with N dictionaries = your count |
 | 3 | `python "$BRAIN_HOME/scripts/brain.py" sections --side team` | One block per team page (`N lines` on the page line), `Heading \| start \| lines` under it, no dictionary |
 | 4 | `python "$BRAIN_HOME/scripts/brain.py" summary --status approved` | `no approved records in personal/sources` (or records left from an unfinished run) |
-| 5 | In a scratch project folder: `/brain-cite one-line test project` | One yes question with team and personal counts, then `braincite.md` with `## Team` and `## Personal` tables (ids, Reads 0); `brain-work/brain-log.md` gains two `brain-context-analyst` rows |
-| 6 | `python "$BRAIN_HOME/scripts/brain.py" read --cite "<project>/braincite.md" T1 T2 && python "$BRAIN_HOME/scripts/brain.py" read --cite "<project>/braincite.md" --report` | Both entries printed in one call, each under a `=== T1 team ... ===` header; the report lists T1 and T2 with `1 reads`, and their Reads column in `braincite.md` went from 0 to 1 |
-| 7 | `python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" collect && echo "- x" >> "<copy>/team/pmpm.md" && python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" markfiled` | Team-write guard: `error: intake changed team or dictionary files: team/pmpm.md`, nothing filed, exit 1 |
+| 5 | In a scratch project folder: `/brain-cite one-line test project` | One yes question with team and personal counts, then `braincite.md` with `## Team` and `## Personal` tables; `brain-work/brain-log.md` gains two `brain-context-analyst` rows |
+| 6 | `python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" collect && echo "- x" >> "<copy>/team/pmpm.md" && python "$BRAIN_HOME/scripts/brain.py" --wiki "<copy>" markfiled` | Team-write guard: `error: intake changed team or dictionary files: team/pmpm.md`, nothing filed, exit 1 |
