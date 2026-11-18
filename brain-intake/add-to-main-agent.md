@@ -4,7 +4,7 @@ Paste everything below the line into the instruction file your main conversation
 
 ---
 
-## Brain: session facts and BrainSight
+## Brain: session facts and BrainCite
 
 `brain` = `python "$BRAIN_HOME/scripts/brain.py"`. The wiki root is `$BRAIN_WIKI`.
 
@@ -24,12 +24,13 @@ Paste everything below the line into the instruction file your main conversation
 | `/brain-file` | End of a session, or when facts have piled up. Files them to personal pages after one yes. |
 | `/brain-ingest` | Documents are waiting in `$BRAIN_WIKI/personal/raw/`. Files them the same way. |
 | `/brain-promote [page]` | Lines on a personal page should reach the team page. The only way team pages change. |
-| `/brain-sight [the ask]` | Start of a project or request. Writes `brainsight.md` in the project folder. |
+| `/brain-cite [the ask]` | Start of a project or request. Writes `braincite.md` in the project folder. |
 
-### Using a project's brainsight.md
+### Using a project's braincite.md
 
-- If the project folder has `brainsight.md`, use it instead of browsing the wiki.
-- It has two tables, `## Team` and `## Personal` (Page, Section, Lines, Why read it). An entry is a section, or a whole page when Section says `(whole page)`.
-- Open an entry only when its "why" applies to what you are about to do: `brain section "<page>" ["<section>"] --side <team|personal>` (leave out the section for a whole page).
-- When handing work to a sub-agent, pass it the absolute path of `brainsight.md` and tell it to open what its task needs.
-- Never open a whole wiki page when a section will do.
+- If the project folder has `braincite.md`, use it instead of browsing the wiki. It has two tables, `## Team` and `## Personal`; each entry has an id (`T1`, `P2`), a page, a section or `(whole page)`, a Reads count and a "why".
+- Open an entry only when its "why" applies to what you are about to do.
+- Read everything you need in ONE call: `brain read --cite "<absolute path>/braincite.md" T1 T3 P2` (ids and direct targets such as `"page > Section"` can be mixed).
+- Always read wiki pages through `brain read`, never with a plain file read: every read is counted in the Reads column, and reading something not listed adds it as an entry.
+- When handing work to a sub-agent, pass it the absolute path of `braincite.md` and the full command with both paths written out (a sub-agent may not have `BRAIN_HOME` or `BRAIN_WIKI` set): `python "<brain-intake folder>/scripts/brain.py" --wiki "<wiki root>" read --cite "<absolute path>/braincite.md" <ids>`, so its reads are counted too.
+- At the end of the session, `brain read --cite "<absolute path>/braincite.md" --report` shows what was read.

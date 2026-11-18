@@ -14,10 +14,10 @@ description: Turn documents waiting in the wiki's personal raw folder into sourc
 
 1. Run `brain root`, `echo "$BRAIN_HOME"`, `whoami`, `date +%F` -> ROOT, HOME, USER, DATE.
 2. Sync in: `git -C "ROOT" pull --ff-only`. Not a git repo -> skip sync here and in step 19. Fails -> stop.
-3. SIGHT = the argument (absolute path), else `<project folder>/brainsight.md` (absolute; the folder this session is open in) if it exists, else none.
+3. CITE = the argument (absolute path), else `<project folder>/braincite.md` (absolute; the folder this session is open in) if it exists, else none.
 4. `brain summary --status approved`. Output other than `no approved records ...` -> stop; follow `brain-reference.md` §14.
 5. Glob `ROOT/personal/raw/*` (top-level files only; names only). `brain summary`: records headed `[ingest, pending]` = OLD; drop documents OLD already names. Nothing left and no OLD -> stop: "No documents in raw/."
-6. `brain pagelist`. SIGHT set: `brain candidates --sight "SIGHT" --out brain-work/candidates.txt`; exit 3 -> SIGHT = none.
+6. `brain pagelist`. CITE set: `brain candidates --cite "CITE" --out brain-work/candidates.txt`; exit 3 -> CITE = none.
 7. Documents left (else step 9): batches of up to 5; one `brain-extractor` per batch, all in parallel, each with: inputs = the batch, origin `ingest`, root ROOT, date DATE, user USER, page_list `ROOT/brain-work/page-list.md`, candidates `ROOT/brain-work/candidates.txt` or `none`, sources `ROOT/personal/sources`, reference `HOME/brain-reference.md`.
 8. Per batch: `brain log brain-extractor --in-file <each document> --in-file "ROOT/brain-work/page-list.md" --out-text "<reply>" --note ingest`.
 9. RECS = OLD plus the record names (file stems) from the extractors' `record:` lines. `brain summary RECS...`. Show its output (counts only) unchanged, then ask the one question:
