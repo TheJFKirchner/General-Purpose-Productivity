@@ -6,6 +6,7 @@ Goal: know what the work set out to do, what it did, and where the evidence live
 
 | Look for | Usually found in |
 | --- | --- |
+| Findings already collected | `findings.md` beside the project plan, if there is one (the `findings` skill): each row has its plan item and source. Read it yourself, first |
 | Original goal, as first written | Project plan, request brief, an analysis folder's `README.md` |
 | What was done | Plan status, analysis `sections/`, hand-over notes |
 | Results, with numbers | Report output, commentary files, dashboard summary tables |
