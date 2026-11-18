@@ -59,7 +59,7 @@ In order. Gate = stop until it passes.
 | 5 | Chosen sections into `config.py` `REPORT`, add charts, `python run.py report` | | `references/charts.md` |
 | 6 | `python run.py commentary` | | `references/commentary.md` |
 | 7 | Cold read | **Gate 3:** a fresh reader's conclusion matches the brief | `references/cold-read.md` |
-| 8 | Hand over: report path, answer, what is assumed or unverified. Record in `README.md`, "Hand-over notes". Auto: the note in `references/auto.md`. A `facts.md` here or in a folder above: add the report's figures to it, each citing its section file and table (the `facts` skill) | | |
+| 8 | Hand over: report path, answer, what is assumed or unverified. Record in `README.md`, "Hand-over notes". Auto: the note in `references/auto.md`. A `findings.md` here or in a folder above: add the report's findings to it, each naming the plan item it bears on and citing its section file and table (the `findings` skill) | | |
 
 Other starting points:
 
