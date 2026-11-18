@@ -1,93 +1,60 @@
-"""The whiteboard's agent: one agentlib chat session for the life of the page.
+"""The whiteboard's agent: one model conversation for the life of the page, kept as cheap as possible.
 
-Its only tool is add_card. It has no file, shell or web tools, runs with permission_mode="never_ask" and
-saves no conversation. It sees its brief, the column names and types, about three sample rows, the style
-note, the recipes already on the board and the reference notes for the session's library (plus html.md for
-tables). Each message it gets starts with the current board, so it can refer to cards by ID and knows which
-were deleted.
+No tools: the agent answers in a strict plain-text format (see reply.py) that the server parses into cards,
+so a turn is one model call. The system prompt holds a short brief, the columns, about three sample rows,
+the style note, the session library's reference file, and (only when a session starts or restarts) the code
+of cards already on the board. Each message starts with one line: card IDs and titles, deletions, and the
+next free ID. All model access goes through engine.py.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import re
+import sys
 from pathlib import Path
 from typing import AsyncIterator, Callable
 
-from agentlib import Agent, AgentError, TextDelta, tool
-
 from .board import Board, BoardError
 from .data import Table
+from .engine import EngineError, TurnResult, make_engine
+from .reply import ReplyParser
 
-AGENT_NAME = "whiteboard"
 REFERENCES = Path(__file__).resolve().parent.parent / "references"
 DEFAULT_MODEL = "sonnet"
+DEFAULT_EFFORT = "low"
+CHAT_IN_PROMPT = 12          # earlier messages shown to a new agent session after a restart
+CHAT_TEXT_LIMIT = 300
 
 BRIEF = """\
-You design charts and tables on a whiteboard page. The user sees a grid of cards. Each card is a sealed
-mini-page that runs one recipe of yours on the full real data. You never see the data itself: only the column
-names and types, a few sample rows, and the user's requests.
+You write charts and tables for a whiteboard page. Each card runs your code on the full data in its own box.
+You see only the column names, types and a few sample rows.
 
-## Adding a card
-Call the add_card tool. It returns the card's ID (G1, G2, ...). Every visual must go through add_card: code
-written in a chat reply is never drawn.
+Code = the body of render(el, rows, lib). el: empty div filling the card (at least ~520 px wide). rows: array
+of row objects (numbers are numbers, dates are strings, missing = null); group, sort and aggregate in code.
+lib: the session library (absent for html). No wrapper, imports, fetch or comments. Always complete and
+standalone (variants too), written compactly.
 
-## The recipe contract
-`code` is the body of a JavaScript function `render(el, rows, lib)`:
-- `el` is the empty box (a div filling the card). Draw into it and nowhere else.
-- `rows` is an array of row objects keyed by the column names below. Numbers are numbers, dates are
-  strings, missing values are null. It holds every row, so group, sort and aggregate in the code.
-- `lib` is the session library's global (see the library notes). It is absent in plain HTML.
-- Write only the body: no `function render` wrapper, no <script> tags, no imports, no fetch or network
-  calls, no outside files.
+Reply in exactly this format and nothing else:
+@card chart|table <parent ID or -> | <title>
+```js
+<code>
+```
+(one block per card), then one line:
+@say <one short plain sentence naming the new IDs>
 
-## Kinds
-- `chart`: drawn with the session library.
-- `table`: a plain HTML table built with the DOM or innerHTML, no library. Tables are available in every
-  session, whatever the library.
-
-## IDs and parents
-- Several visuals asked for in one message means several cards: call add_card once for each.
-- A change to an existing card ("G3 but stacked", "try G2 as a line") is an iteration: add a new card with
-  `parent` set to that card's ID. Cards are never changed in place.
-- Refer to cards by ID. If the user names an ID that is not on the board, say so.
-- Each user message starts with the current board and any cards the user deleted. Do not build on a deleted
-  card unless the user asks.
-
-## Layout and titles
-- The title must describe exactly what is drawn. If it names two measures, draw both; otherwise change the
-  title.
-- Leave room for titles: if the chart draws its own title, set top margin or padding so value labels, axis
-  names and legends never overlap it or each other.
-- Tables must fit the card's width with no sideways scrolling. The box can be as narrow as about 520 px:
-  wrap text, use a smaller font, shorten headers, or leave out minor columns (and say which).
-
-## Broken cards
-If a card fails in the browser you get its error once. Fix it by calling add_card with `replaces` set to that
-ID: the fixed card keeps the ID. Add no other cards in that turn.
-
-## Replies
-Chat replies are one short plain line per card: its ID and what it shows, e.g. "G4: monthly revenue by region,
-stacked bars". No Markdown headings, no code in chat. If a request is unclear, make a sensible choice and say
-which in one line; there is no way to ask questions.
+Rules:
+- Several visuals asked for = several cards. A change to a card = a new card with that card as parent.
+- The title says exactly what is drawn. Leave room so titles, labels and legends never overlap.
+- Tables (kind table): plain HTML, no library, fit the width (wrap or shrink; no sideways scroll).
+- New cards take IDs in order from the "next ID" in each message.
+- Unclear request: make a sensible choice. Never ask questions or restate the request.
+- Fixing a broken card: reply "@fix <ID> | <title>" with the corrected code block, then @say.
 """
 
-ADD_CARD_DESCRIPTION = (
-    "Add a card (one chart or table) to the whiteboard. Returns the card's ID. Call it once per visual. "
-    "For an iteration of an existing card set parent to that card's ID. Use replaces only to fix a card "
-    "reported as broken.")
-
-ADD_CARD_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "title": {"type": "string", "description": "Short title shown on the card."},
-        "code": {"type": "string", "description": "Body of render(el, rows, lib) in JavaScript."},
-        "kind": {"enum": ["chart", "table"], "description": "chart = session library; table = plain HTML."},
-        "parent": {"type": "string", "description": "ID of the card this one iterates on, e.g. G3."},
-        "replaces": {"type": "string", "description": "Only when fixing a broken card: its ID."},
-    },
-    "required": ["title", "code"],
-}
+TABLE_NOTES = """\
+Tables: build a <table> with the DOM or innerHTML; width 100%, border-collapse, font 12px sans-serif, light
+grey cell borders, header background #e8eef7, numbers right-aligned and formatted, long text wrapped."""
 
 
 def read_reference(library: str, folder: Path = REFERENCES) -> str | None:
@@ -100,182 +67,117 @@ def read_reference(library: str, folder: Path = REFERENCES) -> str | None:
     return re.sub(r"^(#{1,4}) ", r"##\1 ", text, flags=re.M)
 
 
-CHAT_IN_PROMPT = 12          # earlier messages shown to a new agent session after a restart
-CHAT_TEXT_LIMIT = 300
-
-
-def build_prompt(library: str, table: Table, style: str | None, cards: list[dict],
-                 references: Path = REFERENCES, chat: list[dict] | None = None) -> str:
-    parts = [BRIEF, f"## Session library: {library}"]
-    if library == "html":
-        parts.append("This session uses plain HTML and SVG: there is no library and `lib` is absent. "
-                     "Charts are drawn with the DOM, SVG or canvas.")
-    cols = "\n".join(f"- {c['name']} ({c['type']})" for c in table.columns) or "- (no columns)"
-    parts.append(f"## Data\n{len(table.rows)} rows. Columns:\n{cols}\n\nSample rows (not the full data):\n"
-                 f"```json\n{json.dumps(table.samples(), indent=2, ensure_ascii=False, default=str)}\n```")
-    if style and style.strip():
-        parts.append(f"## Style note from the user\n{style.strip()}")
-    if cards:
-        listing = []
-        for c in cards:
-            head = f"### {c['id']}: {c['title']} ({c['kind']}, library {c['library']}"
-            head += f", iterates on {c['parent']})" if c.get("parent") else ")"
-            listing.append(f"{head}\n```js\n{c['code']}\n```")
-        parts.append("## Cards already on the board\n" + "\n\n".join(listing))
-    current = current_visual(cards)
-    if current:
-        cid = current["id"]
-        parts.append(
-            f"## The current visual: {cid}\n"
-            f"{cid} is the deliverable's visual as it looks today; the user opened the whiteboard to change it.\n"
-            f"- When the user asks for a change without naming an ID (\"make it horizontal\", \"try other "
-            f"colours\"), start from {cid}.\n"
-            f"- Every new variant of it is a new card with parent=\"{cid}\". {cid} itself is never changed.")
-    if chat:
-        lines = []
-        for m in chat[-CHAT_IN_PROMPT:]:
-            text = " ".join(m["text"].split())
-            text = text if len(text) <= CHAT_TEXT_LIMIT else text[:CHAT_TEXT_LIMIT] + "..."
-            lines.append(f"- {m['role']}: {text}")
-        parts.append("## Conversation so far (before the agent restarted; most recent last)\n" + "\n".join(lines))
-    ref = read_reference(library, references)
-    if ref:
-        parts.append(f"## Library notes: {library}\n{ref}")
-    elif library != "html":
-        parts.append(f"## Library notes: {library}\n`lib` is the {library} library's global object.")
-    if library != "html":
-        html_ref = read_reference("html", references)
-        if html_ref:
-            parts.append(f"## Library notes: html (for tables)\n{html_ref}")
-    return "\n\n".join(parts) + "\n"
-
-
 def current_visual(cards: list[dict]) -> dict | None:
     """The round-0 card: the deliverable's visual passed in with --existing."""
     return next((c for c in cards if int(c.get("round") or 0) == 0), None)
 
 
+def prompt_parts(library: str, table: Table, style: str | None, cards: list[dict],
+                 references: Path = REFERENCES, chat: list[dict] | None = None) -> list[tuple[str, str]]:
+    """The system prompt, as named parts (so --debug-usage can show what each costs)."""
+    parts = [("brief", BRIEF)]
+    lib_note = ("Session library: html (plain DOM/SVG/canvas, no lib)." if library == "html"
+                else f"Session library: {library}.")
+    cols = ", ".join(f"{c['name']} ({c['type']})" for c in table.columns) or "(none)"
+    samples = "\n".join(json.dumps(r, ensure_ascii=False, default=str) for r in table.samples())
+    parts.append(("data", f"{lib_note}\nData: {len(table.rows)} rows. Columns: {cols}\nSample rows:\n{samples}"))
+    if style and style.strip():
+        parts.append(("style", f"Style note from the user: {style.strip()}"))
+    if cards:
+        listing = []
+        for c in cards:
+            head = f"{c['id']} | {c['title']} ({c['kind']}" + (f", from {c['parent']})" if c.get("parent") else ")")
+            listing.append(f"{head}\n```js\n{c['code']}\n```")
+        parts.append(("cards", "Cards on the board:\n" + "\n".join(listing)))
+        cv = current_visual(cards)
+        if cv:
+            parts.append(("current_visual",
+                          f"{cv['id']} is the deliverable's visual as it is today. A change request that names no "
+                          f"ID starts from {cv['id']}; its variants are new cards with parent {cv['id']}."))
+    if chat:
+        lines = []
+        for m in chat[-CHAT_IN_PROMPT:]:
+            text = " ".join(m["text"].split())
+            lines.append(f"- {m['role']}: {text[:CHAT_TEXT_LIMIT]}{'...' if len(text) > CHAT_TEXT_LIMIT else ''}")
+        parts.append(("chat", "Conversation so far (before the agent restarted):\n" + "\n".join(lines)))
+    ref = read_reference(library, references)
+    if ref:
+        parts.append((f"{library}.md", f"## Library notes: {library}\n{ref}"))
+    elif library != "html":
+        parts.append(("library", f"`lib` is the {library} library's global object."))
+    if library != "html":
+        parts.append(("table_notes", TABLE_NOTES))
+    return parts
+
+
+def build_prompt(library: str, table: Table, style: str | None, cards: list[dict],
+                 references: Path = REFERENCES, chat: list[dict] | None = None) -> str:
+    return "\n\n".join(text for _, text in prompt_parts(library, table, style, cards, references, chat)) + "\n"
+
+
 def board_header(board: Board) -> str:
     cards = board.snapshot()
-    if cards:
-        current = current_visual(cards)
-        lines = [f"{c['id']} \"{c['title']}\" ({c['kind']}"
-                 + (", the current visual" if c is current else "")
-                 + (f", from {c['parent']})" if c.get("parent") else ")") for c in cards]
-        text = "Board now: " + "; ".join(lines) + "."
-    else:
-        text = "Board now: empty."
+    cv = current_visual(cards)
+    listed = "; ".join(f"{c['id']} \"{c['title']}\"" + (" (current visual)" if c is cv else "") for c in cards)
+    text = f"Board: {listed or 'empty'}."
     notes = board.take_notes()
     if notes:
-        text += " Since your last turn the user " + ", ".join(notes) + "."
+        text += " Since your last reply the user " + ", ".join(notes) + "."
+    text += f" Next ID: G{board.next_id}."
     return f"[{text}]"
 
 
-Sink = Callable[[dict], None]
-
-
 class Designer:
-    """Owns the agentlib session. All methods run on one asyncio loop (the server's background loop)."""
+    """Owns the model conversation. All methods run on one asyncio loop (the server's background loop)."""
 
     def __init__(self, board: Board, table: Table, style: str | None = None, *, engine: str = "claude",
-                 model: str | None = DEFAULT_MODEL, max_budget_usd: float | None = None,
-                 references: Path = REFERENCES):
+                 model: str | None = DEFAULT_MODEL, effort: str | None = DEFAULT_EFFORT,
+                 max_budget_usd: float | None = None, references: Path = REFERENCES,
+                 replies=None, debug: bool = False, engine_factory: Callable | None = None):
         self.board = board
         self.table = table
         self.style = style
-        self.engine = engine
+        self.engine_name = engine
         self.model = model
+        self.effort = effort
         self.max_budget_usd = max_budget_usd
         self.references = references
-        self._session = None
+        self.replies = replies
+        self.debug = debug
+        self.engine_factory = engine_factory or self._default_factory
+        self.engine = None               # the open engine session, if any
+        self.prompt = ""                 # the system prompt of the open session
+        self.turns = 0
         self._lock: asyncio.Lock | None = None
-        self._outbox: list[dict] = []
-        self.turn_cards: list[str] = []
-        self.add_card = self._make_tool()
-        # The fake engine reports 1 token per turn; for a testable page, estimate from text length instead.
-        self.estimate_usage = engine == "fake"
-        self._instructions = ""
-        self._fresh = False             # the current turn opened a new session (prompt sent in full)
         self._reported_model: str | None = None
+        self.turn_cards: list[str] = []
 
-    # ---- the tool ----------------------------------------------------------------------------------
-    def _make_tool(self):
-        board, outbox, turn_cards = self.board, self._outbox, self.turn_cards
-
-        async def add_card(title: str, code: str, kind: str | None = None, parent: str | None = None,
-                           replaces: str | None = None) -> str:
-            try:
-                if replaces and replaces.strip():
-                    card = board.replace(replaces.strip().upper(), title, code, kind)
-                    note = f"{card['id']} replaced with the fix."
-                else:
-                    card = board.add(title, code, kind or "chart", parent)
-                    note = f"Added {card['id']}."
-            except BoardError as e:
-                raise ValueError(str(e)) from None
-            outbox.append({"type": "card", **card})
-            turn_cards.append(card["id"])
-            return f"{note} ID: {card['id']}"
-
-        return tool(name="add_card", description=ADD_CARD_DESCRIPTION, schema=ADD_CARD_SCHEMA)(add_card)
+    def _default_factory(self):
+        return make_engine(self.engine_name, model=self.model, effort=self.effort,
+                           max_budget_usd=self.max_budget_usd, replies=self.replies)
 
     # ---- session -----------------------------------------------------------------------------------
-    def make_agent(self) -> Agent:
-        return Agent(
-            AGENT_NAME,
-            instructions=build_prompt(self.board.library, self.table, self.style, self.board.snapshot(),
-                                      self.references, self.board.chat_log()),
-            engine=self.engine, model=self.model, tools=[self.add_card],
-            permission_mode="never_ask", save_conversation=False, max_budget_usd=self.max_budget_usd,
-            cwd=str(self.board.out),
-        )
+    def prompt_parts(self) -> list[tuple[str, str]]:
+        return prompt_parts(self.board.library, self.table, self.style, self.board.snapshot(), self.references,
+                            self.board.chat_log())
 
-    async def _ensure_session(self):
-        if self._session is None:
-            agent = self.make_agent()
-            self._instructions = agent.instructions or ""
-            session = agent.session()
-            await session.__aenter__()
-            self._session = session
-            self._fresh = True
-        return self._session
-
-    # ---- usage -------------------------------------------------------------------------------------
-    def model_name(self) -> str:
-        if self.engine == "fake":
-            return "fake engine"
-        return self._reported_model or self.model or "engine default"
-
-    def stats(self) -> dict:
-        return {"usage": self.board.usage_view(), "model": self.model_name(), "round": self.board.round}
-
-    def _record(self, reply, message: str) -> None:
-        """Add one turn's usage to the total for this launch."""
-        fresh, self._fresh = self._fresh, False
-        if reply is None:
-            return
-        if self.estimate_usage:
-            prompt = len(self._instructions) // 4
-            out = len(reply.text or "") + sum(len(json.dumps(c.input)) for c in (reply.tool_calls or []))
-            tokens = {"input_tokens": max(1, len(message) // 4), "output_tokens": max(1, out // 4),
-                      "cache_read_tokens": 0 if fresh else prompt, "cache_write_tokens": prompt if fresh else 0}
-            # Made-up prices, only so the page shows a plausible figure in demos and tests.
-            cost = (tokens["input_tokens"] * 3 + tokens["output_tokens"] * 15 + tokens["cache_read_tokens"] * 0.3
-                    + tokens["cache_write_tokens"] * 3.75) / 1_000_000
-            self.board.add_usage(tokens, cost, self.model_name())
-            return
-        u = reply.usage
-        tokens = {k: getattr(u, k, 0) or 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens",
-                                                     "cache_write_tokens")} if u else {}
-        if reply.model:
-            self._reported_model = reply.model
-        self.board.add_usage(tokens, reply.cost_usd, reply.model)
+    async def _ensure_engine(self):
+        if self.engine is None:
+            parts = self.prompt_parts()
+            self.prompt = "\n\n".join(t for _, t in parts) + "\n"
+            engine = self.engine_factory()
+            await engine.start(self.prompt)
+            self.engine = engine
+            if self.debug:
+                sizes = ", ".join(f"{name} {len(text)}" for name, text in parts)
+                self._log(f"session start: system prompt {len(self.prompt)} chars ({sizes})")
+        return self.engine
 
     async def close(self) -> None:
-        if self._session is not None:
-            session, self._session = self._session, None
+        engine, self.engine = self.engine, None
+        if engine is not None:
             try:
-                await session.__aexit__(None, None, None)
+                await engine.close()
             except Exception:
                 pass
 
@@ -284,26 +186,59 @@ class Designer:
             self._lock = asyncio.Lock()
         return self._lock
 
+    # ---- usage -------------------------------------------------------------------------------------
+    def model_name(self) -> str:
+        if self.engine_name == "fake":
+            return "fake engine"
+        return self._reported_model or self.model or "engine default"
+
+    def stats(self) -> dict:
+        return {"usage": self.board.usage_view(), "model": self.model_name(), "round": self.board.round}
+
+    def _record(self, result: TurnResult | None, label: str, message: str) -> None:
+        if result is None:
+            return
+        if result.model and self.engine_name != "fake":
+            self._reported_model = result.model
+        self.turns += 1
+        self.board.add_usage(result.usage, result.cost_usd, result.model)
+        if self.debug:
+            u = result.usage
+            cost = "unknown" if result.cost_usd is None else f"${result.cost_usd:.4f}"
+            self._log(f"turn {self.turns} ({label}): model calls {result.api_calls}, input {u['input_tokens']}, "
+                      f"output {u['output_tokens']}, cache read {u['cache_read_tokens']}, cache write "
+                      f"{u['cache_write_tokens']}, cost {cost}, message {len(message)} chars, reply "
+                      f"{len(result.text)} chars")
+            for model, m in result.by_model.items():
+                self._log(f"    {model}: input {m['input_tokens']}, output {m['output_tokens']}, cache read "
+                          f"{m['cache_read_tokens']}, cache write {m['cache_write_tokens']}, ${m['cost_usd']:.4f}")
+            if self.turns == 1 and getattr(self.engine, "info", None):
+                self._log(f"    session given: {json.dumps(self.engine.info, default=str)}")
+
+    @staticmethod
+    def _log(text: str) -> None:
+        print(f"[whiteboard usage] {text}", file=sys.stderr, flush=True)
+
     # ---- turns -------------------------------------------------------------------------------------
     async def chat(self, message: str) -> AsyncIterator[dict]:
-        """One user message -> events for the page: text (delta), card, error, then done."""
+        """One user message -> events for the page: text, card, error, then done."""
         message = (message or "").strip()
         if not message:
             yield {"type": "error", "error": "Type a request first.", "message": "Type a request first."}
             yield {"type": "done", "cards": [], **self.stats()}
             return
-        reply: list[str] = []
+        said: list[str] = []
         try:
             async with self._get_lock():
                 self.board.new_round()
-                async for ev in self._turn(f"{board_header(self.board)}\n\n{message}"):
+                async for ev in self._turn(f"{board_header(self.board)}\n{message}", "chat"):
                     if ev["type"] == "text":
-                        reply.append(ev["text"])
+                        said.append(ev["text"])
                     yield ev
         finally:
             # Recorded after the turn, so a session started for this turn does not see it twice.
             self.board.add_chat("user", message)
-            self.board.add_chat("agent", "".join(reply))
+            self.board.add_chat("agent", "".join(said))
 
     async def fix(self, card_id: str, error: str) -> dict:
         """A card failed to render. Sent to the agent once per card; returns the fixed card if any."""
@@ -313,12 +248,11 @@ class Designer:
             return {"ok": True, "fixed": False, "card": None, "cards": [], "text": "",
                     "message": f"{card_id} {why}; not sent to the agent again.", **self.stats()}
         text, cards, errors = [], [], []
-        msg = (f"{board_header(self.board)}\n\nCard {card_id} failed to render in the browser with this error:\n"
-               f"{(error or 'unknown error').strip()[:2000]}\n\nFix it: call add_card once with "
-               f"replaces=\"{card_id}\" and the corrected code. Add no other cards.")
+        msg = (f"{board_header(self.board)}\n{card_id} failed in the browser: "
+               f"{(error or 'unknown error').strip()[:1500]}\nReply with @fix {card_id} and the corrected code.")
         try:
             async with self._get_lock():
-                async for ev in self._turn(msg):
+                async for ev in self._turn(msg, f"fix {card_id}"):
                     if ev["type"] == "text":
                         text.append(ev["text"])
                     elif ev["type"] == "card":
@@ -336,37 +270,63 @@ class Designer:
             out["error"] = "; ".join(errors)
         return out
 
-    async def _turn(self, message: str) -> AsyncIterator[dict]:
-        self._outbox.clear()
-        self.turn_cards.clear()
+    def _apply(self, ev: dict, said: list[int]) -> list[dict]:
+        """One parsed reply event -> page events (and a card on the board)."""
+        if ev["kind"] in ("text", "note"):
+            text = ev["text"] if ev["kind"] == "text" else f"({ev['text']})"
+            out = [{"type": "text", "text": ("\n" if said[0] else "") + text}]
+            out[0]["delta"] = out[0]["text"]
+            said[0] += 1
+            return out
         try:
-            session = await self._ensure_session()
-            async for ev in session.stream(message):
-                while self._outbox:
-                    yield self._outbox.pop(0)
-                if isinstance(ev, TextDelta) and ev.text:
-                    yield {"type": "text", "text": ev.text, "delta": ev.text}
-                elif ev.type == "done":
-                    reply = ev.reply
-                    self._record(reply, message)
-                    while self._outbox:
-                        yield self._outbox.pop(0)
-                    if reply.status == "error":
-                        msg = reply.error or f"The agent stopped ({reply.error_kind or 'error'})."
-                        yield {"type": "error", "error": msg, "message": msg}
-            while self._outbox:
-                yield self._outbox.pop(0)
-        except AgentError as e:
-            # A failed turn still used tokens: agentlib puts the partial turn in e.reply (cost unknown -> 0).
-            self._record(getattr(e, "reply", None), message)
-            while self._outbox:
-                yield self._outbox.pop(0)
-            # The agent's conversation is not saved, so it cannot be reopened: start afresh next turn. The new
-            # prompt lists every card on the board, so IDs still mean the same thing.
+            card = self._place(ev)
+        except BoardError as e:
+            return self._apply({"kind": "note", "text": f"A card was skipped: {e}"}, said)
+        self.turn_cards.append(card["id"])
+        return [{"type": "card", **card}]
+
+    def _place(self, ev: dict) -> dict:
+        b = self.board
+        if ev["fix"]:
+            if ev["fix"] in b.fixing:
+                return b.replace(ev["fix"], ev["title"], ev["code"])
+            # A fix nobody asked for: keep it as a variant of that card instead of changing it in place.
+            parent = ev["fix"] if b.get(ev["fix"]) else None
+            return b.add(ev["title"], ev["code"], "chart", parent)
+        try:
+            return b.add(ev["title"], ev["code"], ev["card_kind"], ev["parent"])
+        except BoardError:
+            if ev["parent"] is None:
+                raise
+            return b.add(ev["title"], ev["code"], ev["card_kind"], None)   # unknown parent: keep the card
+
+    async def _turn(self, message: str, label: str) -> AsyncIterator[dict]:
+        self.turn_cards.clear()
+        parser, result, said = ReplyParser(), None, [0]
+        try:
+            engine = await self._ensure_engine()
+            async for item in engine.send(message):
+                if isinstance(item, TurnResult):
+                    result = item
+                    continue
+                for ev in parser.feed(item):
+                    for out in self._apply(ev, said):
+                        yield out
+            for ev in parser.finish():
+                for out in self._apply(ev, said):
+                    yield out
+            self._record(result, label, message)
+            if result is not None and result.error:
+                yield {"type": "error", "error": result.error, "message": result.error}
+        except EngineError as e:
+            self._record(e.result, label, message)
+            # The conversation cannot be reopened: start afresh next turn. The new prompt lists every card on
+            # the board with its code, and the recent chat, so IDs still mean the same thing.
             await self.close()
-            msg = f"The agent could not run: {getattr(e, 'short', None) or e}"
+            msg = f"The agent could not run: {e}"
             yield {"type": "error", "error": msg, "message": msg}
         except Exception as e:  # setup problems show in the chat instead of killing the page
+            await self.close()
             msg = f"The agent could not run: {type(e).__name__}: {e}"
             yield {"type": "error", "error": msg, "message": msg}
         yield {"type": "done", "cards": list(self.turn_cards), **self.stats()}

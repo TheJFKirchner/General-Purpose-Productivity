@@ -45,7 +45,9 @@ python -m whiteboard --data "<tmp>/fedp-x/data.csv" --library echarts --out "<tm
 - Run it as a background command; it opens a browser page and keeps running until the user presses Done.
 - Tell the user: the whiteboard is open in their browser; ask for several visuals, iterate by ID ("G2 but stacked"), save the ones they like, then press Done.
 - It prints `Whiteboard: <address>` first. `--no-open` skips opening the browser (give the user that address); `--port N` picks the port (default: any free port).
-- First time on a machine: Python 3.10+ and `agentlib` installed (`pip install -e <repo>/agentlib`, then its one-time sign-in setup).
+- First time on a machine: Python 3.10+, `pip install claude-agent-sdk`, and Claude Code signed in (the agent uses that sign-in; no API key).
+- Model and effort: `--model` (alias or full id, default `sonnet`; env `WHITEBOARD_MODEL`) and `--effort` (`low` to `max`, default `low`; env `WHITEBOARD_EFFORT`). Keep the defaults unless the user asks.
+- `--debug-usage` (env `WHITEBOARD_DEBUG_USAGE=1`) prints model calls, tokens, cost and prompt part sizes per turn to stderr.
 - Fake engine (zero tokens, no sign-in, scripted replies): add `--fake`, or set `WHITEBOARD_FAKE=1`. Use it for testing only.
 - `python -m whiteboard --help` lists every flag.
 

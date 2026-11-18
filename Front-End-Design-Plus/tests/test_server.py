@@ -11,10 +11,7 @@ import urllib.request
 import pytest
 
 from conftest import PROJECT
-from agentlib import fake
-
 from whiteboard import cli, data, server
-from whiteboard.agent import AGENT_NAME
 
 
 def start(csv_file, out, *extra):
@@ -240,8 +237,7 @@ def test_heartbeat_keeps_alive_then_silence_ends_with_done_false(tmp_path, csv_f
 def test_running_agent_turn_counts_as_activity(tmp_path, csv_file, monkeypatch):
     monkeypatch.setenv("WHITEBOARD_IDLE_S", "0.5")
     app, thread = start(csv_file, tmp_path / "out")
-    fake.reset()
-    fake.script(AGENT_NAME, [lambda msg: time.sleep(1.5) or [fake.say("slow reply")]])
+    app.designer.replies = lambda msg: time.sleep(1.5) or "@say slow reply"
     try:
         _, text = post(app, "/api/chat", {"message": "take your time"})   # 1.5 s with no other request
         assert [k for k, _ in sse(text)][-1] == "done"

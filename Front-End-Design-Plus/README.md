@@ -17,8 +17,9 @@ In the page:
 ## Install
 
 1. Python 3.10 or later.
-2. Install `agentlib` from this repo and do its one-time sign-in setup: `pip install -e agentlib` from the repo folder, then follow [agentlib/setup/claude-setup.md](../agentlib/setup/claude-setup.md) and run `python -m agentlib.check`.
-3. Link the skill into your user skills folder (Windows, from a Command Prompt; replace the second path with where this repo is cloned):
+2. The Claude Agent SDK for Python: `pip install claude-agent-sdk`.
+3. Claude Code signed in on this machine; the agent uses that sign-in. No API key is needed. (Not needed for `--fake` or the tests.)
+4. Link the skill into your user skills folder (Windows, from a Command Prompt; replace the second path with where this repo is cloned):
 
    ```
    mklink /J "%USERPROFILE%\.claude\skills\front-end-design-plus" "<repo folder>\Front-End-Design-Plus"
@@ -37,11 +38,18 @@ The skill is user-invoked only: type `/front-end-design-plus` in Claude Code. It
   python -m whiteboard --data sample/orders.csv --library echarts --out <a new, empty temp folder>
   ```
 
-  Other flags: `--style "<note>"` (colours, font, light or dark), `--existing <file>` (the visual as it is today, as a `render` body or a recipe JSON; it is pinned as "Current visual", G1; the skill always passes it when the visual exists), `--no-open` (do not open a browser), `--port N`, and `--fake` (or `WHITEBOARD_FAKE=1`) for the scripted fake engine: no sign-in and no tokens. `python -m whiteboard --help` lists every flag.
+  Other flags: `--style "<note>"` (colours, font, light or dark), `--existing <file>` (the visual as it is today, as a `render` body or a recipe JSON; it is pinned as "Current visual", G1; the skill always passes it when the visual exists), `--no-open` (do not open a browser; or `WHITEBOARD_NO_OPEN=1`), `--port N` (default any free port; or `WHITEBOARD_PORT`), `--model` (alias or full id, default `sonnet`; or `WHITEBOARD_MODEL`), `--effort` (`low`, `medium`, `high`, `xhigh` or `max`, default `low`; or `WHITEBOARD_EFFORT`), `--debug-usage` (prints model calls, tokens, cost and prompt part sizes per turn to stderr; or `WHITEBOARD_DEBUG_USAGE=1`), and `--fake` (or `WHITEBOARD_FAKE=1`) for the scripted fake engine: no sign-in and no tokens. `python -m whiteboard --help` lists every flag.
 - **Finish:** press Done. The launcher exits and its last line is `RESULT: <path to result.json>`. If the tab is closed without Done, it stops by itself after about 90 seconds and `result.json` has `done: false`, still listing what was saved.
 - **No resuming:** every launch is a fresh board, and the output folder must be new or empty (a folder that already holds files is refused). To carry on from a visual saved last time, pass its `<id>.json` as `--existing`; it opens as the "Current visual".
 
 The output folder ends up with `result.json` (the saved IDs) and one `<id>.json` per saved visual. These are the only record of a session; unsaved cards and the chat are not kept.
+
+## Engine
+
+- This project is a deliberate, owner-approved exception to the workspace rule that agent code goes through `agentlib`. The agent runs directly on Claude Code through the Claude Agent SDK, in a minimal session: our prompt only, no tools, no settings, CLAUDE.md, memory, skills or MCP, low effort, one model call per turn.
+- It is Claude-only for now. All engine code is in `whiteboard/engine.py`; moving back to `agentlib` means changing that file only.
+- The agent has no tools: it replies in a plain-text card format that `whiteboard/reply.py` parses into cards.
+- The cost in the page's bottom bar is Claude Code's estimate from token counts, not a bill.
 
 ## The six libraries
 

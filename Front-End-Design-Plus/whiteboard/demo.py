@@ -3,7 +3,7 @@
 Each message gets a canned answer built from the real column names:
 - mentions a card ID (G3)      -> one iteration of it (parent set), drawn as a line
 - no ID, but a current visual   -> one iteration of the current visual (round-0 card from --existing)
-- a card error report           -> the fix, replacing the same ID
+- a card error report           -> the fix (@fix), replacing the same ID
 - anything else                 -> two cards: a chart and a table
 Good enough to click through the page; not a stand-in for the real agent.
 """
@@ -12,11 +12,7 @@ from __future__ import annotations
 import json
 import re
 
-from .agent import AGENT_NAME
 from .data import Table
-
-DEMO_TURNS = 500
-
 
 def _pick(table: Table) -> tuple[str, str | None]:
     cols = table.columns
@@ -71,30 +67,31 @@ def table_code() -> str:
             "el.appendChild(t);\n")
 
 
-def install(library: str, table: Table) -> None:
-    from agentlib import fake
+def block(kind: str, parent: str | None, title: str, code: str) -> str:
+    return f"@card {kind} {parent or '-'} | {title}\n```js\n{code}```\n"
 
+
+def replies(library: str, table: Table):
+    """A reply function for FakeEngine, answering in the agent's plain-text format."""
     x, y = _pick(table)
 
-    def turn(message: str):
-        fix = re.search(r"Card (G\d+) failed to render", message)
+    def turn(message: str) -> str:
+        fix = re.search(r"(G\d+) failed in the browser", message)
         if fix:
-            return [fake.call("add_card", {"title": "Fixed", "code": chart_code(library, table),
-                                           "replaces": fix.group(1)}),
-                    fake.say(f"(demo) Fixed {fix.group(1)}.")]
-        request = message.split("\n\n", 1)[-1]
+            return (f"@fix {fix.group(1)} | Fixed\n```js\n{chart_code(library, table)}```\n"
+                    f"@say (demo) Fixed {fix.group(1)}.\n")
+        request = message.split("\n", 1)[-1]
         ref = re.search(r"\bG(\d+)\b", request, re.I)
-        current = re.search(r"\bG(\d+) \"[^\"]*\" \([^)]*the current visual", message)
+        current = re.search(r"\bG(\d+) \"[^\"]*\" \(current visual\)", message)
+        nxt = re.search(r"Next ID: (G\d+)", message)
         if ref or current:  # a named card, else the current visual (session from --existing)
             parent = f"G{(ref or current).group(1)}"
-            return [fake.call("add_card", {"title": f"{parent} as a line", "parent": parent,
-                                           "code": chart_code(library, table, "line")}),
-                    fake.say(f"(demo) Added a line version of {parent}.")]
+            return (block("chart", parent, f"{parent} as a line", chart_code(library, table, "line"))
+                    + f"@say (demo) {nxt.group(1) if nxt else 'New card'}: a line version of {parent}.\n")
         what = f"{y or 'count'} by {x}"
-        return [fake.say("(demo) Two cards coming. "),
-                fake.call("add_card", {"title": what.capitalize(), "kind": "chart",
-                                       "code": chart_code(library, table)}),
-                fake.call("add_card", {"title": "First 50 rows", "kind": "table", "code": table_code()}),
-                fake.say("One chart and one table.")]
+        return (block("chart", None, what.capitalize(), chart_code(library, table))
+                + block("table", None, "First 50 rows", table_code())
+                + "@say (demo) One chart and one table.\n")
 
-    fake.script(AGENT_NAME, [turn] * DEMO_TURNS)
+    return turn
+

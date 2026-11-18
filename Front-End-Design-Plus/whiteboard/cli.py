@@ -1,15 +1,16 @@
 """Command line: python -m whiteboard --data <file> --library <name> --out <folder> [--style <text>]
-[--existing <file>] [--fake] [--no-open] [--port N] [--model M]
+[--existing <file>] [--fake] [--no-open] [--port N] [--model M] [--effort E] [--debug-usage]
 
 Exit codes: 0 after Done, Ctrl+C, or the page going away (result.json then has done: false); 2 for a bad
 launch (unsupported library, unreadable data, an output folder holding files from an earlier session).
-Every launch starts a fresh board; only saved visuals (<id>.json) and result.json are written. The last line printed is
-"RESULT: <out>/result.json"; that line is the signal the session is over.
+Every launch starts a fresh board; only saved visuals (<id>.json) and result.json are written. The last line
+printed is "RESULT: <out>/result.json"; that line is the signal the session is over.
 
-Environment (for tests and demos): WHITEBOARD_FAKE=1 (agentlib fake engine, scripted demo replies, zero
-tokens), WHITEBOARD_NO_OPEN=1 (no browser), WHITEBOARD_PORT, WHITEBOARD_MODEL, WHITEBOARD_BUDGET (USD cap
-for the session), WHITEBOARD_IDLE_S (default 90) and WHITEBOARD_CONNECT_S (default 600): how long the page
-may be silent, or absent at launch, before the session ends on its own.
+Environment (for tests and demos): WHITEBOARD_FAKE=1 (fake engine, scripted demo replies, zero tokens),
+WHITEBOARD_NO_OPEN=1 (no browser), WHITEBOARD_PORT, WHITEBOARD_MODEL, WHITEBOARD_EFFORT (default low),
+WHITEBOARD_BUDGET (USD cap for the session), WHITEBOARD_DEBUG_USAGE=1 (per-turn model calls, tokens, cost
+and prompt part sizes on stderr), WHITEBOARD_IDLE_S (default 90) and WHITEBOARD_CONNECT_S (default 600): how
+long the page may be silent, or absent at launch, before the session ends on its own.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ import sys
 from pathlib import Path
 
 from . import LIBRARIES
-from .agent import DEFAULT_MODEL, Designer
+from .agent import DEFAULT_EFFORT, DEFAULT_MODEL, Designer
 from .board import Board, OutputNotEmpty
 from .data import DataError, load
 from .server import CONNECT_S, IDLE_S, Whiteboard
@@ -100,11 +101,17 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--out", required=True, help="new or empty output folder (<id>.json per saved visual, result.json)")
     ap.add_argument("--style", default=None, help="optional style note for the agent")
     ap.add_argument("--existing", default=None, help="the visual being tweaked, e.g. a saved <id>.json (becomes G1, the current visual)")
-    ap.add_argument("--fake", action="store_true", help="agentlib fake engine: scripted replies, zero tokens")
+    ap.add_argument("--fake", action="store_true", help="fake engine: scripted replies, zero tokens")
     ap.add_argument("--no-open", action="store_true", help="do not open a browser")
     ap.add_argument("--port", type=int, default=int(os.environ.get("WHITEBOARD_PORT") or 0),
                     help="port (default: any free port)")
-    ap.add_argument("--model", default=os.environ.get("WHITEBOARD_MODEL") or DEFAULT_MODEL)
+    ap.add_argument("--model", default=os.environ.get("WHITEBOARD_MODEL") or DEFAULT_MODEL,
+                    help=f"model alias or full id (default {DEFAULT_MODEL}; env WHITEBOARD_MODEL)")
+    ap.add_argument("--effort", default=os.environ.get("WHITEBOARD_EFFORT") or DEFAULT_EFFORT,
+                    choices=["low", "medium", "high", "xhigh", "max"],
+                    help=f"model effort (default {DEFAULT_EFFORT}; env WHITEBOARD_EFFORT)")
+    ap.add_argument("--debug-usage", action="store_true",
+                    help="print model calls, tokens, cost and prompt part sizes per turn (stderr)")
     return ap.parse_args(argv)
 
 
@@ -129,14 +136,16 @@ def build(args: argparse.Namespace) -> Whiteboard:
         board.add(existing["title"], existing["code"], existing["kind"], card_id="G1", round=0)
 
     engine = "fake" if fake else "claude"
+    replies = None
     if fake:
         from . import demo
-        demo.install(library, table)
+        replies = demo.replies(library, table)
     else:
         clean_environment()
     budget = os.environ.get("WHITEBOARD_BUDGET")
     designer = Designer(board, table, args.style, engine=engine, model=None if fake else args.model,
-                        max_budget_usd=float(budget) if budget else None)
+                        effort=args.effort, max_budget_usd=float(budget) if budget else None, replies=replies,
+                        debug=bool(args.debug_usage) or flag("WHITEBOARD_DEBUG_USAGE"))
     return Whiteboard(board, table, designer, args.style, engine,
                       idle_s=seconds("WHITEBOARD_IDLE_S", IDLE_S), connect_s=seconds("WHITEBOARD_CONNECT_S", CONNECT_S))
 
@@ -161,7 +170,8 @@ def main(argv=None) -> int:
         print(f"whiteboard: cannot start the server: {e}", file=sys.stderr, flush=True)
         return 2
     b = app.board
-    mode = "fake engine (no tokens)" if app.engine == "fake" else f"model {args.model}"
+    mode = ("fake engine (no tokens)" if app.engine == "fake"
+            else f"model {args.model}, effort {args.effort}")
     print(f"Whiteboard: {url}", flush=True)
     start = "starting from the current visual (G1)" if b.cards else "new board"
     print(f"  library {b.library}, {len(app.table.rows)} rows, {start}, {mode}", flush=True)
