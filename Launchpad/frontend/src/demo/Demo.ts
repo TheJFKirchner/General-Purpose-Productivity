@@ -5,6 +5,7 @@
    websocket would. Used when the page URL has no ?port=&code= (also `npm run dev`). ?speed=N runs it N times faster.
    Loosely typed on purpose: it is a script, the store's reducer is the typed side. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { demoUsage } from './usageDemo';
 import type { GitRepo, UiMessage } from '../contract';
 import { actions, getState, sel } from '../store';
 import { baseName } from '../lib/format';
@@ -741,6 +742,8 @@ export class Demo {
         demoMcpOn(msg, this.mcp, ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
       case 'workflows_get': case 'workflow_save': case 'workflow_remove': case 'workflow_run': case 'workflow_stop': case 'workflow_review':
         demoWorkflowsOn(msg, this.wfs, ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
+      case 'usage_get': this.later(150, () => this.emit(demoUsage(msg as Extract<UiMessage, { type: 'usage_get' }>))); break;
+      case 'usage_stop': break;
       case 'set_autopilot': this.setAutopilot(msg.session_id, !!msg.on); break;
       case 'set_auto_answers': this.setAutoAnswers(msg.session_id, !!msg.on); break;
       case 'planner_promote': {

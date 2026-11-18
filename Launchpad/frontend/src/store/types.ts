@@ -5,11 +5,11 @@
 import type {
   ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CliChoiceEvent, CrewAgentDef, DirEntry, Directory, FileContentEvent,
   FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoleCase, RoleDecision, RoleEntry, RoundAnswer, RunUsage,
-  ReviewTest, ConnectionTestEvent, McpImportCandidate, McpServer, Workflow, WorkflowRun, WorkflowsListEvent, NamedItem, SettingValue, SkillInfo, StepStatus, VisualOption,
+  ReviewTest, ConnectionTestEvent, McpImportCandidate, McpServer, Workflow, WorkflowRun, WorkflowsListEvent, UsageDataEvent, UsageRequest, NamedItem, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
 /** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / CLI switch. */
-export type View = 'plan' | 'missions' | 'crew' | 'files' | 'workflows' | 'settings';
+export type View = 'plan' | 'missions' | 'crew' | 'files' | 'workflows' | 'usage' | 'settings';
 /** Which side of the chat screen's switch is showing. */
 export type ChatSide = 'planner' | 'code';
 export type SessionStatus = 'planning' | 'running' | 'done' | 'stopped' | 'failed' | 'blocked';
@@ -255,6 +255,9 @@ export interface WorkflowsState {
   runs: Record<string, WorkflowRun>; latest: Record<string, string>; error: string | null; runErrors: Record<string, string>;
 }
 
+/** The Usage screen: the last usage_data for the latest request (null until one arrives), how many usage_get requests are unanswered, and the latest request (`want`: a reply for another request is ignored). */
+export interface UsageState { data: Omit<UsageDataEvent, 'type'> | null; pending: number; want: UsageRequest | null }
+
 /** An import candidate list for one source: loading until mcp_imports answers. */
 export type McpImportList = { loading: true } | { loading: false; servers: McpImportCandidate[] };
 
@@ -439,6 +442,7 @@ export interface AppState {
   roleOpen: string | null;
   mcp: McpState;
   wf: WorkflowsState;
+  usage: UsageState;
   connTests: Record<string, ConnTest>;
   mcpImports: Record<string, McpImportList>;
   crewRemoving: string | null;            // agent_remove sent, waiting for agent_removed

@@ -15,6 +15,7 @@ import Aside from './views/Aside/Aside';
 import VisualsPanel from './views/Visuals/Visuals';
 import Settings from './views/Settings/Settings';
 import Workflows from './views/Workflows/Workflows';
+import Usage from './views/Usage/Usage';
 
 export default function App() {
   const view = useLaunchpad(st => st.ui.view);
@@ -46,6 +47,7 @@ export default function App() {
           <Slot v="crew" view={view}><Crew /></Slot>
           <Slot v="files" view={view}><Files /></Slot>
           <Slot v="workflows" view={view}><Workflows /></Slot>
+          <Slot v="usage" view={view}><Usage /></Slot>
           <Slot v="settings" view={view}><Settings /></Slot>
           <Aside />
           <VisualsPanel />

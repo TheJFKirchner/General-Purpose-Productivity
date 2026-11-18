@@ -38,6 +38,9 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
   with three servers (two local demo servers that really pass their test, one URL server that fails), assignments
   for the Builder and copy-reviewer, and a sample Claude Code setup to import from (never the real home folder).
   Agents run on the fake engine, which cannot take MCP servers, so assignments do nothing in the demo
+- Usage screen: seed_usage() writes five weeks of made-up usage-log lines (usage_history: plans, CLI chats, workflow
+  runs, reviews, drafting; Sonnet / Opus / Haiku; one CLI) into the demo's own temp home; the demo's own fake calls are
+  logged on top of it (CLI "Fake engine (demo)")
 """
 from __future__ import annotations
 
@@ -341,6 +344,112 @@ def seed_tally(tally, store) -> None:
                 "dir_id": shop["dir_id"], "folder": shop["name"], "project": shop["path"],
                 "session_id": f"20261101-0900{k}{i}-demo", "run": 1, "step": i, "title": title, "skills": skills,
                 "outcome": outcome, "questions": questions, "assumptions": assumptions, "timed_out": timed_out})
+
+
+# ---------------------------------------------------------------- usage history (sample, temp only)
+USAGE_DAYS = 35                      # made-up history: five weeks up to today
+# model id -> $ per million tokens (input, output, cache read, cache write); made-up but believable
+USAGE_MODELS = {"claude-sonnet-4-5": (3.0, 15.0, 0.30, 3.75), "claude-opus-4-5": (5.0, 25.0, 0.50, 6.25),
+                "claude-haiku-4-5": (1.0, 5.0, 0.10, 1.25)}
+USAGE_PLANS = ("Refresh the landing page", "Order export to CSV", "Fix the checkout totals", "Tidy the product pages",
+               "Newsletter sign-up form", "Speed up the search page", "Returns policy page", "Stock alert emails")
+USAGE_ROLES = ("frontend-dev", "copy-editor", "data-migrator")
+
+
+def usage_history(dirs: list[dict], today=None, seed: int = 17) -> list[dict]:
+    """Believable made-up usage-log lines for the demo (app/usagelog.py line format): plan sessions (planner on Sonnet,
+    sometimes promoted to Opus; orchestrator, builders, Explorer, Visualizer, the copy-reviewer folder agent), CLI
+    chats, workflow runs, role reviews and drafting calls over USAGE_DAYS days, more on weekdays. One CLI only (the
+    others are not usable), so the variety is in models and agents."""
+    import datetime as dt
+    import random
+    from .agents import crew
+    from .usagelog import VERSION
+    rng = random.Random(seed)
+    today = today or dt.date.today()
+    dirs = dirs or [{"dir_id": None, "path": "", "name": "Demo shop"}]
+    rows: list[dict] = []
+    now = dt.datetime.now()
+
+    def call(t, sid, kind, label, d, role, agent, model, size=1.0, step=None, stage=None, run_folder=None):
+        rates = USAGE_MODELS[model]
+        u = {"input_tokens": int(rng.randint(6, 60) * size), "output_tokens": int(rng.randint(400, 3500) * size),
+             "cache_read_tokens": int(rng.randint(15_000, 160_000) * size),
+             "cache_write_tokens": int(rng.randint(1_500, 25_000) * size)}
+        cost = sum(u[k] * r for k, r in zip(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"),
+                                            rates)) / 1e6
+        rows.append({"v": VERSION, "ts": t.astimezone().isoformat(timespec="seconds"), "session": sid, "kind": kind,
+                     "label": label, "dir_id": d["dir_id"], "folder": d["path"], "folder_name": d["name"],
+                     "run_folder": run_folder, "role": role, "agent": agent, "step": step, "stage": stage,
+                     "model": model, "cli": "claude", "engine": "claude", "cost": round(cost, 6), **u})
+        return t + dt.timedelta(minutes=rng.randint(1, 9), seconds=rng.randint(0, 59))
+
+    for back in range(USAGE_DAYS - 1, -1, -1):
+        day = today - dt.timedelta(days=back)
+        weekday = day.weekday() < 5
+        for k in range(rng.randint(2, 5) if weekday else rng.randint(0, 2)):
+            t = dt.datetime.combine(day, dt.time(rng.randint(8, 18), rng.randint(0, 59)))
+            if t > now:
+                continue
+            d = dirs[rng.randrange(len(dirs))]
+            sid = f"{t.strftime('%Y%m%d-%H%M%S')}-demo{k}"
+            kind = rng.choices(("plan", "chat", "workflow", "review", "other"), (5, 4, 2, 1, 1))[0]
+            folder = Path(d["path"]) / ".launchpad" / sid if d["path"] else None
+            rf = str(folder) if folder else None
+            if kind == "plan":
+                label = rng.choice(USAGE_PLANS)
+                top = rng.random() < 0.4
+                for i in range(rng.randint(2, 5)):
+                    t = call(t, sid, kind, label, d, "planner", crew.display("planner"),
+                             "claude-opus-4-5" if top and i else "claude-sonnet-4-5", 0.6, run_folder=rf)
+                if rng.random() < 0.5:
+                    t = call(t, sid, kind, label, d, "astronaut", crew.display("astronaut"), "claude-haiku-4-5", 0.8,
+                             run_folder=rf)
+                if rng.random() < 0.3:
+                    t = call(t, sid, kind, label, d, "visual", crew.display("visual"), "claude-haiku-4-5", 0.4,
+                             run_folder=rf)
+                if rng.random() < 0.8:                                          # approved and run
+                    steps = rng.randint(2, 4)
+                    for n in range(1, steps + 1):
+                        t = call(t, sid, kind, label, d, "orchestrator", crew.display("orchestrator"),
+                                 "claude-sonnet-4-5", 0.3, run_folder=rf)
+                        worker = "Copy reviewer" if n == steps and rng.random() < 0.4 else crew.display("builder")
+                        for _ in range(rng.randint(1, 3)):
+                            t = call(t, sid, kind, label, d, "builder", worker, "claude-sonnet-4-5", 1.2, step=n,
+                                     run_folder=rf)
+            elif kind == "chat":
+                model = "claude-opus-4-5" if rng.random() < 0.3 else "claude-sonnet-4-5"
+                for _ in range(rng.randint(2, 8)):
+                    t = call(t, sid, kind, "CLI chat", d, "pilot", crew.display("pilot"), model, 0.9, run_folder=rf)
+            elif kind == "workflow":
+                wid = f"{t.strftime('%Y%m%d-%H%M%S')}-{rng.randrange(16**4):04x}"
+                sid = f"wf-{wid}"
+                label = f"Weekly stock report, run {wid}"
+                for n, (agent, stage, model) in enumerate((
+                        (crew.display("astronaut"), "Gather this week's numbers", "claude-haiku-4-5"),
+                        (crew.display("builder"), "Write the report", "claude-sonnet-4-5"),
+                        ("Copy reviewer", "Check the wording", "claude-sonnet-4-5")), 1):
+                    t = call(t, sid, kind, label, d, "builder", agent, model, 1.0, step=n, stage=stage,
+                             run_folder=str(Path(d["path"]) / "reports" / wid) if d["path"] else None)
+            elif kind == "review":
+                sid = f"reviewer-{rng.randrange(16**8):08x}"
+                role = rng.choice(USAGE_ROLES)
+                for _ in range(rng.randint(1, 2)):
+                    t = call(t, sid, kind, f"Role review: {role}", d, "reviewer", crew.display("role_reviewer"),
+                             "claude-sonnet-4-5", 0.7)
+            else:
+                sid = f"drafter-{rng.randrange(16**8):08x}"
+                call(t, sid, kind, "Agent drafting", d, "drafter", crew.display("drafter"), "claude-haiku-4-5", 0.2)
+    return rows
+
+
+def seed_usage(log, store) -> None:
+    """Made-up usage history for the Usage screen, in the demo's own temp home only (never a real log); the demo home
+    is wiped at every --fake launch, so it is always five weeks up to today."""
+    from .tally import in_temp
+    if log.folder is None or not in_temp(log.folder) or log.files():
+        return
+    log.append_many(usage_history(store.directories()))
 
 
 # ---------------------------------------------------------------- MCP library + Claude Code import (sample, temp only)

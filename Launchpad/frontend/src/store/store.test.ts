@@ -88,6 +88,7 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   mcp_library: { servers: [{ name: 'fs', kind: 'command', config: { command: 'npx' }, status: 'connected', detail: null, tool_count: 3, tested_at: null }], assignments: { 'launchpad-builder': ['fs'] },
     connections: [{ id: 'claude_code', name: 'Claude Code' }], import_sources: [{ id: 'claude_code', name: 'Claude Code' }] },
   mcp_imports: { source: 'claude_code', servers: [{ name: 'gh', kind: 'url', summary: 'https://x', exists: false }] },
+  usage_data: { buckets: ['2026-11-16'], series: [{ key: 'claude', label: 'Claude', cost: [1], input_tokens: [1], output_tokens: [1], cache_read_tokens: [1], cache_write_tokens: [1] }], totals: { cost: 1, input_tokens: 1, output_tokens: 1, cache_read_tokens: 1, cache_write_tokens: 1 }, sessions: [] },
   workflows_list: { workflows: [{ id: 'd1/w1', slug: 'w1', name: 'Study', description: '', folder: 'd1', folder_name: 'proj', path: 'workflows/w1.json', output_folder: 'out', output_path: '/out', unattended_default: false,
     inputs: [{ name: 'date', label: 'Date', kind: 'date', required: true, default: '', options: [], help: '' }], files: [], stages: [{ index: 0, kind: 'review', title: 'Check', checklist: [] }], warnings: [], can_run: true, running_run_id: 'r1', last_run_id: 'r1' }],
     folders: [{ dir_id: 'd1', name: 'proj', path: '/proj', is_primary: true }], agents: { d1: [{ name: 'launchpad-builder', display_name: 'Builder', purpose: 'building', builtin: true }] }, reviewer_name: 'Sam' },

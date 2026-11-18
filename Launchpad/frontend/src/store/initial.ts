@@ -52,6 +52,7 @@ export function initialState(): AppState {
     roles: { loaded: false, threshold: 2, resurface: 5, entries: [] }, reviews: {}, roleOpen: null,
     mcp: { loaded: false, servers: [], assignments: {}, connections: [], importSources: [], error: null }, connTests: {}, mcpImports: {},
     wf: { openReview: null, loaded: false, list: [], folders: [], agents: {}, reviewerName: '', runs: {}, latest: {}, error: null, runErrors: {} },
+    usage: { data: null, pending: 0, want: null },
     crewRemoving: null, crewError: null, crewFlash: null,
     settings: null, fx: initialFx(), files: {}, editor: initialEditor(), git: initialGit(),
   };

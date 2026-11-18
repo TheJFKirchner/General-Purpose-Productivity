@@ -24,7 +24,7 @@ async function mount(wide = true) {
 it('lists the views in order with Settings apart, marks the active one and switches on click and keys', async () => {
   const { host, root } = await mount();
   const tabs = [...host.querySelectorAll('[role=tab]')].map(t => t.id);
-  expect(tabs).toEqual(['tab-plan', 'tab-missions', 'tab-crew', 'tab-files', 'tab-workflows', 'tab-settings']);
+  expect(tabs).toEqual(['tab-plan', 'tab-missions', 'tab-crew', 'tab-files', 'tab-workflows', 'tab-usage', 'tab-settings']);
   expect(host.querySelector('.side-bottom #tab-settings')).toBeTruthy();
   expect(host.querySelector('#tab-plan')!.getAttribute('aria-selected')).toBe('true');
   await act(async () => { (host.querySelector('#tab-crew') as HTMLElement).click(); });

@@ -163,6 +163,8 @@ def build_settings(args):
         demo.install(project)
         demo_app_root()                        # the editor in the demo edits a copy, never the real agent files
         demo.seed_tally(Tally.beside(store), store)    # sample undefined roles, in the demo's own temp home only
+        from .usagelog import UsageLog
+        demo.seed_usage(UsageLog.beside(store), store)  # five weeks of made-up usage history, temp home only
         import tempfile
         from . import mcpimport
         from .mcplib import McpLibrary
@@ -175,12 +177,13 @@ def build_settings(args):
 
 def reset_demo_home(home: Path) -> None:
     """Best-effort wipe of the fake demo's own per-user folder (settings.json with folders + use counts, backups, the
-    undefined-roles tally and its review cases, the MCP library)."""
+    undefined-roles tally and its review cases, the MCP library, the usage log)."""
     import shutil
     from .mcplib import FILE_NAME as MCP_FILE
     from .tally import CASES_DIR, FILE_NAME
+    from .usagelog import DIR_NAME as USAGE_DIR
     for p in (home / "settings.json", home / "backups", home / FILE_NAME, home / (FILE_NAME + ".lock"),
-              home / CASES_DIR, home / MCP_FILE, home / (MCP_FILE + ".lock")):
+              home / CASES_DIR, home / MCP_FILE, home / (MCP_FILE + ".lock"), home / USAGE_DIR):
         try:
             if p.is_dir():
                 shutil.rmtree(p)

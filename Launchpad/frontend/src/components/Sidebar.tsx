@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type View } from '../store';
 import { lsGet, lsSet, LS_SIDEBAR } from '../lib/storage';
-import { FolderTree, MessagesSquare, Orbit, PanelLeftClose, PanelLeftOpen, Settings, Users, Workflow } from './icons';
+import { ChartColumnStacked, FolderTree, MessagesSquare, Orbit, PanelLeftClose, PanelLeftOpen, Settings, Users, Workflow } from './icons';
 
 type NavEntry = { view: View; label: string; icon: ReactNode; title?: string; group: 'main' | 'bottom' };
 
@@ -16,6 +16,7 @@ const NAV: NavEntry[] = [
   { view: 'crew', label: 'Crew', icon: <Users />, group: 'main' },
   { view: 'files', label: 'Files', icon: <FolderTree />, group: 'main' },
   { view: 'workflows', label: 'Workflows', icon: <Workflow />, group: 'main', title: 'Workflows: studies and reports you run more than once, with review stops' },
+  { view: 'usage', label: 'Usage', icon: <ChartColumnStacked />, group: 'main', title: 'Usage: what the agents cost, by day or week, and the sessions behind it' },
   { view: 'settings', label: 'Settings', icon: <Settings />, group: 'bottom', title: 'Settings: connections, MCP servers, connected folders, timers, models' },
 ];
 

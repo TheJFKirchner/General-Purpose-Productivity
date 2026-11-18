@@ -5,9 +5,13 @@
   done | denied | failed; Done -> usage + cost added (pushed)
 - failed turns: add_reply(AgentError.reply) keeps whatever usage the engine saw; open calls close as failed
 - agent_usage keeps the old planner-header fields (agent, cache_read, cache_write, input, output, last)
+- usage log: add_reply also writes one line per reply to the per-user usage log (hub.usage, app/usagelog.py), the single
+  place every agent call is recorded; usage_info {label?, folder?, stage?} = what the caller knows that the hub cannot
+  find (a review's role, a drafting call's folder, a workflow stage's title)
 """
 from __future__ import annotations
 
+import sys
 import uuid
 
 from agentlib.events import Done, ToolCall, ToolResult
@@ -34,6 +38,7 @@ class Meter:
         self.tool_calls = 0
         self.open_calls: dict[str, dict] = {}      # tool call id -> its "started" activity event
         self.by_model: dict[str, dict] = {}         # model id -> {"usage": Usage, "cost_usd": float} (cumulative)
+        self.usage_info: dict = {}                  # extra usage-log fields: label, folder, stage (app/usagelog.py)
         hub.meters.append(self)
 
     def event(self) -> dict:
@@ -141,8 +146,23 @@ class Meter:
             cur["cost_usd"] += float(v.get("cost_usd") or 0.0)
         if count_tools:
             self.tool_calls += len(reply.tool_calls)
+        await self._log(reply)
         await self.push()
         await self.hub.emit_totals(self)
+
+    async def _log(self, reply) -> None:
+        """One line in the per-user usage log (app/usagelog.py) for the reply just added; never stops a run."""
+        log = getattr(self.hub, "usage", None)
+        if log is None:
+            return
+        try:
+            log.record(self.hub, self, reply)
+        except Exception as e:  # noqa: BLE001 -- a log that cannot be written must not break the agent
+            print(f"Launchpad: usage log line not written ({type(e).__name__}: {e})", file=sys.stderr)
+            return
+        changed = getattr(self.hub, "usage_changed", None)
+        if changed is not None:
+            await changed()
 
     def tokens(self) -> int:
         return self.usage.total_input_tokens + self.usage.output_tokens

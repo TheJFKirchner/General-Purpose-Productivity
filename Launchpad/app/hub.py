@@ -10,7 +10,7 @@
   report_to_planner, run_stop, new_session, chat_new, chat_message, chat_set_mode, chat_stop,
   visual_pick, visual_tweak, visual_retry, set_autopilot, set_auto_answers, planner_promote, planner_choose, cli_choose,
   agent_draft, agent_create, agent_remove, chat_from_plan, set_agent_skills,
-  git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py)
+  git_scan, git_refresh, git_fetch, git_commit, git_push (Repos panel, app/gitrepos.py), usage_get, usage_stop
 - Agent use counter: count_use(name) -> store + agent_uses event (planner session, explore, step, run, visual
   render, CLI chat)
 - Planner picker (app/agents/planner/choices.py): planner_choose -> a planner nobody has written to yet takes any
@@ -43,6 +43,9 @@
   workflow_stop, workflow_review. A run's Missions events use its mission id ("wf-<run id>"): session_like(id) finds
   a session or a workflow run's owner (Auto answers, auto_answer lines, activity logs); run_stop / set_autopilot /
   set_auto_answers on that id act on the run; connect replays runs after the sessions
+- Usage screen (app/usagelog.py; per-user log <home>/.launchpad/usage/, written by Meter.add_reply; in memory without a
+  user file and under --fake unless that home is a temp folder): usage_get -> usage_data (remembered in usage_watch and
+  pushed again, debounced, after new spend via usage_changed) · usage_stop forgets it. usage_running(sid) = in progress now
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -61,6 +64,7 @@ from . import mcpimport, mcplib
 from . import plan as plan_mod
 from . import skills as skills_mod
 from . import tally as tally_mod
+from . import usagelog
 from .activity import log_line
 from .agents import crew, folder_agents
 from .agents.claude_code import choices as cli_choices
@@ -81,6 +85,7 @@ from .workflows.manager import Workflows
 
 ACTIVITY_SNAPSHOT = 300          # recent activity events replayed to a reconnecting UI
 AUTO_LINES_SNAPSHOT = 200        # recent auto_answer lines (builder questions answered by Auto answers) replayed too
+USAGE_PUSH_DELAY_S = 2.0         # unasked usage_data at most this often while the Usage screen is open
 
 
 class LaunchSession:
@@ -233,6 +238,11 @@ class Hub:
         self.mcp = mcplib.McpLibrary.beside(self.store)  # MCP library, beside settings.json (app/mcplib.py)
         if settings.engine == "fake" and not tally_mod.in_temp(self.mcp.path):
             self.mcp = mcplib.McpLibrary(None)           # the demo never writes a real MCP library
+        self.usage = usagelog.UsageLog.beside(self.store)  # per-user usage log, beside settings.json (app/usagelog.py)
+        if settings.engine == "fake" and not tally_mod.in_temp(self.usage.folder):
+            self.usage = usagelog.UsageLog(None)         # the demo never writes a real usage log
+        self.usage_watch: dict | None = None             # the latest usage_get (pushed again on new spend) until usage_stop
+        self.usage_push: asyncio.Task | None = None      # the pending unasked usage_data
         self.mcp_started = False                         # background test of every server (once per launch)
         self.mcp_warned: set = set()                     # (owner, who, server, reason) warnings already shown
         self.connection_tests: set[str] = set()          # connection tests running now
@@ -378,6 +388,44 @@ class Hub:
         elif meter.chat_id:
             await self.emit(costs.chat_usage(self.meters, meter.chat_id))
 
+    # ---------------------------------------------------------------- usage screen (app/usagelog.py)
+    def usage_running(self, sid: str) -> bool:
+        """Is that usage-log session in progress in this launch right now (a run, a planner / chat turn, a workflow
+        run incl. one waiting at a review, a review)?"""
+        ls = self.sessions.get(sid)
+        if ls is not None and (ls.running or ls.chat.lock.locked()):
+            return True
+        run = self.workflows.mission(sid)
+        if run is not None and run.in_progress:
+            return True
+        chat = self.chats.get(sid)
+        if chat is not None and (chat.lock.locked() or (chat.turn_task is not None and not chat.turn_task.done())):
+            return True
+        return any(usagelog.meter_key(m) == sid and (m.status == "working" or (m.status == "waiting"
+                                                                                and m.role != "planner"))
+                   for m in self.meters)
+
+    async def usage_event(self, req: dict, *, pushed: bool = False) -> dict:
+        """usage_data for a request; the log is read off the event loop (only new bytes after the first read)."""
+        running = {sid for sid in [*self.sessions, *self.workflows.missions, *self.chats,
+                                   *(usagelog.meter_key(m) for m in self.meters)] if self.usage_running(sid)}
+        return await asyncio.to_thread(usagelog.build, self.usage, req, running=running.__contains__, pushed=pushed)
+
+    async def usage_changed(self) -> None:
+        """A usage line was written: while a Usage screen is open (usage_watch), push usage_data again, at most once
+        per USAGE_PUSH_DELAY_S (one pending push collects every line written meanwhile)."""
+        if self.usage_watch is None or (self.usage_push is not None and not self.usage_push.done()):
+            return
+        self.usage_push = self._spawn(self._usage_push_later())
+
+    async def _usage_push_later(self) -> None:
+        await asyncio.sleep(USAGE_PUSH_DELAY_S)
+        if self.usage_watch is not None:
+            try:
+                await self.emit(await self.usage_event(self.usage_watch, pushed=True))
+            except Exception as e:  # noqa: BLE001 -- a push is a convenience; never break anything
+                print(f"Launchpad: usage_data push failed ({type(e).__name__}: {e})", file=sys.stderr)
+
     async def emit_crew(self) -> None:
         agents = [{"name": m.name, "role": m.role, "status": m.status, "session_id": m.session_id}
                   for m in self.meters if m.status != "done" or (m.role == "planner" and m.session_id == self.current.id)]
@@ -461,6 +509,11 @@ class Hub:
             await self.workflows.handle(kind, msg)
         elif kind == "test_connection":
             await self.test_connection(str(msg.get("id") or ""))
+        elif kind == "usage_get":
+            self.usage_watch = usagelog.clean_request(msg)
+            await self.emit(await self.usage_event(self.usage_watch))
+        elif kind == "usage_stop":
+            self.usage_watch = None
         elif kind in ("get_mcp", "save_mcp_server", "remove_mcp_server", "test_mcp_server", "list_mcp_imports",
                       "import_mcp_servers", "set_agent_mcp"):
             await self._mcp_message(kind, msg)

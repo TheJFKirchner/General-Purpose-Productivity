@@ -100,7 +100,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:var(--s
 .sidebar.collapsed .side-txt{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .sidebar.collapsed .nbadge{position:absolute;top:var(--sp-0);right:var(--sp-0);margin:0;min-width:var(--icon-md);height:var(--icon-md);padding:0 var(--sp-1);font-size:var(--fs-2xs)}
 .hdr-right{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2);flex:1 1 0;min-width:0;font-size:var(--fs-sm);color:var(--muted)}
-.usage{display:inline-flex;align-items:center;gap:var(--sp-1-5);min-width:0;min-height:var(--ctl-sm);padding:0 var(--sp-3);background:var(--card);border-radius:var(--r-pill);font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:var(--shadow-xs);cursor:default}
+.usage{display:inline-flex;align-items:center;gap:var(--sp-1-5);min-width:0;min-height:var(--ctl-sm);padding:0 var(--sp-3);background:var(--card);border-radius:var(--r-pill);font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:var(--shadow-xs);cursor:pointer;border:0;font:inherit;color:inherit;transition:box-shadow var(--t-fast)}
+.usage:hover{box-shadow:var(--shadow-sm)}
 .u-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .usage .lucide{width:var(--icon-sm);height:var(--icon-sm)}
 .conn{flex:none;display:inline-flex;align-items:center;gap:var(--sp-1-5);white-space:nowrap}

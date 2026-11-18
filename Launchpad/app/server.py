@@ -578,6 +578,85 @@
       pick_directory -> directory_picked {path} picks an output folder anywhere (only when settings
       can_pick_directory; the page uses the path as typed text and does NOT send add_directory for it); anything
       else = type the path (absolute paths are fine)
+
+  Usage screen (Features/2026-11-17-usage-monitor.md; back end app/usagelog.py)
+    The usage log: one line per agent call (every reply the app meters: planner, Explorer, orchestrator, builders and
+    folder step agents, Visualizer, CLI chat, Role Reviewer, drafter, workflow stages), written by app/meter.py at the
+    same moment the call is added to the live totals, to <home>/.launchpad/usage/<YYYY-MM>.jsonl (per user, never in a
+    project, never sent anywhere). Earlier spend is not reconstructed. The live totals (usage scope app / session /
+    chat, agent_usage, run_finished, report costs) are unchanged and still summed by app/costs.py; the log is a record
+    beside them, and a session's lines add up to the same figures (cost + planner_cost of usage scope session; cost of
+    usage scope chat)
+    UI -> here
+    usage_get {period?: "7d"|"30d"|"90d"|"all" (default "30d"), bucket?: "day"|"week" (default "day"),
+               split?: "cli"|"model"|"agent" (default "agent"), session?: session id|null (narrows everything but the
+               sessions list to that one session)} -> usage_data
+      - the page sends it when the Usage screen opens and whenever a control or the narrowing changes. The server
+        remembers the latest request and pushes usage_data for it again, unasked, when new spend is recorded (at most
+        once every 2 s, a few seconds after the call), until usage_stop. An unknown value is replaced by its default
+        (request in the reply says what was used)
+    usage_stop {}  (the Usage screen closed: no more unasked usage_data; nothing is sent back)
+    here -> UI
+    usage_data {request: {period, bucket, split, session}, range: {start: "YYYY-MM-DD", end: "YYYY-MM-DD"}|null,
+                buckets: [bucket], series: [series], totals: {cost, input_tokens, output_tokens, cache_read_tokens,
+                cache_write_tokens, calls, sessions}, sessions: [session], sessions_total, measures: [measure],
+                skipped_lines, pushed: bool, error?}
+      - reply to usage_get; also pushed (pushed true) when new spend is recorded while a usage_get is remembered (to
+        every client: a page whose controls no longer match request ignores it or sends usage_get again)
+      - range = the dates covered, inclusive, local time: 7d / 30d / 90d = today and the 6 / 29 / 89 days before it;
+        all = the day of the first recorded call to today; null when nothing at all is recorded (then buckets,
+        series and sessions are [] and every total 0: show "nothing recorded yet")
+      - every date and time is the computer's local time zone; weeks start on Monday
+      - bucket = {key, label, start, end, partial}: every day (or week) of the range in order, empty ones included
+        (values 0). day: key = start = end = "YYYY-MM-DD", label "17 Nov". week: key = that week's Monday
+        "YYYY-MM-DD", label "Week of 16 Nov"; start / end = the days of that week inside the range (the first and last
+        week may be cut by the range: partial true, else false). A label gains the year ("17 Nov 2025") when it is not
+        the current year
+      - series = {key, label, values: {cost: [..], input_tokens: [..], output_tokens: [..], cache_read_tokens: [..],
+        cache_write_tokens: [..]}, totals: {cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+        calls}, members: [labels]}: one array entry per bucket, same order as buckets, all five measures (switching the
+        measure needs no request). cost in dollars (six decimals), tokens as integers; input_tokens = uncached input only
+        - split cli: key = the harness id ("claude", "cursor"; "fake" = the zero-token demo engine), label "Claude",
+          "Cursor", "Fake engine (demo)"
+        - split model: key = label = the model's readable name ("Sonnet 4.5", "Opus 4.1", "Haiku 4.5"; an id it
+          cannot read is shown as written). One reply that used several models is split per model (agentlib's
+          usage_by_model), so each model carries its own tokens and cost
+        - split agent: key = label = the agent's display name: "Planner", "Explorer", "Orchestrator", "Builder",
+          "Visualizer", "CLI", "Role Reviewer", "Agent drafter", a folder agent's display name ("Copy reviewer"); calls made
+          inside a workflow run are their own groups: "Workflow: <agent display name>" ("Workflow: Builder")
+        - order: by total cost over the request, largest first. At most 7 series: when there are more than 7 groups the
+          6 largest are named and the rest are summed into ONE series {key: "__other__", label: "Other", members: the
+          labels it holds}; members = [] for named series. Ranking is always by cost (whatever measure is shown)
+      - totals = the whole request (range, and the session when narrowed): the sum of every series; calls = agent calls;
+        sessions = how many sessions those calls belong to
+      - measures = [{key, label, unit}] in this order: cost "Cost" usd, input_tokens "Input tokens" tokens,
+        output_tokens "Output tokens" tokens, cache_read_tokens "Cache read tokens" tokens, cache_write_tokens "Cache
+        write tokens" tokens (the measure picker's options)
+      - session = {id, kind: plan|chat|workflow|review|other, kind_label: "Plan"|"CLI chat"|"Workflow run"|"Review"|
+        "Other", label, folder: {dir_id, name, path}|null, run_folder: absolute path|null, started_at, last_at, running,
+        cost, planner_cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, calls, agents: [names],
+        models: [names], clis: [labels]}
+        - id = the session id (plan: the planning session's id; workflow run: "wf-<run id>", its Missions id; CLI chat:
+          the chat id; review / other: the agent run's own id, e.g. "reviewer-1a2b3c4d") = what usage_get session takes
+        - label: plan = the plan's name ("Planning session" before a draft); workflow = "<workflow name>, run <id>"
+          (+ " (test run)"); CLI chat = "CLI chat"; review = "Role review: <role>"; other = what it was ("Agent
+          drafting")
+        - folder = the connected folder it ran in (primary; dir_id may no longer be connected); null for calls with no
+          folder. run_folder = its session / chat / workflow-run record folder when it has one
+        - started_at / last_at = ISO local times of its first / latest recorded call; running = it is in progress in
+          this launch right now (a run, a planner or chat turn, a workflow run, a review); false otherwise
+        - cost and the token counts = EVERY agent of that session, planner included (all its calls in the log, not cut
+          to the range); planner_cost = the planner's share (so cost - planner_cost = the app's own session total,
+          usage scope session cost); calls = agent calls
+        - listed: every session with at least one call inside the range (ignores the session narrowing, so the table
+          stays put while a row is selected), from every folder; running first, then latest last_at first; at most
+          500 (sessions_total = how many there were)
+      - skipped_lines = damaged or half-written log lines that were skipped while reading (they never stop a read)
+      - error = the log could not be read at all (permissions, disk): lists are then [] and totals 0
+    CSV ("Download CSV", built by the page from the last usage_data; no message): what the chart shows, one row per
+      bucket and series (empty values as 0), columns: period start, period end (bucket start / end), group (series
+      label; "Other" as shown), cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens; header
+      row first. A narrowed chart exports only that session
   HTTP
     GET / (page; Content-Security-Policy inherited by the visual frames: no network beyond this app)
       = frontend/dist/index.html (React build) when it exists, else prototype/launchpad-orbit.html (vanilla)

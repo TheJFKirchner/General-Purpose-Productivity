@@ -466,6 +466,32 @@ export interface WorkflowsListEvent {
 }
 /** Pushed whenever a run changes; the latest run of every workflow is replayed on connect. A refused workflow_run: run null + workflow_id + error. */
 export interface WorkflowRunStateEvent { type: 'workflow_run_state'; run: WorkflowRun | null; error?: string | null; workflow_id?: string }
+/* ---------- Usage screen (cost and session monitoring); the app/server.py header ("Usage screen") is authoritative ---------- */
+export type UsagePeriod = '7d' | '30d' | '90d' | 'all';
+export type UsageBucket = 'day' | 'week';
+export type UsageSplit = 'cli' | 'model' | 'agent';
+/** The five measures the chart can show; each series carries all of them per bucket, so switching needs no new request. */
+export type UsageMeasure = 'cost' | 'input_tokens' | 'output_tokens' | 'cache_read_tokens' | 'cache_write_tokens';
+export const USAGE_MEASURES: UsageMeasure[] = ['cost', 'input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens'];
+export type UsageTotals = Record<UsageMeasure, number>;
+/** One bar position: day key = start = end "YYYY-MM-DD"; week key = that Monday; partial = a week cut by the range. label is the server's English one. */
+export interface UsageBucketInfo { key: string; label: string; start: string; end: string; partial: boolean }
+/** One series (a CLI, model or agent). The smaller ones are summed by the server into one series with key "__other__" (label "Other", members = what it holds). Arrays align with `buckets`. */
+export interface UsageSeries { key: string; label: string; values: Record<UsageMeasure, number[]>; totals: UsageTotals & { calls: number }; members: string[] }
+export const USAGE_OTHER_KEY = '__other__';
+export type UsageSessionKind = 'plan' | 'chat' | 'workflow' | 'review' | 'other';
+export interface UsageSession extends UsageTotals {
+  id: string; kind: UsageSessionKind; kind_label: string; label: string; folder: { dir_id: string; name: string; path: string } | null; run_folder: string | null;
+  started_at: string; last_at: string; running: boolean; planner_cost: number; calls: number; agents: string[]; models: string[]; clis: string[];
+}
+export interface UsageRequest { period: UsagePeriod; bucket: UsageBucket; split: UsageSplit; session: string | null }
+/** Reply to usage_get; also pushed (pushed true) when new spend is recorded while a usage_get is remembered. range null = nothing recorded at all. */
+export interface UsageDataEvent {
+  type: 'usage_data'; request?: UsageRequest; range?: { start: string; end: string } | null; buckets: UsageBucketInfo[]; series: UsageSeries[];
+  totals: UsageTotals & { calls?: number; sessions?: number }; sessions: UsageSession[]; sessions_total?: number;
+  measures?: { key: UsageMeasure; label: string; unit: string }[]; skipped_lines?: number; pushed?: boolean; error?: string | null;
+}
+
 export interface ReviewStartedEvent { type: 'review_started'; review_id: string; role: string; model: string; harness: string }
 export interface ReviewProgressEvent { type: 'review_progress'; review_id: string; role: string; phase: 'reading' | 'asking' | 'finalising'; text: string }
 /** The finished case (also replayed on connect: the latest case per role). */
@@ -499,7 +525,7 @@ export type ServerEvent =
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
   | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent
   | RolesListEvent | ReviewStartedEvent | ReviewProgressEvent | ReviewCaseEvent | ReviewFailedEvent | ReviewRefusedEvent
-  | ReviewDecidedEvent | ConnectionTestEvent | McpLibraryEvent | McpImportsEvent | WorkflowsListEvent | WorkflowRunStateEvent;
+  | ReviewDecidedEvent | ConnectionTestEvent | McpLibraryEvent | McpImportsEvent | WorkflowsListEvent | WorkflowRunStateEvent | UsageDataEvent;
 
 export type ServerEventType = ServerEvent['type'];
 
@@ -512,7 +538,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
   'git_repos', 'git_result',
   'roles_list', 'review_started', 'review_progress', 'review_case', 'review_failed', 'review_refused', 'review_decided',
-  'connection_test', 'mcp_library', 'mcp_imports', 'workflows_list', 'workflow_run_state',
+  'connection_test', 'mcp_library', 'mcp_imports', 'workflows_list', 'workflow_run_state', 'usage_data',
 ];
 
 /* ---------- UI -> here ---------- */
@@ -572,6 +598,8 @@ export type UiMessage =
   | { type: 'import_mcp_servers'; source: string; names: string[] }
   | { type: 'set_agent_mcp'; agent: string; servers: string[] }
   | { type: 'workflows_get' }
+  | { type: 'usage_get'; period: UsagePeriod; bucket: UsageBucket; split: UsageSplit; session?: string | null }
+  | { type: 'usage_stop' }
   | { type: 'workflow_save'; folder: Id; workflow: WorkflowDraft; original_id?: string }
   | { type: 'workflow_remove'; id: string }
   | { type: 'workflow_run'; id: string; inputs: Record<string, string>; test: boolean; unattended: boolean }

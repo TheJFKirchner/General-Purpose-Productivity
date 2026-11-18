@@ -1,0 +1,52 @@
+/* Usage styles: controls, totals row, the chart and its legend, the sessions table. Tokens only; the chart's own
+   series colours live in lib/usageChart.ts (a chart cannot read CSS variables). The chart box takes the width it is given,
+   so it follows the sidebar and the window; at narrow widths the controls wrap and the table scrolls sideways. */
+.us-body{flex:1;min-height:0;overflow-y:auto;padding:var(--sp-4) var(--sp-5) var(--sp-7);display:flex;flex-direction:column;gap:var(--sp-4)}
+.us-note{padding:var(--sp-3) 0;font-size:var(--fs-sm);color:var(--muted)}
+.us-controls{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-5);align-items:flex-end}
+.us-ctl{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.us-ctl-l{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--overline)}
+.us-ctl .seg{margin-left:0}
+.us-ctl select.field{min-height:var(--ctl-sm)}
+
+.us-totals{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--sp-2-5)}
+.us-totals li{display:flex;flex-direction:column;gap:var(--sp-0);padding:var(--sp-2-5) var(--sp-3);background:var(--card);border:1.5px solid var(--line);border-radius:var(--r-md);min-width:0}
+.us-totals li.on{border-color:var(--indigo);background:var(--indigo-soft)}
+.us-tl{font-size:var(--fs-xs);color:var(--muted)}
+.us-totals b{font-family:var(--disp);font-size:var(--fs-xl);font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+
+.us-chipline{display:flex}
+.us-chipline .chip{height:auto;min-height:var(--chip-h);white-space:normal;gap:var(--sp-1-5)}
+.us-chipx{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:inherit;cursor:pointer;padding:var(--sp-0);border-radius:var(--r-pill)}
+.us-chipx:hover{background:var(--card)}
+.us-chipx .lucide{width:var(--icon-xs);height:var(--icon-xs)}
+
+.us-chartwrap{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r-xl);padding:var(--sp-3) var(--sp-4) var(--sp-3);min-width:0;transition:opacity var(--t-base)}
+.us-chartwrap.busy{opacity:.6}
+.us-chart{width:100%;height:320px;min-width:0}
+.us-chartwait{height:320px;display:flex;align-items:center;justify-content:center}
+.us-legend{list-style:none;margin:var(--sp-2) 0 0;padding:0;display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-4);font-size:var(--fs-sm)}
+.us-legend li{display:inline-flex;align-items:center;gap:var(--sp-1-5);min-width:0}
+.us-sw{width:var(--icon-sm);height:var(--icon-sm);border-radius:var(--r-xs);flex:none}
+.us-ln{overflow-wrap:anywhere}
+.us-lv{color:var(--muted);font-variant-numeric:tabular-nums}
+.us-foot{margin:0;font-size:var(--fs-sm);color:var(--muted);max-width:80ch}
+
+.us-h2{margin:var(--sp-2) 0 0;font-family:var(--disp);font-size:var(--fs-lg);font-weight:600}
+.us-tablewrap{overflow-x:auto;border:1.5px solid var(--line);border-radius:var(--r-lg);background:var(--card);scrollbar-width:thin}
+.us-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.us-table th,.us-table td{padding:var(--sp-2) var(--sp-3);text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+.us-table tbody tr:last-child td{border-bottom:0}
+.us-table th{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--overline);white-space:nowrap}
+.us-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.us-table td.num{white-space:nowrap}
+.us-table tbody tr{cursor:pointer}
+.us-table tbody tr:hover{background:var(--bg)}
+.us-table tbody tr.on{background:var(--indigo-soft)}
+.us-sub{display:block;font-size:var(--fs-xs);color:var(--muted);overflow-wrap:anywhere}
+.us-sortb,.us-rowb{border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;padding:0;text-align:inherit;text-transform:inherit;letter-spacing:inherit}
+.us-sortb{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.us-sortb .lucide{width:var(--icon-xs);height:var(--icon-xs)}
+.us-rowb{white-space:nowrap;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
+.us-rowb:hover{text-decoration-color:var(--indigo)}
+@media (max-width:1240px){.us-chart,.us-chartwait{height:280px}}

@@ -18,6 +18,7 @@ import { fxKey, isFinished, problemText, qOpen, sLabel, sName } from './selector
 import { initialCrewForm } from './initial';
 import { onConnectionTest, onMcpImports, onMcpLibrary } from './mcp';
 import { onWorkflowRunState, onWorkflowsList } from './workflows';
+import { onUsageData } from './usage';
 import { onReviewCase, onReviewDecided, onReviewFailed, onReviewProgress, onReviewRefused, onReviewStarted, onRolesList, reviewOf } from './roles';
 import { REDUCED, baseName, modelName } from '../lib/format';
 import { ADDABLE_PURPOSES, S_LABEL, WRITE_TOOLS } from '../lib/labels';
@@ -117,6 +118,7 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'connection_test': onConnectionTest(c, ev); break;
     case 'mcp_library': onMcpLibrary(c, ev); break;
     case 'mcp_imports': onMcpImports(c, ev); break;
+    case 'usage_data': onUsageData(c, ev); break;
     case 'workflows_list': onWorkflowsList(c, ev); break;
     case 'workflow_run_state': onWorkflowRunState(c, ev); break;
     case 'review_started': onReviewStarted(c, ev); break;

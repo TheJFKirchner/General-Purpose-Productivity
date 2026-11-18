@@ -571,6 +571,7 @@ class WorkflowRun:
         await self.set_stage(k, "running")
         await self.changed()
         meter = ctx.meter = Meter(self.hub, session_id=self.mission_id, role="builder", name=ctx.agent_name, step=n)
+        meter.usage_info = {"stage": st["title"]}                     # the usage log names the stage
         self.meters.append(meter)
         await meter.set_status("working")
         cost_before = meter.cost_usd

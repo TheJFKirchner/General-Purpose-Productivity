@@ -1,7 +1,7 @@
 /* Top bar: brand, connection, whole-app usage, avatar. The section navigation is the left sidebar (Sidebar.tsx).
    A coral bar under it says when the connection to the back end is lost. */
 import { useComputed, useLaunchpad } from '../store';
-import { sel } from '../store';
+import { actions, sel } from '../store';
 import { tokShort, usd } from '../lib/format';
 import { Wallet, WifiOff } from './icons';
 
@@ -21,7 +21,7 @@ export function Header() {
         </div>
         <div className="hdr-right">
           <span className="conn" role="status" title={conn.text}><span className="dot" style={{ background: conn.color }} /><span className="conn-txt">{conn.text}</span></span>
-          <span className="usage" data-tip="allagents" tabIndex={0} aria-label={`Whole app usage ${cost}, ${toks}`}><Wallet /><span className="u-txt"><span className="u-lbl">Whole app · </span>{cost} · {toks}</span></span>
+          <button type="button" className="usage" data-tip="allagents" aria-label={`Whole app usage ${cost}, ${toks}. Open the Usage screen`} onClick={() => actions.setView('usage')}><Wallet /><span className="u-txt"><span className="u-lbl">Whole app · </span>{cost} · {toks}</span></button>
           <span className="avatar" role="img" aria-label="You">J</span>
         </div>
       </header>

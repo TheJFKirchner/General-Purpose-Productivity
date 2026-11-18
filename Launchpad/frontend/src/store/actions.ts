@@ -4,7 +4,7 @@
 import type { AgentFields, ChatMode, Id, McpConfig, McpKind, ReviewAnswerOut, RoundAnswer, WorkflowDraft } from '../contract';
 import { getState, later, run, send, toast, type Ctx } from './core';
 import type { ChatSide, QueueItem, View } from './types';
-import type { GitOp, UiMessage } from '../contract';
+import type { GitOp, UiMessage, UsageBucket, UsagePeriod, UsageSplit } from '../contract';
 import {
   addBubble, addSys, answerQ, chatBubble, closeEditor, curChatOf, dropItem, fxBoot, fxLoad, fxSelect, noteVisPick, openVis,
   requestCrew, sendChat, setChatMode, setCurrent, submitIfDone,
@@ -608,6 +608,15 @@ export const actions = {
   importMcpServers(source: string, names: string[]) { if (names.length) send({ type: 'import_mcp_servers', source, names }); },
   /* ---------- workflows ---------- */
   workflowsGet() { send({ type: 'workflows_get' }); },
+  /** Ask for the Usage screen's data (the server answers usage_data, and re-sends it unasked when new spend is recorded, until usage_stop). */
+  usageGet(q: { period: UsagePeriod; bucket: UsageBucket; split: UsageSplit; session?: string | null }) {
+    run(c => {
+      const session = q.session || null;
+      if (send({ type: 'usage_get', period: q.period, bucket: q.bucket, split: q.split, session })) { c.st.usage.pending += 1; c.st.usage.want = { period: q.period, bucket: q.bucket, split: q.split, session }; }
+    });
+  },
+  /** The Usage screen was left: no more unasked usage_data. */
+  usageStop() { run(c => { c.st.usage.want = null; send({ type: 'usage_stop' }); }); },
   /** From an Incoming review card: show the Workflows tab with that run's review open. */
   openWorkflowReview(runId: string) { run(c => { c.st.ui.view = 'workflows'; c.st.wf.openReview = runId; send({ type: 'workflows_get' }); }); },
   clearOpenReview() { run(c => { c.st.wf.openReview = null; }); },
