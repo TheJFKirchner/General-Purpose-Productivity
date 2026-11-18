@@ -21,7 +21,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var state = {
     library: 'echarts', columns: [], style: '', rows: [],
-    cards: [], saved: {}, busy: false, reported: {}, frames: [], loading: false, beat: null
+    cards: [], saved: {}, busy: false, reported: {}, frames: [], loading: false, beat: null,
+    round: 0, expanded: false, requests: [], model: '', engine: '', usage: null
   };
 
   // ---------- helpers ----------
@@ -182,7 +183,8 @@
     node.appendChild(head);
 
     var sub = el('div', 'card-sub');
-    sub.appendChild(el('span', 'from', card.parent ? 'from ' + card.parent : ''));
+    if (card.round === 0) sub.appendChild(el('span', 'tag current', 'Current visual'));
+    else sub.appendChild(el('span', 'from', card.parent ? 'from ' + card.parent : ''));
     sub.appendChild(el('span', 'tag saved', 'Saved'));
     node.appendChild(sub);
 
@@ -236,32 +238,121 @@
         upsertCard(res.card);
         if (res.text) addMsg('agent', res.text);
       }
+      if (res) updateUsage(res);
     }).catch(function () { /* the card keeps showing its error */ });
+  }
+
+  // The model (state.cards) is the source of truth. layout() decides which cards are on screen
+  // and positions them with CSS `order`, so a card's frame is only ever created or destroyed,
+  // never moved (moving an iframe in the DOM reloads it, which would flicker).
+  var STORE_KEY = 'whiteboard.showEarlier';
+  function loadExpanded() { try { return window.localStorage.getItem(STORE_KEY) === '1'; } catch (e) { return false; } }
+  function storeExpanded(v) { try { window.localStorage.setItem(STORE_KEY, v ? '1' : '0'); } catch (e) { /* ignored */ } }
+
+  function roundOf(c) { return typeof c.round === 'number' ? c.round : 0; }
+  function shorten(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+  function roundLabel(r) {
+    if (r === 0) return 'Starting visual';
+    var req = state.requests[r - 1];
+    return 'Round ' + r + (req ? ': ' + shorten(req, 60) : '');
+  }
+  function nodeFor(id) { return $('grid').querySelector('[data-id="' + id + '"]'); }
+  function dropNode(node) { if (node._handle) node._handle.destroy(); node.remove(); }
+
+  function layout() {
+    var grid = $('grid');
+    var cards = state.cards;
+    var hasRounds = cards.some(function (c) { return typeof c.round === 'number'; });
+    var latest = Math.max(state.round, 0);
+    var current = cards.filter(function (c) { return c.round === 0; });   // the card from --existing
+    var saved = cards.filter(function (c) { return c.round !== 0 && state.saved[c.id]; });
+    var rest = cards.filter(function (c) { return c.round !== 0 && !state.saved[c.id]; });
+    var byRound = {};
+    rest.forEach(function (c) { var r = hasRounds ? roundOf(c) : latest; (byRound[r] = byRound[r] || []).push(c); });
+    var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return y - x; });
+
+    var sections = [], earlier = 0;
+    if (current.length) sections.push({ key: 'current', label: 'Current visual', cards: current });
+    if (saved.length) sections.push({ key: 'saved', label: 'Saved', cards: saved });
+    var showLabels = hasRounds && (saved.length > 0 || current.length > 0 || state.expanded);
+    rounds.forEach(function (r) {
+      if (r >= latest || state.expanded) {
+        sections.push({ key: 'r' + r, label: showLabels ? roundLabel(r) : '', cards: byRound[r] });
+      } else {
+        earlier += byRound[r].length;
+      }
+    });
+    var earlierTotal = 0;
+    rounds.forEach(function (r) { if (r < latest) earlierTotal += byRound[r].length; });
+
+    // Reconcile card nodes.
+    var wanted = {};
+    sections.forEach(function (sec, si) {
+      sec.cards.forEach(function (c, i) { wanted[c.id] = si * 10000 + 1 + i; });
+    });
+    Array.prototype.slice.call(grid.querySelectorAll('.card')).forEach(function (n) {
+      if (!(n.dataset.id in wanted)) dropNode(n);
+    });
+    var added = [];
+    cards.forEach(function (c) {
+      if (c.id in wanted && !nodeFor(c.id)) { var n = cardNode(c); grid.appendChild(n); added.push(n); }
+    });
+    cards.forEach(function (c) {
+      if (c.id in wanted) nodeFor(c.id).style.order = wanted[c.id];
+    });
+    // Reconcile group headers.
+    var keep = {};
+    sections.forEach(function (sec, si) {
+      if (!sec.label) return;
+      keep[sec.key] = true;
+      var h = grid.querySelector('.group-label[data-key="' + sec.key + '"]');
+      if (!h) { h = el('div', 'group-label'); h.dataset.key = sec.key; grid.appendChild(h); }
+      if (h.textContent !== sec.label) h.textContent = sec.label;
+      h.style.order = si * 10000;
+    });
+    Array.prototype.slice.call(grid.querySelectorAll('.group-label')).forEach(function (h) {
+      if (!keep[h.dataset.key]) h.remove();
+    });
+
+    // Earlier-cards control and counts.
+    var bar = $('earlier');
+    if (earlierTotal > 0) {
+      bar.hidden = false;
+      $('earlier-btn').textContent = state.expanded ? 'Hide earlier cards' : 'Show earlier cards (' + earlierTotal + ')';
+    } else {
+      bar.hidden = true;
+    }
+    var shown = Object.keys(wanted).length, total = cards.length;
+    $('empty').hidden = total > 0;
+    $('grid').hidden = total === 0;
+    $('count').textContent = !total ? '' : (shown === total ? '(' + total + ')' : shown + ' of ' + total);
+    return added;
   }
 
   function upsertCard(card) {
     if (card.saved) state.saved[card.id] = true;
+    if (typeof card.round === 'number' && card.round > state.round) state.round = card.round;
     var i = state.cards.findIndex(function (c) { return c.id === card.id; });
     if (i >= 0) state.cards[i] = card; else state.cards.push(card);
-    var grid = $('grid');
-    var fresh = cardNode(card);
-    var old = grid.querySelector('[data-id="' + card.id + '"]');
-    if (old) {
+    var old = nodeFor(card.id);
+    if (old) {                       // visible: redraw this one card in place
+      var fresh = cardNode(card);
+      fresh.style.order = old.style.order;
       if (old._handle) old._handle.destroy();
-      grid.replaceChild(fresh, old);
-    } else {
-      grid.appendChild(fresh);
-      if (!state.loading) fresh.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-    refreshBoard();
+      $('grid').replaceChild(fresh, old);
+    }                                // hidden: the model is updated, nothing to show
+    if (state.loading) return;
+    var added = layout();
+    if (added.length && added[0].dataset.id === card.id) added[0].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  function refreshBoard() {
-    var n = state.cards.length;
-    $('empty').hidden = n > 0;
-    $('grid').hidden = n === 0;
-    $('count').textContent = n ? '(' + n + ')' : '';
-  }
+  function refreshBoard() { layout(); }
+
+  $('earlier-btn').addEventListener('click', function () {
+    state.expanded = !state.expanded;
+    storeExpanded(state.expanded);
+    layout();
+  });
 
   // POST and read the {ok, error} reply; failures are shown in the chat.
   function action(path, id, what) {
@@ -282,16 +373,15 @@
       if (want) state.saved[card.id] = true; else delete state.saved[card.id];
       var node = $('grid').querySelector('[data-id="' + card.id + '"]');
       if (node) applySaved(node, want);
+      layout();
     });
   }
   function deleteCard(card) {
     action('/api/delete', card.id, 'delete').then(function (ok) {
       if (!ok) return;
-      var node = $('grid').querySelector('[data-id="' + card.id + '"]');
-      if (node) { if (node._handle) node._handle.destroy(); node.remove(); }
       state.cards = state.cards.filter(function (c) { return c.id !== card.id; });
       delete state.saved[card.id];
-      refreshBoard();
+      layout();
     });
   }
 
@@ -407,6 +497,7 @@
   }
 
   function sendMessage(message) {
+    state.requests.push(message);
     addMsg('user', message);
     setBusy(true);
     var current = null;
@@ -426,6 +517,8 @@
         }
       } else if (evt === 'error') {
         addMsg('error', textOf(p) || 'Something went wrong.');
+      } else if (evt === 'done') {
+        if (p && typeof p === 'object') updateUsage(p);
       }
     }
     return fetch('/api/chat', {
@@ -489,6 +582,53 @@
     });
   });
 
+  // ---------- usage footer ----------
+  function tokens(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n); }
+  function shortModel(m) {
+    var k = /(opus|sonnet|haiku)/i.exec(m || '');
+    return k ? k[1].toLowerCase() : (m || '');
+  }
+  function updateUsage(o) {
+    if (!o || typeof o !== 'object') return;
+    if (o.model) state.model = o.model;
+    if (o.usage && typeof o.usage === 'object') state.usage = o.usage;
+    renderUsage();
+  }
+  function renderUsage() {
+    var u = state.usage, line = $('usage-line'), det = $('usage-detail');
+    var fake = /fake/i.test(state.engine) || /fake/i.test(state.model);
+    var parts = [];
+    if (fake) parts.push('fake engine');
+    else if (state.model) parts.push(shortModel(state.model));
+    if (!u) {
+      parts.push('no usage yet');
+    } else {
+      var total = typeof u.total_tokens === 'number' ? u.total_tokens
+        : (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_read_tokens || 0) + (u.cache_write_tokens || 0);
+      parts.push(tokens(total) + ' tokens');
+      if (fake) parts.push('no cost');
+      else if (typeof u.cost_usd === 'number') parts.push('about $' + (u.cost_usd < 0.1 ? u.cost_usd.toFixed(3) : u.cost_usd.toFixed(2)) + ' (estimate)');
+      else parts.push('cost not available');
+    }
+    line.textContent = parts.join(' · ');
+    det.textContent = '';
+    if (u) {
+      [['Input', u.input_tokens], ['Output', u.output_tokens], ['Cache read', u.cache_read_tokens],
+       ['Cache write', u.cache_write_tokens], ['Turns', u.turns]].forEach(function (r) {
+        if (typeof r[1] !== 'number') return;
+        var row = el('div', 'usage-row');
+        row.appendChild(el('span', null, r[0]));
+        row.appendChild(el('span', null, r[0] === 'Turns' ? String(r[1]) : r[1].toLocaleString()));
+        det.appendChild(row);
+      });
+      det.appendChild(el('div', 'usage-note', 'Cost is an estimate from token counts, not a bill.'));
+    }
+    $('usage').title = (state.model ? state.model + '. ' : '') + 'Click for the token breakdown. Cost is an estimate.';
+  }
+  $('usage').addEventListener('click', function () {
+    $('usage-detail').hidden = !$('usage-detail').hidden;
+  });
+
   // ---------- start-up ----------
   function renderMeta() {
     var m = $('meta');
@@ -528,16 +668,21 @@
       state.library = s.library || 'echarts';
       state.columns = s.columns || [];
       state.style = s.style || '';
+      state.engine = s.engine || '';
+      state.expanded = loadExpanded();
       state.rows = Array.isArray(d) ? d : (d && (d.rows || d.data)) || [];
       var cards = s.cards || [];
       renderMeta();
+      updateUsage(s);
       (s.chat || []).forEach(function (m) {
         if (m && m.text) addMsg(m.role === 'user' ? 'user' : 'agent', m.text);
+        if (m && m.role === 'user') state.requests.push(m.text);
       });
       state.loading = true;
+      state.round = typeof s.round === 'number' ? s.round : 0;
       cards.forEach(upsertCard);
       state.loading = false;
-      refreshBoard();
+      layout();
       $('grid').scrollTop = 0;
       if (cards.length) {
         addMsg('note', (s.chat || []).length
@@ -548,7 +693,7 @@
     }).catch(function (e) {
       $('meta').textContent = 'Could not load the session: ' + e.message;
       addMsg('error', 'Could not load the session: ' + e.message);
-      refreshBoard();
+      layout();
     });
   }
   init();

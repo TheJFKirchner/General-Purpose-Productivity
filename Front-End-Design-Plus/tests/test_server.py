@@ -55,7 +55,9 @@ def test_session_data_chat_save_done(tmp_path, csv_file):
         s = json.loads(body)
         assert status == 200 and ctype.startswith("application/json")
         assert s["library"] == "echarts" and s["style"] == "" and s["cards"] == [] and s["engine"] == "fake"
-        assert set(s) == {"library", "columns", "style", "cards", "saved", "chat", "row_count", "engine"}
+        assert set(s) == {"library", "columns", "style", "cards", "saved", "chat", "row_count", "engine",
+                          "round", "usage", "model"}
+        assert s["round"] == 0 and s["model"] == "fake engine" and s["usage"]["turns"] == 0
         assert s["chat"] == []
         assert s["columns"] == [{"name": "region", "type": "string"}, {"name": "month", "type": "date"},
                                 {"name": "sales", "type": "number"}, {"name": "active", "type": "boolean"}]
@@ -122,9 +124,17 @@ def test_existing_becomes_g1_and_resume_keeps_board(tmp_path, csv_file):
     app, thread = start(csv_file, out, "--existing", str(existing), "--style", "Navy, no gridlines")
     try:
         s = json.loads(get(app, "/api/session")[2])
-        assert [c["id"] for c in s["cards"]] == ["G1"] and s["cards"][0]["code"].startswith("lib.init")
+        g1 = s["cards"][0]
+        assert [c["id"] for c in s["cards"]] == ["G1"] and g1["code"].startswith("lib.init")
+        assert g1["round"] == 0 and g1["title"] == "Current visual" and s["round"] == 0
         assert s["style"] == "Navy, no gridlines"
-        post(app, "/api/chat", {"message": "two more"})
+        # No ID named: the demo agent, like the brief, starts from the current visual.
+        _, text = post(app, "/api/chat", {"message": "make it horizontal"})
+        events = sse(text)
+        new = [d for k, d in events if k == "card"]
+        assert [(c["id"], c["parent"], c["round"]) for c in new] == [("G2", "G1", 1)]
+        done = events[-1][1]
+        assert done["round"] == 1 and done["usage"]["turns"] == 1 and done["model"] == "fake engine"
         post(app, "/api/done", {})
         thread.join(10)
     finally:
@@ -133,8 +143,14 @@ def test_existing_becomes_g1_and_resume_keeps_board(tmp_path, csv_file):
     app2, thread2 = start(csv_file, out, "--existing", str(existing))
     try:
         s = json.loads(get(app2, "/api/session")[2])
-        assert [c["id"] for c in s["cards"]] == ["G1", "G2", "G3"]   # resumed; G1 not added twice
-        assert s["chat"][0]["text"] == "two more"                      # the chat comes back too
+        assert [c["id"] for c in s["cards"]] == ["G1", "G2"]          # resumed; G1 not added twice
+        assert [c["round"] for c in s["cards"]] == [0, 1] and s["round"] == 1
+        assert s["chat"][0]["text"] == "make it horizontal"            # the chat comes back too
+        assert s["usage"]["turns"] == 1 and s["usage"]["total_tokens"] > 0   # usage carries over
+        _, text = post(app2, "/api/chat", {"message": "and G2 in navy"})
+        done = sse(text)[-1][1]
+        assert done["round"] == 2 and done["usage"]["turns"] == 2
+        assert [d["round"] for k, d in sse(text) if k == "card"] == [2]
     finally:
         app2.stop()
 

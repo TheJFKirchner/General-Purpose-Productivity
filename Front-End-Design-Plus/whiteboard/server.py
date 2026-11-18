@@ -6,10 +6,15 @@ Pages:
   GET  /ui/<file>            files in whiteboard/ui/ (also served at /<file>)
   GET  /vendor/<file>        local library copies in whiteboard/vendor/
 API (JSON unless stated):
-  GET  /api/session          {library, columns, style, cards (each with saved), saved, chat, row_count, engine}
+  GET  /api/session          {library, columns, style, cards (each with saved and round), saved, chat,
+                              row_count, engine, round, usage, model}
   GET  /api/data             the full rows: a JSON array of row objects
-  POST /api/chat {message}   text/event-stream: events text, card, error, done (data = JSON with "type")
-  POST /api/card-error {id, error}   once per card: the agent fixes it -> {ok, fixed, card, cards, text}
+  POST /api/chat {message}   text/event-stream: events text, card (recipe + round), error,
+                             done {cards, round, usage, model} (data = JSON with "type")
+  POST /api/card-error {id, error}   once per card: the agent fixes it
+                             -> {ok, fixed, card, cards, text, round, usage, model}
+  usage = {input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost_usd, turns},
+  cumulative for the whole whiteboard session (kept in board.json across resumes)
   POST /api/save {id} · /api/unsave {id} · /api/delete {id} · /api/done
   POST /api/heartbeat        {ok}; the page posts it every 15 s
 
@@ -113,7 +118,7 @@ class Whiteboard:
     def session_info(self) -> dict:
         return {"library": self.board.library, "columns": self.table.columns, "style": self.style or "",
                 "cards": self.board.snapshot(), "saved": list(self.board.saved), "chat": self.board.chat_log(),
-                "row_count": len(self.table.rows), "engine": self.engine}
+                "row_count": len(self.table.rows), "engine": self.engine, **self.designer.stats()}
 
     def chat_events(self, message: str):
         """Run one chat turn on the agent loop; yield its events in this (HTTP) thread."""
@@ -125,7 +130,7 @@ class Whiteboard:
                     q.put(ev)
             except Exception as e:  # never leave the page waiting
                 q.put({"type": "error", "error": f"{type(e).__name__}: {e}", "message": str(e)})
-                q.put({"type": "done", "cards": []})
+                q.put({"type": "done", "cards": [], **self.designer.stats()})
             finally:
                 q.put(None)
 

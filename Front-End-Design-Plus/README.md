@@ -9,6 +9,11 @@ You invoke it while working on a deliverable (a dashboard, a report page, an app
 - **Small output.** Each saved visual is one short JSON file with its ID, title, library and recipe. No data.
 - **Offline.** The chart libraries are local copies in `whiteboard/vendor/`.
 
+In the page:
+- **Current visual pinned at the top.** When you are changing a visual that already exists, the skill always passes it in, redrawn as it looks today, as "Current visual" (G1).
+- **A tidy board.** After each round, earlier cards fold away behind "Show earlier cards"; saved cards stay visible.
+- **Cost in view.** A bar at the bottom shows the model, the tokens used and an estimated cost.
+
 ## Install
 
 1. Python 3.10 or later.
@@ -32,7 +37,7 @@ The skill is user-invoked only: type `/front-end-design-plus` in Claude Code. It
   python -m whiteboard --data sample/orders.csv --library echarts --out <a temp folder>
   ```
 
-  Other flags: `--style "<note>"` (colours, font, light or dark), `--existing <file>` (a visual to tweak, as a `render` body or a recipe JSON; it becomes card G1), `--no-open` (do not open a browser), `--port N`, and `--fake` (or `WHITEBOARD_FAKE=1`) for the scripted fake engine: no sign-in and no tokens. `python -m whiteboard --help` lists every flag.
+  Other flags: `--style "<note>"` (colours, font, light or dark), `--existing <file>` (the visual as it is today, as a `render` body or a recipe JSON; it is pinned as "Current visual", G1; the skill always passes it when the visual exists), `--no-open` (do not open a browser), `--port N`, and `--fake` (or `WHITEBOARD_FAKE=1`) for the scripted fake engine: no sign-in and no tokens. `python -m whiteboard --help` lists every flag.
 - **Finish:** press Done. The launcher exits and its last line is `RESULT: <path to result.json>`. If the tab is closed without Done, it stops by itself after about 90 seconds and `result.json` has `done: false`, still listing what was saved.
 - **Resume:** run again with the same `--out` folder and library. A different library on the same folder is refused.
 

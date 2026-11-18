@@ -59,7 +59,7 @@ def load_existing(path: str | Path, library: str) -> dict:
     if not p.is_file():
         raise LaunchError(f"--existing file not found: {p}")
     text = p.read_text(encoding="utf-8-sig")
-    title, kind, code = "Existing visual", "chart", text
+    title, kind, code = "Current visual", "chart", text
     if p.suffix.lower() == ".json":
         try:
             data = json.loads(text)
@@ -68,7 +68,7 @@ def load_existing(path: str | Path, library: str) -> dict:
         if not isinstance(data, dict) or not isinstance(data.get("code"), str):
             raise LaunchError(f"--existing {p.name} must be a recipe object with a 'code' string.")
         code = data["code"]
-        title = data.get("title") or title
+        title = str(data.get("title") or "").strip() or title
         kind = data.get("kind") if data.get("kind") in ("chart", "table") else kind
         if data.get("library") == "html" and library != "html" and kind == "chart":
             kind = "table"
@@ -121,7 +121,7 @@ def build(args: argparse.Namespace) -> Whiteboard:
     except (OSError, ValueError) as e:
         raise LaunchError(f"Cannot use output folder {args.out}: {e}") from None
     if existing and not board.resumed:
-        board.add(existing["title"], existing["code"], existing["kind"], card_id="G1")
+        board.add(existing["title"], existing["code"], existing["kind"], card_id="G1", round=0)
 
     engine = "fake" if fake else "claude"
     if fake:

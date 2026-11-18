@@ -2,6 +2,7 @@
 
 Each message gets a canned answer built from the real column names:
 - mentions a card ID (G3)      -> one iteration of it (parent set), drawn as a line
+- no ID, but a current visual   -> one iteration of the current visual (round-0 card from --existing)
 - a card error report           -> the fix, replacing the same ID
 - anything else                 -> two cards: a chart and a table
 Good enough to click through the page; not a stand-in for the real agent.
@@ -83,8 +84,9 @@ def install(library: str, table: Table) -> None:
                     fake.say(f"(demo) Fixed {fix.group(1)}.")]
         request = message.split("\n\n", 1)[-1]
         ref = re.search(r"\bG(\d+)\b", request, re.I)
-        if ref:
-            parent = f"G{ref.group(1)}"
+        current = re.search(r"\bG(\d+) \"[^\"]*\" \([^)]*the current visual", message)
+        if ref or current:  # a named card, else the current visual (session from --existing)
+            parent = f"G{(ref or current).group(1)}"
             return [fake.call("add_card", {"title": f"{parent} as a line", "parent": parent,
                                            "code": chart_code(library, table, "line")}),
                     fake.say(f"(demo) Added a line version of {parent}.")]

@@ -122,6 +122,15 @@ def build_prompt(library: str, table: Table, style: str | None, cards: list[dict
             head += f", iterates on {c['parent']})" if c.get("parent") else ")"
             listing.append(f"{head}\n```js\n{c['code']}\n```")
         parts.append("## Cards already on the board\n" + "\n\n".join(listing))
+    current = current_visual(cards)
+    if current:
+        cid = current["id"]
+        parts.append(
+            f"## The current visual: {cid}\n"
+            f"{cid} is the deliverable's visual as it looks today; the user opened the whiteboard to change it.\n"
+            f"- When the user asks for a change without naming an ID (\"make it horizontal\", \"try other "
+            f"colours\"), start from {cid}.\n"
+            f"- Every new variant of it is a new card with parent=\"{cid}\". {cid} itself is never changed.")
     if chat:
         lines = []
         for m in chat[-CHAT_IN_PROMPT:]:
@@ -141,10 +150,17 @@ def build_prompt(library: str, table: Table, style: str | None, cards: list[dict
     return "\n\n".join(parts) + "\n"
 
 
+def current_visual(cards: list[dict]) -> dict | None:
+    """The round-0 card: the deliverable's visual passed in with --existing."""
+    return next((c for c in cards if int(c.get("round") or 0) == 0), None)
+
+
 def board_header(board: Board) -> str:
     cards = board.snapshot()
     if cards:
+        current = current_visual(cards)
         lines = [f"{c['id']} \"{c['title']}\" ({c['kind']}"
+                 + (", the current visual" if c is current else "")
                  + (f", from {c['parent']})" if c.get("parent") else ")") for c in cards]
         text = "Board now: " + "; ".join(lines) + "."
     else:
@@ -176,6 +192,11 @@ class Designer:
         self._outbox: list[dict] = []
         self.turn_cards: list[str] = []
         self.add_card = self._make_tool()
+        # The fake engine reports 1 token per turn; for a testable page, estimate from text length instead.
+        self.estimate_usage = engine == "fake"
+        self._instructions = ""
+        self._fresh = False             # the current turn opened a new session (prompt sent in full)
+        self._reported_model: str | None = None
 
     # ---- the tool ----------------------------------------------------------------------------------
     def _make_tool(self):
@@ -211,10 +232,44 @@ class Designer:
 
     async def _ensure_session(self):
         if self._session is None:
-            session = self.make_agent().session()
+            agent = self.make_agent()
+            self._instructions = agent.instructions or ""
+            session = agent.session()
             await session.__aenter__()
             self._session = session
+            self._fresh = True
         return self._session
+
+    # ---- usage -------------------------------------------------------------------------------------
+    def model_name(self) -> str:
+        if self.engine == "fake":
+            return "fake engine"
+        return self._reported_model or self.model or "engine default"
+
+    def stats(self) -> dict:
+        return {"usage": self.board.usage_view(), "model": self.model_name(), "round": self.board.round}
+
+    def _record(self, reply, message: str) -> None:
+        """Add one turn's usage to the session total (board.json keeps it across resumes)."""
+        fresh, self._fresh = self._fresh, False
+        if reply is None:
+            return
+        if self.estimate_usage:
+            prompt = len(self._instructions) // 4
+            out = len(reply.text or "") + sum(len(json.dumps(c.input)) for c in (reply.tool_calls or []))
+            tokens = {"input_tokens": max(1, len(message) // 4), "output_tokens": max(1, out // 4),
+                      "cache_read_tokens": 0 if fresh else prompt, "cache_write_tokens": prompt if fresh else 0}
+            # Made-up prices, only so the page shows a plausible figure in demos and tests.
+            cost = (tokens["input_tokens"] * 3 + tokens["output_tokens"] * 15 + tokens["cache_read_tokens"] * 0.3
+                    + tokens["cache_write_tokens"] * 3.75) / 1_000_000
+            self.board.add_usage(tokens, cost, self.model_name())
+            return
+        u = reply.usage
+        tokens = {k: getattr(u, k, 0) or 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens",
+                                                     "cache_write_tokens")} if u else {}
+        if reply.model:
+            self._reported_model = reply.model
+        self.board.add_usage(tokens, reply.cost_usd, reply.model)
 
     async def close(self) -> None:
         if self._session is not None:
@@ -235,11 +290,12 @@ class Designer:
         message = (message or "").strip()
         if not message:
             yield {"type": "error", "error": "Type a request first.", "message": "Type a request first."}
-            yield {"type": "done", "cards": []}
+            yield {"type": "done", "cards": [], **self.stats()}
             return
         reply: list[str] = []
         try:
             async with self._get_lock():
+                self.board.new_round()
                 async for ev in self._turn(f"{board_header(self.board)}\n\n{message}"):
                     if ev["type"] == "text":
                         reply.append(ev["text"])
@@ -255,7 +311,7 @@ class Designer:
             card = self.board.get(card_id)
             why = "is not on the board" if card is None else "was already sent back once"
             return {"ok": True, "fixed": False, "card": None, "cards": [], "text": "",
-                    "message": f"{card_id} {why}; not sent to the agent again."}
+                    "message": f"{card_id} {why}; not sent to the agent again.", **self.stats()}
         text, cards, errors = [], [], []
         msg = (f"{board_header(self.board)}\n\nCard {card_id} failed to render in the browser with this error:\n"
                f"{(error or 'unknown error').strip()[:2000]}\n\nFix it: call add_card once with "
@@ -274,7 +330,8 @@ class Designer:
         fixed = next((c for c in cards if c["id"] == card_id), None)
         note = "".join(text).strip() or (f"{card_id} fixed." if fixed else "")
         self.board.add_chat("agent", note)
-        out = {"ok": not errors, "fixed": fixed is not None, "card": fixed, "cards": cards, "text": "".join(text)}
+        out = {"ok": not errors, "fixed": fixed is not None, "card": fixed, "cards": cards, "text": "".join(text),
+               **self.stats()}
         if errors:
             out["error"] = "; ".join(errors)
         return out
@@ -291,6 +348,7 @@ class Designer:
                     yield {"type": "text", "text": ev.text, "delta": ev.text}
                 elif ev.type == "done":
                     reply = ev.reply
+                    self._record(reply, message)
                     while self._outbox:
                         yield self._outbox.pop(0)
                     if reply.status == "error":
@@ -299,6 +357,8 @@ class Designer:
             while self._outbox:
                 yield self._outbox.pop(0)
         except AgentError as e:
+            # A failed turn still used tokens: agentlib puts the partial turn in e.reply (cost unknown -> 0).
+            self._record(getattr(e, "reply", None), message)
             while self._outbox:
                 yield self._outbox.pop(0)
             # The conversation is not saved, so it cannot be resumed: start afresh next turn. The new
@@ -309,4 +369,4 @@ class Designer:
         except Exception as e:  # setup problems show in the chat instead of killing the page
             msg = f"The agent could not run: {type(e).__name__}: {e}"
             yield {"type": "error", "error": msg, "message": msg}
-        yield {"type": "done", "cards": list(self.turn_cards)}
+        yield {"type": "done", "cards": list(self.turn_cards), **self.stats()}

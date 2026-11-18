@@ -21,12 +21,17 @@
         <button type="submit" id="send" class="btn primary">Send</button>
       </div>
     </form>
+    <div class="usage" id="usage" role="button" tabindex="0">
+      <div class="usage-detail" id="usage-detail" hidden></div>
+      <div class="usage-line" id="usage-line">No usage yet</div>
+    </div>
   </aside>
   <main class="board">
     <div class="board-bar">
       <div class="board-title">Cards <span id="count" class="count"></span></div>
       <button type="button" id="done" class="btn">Done</button>
     </div>
+    <div class="earlier" id="earlier" hidden><button type="button" class="link-btn" id="earlier-btn">Show earlier cards</button></div>
     <div class="grid" id="grid"></div>
     <div class="empty" id="empty" hidden>
       <h2>Nothing on the board yet</h2>

@@ -2,6 +2,7 @@
 import asyncio
 import json
 
+import pytest
 from agentlib import fake
 
 from whiteboard.agent import AGENT_NAME, Designer, build_prompt
@@ -46,10 +47,12 @@ def test_multi_card_request_gives_several_ids(tmp_path, csv_file):
     assert [c["id"] for c in cards] == ["G1", "G2", "G3"]
     assert cards[2]["kind"] == "table" and cards[2]["library"] == "html"
     assert cards[0]["library"] == "echarts" and cards[0]["parent"] is None
-    assert set(cards[0]) == {"type", "id", "parent", "title", "library", "kind", "code"}
+    assert set(cards[0]) == {"type", "id", "parent", "title", "library", "kind", "code", "round"}
+    assert [c["round"] for c in cards] == [1, 1, 1]                    # one message = one round
     streamed = "".join(e["text"] for e in evs if e["type"] == "text")
     assert "Three cards." in streamed and "Done." in streamed
-    assert evs[-1] == {"type": "done", "cards": ["G1", "G2", "G3"]}
+    assert evs[-1]["type"] == "done" and evs[-1]["cards"] == ["G1", "G2", "G3"]
+    assert set(evs[-1]) == {"type", "cards", "round", "usage", "model"}
     saved = json.loads(board.board_file.read_text(encoding="utf-8"))
     assert [c["id"] for c in saved["cards"]] == ["G1", "G2", "G3"] and saved["next_id"] == 4
 
@@ -209,6 +212,150 @@ def test_unsave_keeps_the_card(tmp_path, csv_file):
     assert json.loads(board.result_file.read_text(encoding="utf-8"))["saved"] == []
     assert board.unsave("G1")["ok"]                                     # unsaving twice is harmless
     assert json.loads(board.board_file.read_text(encoding="utf-8"))["saved"] == []
+
+
+def test_rounds_per_message_and_fix_keeps_round(tmp_path, csv_file):
+    fake.script(AGENT_NAME, [
+        [card("A"), card("B")],
+        [card("C", parent="G1")],
+        [fake.call("add_card", {"title": "A", "code": BAR, "replaces": "G1"})],
+        [fake.say("nothing this time")],
+    ])
+    board, d = make(tmp_path, csv_file)
+
+    async def go():
+        await collect(d.chat("two"))
+        evs = await collect(d.chat("iterate G1"))
+        fixed = await d.fix("G1", "TypeError")
+        last = await collect(d.chat("just talk"))
+        await d.close()
+        return evs, fixed, last
+
+    evs, fixed, last = run(go())
+    assert [e["round"] for e in evs if e["type"] == "card"] == [2] and evs[-1]["round"] == 2
+    assert fixed["card"]["round"] == 1 and fixed["round"] == 2      # the fix keeps the card's round
+    assert [(c["id"], c["round"]) for c in board.snapshot()] == [("G1", 1), ("G2", 1), ("G3", 2)]
+    assert last[-1]["round"] == 3 and board.round == 3               # a message with no cards is a round too
+    saved = json.loads(board.board_file.read_text(encoding="utf-8"))
+    assert saved["round"] == 3 and [c["round"] for c in saved["cards"]] == [1, 1, 2]
+    board.save("G1")
+    assert "round" not in json.loads((board.out / "G1.json").read_text(encoding="utf-8"))
+
+
+def test_usage_is_cumulative_over_chat_and_fix_turns_and_survives_resume(tmp_path, csv_file):
+    fake.script(AGENT_NAME, [[card("A")], [fake.call("add_card", {"title": "A", "code": BAR, "replaces": "G1"})]])
+    board, d = make(tmp_path, csv_file)
+
+    async def go():
+        evs = await collect(d.chat("one chart"))
+        fixed = await d.fix("G1", "TypeError")
+        await d.close()
+        return evs[-1], fixed
+
+    done, fixed = run(go())
+    u1, u2 = done["usage"], fixed["usage"]
+    assert done["model"] == "fake engine" and fixed["model"] == "fake engine"
+    assert u1["turns"] == 1 and u2["turns"] == 2
+    for u in (u1, u2):
+        assert u["total_tokens"] == (u["input_tokens"] + u["output_tokens"] + u["cache_read_tokens"]
+                                     + u["cache_write_tokens"])
+        assert u["cost_usd"] > 0
+    assert u1["cache_write_tokens"] > 0 and u2["cache_read_tokens"] > 0   # prompt sent once, then cached
+    assert u2["total_tokens"] > u1["total_tokens"] and u2["cost_usd"] > u1["cost_usd"]
+    assert json.loads(board.board_file.read_text(encoding="utf-8"))["usage"] == board.usage
+
+    fake.reset()
+    board2 = Board(tmp_path / "out", "echarts")
+    board2.open()
+    assert board2.usage_view() == u2 and board2.model == "fake engine"
+
+
+def test_usage_passes_agentlib_numbers_through(tmp_path, csv_file):
+    # The real-engine path: tokens and cost exactly as agentlib reports them per turn (Reply.usage,
+    # Reply.cost_usd), including a turn that fails midway (AgentError.reply, cost unknown -> 0).
+    fake.script(AGENT_NAME, [[fake.say("a")], [fake.say("b")], [fake.say("c"), fake.fail("gateway down")]])
+    board, d = make(tmp_path, csv_file)
+    d.estimate_usage = False
+    reported = []
+    real_record = d._record
+
+    def spy(reply, message):
+        if reply is not None:
+            reported.append(reply)
+        real_record(reply, message)
+
+    d._record = spy
+
+    async def go():
+        for m in ("1", "2", "3"):
+            await collect(d.chat(m))
+
+    run(go())
+    u = board.usage_view()
+    assert len(reported) == 3 and u["turns"] == 3
+    assert u["input_tokens"] == sum(r.usage.input_tokens for r in reported) > 0
+    assert u["output_tokens"] == sum(r.usage.output_tokens for r in reported)
+    assert u["cost_usd"] == pytest.approx(sum(r.cost_usd for r in reported)) and u["cost_usd"] > 0
+    assert reported[2].cost_usd == 0                     # the failed turn: agentlib does not know its cost
+    before = u["input_tokens"]
+    board.add_usage({"input_tokens": 5}, None, None)    # an engine giving tokens but no cost
+    assert board.usage_view()["cost_usd"] is None and board.usage_view()["input_tokens"] == before + 5
+
+
+def test_current_visual_is_round_0_and_the_default_starting_point(tmp_path, csv_file):
+    seen = []
+    fake.script(AGENT_NAME, [lambda msg: seen.append(msg) or [card("Horizontal", parent="G1")]])
+    board, d = make(tmp_path, csv_file)
+    g1 = board.add("", BAR, "chart", card_id="G1", round=0)
+    assert g1["title"] == "Current visual" and g1["round"] == 0
+    prompt = d.make_agent().instructions
+    assert "## The current visual: G1" in prompt
+    assert "without naming an ID" in prompt and 'parent="G1"' in prompt
+
+    async def go():
+        evs = await collect(d.chat("make it horizontal"))
+        await d.close()
+        return evs
+
+    evs = run(go())
+    assert '"Current visual" (chart, the current visual)' in seen[0]
+    new = [e for e in evs if e["type"] == "card"][0]
+    assert (new["id"], new["parent"], new["round"]) == ("G2", "G1", 1)
+    # Without --existing there is no current visual, and no such section.
+    other, d2 = make(tmp_path, csv_file, out="other")
+    assert "The current visual" not in d2.make_agent().instructions
+
+
+def test_existing_recipe_without_title_gets_one(tmp_path):
+    from whiteboard.cli import load_existing
+    p = tmp_path / "current.json"
+    p.write_text(json.dumps({"code": BAR, "title": "  "}), encoding="utf-8")
+    assert load_existing(p, "echarts")["title"] == "Current visual"
+    js = tmp_path / "current.js"
+    js.write_text(BAR, encoding="utf-8")
+    assert load_existing(js, "echarts")["title"] == "Current visual"
+
+
+def test_board_from_before_rounds_loads_cards_as_round_1(tmp_path, csv_file):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "board.json").write_text(json.dumps({
+        "version": 1, "library": "echarts", "next_id": 3, "saved": [], "chat": [],
+        "cards": [{"id": "G1", "parent": None, "title": "A", "library": "echarts", "kind": "chart", "code": BAR},
+                  {"id": "G2", "parent": "G1", "title": "B", "library": "echarts", "kind": "chart", "code": BAR}],
+    }), encoding="utf-8")
+    fake.script(AGENT_NAME, [[card("C")]])
+    board, d = make(tmp_path, csv_file)
+    assert [c["round"] for c in board.snapshot()] == [1, 1] and board.round == 1
+    assert "The current visual" not in d.make_agent().instructions
+
+    async def go():
+        evs = await collect(d.chat("one more"))
+        await d.close()
+        return evs
+
+    new = [e for e in run(go()) if e["type"] == "card"][0]
+    assert (new["id"], new["round"]) == ("G3", 2)
 
 
 def test_resume_refuses_other_library(tmp_path):
