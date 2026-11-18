@@ -1,11 +1,22 @@
 # Workflows
 
-Status: approved
+Status: built
 Date: 2026-11-17
 
 A Workflows view where a user registers any report or study they run more than once, so nobody has to ask an agent to go and find the study and its plan again. A workflow is a JSON file describing a straight line of stages. Each stage is either an agent doing one job, with markdown files attached for context, or a human review stop with a checklist and sign-off. The card shows the stages left to right with live status. Runs save everything a person would want as a record into a folder the user chooses, and a test run reuses one folder that is cleared each time. Approved but not started: it is built after request 27 (Settings, connections and MCP) is accepted and after request 29 (sidebar).
 
-Feature branch (to be created when the build starts): `feature/workflows`.
+Feature branch: `feature/workflows`, created from `feature/sidebar-navigation` (request 29), which itself sits on `feature/settings-connections-mcp` (request 27). Merge in that order.
+
+## What was built, and where it differs from the plan
+
+- Built as planned: the JSON format with checking and discovery (`app/workflows/format.py`), the runner (`runner.py`), run records (`records.py`), the manager and messages (`manager.py`), an example workflow and format notes (`app/workflows/`), and the Workflows view with wide cards, stage track, Run box, review screen and Add / Edit form (`frontend/src/views/Workflows/`).
+- **Stage agents are narrower than assumption 4.** A stage may name the Builder, the Explorer or one of the folder's own agents. Planner, Orchestrator, Visualizer and CLI are not offered, because they are built around their own screens. Raised with the user.
+- **Choices the back-end builder made, raised with the user:** a failed agent stage fails the whole run (no retry outside a review's send-back); attached files are read once at the start of a run, so stages re-run after a send-back use the same reading; send-back does not require the checklist to be complete, approve does; stopping at a review puts that review back to waiting; send-back targets earlier agent stages only.
+- **Runs live in memory.** A page reload keeps a run, including one waiting at a review; quitting Launchpad ends it, though its folder and files stay. Each run already writes `run.json`, so resuming unfinished runs at start is a contained follow-up (a run waiting at a review resumes exactly; one caught mid agent stage restarts that stage).
+- **Added beyond the plan:** a waiting review raises a card in Incoming and marks the run as needing the user in Missions and the run row; workflow runs are labelled with the workflow's name there and planner-only actions are hidden; a `test` folder that is a link is refused as well as one without Launchpad's marker.
+- **Attached files are typed as paths;** only the output folder has a Browse button.
+- Checked: fake-engine tests (including a real load and run of Explorer, folder-agent and Builder stages, the demo's sample workflow run to its review, and Unattended auto-answering a stage question), front-end tests and build, and one UI review of the running demo covering this request and the sidebar, followed by one fix round (Explorer stages failing to load, Unattended shown as off, a waiting review invisible outside Workflows, the stage track cut off, planner labels on workflow runs, a stale review message, the example hidden in the demo).
+- Not checked: nothing has been run on a real agent; the fix-round changes were not looked at again in the running app (the stage track fitting at the default size is an estimate); removing a workflow, rejected results shown after a send-back and a run surviving a reload were not seen in the app, only in tests; the Workflows screens at narrow widths.
 
 ## Principle agreed first
 
@@ -75,6 +86,15 @@ Launchpad provides the mechanism (a way to define, run and watch a workflow) and
 - `decision` is `approve` or `send_back`; `back_to` names the stage to return to.
 - `workflow_run_state` is also pushed whenever a run changes, and replayed on reconnect.
 - The header of `app/server.py` is the authoritative contract and `frontend/src/contract.ts` mirrors it. Request 27 showed that a table at this level leaves gaps (where lists ride, exact config shapes, how errors are reported): the back-end builder writes the full contract into the `app/server.py` header first and the front-end builder builds to that.
+
+Filled in by the back-end builder (full detail in the `app/server.py` header, "Workflows" block):
+
+- `workflows_list {workflows, folders, agents, reviewer_name, error?}`: `folders` = where a workflow can be saved (primary, then ticked additional folders); `agents[dir_id]` = the agents a stage may name in that folder (Builder, Explorer, the folder's step-worker agents; Planner, Orchestrator, Visualizer and CLI are not stage agents); `reviewer_name` = the last sign-off name (per user); `error` = why a save or remove was refused. Also sent on connect.
+- A workflow adds `slug`, `folder_name`, `path`, `output_path`, `can_run`, `running_run_id`, `last_run_id`; `id` = `"<dir_id>/<slug>"`, `folder` = a dir_id. An input = `{name, label, kind: text|date|number|file|choice, required, default, options, help}`. An attached file = `{path, resolved, exists, name}`. A stage adds `index` (0-based); agent stages add `agent_display`, `agent_purpose`; a checklist item = `{text, kind: tick|answer}`. A warning = `{level: error|warning, code, message, stage, field}`; any error disables Run.
+- `workflow_run_state {run, error?, workflow_id?}`: a refused run = `run: null` + `error`; other refusals resend the unchanged run with `error`. A run adds `workflow_name`, `mission_id`, `unattended`, `autopilot`, `auto_answers`, `current_stage`, `started_at`, `finished_at`, `summary_file`, `error`, `cost_usd`; status `running|awaiting_review|done|failed|stopped`. A stage run = `{index, kind, title, status: waiting|running|done|failed|awaiting_review, agent, agent_display, result_file, result_markdown, attempts, checklist, review, reviews, error, cost_usd}` (`result_markdown` = the current result's text for the review screen, since the run folder may be outside every connected folder); a review record = `{decision, name, note, at, answers, back_to, record_file}`.
+- `workflow_review` `stage` and `back_to` are 0-based stage indexes; `answers` = one `{ticked?, answer?}` per checklist item. Approve needs every item and a name; send-back needs a name, a note and an earlier agent stage.
+- Missions: a run also appears as a Missions run under `session_id = run.mission_id` (`"wf-<run id>"`) through the existing run events; `run_stop`, `set_autopilot` and `set_auto_answers` on that id work for the workflow run. `run_started` and `run_finished` carry `workflow {id, name, run_id, test}` (the marker of a workflow run: label it as the workflow, hide Send to planner); `run_started` also carries `auto_answers` and is followed by `autopilot` / `auto_answers` events. A run waiting at a review marks the step `waiting_for: "review"` and posts a `queue_item` of kind `review` (the "needs you" card, with `workflow`, `run_id`, `stage`), resolved when the review is signed or the run stops.
+- Form helpers reuse `list_dir` (browse a connected folder) and `pick_directory` (an output folder anywhere); no new messages.
 
 ## Tasks
 

@@ -27,7 +27,7 @@ export interface QuestionRoundBody { id: string; round: number; questions: Quest
 export interface RoundAnswer { accepted: boolean; option?: string; text?: string }
 /** `agent` = the agent named for the step (null = the Builder; only the Builder or folder agents); `agent_display` = who
     runs it (`Builder` when null); `agent_fallback` = the named agent is missing / broken / not a step worker here, so the Builder runs it. */
-export interface PlanStep { n: number; title: string; status?: StepStatus; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean;
+export interface PlanStep { n: number; title: string; status?: StepStatus; /** a blocked workflow review stage: "review" */ waiting_for?: 'review'; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean;
   /** the purpose of the agent that runs the step ("building" for the Builder): the chip colour, whatever folder Crew shows */
   agent_purpose?: Purpose | string | null;
   /** skill names the plan names for the step (absent = none): its worker gets them on top of its own allowlist */
@@ -261,8 +261,12 @@ export interface PlanDraftEvent {
   type: 'plan_draft'; session_id: Id; path: string; markdown: string; steps: PlanStep[]; revision?: number; previous_runs?: number;
 }
 export interface RunStartedEvent {
-  type: 'run_started'; session_id: Id; name: string; steps: PlanStep[]; run?: number; revision?: number; autopilot?: boolean;
+  type: 'run_started'; session_id: Id; name: string; steps: PlanStep[]; run?: number; revision?: number; autopilot?: boolean; auto_answers?: boolean;
+  /** present only for a workflow run (the marker): label it with the workflow, hide planner-only actions */
+  workflow?: WorkflowMark;
 }
+/** {id, name, run_id, test} of a workflow run, on run_started, run_finished and the review card. */
+export interface WorkflowMark { id: string; name: string; run_id: string; test: boolean }
 export interface PlannerModelEvent {
   type: 'planner_model'; session_id: Id; model: string; promoted: boolean; reason: string | null; by: 'criteria' | 'user' | null;
   /** harness and models of this session; label = "<harness> · <model>" now; option_id = "<harness>:<model>" now */
@@ -310,7 +314,7 @@ export interface AutoAnswerEvent {
   type: 'auto_answer'; session_id: Id; id: string; agent: string; step: number | null; title: string; answer: string;
 }
 export interface StepUpdateEvent {
-  type: 'step_update'; session_id: Id; n: number; status?: StepStatus; built?: string[]; report_path?: string;
+  type: 'step_update'; session_id: Id; n: number; status?: StepStatus; waiting_for?: 'review'; built?: string[]; report_path?: string;
   agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: Purpose | string | null;
   skills?: string[]; skills_unknown?: string[]; role?: string;
 }
@@ -319,7 +323,7 @@ export interface QueueItemEvent {
   id: Id;
   session_id: Id | null;
   chat_id?: Id | null;
-  kind: 'question' | 'permission' | 'plan' | 'info';
+  kind: 'question' | 'permission' | 'plan' | 'info' | 'review';
   agent?: string;
   agent_id?: Id | null;
   step?: number | null;
@@ -338,6 +342,10 @@ export interface QueueItemEvent {
   review_id?: string;
   role?: string;
   test?: ReviewTest | '';
+  /** kind review (a workflow run waiting for sign-off): the workflow, the run and the stage index; opens the review in Workflows */
+  workflow?: WorkflowMark;
+  run_id?: string;
+  stage?: number;
 }
 export interface QueueResolvedEvent { type: 'queue_resolved'; id: Id; answer: string | null; by?: 'user' | 'timer' | 'autopilot' | 'auto' }
 export interface ByModel extends TokenCounts { model: string; cost_usd: number }
@@ -371,7 +379,7 @@ export interface ActivityEvent {
 }
 export interface RunFinishedEvent {
   type: 'run_finished'; session_id: Id; status: RunEndStatus; report_path: string; markdown: string;
-  total_cost_usd?: number; planner_cost_usd?: number; report_sent?: boolean;
+  total_cost_usd?: number; planner_cost_usd?: number; report_sent?: boolean; workflow?: WorkflowMark;
 }
 /** dir_id = the connected folder whose .claude/agents/ files are included; tool_choices = tools the Add form offers. */
 export interface CrewListEvent { type: 'crew_list'; agents: CrewAgentDef[]; dir_id?: Id | null; tool_choices?: string[];
@@ -408,6 +416,56 @@ export interface McpLibraryEvent {
 }
 export interface McpImportCandidate { name: string; kind: McpKind; summary: string; exists: boolean }
 export interface McpImportsEvent { type: 'mcp_imports'; source: string; servers: McpImportCandidate[] }
+
+/* ---------- workflows (the header of app/server.py, section "Workflows", is authoritative) ---------- */
+export type WorkflowInputKind = 'text' | 'date' | 'number' | 'file' | 'choice';
+/** A named input asked for at Run. name = [a-z][a-z0-9_]*; date = YYYY-MM-DD; options only for choice. */
+export interface WorkflowInput { name: string; label: string; kind: WorkflowInputKind; required: boolean; default: string; options: string[]; help: string }
+/** An attached markdown file: a link, read at the start of every run. exists = found right now. */
+export interface AttachedFile { path: string; resolved?: string; exists: boolean; name?: string }
+/** tick = must be ticked to approve; answer = needs a written answer. */
+export interface ChecklistItem { text: string; kind: 'tick' | 'answer' }
+export interface WorkflowAgentStage { index: number; kind: 'agent'; title: string; agent: string; agent_display?: string; agent_purpose?: string; instruction: string; files: AttachedFile[] }
+export interface WorkflowReviewStage { index: number; kind: 'review'; title: string; checklist: ChecklistItem[] }
+export type WorkflowStage = WorkflowAgentStage | WorkflowReviewStage;
+/** level error disables Run; code: invalid_file | invalid | no_output_folder | missing_file | unknown_agent | unknown_field (warning). */
+export interface WorkflowWarning { level: 'error' | 'warning'; code: string; message: string; stage: number | null; field: string | null }
+/** One workflow file. id = "<dir_id>/<slug>" (opaque); folder = the dir_id of its connected folder. */
+export interface Workflow {
+  id: string; slug: string; name: string; description: string; folder: Id; folder_name: string; path: string; output_folder: string; output_path: string;
+  unattended_default: boolean; inputs: WorkflowInput[]; files: AttachedFile[]; stages: WorkflowStage[]; warnings: WorkflowWarning[];
+  can_run: boolean; running_run_id: string | null; last_run_id: string | null;
+}
+/** What the form sends (workflow_save.workflow): the file's content. Paths are strings; a checklist item is {text, kind}. */
+export interface WorkflowInputDraft { name: string; label?: string; kind?: WorkflowInputKind; required?: boolean; default?: string; options?: string[]; help?: string }
+export type WorkflowStageDraft =
+  | { kind: 'agent'; title: string; agent: string; instruction: string; files: string[] }
+  | { kind: 'review'; title: string; checklist: ChecklistItem[] };
+export interface WorkflowDraft { name: string; description: string; output_folder: string; unattended_default: boolean; inputs: WorkflowInputDraft[]; files: string[]; stages: WorkflowStageDraft[] }
+export type WorkflowStageStatus = 'waiting' | 'running' | 'done' | 'failed' | 'awaiting_review';
+export type WorkflowRunStatus = 'running' | 'awaiting_review' | 'done' | 'failed' | 'stopped';
+/** One answer in a review record or sent with workflow_review: tick items use ticked, answer items use answer. */
+export interface ReviewAnswerOut { ticked?: boolean; answer?: string }
+export interface ReviewRecord { decision: 'approve' | 'send_back'; name: string; note: string; at: string; answers: { text: string; kind: 'tick' | 'answer'; ticked: boolean; answer: string }[]; back_to: number | null; record_file?: string }
+export interface StageAttempt { attempt: number; result_file: string | null; status: string; rejected: boolean; note: string | null }
+/** One stage of a run. result_markdown = the result file's text (what the review shows; cut at 100 000 characters). */
+export interface WorkflowRunStage {
+  index: number; kind: 'agent' | 'review'; title: string; status: WorkflowStageStatus; agent: string | null; agent_display: string | null;
+  result_file: string | null; result_markdown: string | null; attempts: StageAttempt[]; checklist: ChecklistItem[];
+  review: ReviewRecord | null; reviews: ReviewRecord[]; error: string | null; cost_usd?: number;
+}
+export interface WorkflowRun {
+  id: string; workflow_id: string; workflow_name: string; test: boolean; folder: string; mission_id?: string; inputs: Record<string, string>;
+  unattended: boolean; autopilot?: boolean; auto_answers?: boolean; status: WorkflowRunStatus; current_stage: number | null;
+  started_at: string; finished_at: string | null; summary_file?: string | null; error: string | null; cost_usd?: number; stages: WorkflowRunStage[];
+}
+/** The reply to workflows_get / workflow_save / workflow_remove; also sent on connect and when a run starts or ends. */
+export interface WorkflowsListEvent {
+  type: 'workflows_list'; workflows: Workflow[]; folders: { dir_id: Id; name: string; path: string; is_primary: boolean }[];
+  agents: Record<Id, { name: string; display_name: string; purpose: string; builtin: boolean }[]>; reviewer_name: string; error?: string | null;
+}
+/** Pushed whenever a run changes; the latest run of every workflow is replayed on connect. A refused workflow_run: run null + workflow_id + error. */
+export interface WorkflowRunStateEvent { type: 'workflow_run_state'; run: WorkflowRun | null; error?: string | null; workflow_id?: string }
 export interface ReviewStartedEvent { type: 'review_started'; review_id: string; role: string; model: string; harness: string }
 export interface ReviewProgressEvent { type: 'review_progress'; review_id: string; role: string; phase: 'reading' | 'asking' | 'finalising'; text: string }
 /** The finished case (also replayed on connect: the latest case per role). */
@@ -441,7 +499,7 @@ export type ServerEvent =
   | ChatMessageEvent | ChatModeEvent | ChatDoneEvent | VisualSetEvent
   | AgentUsesEvent | AgentDraftedEvent | AgentSavedEvent | AgentRemovedEvent | GitReposEvent | GitResultEvent
   | RolesListEvent | ReviewStartedEvent | ReviewProgressEvent | ReviewCaseEvent | ReviewFailedEvent | ReviewRefusedEvent
-  | ReviewDecidedEvent | ConnectionTestEvent | McpLibraryEvent | McpImportsEvent;
+  | ReviewDecidedEvent | ConnectionTestEvent | McpLibraryEvent | McpImportsEvent | WorkflowsListEvent | WorkflowRunStateEvent;
 
 export type ServerEventType = ServerEvent['type'];
 
@@ -454,7 +512,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'chat_mode', 'chat_done', 'visual_set', 'agent_uses', 'agent_drafted', 'agent_saved', 'agent_removed',
   'git_repos', 'git_result',
   'roles_list', 'review_started', 'review_progress', 'review_case', 'review_failed', 'review_refused', 'review_decided',
-  'connection_test', 'mcp_library', 'mcp_imports',
+  'connection_test', 'mcp_library', 'mcp_imports', 'workflows_list', 'workflow_run_state',
 ];
 
 /* ---------- UI -> here ---------- */
@@ -513,6 +571,13 @@ export type UiMessage =
   | { type: 'list_mcp_imports'; source: string }
   | { type: 'import_mcp_servers'; source: string; names: string[] }
   | { type: 'set_agent_mcp'; agent: string; servers: string[] }
+  | { type: 'workflows_get' }
+  | { type: 'workflow_save'; folder: Id; workflow: WorkflowDraft; original_id?: string }
+  | { type: 'workflow_remove'; id: string }
+  | { type: 'workflow_run'; id: string; inputs: Record<string, string>; test: boolean; unattended: boolean }
+  | { type: 'workflow_stop'; run_id: string }
+  /** stage / back_to = stage indexes; back_to = an EARLIER AGENT stage; note required on send_back */
+  | { type: 'workflow_review'; run_id: string; stage: number; answers: ReviewAnswerOut[]; name: string; note?: string; decision: 'approve' | 'send_back'; back_to?: number }
   | { type: 'git_scan' }
   | { type: 'git_refresh'; repo_id: string }
   | { type: 'git_fetch'; repo_id: string }

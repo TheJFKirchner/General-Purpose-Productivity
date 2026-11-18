@@ -17,6 +17,7 @@ import {
 import { fxKey, isFinished, problemText, qOpen, sLabel, sName } from './selectors';
 import { initialCrewForm } from './initial';
 import { onConnectionTest, onMcpImports, onMcpLibrary } from './mcp';
+import { onWorkflowRunState, onWorkflowsList } from './workflows';
 import { onReviewCase, onReviewDecided, onReviewFailed, onReviewProgress, onReviewRefused, onReviewStarted, onRolesList, reviewOf } from './roles';
 import { REDUCED, baseName, modelName } from '../lib/format';
 import { ADDABLE_PURPOSES, S_LABEL, WRITE_TOOLS } from '../lib/labels';
@@ -116,6 +117,8 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'connection_test': onConnectionTest(c, ev); break;
     case 'mcp_library': onMcpLibrary(c, ev); break;
     case 'mcp_imports': onMcpImports(c, ev); break;
+    case 'workflows_list': onWorkflowsList(c, ev); break;
+    case 'workflow_run_state': onWorkflowRunState(c, ev); break;
     case 'review_started': onReviewStarted(c, ev); break;
     case 'review_progress': onReviewProgress(c, ev); break;
     case 'review_case': onReviewCase(c, ev); break;
@@ -143,6 +146,11 @@ function handleEvent(c: Ctx, ev: ServerEvent): void {
     case 'settings': onSettings(c, ev); break;
     case 'directory_picked': {
       c.st.ui.picking = false;
+      if (c.st.ui.pickFor === 'output') {          // the workflow form: only fill its field, never add_directory
+        c.st.ui.pickFor = null;
+        if (!ev.path) toast(c, 'No folder was picked'); else c.st.ui.pickedOutput = ev.path;
+        break;
+      }
       if (!ev.path) { toast(c, 'No folder was picked'); break; }
       c.st.ui.settingsAddPath = ev.path;
       if (send({ type: 'add_directory', path: ev.path })) { c.st.ui.settingsAdding = ev.path; toast(c, 'Adding the folder…'); }
@@ -339,17 +347,19 @@ function onRunStarted(c: Ctx, ev: RunStartedEvent): void {
   if (!(c.st.replaying && s.draft && s.draft.status === 'draft')) s.runDraftV = s.draftV || 0;
   if (typeof ev.revision === 'number') s.runRev = ev.revision;
   if (ev.autopilot != null) s.autopilot = !!ev.autopilot;
+  if (ev.auto_answers != null) s.autoAnswers = !!ev.auto_answers;
+  if (ev.workflow) s.wf = ev.workflow;
   s.run = { name: ev.name || sName(s), started: Date.now(),
             steps: (Array.isArray(ev.steps) ? ev.steps : []).map(st => ({ n: st.n, title: st.title || `Step ${st.n}`, status: st.status || 'todo', built: [], report_path: '',
               agent: st.agent ?? null, agent_display: st.agent_display ?? null, agent_fallback: !!st.agent_fallback, agent_purpose: st.agent_purpose ?? null,
-              skills: st.skills || [], skills_unknown: st.skills_unknown || [], ...(st.role ? { role: st.role } : {}) })) };
+              skills: st.skills || [], skills_unknown: st.skills_unknown || [], ...(st.role ? { role: st.role } : {}), ...(st.waiting_for ? { waiting_for: st.waiting_for } : {}) })) };
   /* a new run in the same session: fresh steps, back in flight; earlier agents and their costs stay in the session */
   Object.assign(s, { status: 'running', approving: false, report: null, reportSent: false, snapReportSent: false, cleared: false, stopping: false, flash: 0 });
   if (again) removeQ(c, 'report:' + s.id);
   syncPlanCard(s);
   needCrewFor(c, s.run.steps);
-  if (!c.st.replaying) addSys(c, again ? `Run ${s.letter} launched again: ${s.run.name}` : `Run ${s.letter} launched: ${s.run.name}`, s.id);
-  toast(c, `Run ${s.letter} launched · ${s.run.name}`);
+  if (!c.st.replaying && !s.wf) addSys(c, again ? `Run ${s.letter} launched again: ${s.run.name}` : `Run ${s.letter} launched: ${s.run.name}`, s.id);
+  toast(c, s.wf ? `${s.wf.test ? 'Test run' : 'Workflow'} started · ${s.wf.name}` : `Run ${s.letter} launched · ${s.run.name}`);
 }
 
 function onStepUpdate(c: Ctx, ev: StepUpdateEvent): void {
@@ -357,7 +367,8 @@ function onStepUpdate(c: Ctx, ev: StepUpdateEvent): void {
   if (!s.run) { s.run = { name: sName(s), steps: [], started: Date.now() }; if (!isFinished(s)) s.status = 'running'; }
   let st = s.run.steps.find(x => String(x.n) === String(ev.n));
   if (!st) { s.run.steps.push({ n: ev.n, title: `Step ${ev.n}`, status: 'todo', built: [], report_path: '' }); s.run.steps.sort((a, b) => a.n - b.n); st = s.run.steps.find(x => String(x.n) === String(ev.n))!; }
-  if (ev.status) { if (ev.status === 'done' && st.status !== 'done') { s.flash = Date.now(); s.flashN = st.n; } st.status = ev.status; }
+  if (ev.status) { if (ev.status === 'done' && st.status !== 'done') { s.flash = Date.now(); s.flashN = st.n; } st.status = ev.status; if (ev.status !== 'blocked') delete st.waiting_for; }
+  if (ev.waiting_for) st.waiting_for = ev.waiting_for;
   if (Array.isArray(ev.built)) for (const b of ev.built) if (!st.built.includes(b)) st.built.push(b);
   if (ev.report_path) st.report_path = ev.report_path;
   if (ev.agent !== undefined) st.agent = ev.agent;
@@ -371,6 +382,7 @@ function onStepUpdate(c: Ctx, ev: StepUpdateEvent): void {
 
 function onRunFinished(c: Ctx, ev: RunFinishedEvent): void {
   const s = sess(c, ev.session_id); if (!s) return;
+  if (ev.workflow) s.wf = ev.workflow;
   s.status = (['done', 'stopped', 'failed', 'blocked'] as const).includes(ev.status) ? ev.status : ev.status ? 'failed' : 'done';
   s.stopping = false;
   s.reportSent = ev.report_sent != null ? !!ev.report_sent : !!s.snapReportSent;   // the snapshot knows if it was sent
@@ -383,9 +395,9 @@ function onRunFinished(c: Ctx, ev: RunFinishedEvent): void {
   for (const i of c.st.queue) if (i.session_id === s.id && qOpen(i)) i.ui = 'ended';
   const rid = 'report:' + s.id;
   removeQ(c, rid);
-  c.st.queue.push({ id: rid, kind: 'report', session_id: s.id, agent: 'Orchestrator', step: null, title: '', at: Date.now(), ui: 'open' });
-  if (!c.st.replaying) addSys(c, `Run ${s.letter} (${sName(s)}) finished: ${S_LABEL[s.status].toLowerCase()}. The report is in Incoming.`, s.id);
-  toast(c, `Run ${s.letter} finished · ${S_LABEL[s.status]}`);
+  c.st.queue.push({ id: rid, kind: 'report', session_id: s.id, agent: s.wf ? '' : 'Orchestrator', step: null, title: '', at: Date.now(), ui: 'open' });
+  if (!c.st.replaying && !s.wf) addSys(c, `Run ${s.letter} (${sName(s)}) finished: ${S_LABEL[s.status].toLowerCase()}. The report is in Incoming.`, s.id);
+  toast(c, s.wf ? `${s.wf.name}${s.wf.test ? ' (test run)' : ''} finished · ${S_LABEL[s.status]}` : `Run ${s.letter} finished · ${S_LABEL[s.status]}`);
 }
 
 /** The server's totals (app / session / chat), stored as sent: the page adds no costs up itself. */

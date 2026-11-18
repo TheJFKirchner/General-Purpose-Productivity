@@ -39,6 +39,10 @@
   (start_background: server startup, else the first connection). give_mcp(agent, who) right before any crew agent
   starts: its assigned servers whose last test passed; each skipped one is a system warning in that session / chat
   (once per owner, server and reason)
+- Workflows (app/workflows/manager.py Workflows): workflows_get, workflow_save, workflow_remove, workflow_run,
+  workflow_stop, workflow_review. A run's Missions events use its mission id ("wf-<run id>"): session_like(id) finds
+  a session or a workflow run's owner (Auto answers, auto_answer lines, activity logs); run_stop / set_autopilot /
+  set_auto_answers on that id act on the run; connect replays runs after the sessions
 - here -> UI: see app/server.py header (contract)
 """
 from __future__ import annotations
@@ -73,6 +77,7 @@ from .incoming import Incoming
 from .sessionfiles import SessionFolder, new_session_id
 from .settings import Settings
 from .store import SPECS, Store
+from .workflows.manager import Workflows
 
 ACTIVITY_SNAPSHOT = 300          # recent activity events replayed to a reconnecting UI
 AUTO_LINES_SNAPSHOT = 200        # recent auto_answer lines (builder questions answered by Auto answers) replayed too
@@ -235,6 +240,8 @@ class Hub:
         self.mcp_tasks: dict[str, asyncio.Task] = {}      # server name -> its running (or last) test
         self.sessions: dict[str, LaunchSession] = {}   # in the order the front end letters them (Run A, B, ...)
         self.chats: dict[str, PilotChat] = {}       # regular sessions (Pilot), several may coexist
+        self.workflows = Workflows(self)            # workflow files + runs (app/workflows/)
+        self.demo_seeded = False                    # --fake: the sample workflow run (once per launch)
         self.current: LaunchSession = self._new()
 
     def directory(self, did: str | None) -> tuple[str, Path]:
@@ -247,6 +254,17 @@ class Hub:
         if not path.is_dir():
             raise ValueError(f"folder not found on disk: {path}")
         return did, path.resolve()
+
+    def session_like(self, sid: str | None):
+        """A planning session, or the owner of a workflow run whose mission id this is (id, auto_answers, folder);
+        None otherwise."""
+        if not sid:
+            return None
+        ls = self.sessions.get(sid)
+        if ls is not None:
+            return ls
+        run = self.workflows.mission(sid)
+        return run.ls if run is not None else None
 
     def extra_dirs(self, primary: str | None) -> tuple[list[str], list[Path]]:
         """The additional folders for a session or chat whose primary is `primary`: (dir_ids, paths); ticked
@@ -263,7 +281,8 @@ class Hub:
     def busy(self, did: str) -> bool:
         """A run, a planner turn or a chat turn is going in that directory."""
         return (any(ls.dir_id == did and (ls.running or ls.chat.lock.locked()) for ls in self.sessions.values())
-                or any(c.dir_id == did and c.lock.locked() for c in self.chats.values()))
+                or any(c.dir_id == did and c.lock.locked() for c in self.chats.values())
+                or any(r.in_progress and r.wf["folder"] == did for r in self.workflows.runs.values()))
 
     def settings_event(self) -> dict:
         extra = set(self.store.additional_ids())
@@ -278,6 +297,9 @@ class Hub:
 
     def run_name(self, session_id: str) -> str:
         """The app's own letter for a session's run ("A", "B", ... "AA"), as the front end shows it ("Run A")."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            return f"workflow {run.wf['name']}" + (" (test run)" if run.test else "") + f", run {run.id}"
         n = list(self.sessions).index(session_id) + 1 if session_id in self.sessions else 0
         s = ""
         while n > 0:
@@ -314,8 +336,14 @@ class Hub:
         self.recent_activity.append(ev)
         if ev["status"] != "started":
             owner = self.sessions.get(ev.get("session_id") or "") or self.chats.get(ev.get("chat_id") or "")
+            run = self.workflows.mission(ev.get("session_id"))
+            if owner is None and run is not None:
+                owner = run
             if owner is not None:
-                owner.folder.add_activity(log_line(ev, started or ev["ts"]))
+                try:
+                    owner.folder.add_activity(log_line(ev, started or ev["ts"]))
+                except OSError:
+                    pass
         await self.emit(ev)
 
     def session_costs(self, session_id: str) -> tuple[float, float]:
@@ -341,7 +369,7 @@ class Hub:
         that just changed (its session: total + planner share; its CLI chat); no meter = all of them (on connect)."""
         await self.emit(costs.app_usage(self.meters))
         if meter is None:
-            for sid in self.sessions:
+            for sid in [*self.sessions, *self.workflows.missions]:
                 await self.emit(costs.session_usage(self.meters, sid))
             for cid in self.chats:
                 await self.emit(costs.chat_usage(self.meters, cid))
@@ -379,6 +407,7 @@ class Hub:
         if len(self.sessions) > 1:
             snapshot.append(self.current.started_event())       # last one = the current session
         snapshot += [c.started_event() for c in self.chats.values()]
+        snapshot += self.workflows.connect_events()     # workflow runs (Missions + workflow_run_state) + the list
         snapshot.append(self.roles_event())
         snapshot.append(self.mcp_event())
         snapshot += self.reviews.events()
@@ -410,7 +439,11 @@ class Hub:
         elif kind == "plan_approve":
             await self.approve(str(msg.get("session_id") or self.current.id))
         elif kind == "queue_response":
-            if not await self.incoming.respond(msg):
+            item = self.incoming.items.get(str(msg.get("id")))
+            if item is not None and item.kind == "review":
+                await self.system("Sign off this review (approve or send back) in the Workflows view.",
+                                  item.session_id)
+            elif not await self.incoming.respond(msg):
                 await self.emit({"type": "system", "text": "That request is no longer open."})
         elif kind == "queue_dismiss":
             pass                                                  # info cards need no answer
@@ -423,6 +456,9 @@ class Hub:
             await self._agent_message(kind, msg)
         elif kind in ("roles_get", "role_dismiss", "role_merge", "review_start", "review_decide"):
             await self._role_message(kind, msg)
+        elif kind in ("workflows_get", "workflow_save", "workflow_remove", "workflow_run", "workflow_stop",
+                      "workflow_review"):
+            await self.workflows.handle(kind, msg)
         elif kind == "test_connection":
             await self.test_connection(str(msg.get("id") or ""))
         elif kind in ("get_mcp", "save_mcp_server", "remove_mcp_server", "test_mcp_server", "list_mcp_imports",
@@ -674,7 +710,12 @@ class Hub:
         return t
 
     def start_background(self) -> None:
-        """Re-test every server in the library once per launch, in the background (statuses arrive as mcp_library)."""
+        """Re-test every server in the library once per launch, in the background (statuses arrive as mcp_library).
+        The fake demo also seeds its sample workflow run here (once)."""
+        if getattr(self.settings, "demo", False) and not self.demo_seeded:
+            self.demo_seeded = True
+            from . import demo
+            self._spawn(demo.seed_workflow_run(self))
         if self.mcp_started:
             return
         self.mcp_started = True
@@ -850,6 +891,8 @@ class Hub:
         except ValueError as e:
             await self.system(f"Settings: {e}")
         await self.emit(self.settings_event())
+        if kind in ("set_settings", "add_directory", "remove_directory"):
+            await self.emit(self.workflows.list_event())          # the folders workflows live in may have changed
 
     async def _file_message(self, kind: str, msg: dict) -> None:
         root, path = str(msg.get("root") or ""), str(msg.get("path") or "")
@@ -1030,6 +1073,10 @@ class Hub:
 
     async def set_autopilot(self, session_id: str, on: bool) -> None:
         """Valid before launch and during a run. Turning it on approves the run's open permission cards."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.set_switch(run, "autopilot", on)
+            return
         ls = self.sessions.get(session_id)
         if ls is None:
             await self.system("That session is not open.")
@@ -1041,6 +1088,10 @@ class Hub:
 
     async def set_auto_answers(self, session_id: str, on: bool) -> None:
         """Per-session switch, for builders only. Turning it on answers the plan-step questions already waiting."""
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.set_switch(run, "auto_answers", on)
+            return
         ls = self.sessions.get(session_id)
         if ls is None:
             await self.system("That session is not open.")
@@ -1054,7 +1105,7 @@ class Hub:
                             answer: str) -> None:
         """One plan-step question decided by its worker under Auto answers: one auto_answer line, shown in Incoming
         (kept for a reconnect; never in the planner chat)."""
-        ls = self.sessions.get(session_id)
+        ls = self.session_like(session_id)
         if ls is None:
             return
         ev = {"type": "auto_answer", "session_id": ls.id, "id": id, "agent": agent, "step": step, "title": title,
@@ -1063,6 +1114,10 @@ class Hub:
         await self.emit(ev)
 
     async def stop(self, session_id: str) -> None:
+        run = self.workflows.mission(session_id)
+        if run is not None:
+            await self.workflows.stop(run.id)
+            return
         ls = self.sessions.get(session_id)
         if ls is None or not ls.running:
             await self.system("No run is going in that session.", session_id)
@@ -1086,6 +1141,7 @@ class Hub:
     async def close(self) -> None:
         for t in list(self.background):
             t.cancel()
+        await self.workflows.close()
         for ls in self.sessions.values():
             await ls.visuals.close()
             if ls.running:

@@ -13,7 +13,7 @@ export const curSess = (st: S): Session | null => (st.current != null && st.sess
 /** Display name of a session (a newer draft's title wins while its run shows the older plan). */
 export const sName = (s: Session): string =>
   (s.run && s.draft && s.draft.title && s.runDraftV !== s.draftV ? s.draft.title : '') || (s.run && s.run.name) || (s.draft && s.draft.title) || s.planTitle || 'New plan';
-export const sLabel = (s: Session): string => (s.run ? 'Run ' : 'Session ') + s.letter;
+export const sLabel = (s: Session): string => s.wf ? `${s.wf.name}${s.wf.test ? ' (test run)' : ''}` : (s.run ? 'Run ' : 'Session ') + s.letter;
 export const isFinished = (s: Session): boolean => ['done', 'stopped', 'failed', 'blocked'].includes(s.status);
 export const inFlight = (st: S): Session[] => allSessions(st).filter(s => s.status === 'running');
 export const agentsOf = (st: S, sid: string | null | undefined): Agent[] => Object.values(st.agents).filter(a => a.session_id === sid);
@@ -66,8 +66,13 @@ export function planCardView(s: Session, e: Extract<PlannerEntry, { kind: 'planc
 }
 
 /* ---------- Incoming ---------- */
-export const qOpen = (i: QueueItem): boolean => i.ui === 'open' && (i.kind === 'question' || i.kind === 'permission');
-export const waitingCount = (st: S, sid: string): number => st.queue.filter(i => qOpen(i) && i.session_id === sid).length;
+export const qOpen = (i: QueueItem): boolean => i.ui === 'open' && (i.kind === 'question' || i.kind === 'permission' || i.kind === 'review');
+/** A workflow run with a review stage waiting for sign-off (the blocked step says so even before the card arrives). */
+export const reviewWaiting = (s: Session): boolean => !!s.run && s.run.steps.some(x => x.status === 'blocked' && x.waiting_for === 'review');
+export const waitingCount = (st: S, sid: string): number => {
+  const n = st.queue.filter(i => qOpen(i) && i.session_id === sid).length, s = st.sessions[sid];
+  return n || (s && s.status === 'running' && reviewWaiting(s) ? 1 : 0);
+};
 export const openCount = (st: S): number => st.queue.filter(qOpen).length;
 export const anyBlocking = (st: S): boolean => st.queue.some(i => qOpen(i) && !!i.blocking);
 /** Is this agent waiting on the user? Matched by queue_item.agent_id; name only as a fallback. */
@@ -436,3 +441,16 @@ export function mcpAssigned(st: S, agent: string): { name: string; server: McpSe
 }
 /** The assigned servers of an agent that are not connected (failed, untested, testing or gone): the card warning. */
 export const mcpProblems = (st: S, agent: string) => mcpAssigned(st, agent).filter(x => !x.ok && x.server?.status !== 'testing');
+
+/* ---------- workflows ---------- */
+/** The run a workflow's card shows (its newest), or null. */
+export const wfRunOf = (st: S, workflowId: string) => st.wf.runs[st.wf.latest[workflowId]] || null;
+/** Why the last Run / review of a workflow was refused, or ''. */
+export const wfRunError = (st: S, workflowId: string): string => st.wf.runErrors[workflowId] || '';
+export const wfActive = (r: { status: string } | null | undefined) => !!r && (r.status === 'running' || r.status === 'awaiting_review');
+/** Runs waiting for a person to review (sidebar badge, card marker). */
+export const wfWaiting = (st: S): number => Object.values(st.wf.latest).filter(id => st.wf.runs[id]?.status === 'awaiting_review').length;
+/** Runs going or waiting. */
+export const wfRunning = (st: S): number => Object.values(st.wf.latest).filter(id => wfActive(st.wf.runs[id])).length;
+/** Index of the stage waiting for review in a run, or -1. */
+export const wfReviewStage = (r: { stages: { status: string }[] }): number => r.stages.findIndex(s => s.status === 'awaiting_review');

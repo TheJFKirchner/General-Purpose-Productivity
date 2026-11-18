@@ -7,4 +7,5 @@ export {
   CloudDownload, Compass, Copy, File, FileText, Folder, FolderOpen, FolderTree, GitBranch, Hammer, Hand, History, Inbox, Info, ListChecks, Loader2, Maximize2,
   MessagesSquare, Orbit, Pause, Pencil, Plus, RotateCw, Rocket, Search, Send, Settings, Shapes, ShieldAlert, ShieldCheck, Sparkles, Square,
   Telescope, Terminal, Plug, Server, Download, CircleCheck, CircleX, Trash, UserCog, UserPlus, Users, Wallet, WandSparkles, WifiOff, X, GitMerge, PanelLeftClose, PanelLeftOpen,
+  Workflow, Play, ArrowDown, FlaskConical, UserCheck, ClipboardCheck, Circle, CircleDashed, Undo2,
 } from 'lucide-react';

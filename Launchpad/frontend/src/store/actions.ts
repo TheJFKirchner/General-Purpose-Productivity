@@ -1,7 +1,7 @@
 /* UI actions: everything a screen does that changes state and/or sends a message. Views call these (or plain
    send() for messages with no local state change); they never write the store themselves.
    Ported from the vanilla click handlers; the same messages go out. */
-import type { AgentFields, ChatMode, Id, McpConfig, McpKind, RoundAnswer } from '../contract';
+import type { AgentFields, ChatMode, Id, McpConfig, McpKind, ReviewAnswerOut, RoundAnswer, WorkflowDraft } from '../contract';
 import { getState, later, run, send, toast, type Ctx } from './core';
 import type { ChatSide, QueueItem, View } from './types';
 import type { GitOp, UiMessage } from '../contract';
@@ -42,6 +42,7 @@ export const actions = {
       c.st.ui.view = v;
       if (v === 'files') { if (!c.st.settings) send({ type: 'get_settings' }); fxBoot(c); gitScan(c); }
       if (v === 'crew') { requestCrew(c); if (!c.st.settings) send({ type: 'get_settings' }); send({ type: 'get_mcp' }); }
+      if (v === 'workflows') send({ type: 'workflows_get' });
       if (v === 'settings') { send({ type: 'get_settings' }); send({ type: 'get_mcp' }); c.st.ui.settingsMsg = null; }
       if (v === 'plan' && c.st.ui.chatSide === 'code' && !c.st.crewDefs && !c.st.crewLoading) requestCrew(c);
     });
@@ -605,6 +606,27 @@ export const actions = {
   listMcpImports(source: string) { run(c => { if (send({ type: 'list_mcp_imports', source })) c.st.mcpImports[source] = { loading: true }; }); },
   closeMcpImports(source: string) { run(c => { delete c.st.mcpImports[source]; }); },
   importMcpServers(source: string, names: string[]) { if (names.length) send({ type: 'import_mcp_servers', source, names }); },
+  /* ---------- workflows ---------- */
+  workflowsGet() { send({ type: 'workflows_get' }); },
+  /** From an Incoming review card: show the Workflows tab with that run's review open. */
+  openWorkflowReview(runId: string) { run(c => { c.st.ui.view = 'workflows'; c.st.wf.openReview = runId; send({ type: 'workflows_get' }); }); },
+  clearOpenReview() { run(c => { c.st.wf.openReview = null; }); },
+  /** Browse for an output folder: the picked path only fills the form's field (never connected as a working directory). */
+  pickOutputFolder() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; c.st.ui.pickFor = 'output'; toast(c, 'Choose a folder in the picker window…'); } }); },
+  clearPickedOutput() { run(c => { c.st.ui.pickedOutput = null; }); },
+  /** Save (add, or edit with the id it had). The server answers workflows_list (error on a refusal). */
+  saveWorkflow(folder: string, workflow: WorkflowDraft, originalId?: string) {
+    run(c => { c.st.wf.error = null; send(originalId ? { type: 'workflow_save', folder, workflow, original_id: originalId } : { type: 'workflow_save', folder, workflow }); });
+  },
+  removeWorkflow(id: string) { send({ type: 'workflow_remove', id }); },
+  runWorkflow(id: string, inputs: Record<string, string>, test: boolean, unattended: boolean) {
+    run(c => { c.st.wf.error = null; const w = c.st.wf.list.find(x => x.id === id); if (w) delete c.st.wf.runErrors[w.id]; send({ type: 'workflow_run', id, inputs, test, unattended }); });
+  },
+  stopWorkflow(runId: string) { send({ type: 'workflow_stop', run_id: runId }); },
+  /** Approve or send back one review stage (the server remembers the name: workflows_list reviewer_name). */
+  reviewWorkflow(o: { runId: string; stage: number; answers: ReviewAnswerOut[]; name: string; note: string; decision: 'approve' | 'send_back'; backTo?: number }) {
+    send({ type: 'workflow_review', run_id: o.runId, stage: o.stage, answers: o.answers, name: o.name.trim(), note: o.note.trim(), decision: o.decision, ...(o.backTo != null ? { back_to: o.backTo } : {}) });
+  },
   setAgentMcp(agent: string, servers: string[]) {
     run(c => { if (send({ type: 'set_agent_mcp', agent, servers })) c.st.mcp.assignments[agent] = servers; });
   },
@@ -613,7 +635,7 @@ export const actions = {
     const p = String(path || '').trim(); if (!p) return;
     run(c => { if (send({ type: 'add_directory', path: p })) { c.st.ui.settingsAdding = p; toast(c, 'Adding the folder…'); } });
   },
-  pickDirectory() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; toast(c, 'Choose a folder in the picker window…'); } }); },
+  pickDirectory() { run(c => { if (send({ type: 'pick_directory' })) { c.st.ui.picking = true; c.st.ui.pickFor = null; toast(c, 'Choose a folder in the picker window…'); } }); },
   /** One setting changed (the view checks numbers first). */
   setSetting(key: string, value: unknown) { run(c => { if (send({ type: 'set_settings', patch: { [key]: value } })) toast(c, 'Setting sent'); }); },
   makeDefaultDir(dirId: Id) { send({ type: 'set_settings', patch: { default_dir_id: dirId } }); },

@@ -5,11 +5,11 @@
 import type {
   ActivityEvent, AgentFields, AgentUsageEvent, BackupItem, ChatMode, CliChoiceEvent, CrewAgentDef, DirEntry, Directory, FileContentEvent,
   FileErrorCode, GitOp, GitRepo, Id, PermissionSuggestion, PlannerChoiceEvent, PlanStep, Question, RoleCase, RoleDecision, RoleEntry, RoundAnswer, RunUsage,
-  ReviewTest, ConnectionTestEvent, McpImportCandidate, McpServer, NamedItem, SettingValue, SkillInfo, StepStatus, VisualOption,
+  ReviewTest, ConnectionTestEvent, McpImportCandidate, McpServer, Workflow, WorkflowRun, WorkflowsListEvent, NamedItem, SettingValue, SkillInfo, StepStatus, VisualOption,
 } from '../contract';
 
 /** Header tabs. The chat screen ('plan') holds both conversations behind the Planner / CLI switch. */
-export type View = 'plan' | 'missions' | 'crew' | 'files' | 'settings';
+export type View = 'plan' | 'missions' | 'crew' | 'files' | 'workflows' | 'settings';
 /** Which side of the chat screen's switch is showing. */
 export type ChatSide = 'planner' | 'code';
 export type SessionStatus = 'planning' | 'running' | 'done' | 'stopped' | 'failed' | 'blocked';
@@ -38,7 +38,7 @@ export interface Round {
 }
 
 /** agent / agent_display: the agent assigned to the step (null = the Builder). */
-export interface RunStep { n: number; title: string; status: StepStatus; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null; skills?: string[]; skills_unknown?: string[]; role?: string }
+export interface RunStep { n: number; title: string; status: StepStatus; waiting_for?: 'review'; built: string[]; report_path: string; agent?: string | null; agent_display?: string | null; agent_fallback?: boolean; agent_purpose?: string | null; skills?: string[]; skills_unknown?: string[]; role?: string }
 export interface Run { name: string; started: number; finished?: number; steps: RunStep[] }
 export interface Report { path: string; markdown: string; total: number | null }
 
@@ -60,6 +60,8 @@ export interface VisualSet {
 
 export interface Session {
   id: Id;
+  /** set for a workflow run (the server's marker): labelled with the workflow, no planner actions */
+  wf: { id: string; name: string; run_id: string; test: boolean } | null;
   letter: string;
   folder: string;
   dirId: Id | null;
@@ -130,7 +132,7 @@ export interface Session {
 export type QueueUi = 'open' | 'sent' | 'timedout' | 'autopilot' | 'auto' | 'decided' | 'ended';
 export interface QueueItem {
   id: Id;
-  kind: 'question' | 'permission' | 'info' | 'report' | 'plan';
+  kind: 'question' | 'permission' | 'info' | 'report' | 'plan' | 'review';
   session_id: Id | null;
   agent?: string;
   agent_id?: Id | null;
@@ -148,6 +150,10 @@ export interface QueueItem {
   review_id?: string;
   role?: string;
   test?: ReviewTest | '';
+  /** kind review: the workflow run waiting for sign-off, and which stage */
+  workflow?: { id: string; name: string; run_id: string; test: boolean };
+  run_id?: string;
+  stage?: number;
   at: number;
   ui: QueueUi;
   answer?: string;
@@ -239,6 +245,16 @@ export interface McpState {
 }
 /** A Test click: testing until connection_test answers, then done with the answer. */
 export type ConnTest = { status: 'testing' } | { status: 'done'; result: Omit<ConnectionTestEvent, 'type' | 'id'> };
+/** Workflows: the last workflows_list (folders a workflow can be saved in, the agents a stage may name per folder, the name
+    typed at the last sign-off), every run seen (workflow_run_state; newest per workflow in `latest`), the last save / remove
+    error, and a refusal per workflow (a refused Run, a refused review) in `runErrors`. */
+export interface WorkflowsState {
+  /** a run id to open on the review screen (set by an Incoming review card, taken by the Workflows view) */
+  openReview: string | null;
+  loaded: boolean; list: Workflow[]; folders: WorkflowsListEvent['folders']; agents: WorkflowsListEvent['agents']; reviewerName: string;
+  runs: Record<string, WorkflowRun>; latest: Record<string, string>; error: string | null; runErrors: Record<string, string>;
+}
+
 /** An import candidate list for one source: loading until mcp_imports answers. */
 export type McpImportList = { loading: true } | { loading: false; servers: McpImportCandidate[] };
 
@@ -341,6 +357,10 @@ export interface UiState {
   settingsAdding: string | null;
   settingsAddPath: string;
   picking: boolean;
+  /** who asked for the folder picker: 'output' = the workflow form (the path only fills its field), else Settings (adds a working directory) */
+  pickFor: 'output' | null;
+  /** the folder picked for the workflow form, waiting for the form to take it (null = none; '' = cancelled) */
+  pickedOutput: string | null;
   dirMenu: { top: number; left: number; right: number; bottom: number } | null;
   toasts: Toast[];
 }
@@ -418,6 +438,7 @@ export interface AppState {
   reviews: Record<string, RoleReview>;
   roleOpen: string | null;
   mcp: McpState;
+  wf: WorkflowsState;
   connTests: Record<string, ConnTest>;
   mcpImports: Record<string, McpImportList>;
   crewRemoving: string | null;            // agent_remove sent, waiting for agent_removed

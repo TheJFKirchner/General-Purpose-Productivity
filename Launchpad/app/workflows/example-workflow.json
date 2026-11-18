@@ -1,0 +1,53 @@
+{
+  "format": 1,
+  "name": "Example: weekly status note",
+  "description": "Finds what changed in the folder this week, drafts a short status note, and stops for a person to check it.",
+  "output_folder": "workflow-runs/weekly-status",
+  "unattended_default": false,
+  "inputs": [
+    {
+      "name": "week_ending",
+      "label": "Week ending",
+      "kind": "date",
+      "required": true,
+      "default": "",
+      "options": [],
+      "help": "The Friday the note covers, as YYYY-MM-DD."
+    },
+    {
+      "name": "audience",
+      "label": "Audience",
+      "kind": "choice",
+      "required": true,
+      "default": "Team",
+      "options": ["Team", "Management"],
+      "help": "Who reads the note."
+    }
+  ],
+  "files": [],
+  "stages": [
+    {
+      "kind": "agent",
+      "title": "Find what changed",
+      "agent": "launchpad-astronaut",
+      "instruction": "List the files in the working folder that changed in the week ending on the week_ending input, with one line each on what changed. Read only what you need.",
+      "files": []
+    },
+    {
+      "kind": "agent",
+      "title": "Draft the note",
+      "agent": "launchpad-builder",
+      "instruction": "Write a status note of at most ten lines for the audience input, from the earlier stage's list. Plain language, no file paths. Put the note itself in your result.",
+      "files": []
+    },
+    {
+      "kind": "review",
+      "title": "Check the note",
+      "checklist": [
+        {"text": "Every point in the note is true", "kind": "tick"},
+        {"text": "The note fits the audience", "kind": "tick"},
+        {"text": "Anything to add before it goes out?", "kind": "answer"}
+      ]
+    }
+  ]
+}

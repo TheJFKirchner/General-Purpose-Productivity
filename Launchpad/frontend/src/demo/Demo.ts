@@ -12,6 +12,7 @@ import { esc } from '../lib/markdown';
 import { visExtra, visJs } from './visuals';
 import { demoGitOn, demoGitRepos } from './gitDemo';
 import { demoMcp, demoMcpOn } from './mcpDemo';
+import { demoWorkflows, demoWorkflowsOn } from './workflowsDemo';
 import { DEMO_DRAFT_USAGE, demoCase, demoRoles, demoVerdict } from './rolesDemo';
 import { agentPath, crewBase, DEMO_SKILLS, demoFiles, DRAFT_C_MARKDOWN, FILES, folderAgentsBase, fsDirs, fsVals, PLANNER_OLD_BACKUP, PRICE, PROMOTION_PATH, START_USES, TOOL_CHOICES, type DemoFile } from './data';
 
@@ -67,6 +68,7 @@ export class Demo {
   uses: Record<string, number> = { ...START_USES };
   folderAgents = folderAgentsBase();
   mcp = demoMcp();                                          // the MCP library, its assignments and secrets
+  wfs = demoWorkflows();                                    // workflows and their runs
   roles = demoRoles();                                      // undefined roles (the tally), as roles_list shows them
   roleCases: Record<string, Ev> = {};                       // role -> the case its review wrote
   skillSet: Record<string, 'all' | string[]> = {};          // set_agent_skills (agent name -> setting)
@@ -410,6 +412,7 @@ export class Demo {
   start(): void {
     this.fsSettings();
     this.rolesEmit();
+    demoWorkflowsOn({ type: 'workflows_get', quiet: true }, this.wfs, ev => this.emit(ev), () => {});
     this.pkEmit();
     this.cliEmit();
     actions.setQuiet(true);
@@ -736,6 +739,8 @@ export class Demo {
       case 'test_connection': case 'get_mcp': case 'save_mcp_server': case 'remove_mcp_server': case 'test_mcp_server':
       case 'list_mcp_imports': case 'import_mcp_servers': case 'set_agent_mcp':
         demoMcpOn(msg, this.mcp, ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
+      case 'workflows_get': case 'workflow_save': case 'workflow_remove': case 'workflow_run': case 'workflow_stop': case 'workflow_review':
+        demoWorkflowsOn(msg, this.wfs, ev => this.emit(ev), (ms, fn) => { this.later(ms, fn); }); break;
       case 'set_autopilot': this.setAutopilot(msg.session_id, !!msg.on); break;
       case 'set_auto_answers': this.setAutoAnswers(msg.session_id, !!msg.on); break;
       case 'planner_promote': {

@@ -26,6 +26,7 @@ class Settings:
     builder_turn_timeout_s: float | None = None    # builder turns include user waits -> no limit; Stop ends a run
     orchestrator_nudges: int = 2               # turns without run_builder/write_report before the run fails
     builder_runs_per_step: int = 2             # cap on builder runs = steps x this
+    demo: bool = False                         # --fake demo: seeds the sample workflow run (app/demo.py)
 
     def __post_init__(self):
         self.project = Path(self.project).resolve()

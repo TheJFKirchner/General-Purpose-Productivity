@@ -39,7 +39,7 @@ export function initialState(): AppState {
       queueFilter: 'all', feedRun: '', feedAgent: '', hov: null, sel: null, focus: null, focusScroll: false,
       stopConfirm: null, apConfirm: null, pickerChoosing: null, cliChoosing: null, newPlanBusy: false, newChatBusy: false,
       vis: { open: false, wide: false, width: 0 },
-      settingsMsg: null, settingsAdding: null, settingsAddPath: '', picking: false,
+      settingsMsg: null, settingsAdding: null, settingsAddPath: '', picking: false, pickFor: null, pickedOutput: null,
       dirMenu: null, toasts: [],
     },
     replaying: false, quiet: false,
@@ -51,6 +51,7 @@ export function initialState(): AppState {
  crewForm: initialCrewForm(),
     roles: { loaded: false, threshold: 2, resurface: 5, entries: [] }, reviews: {}, roleOpen: null,
     mcp: { loaded: false, servers: [], assignments: {}, connections: [], importSources: [], error: null }, connTests: {}, mcpImports: {},
+    wf: { openReview: null, loaded: false, list: [], folders: [], agents: {}, reviewerName: '', runs: {}, latest: {}, error: null, runErrors: {} },
     crewRemoving: null, crewError: null, crewFlash: null,
     settings: null, fx: initialFx(), files: {}, editor: initialEditor(), git: initialGit(),
   };

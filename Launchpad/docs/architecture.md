@@ -81,6 +81,20 @@ Settings page --save / test / import--> hub._mcp_message -> mcplib (mcp.json) ->
 agent about to start -> hub.give_mcp -> crew.attach_mcp -> mcplib.for_agent -> agent.mcp_servers (+ warnings)
 ```
 
+## Workflows
+
+- **What**: a recurring report or study registered once as `<connected folder>/workflows/<slug>.json` (primary + additional folders): a straight line of agent stages and review stages, named inputs, attached markdown files (links), an output folder. The file is the single definition; the Workflows view's form writes it. Format and module map: [app/workflows/README.md](../app/workflows/README.md).
+- **Run** (`app/workflows/runner.py`): a new path, not plan approval. Each agent stage runs one Crew agent (Builder, Explorer or a folder step worker) through the same `StepContext` as a plan step (questions, permission cards, Builder guards, read-only rules, Auto answers, Autopilot), with Launchpad's stage tools; its first message carries the instruction, inputs, attachments (read at the start of the run), earlier results and any send-back note; code writes its result file. A review stage waits for a sign-off (checklist, name, note): approve goes on, send-back re-runs from the chosen agent stage and keeps the rejected attempts. Unattended = Auto answers + Autopilot for agent stages; reviews always stop.
+- **Records**: each run gets a dated folder (test runs: one `test` folder, emptied each time, only when it holds Launchpad's marker) with result files, review records, `run-summary.md`, `run.json`, questions and data files; the run folder may be outside every connected folder and agents may write there without a card. Bookkeeping (activity log, costs) goes to `<folder>/.launchpad/workflow-runs/<run id>/`.
+- **Live state**: runs live in memory in the hub (`app/workflows/manager.py`), one per workflow at a time, replayed on reconnect; each also shows in Missions under session id `wf-<run id>` through the ordinary run events.
+
+```
+Workflows view --workflow_run--> manager.start (checks, test folder, run folder) -> WorkflowRun.go
+   agent stage -> StageContext (StepContext) -> crew.load / load_step_worker -> agentlib -> submit_report -> NN-<stage>.md
+   review stage -> awaiting_review ... workflow_review -> record -> approve: next stage | send_back: re-run from back_to
+   every change -> workflow_run_state + run-summary.md (+ step_update for Missions)
+```
+
 ## Supporting modules (flat in `app/`)
 
 - `plan.py` plan.md render / parse / validate / targeted edits · `sessionfiles.py` the session folder files
@@ -95,6 +109,7 @@ agent about to start -> hub.give_mcp -> crew.attach_mcp -> mcplib.for_agent -> a
 - `<folder>/.launchpad/<session-id>/`: written at run time inside each connected folder, ignored by git through its own `.gitignore`: `plan.md`, `flight-log.md`, `steps/`, `assumptions.md`, `operations-manual.md`, `report.md`, `activity.log`, `decisions.md`, `questions/` (one `NNN-<slug>.md` per answered question, kept across runs), `visuals/` (an older run's steps and report move to `run-<k>/`).
 - `<home>/.launchpad/`: per-user, outside every project: `settings.json` (connected folders, `additional_dir_ids`, settings, agent use counts, `agent_skills`), `backups/` of hand-edited files, `roles.json` (the undefined-roles tally; written under `roles.json.lock` with re-read + atomic replace, so two Launchpad windows keep each other's updates) `role-cases/` (one markdown case per review, with cost, date and the user's decision) and `mcp.json` (the MCP library: servers with their secrets, last test results, agent assignments; same lock + atomic replace). `LAUNCHPAD_HOME` moves it; `--fake` uses its own temp home (sample roles and a sample MCP library seeded there).
 - `<folder>/.claude/agent-cases/<agent>.md`: the review case of an agent created on the define path (beside `.claude/agents/`, never loaded as an agent).
+- `<folder>/workflows/<slug>.json`: workflow definitions (the user's files). Each run's records go to the folder the workflow names (`<output>/<YYYY-MM-DD_HHMM>/` or `<output>/test/` with the marker `.launchpad-test-folder`); bookkeeping to `<folder>/.launchpad/workflow-runs/<run id>/`. `settings.json` also keeps `reviewer_name` (the last sign-off name).
 
 - No database; the in-memory hub state is rebuilt for a reconnecting page from the snapshot.
 

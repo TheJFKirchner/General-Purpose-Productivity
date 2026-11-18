@@ -20,8 +20,8 @@ export function openReport(sid: string): void {
     actions: () => {
       const s2 = getState().sessions[sid];
       return [
-        ...(path && rroot != null ? [{ label: 'Edit report', icon: <Pencil />, onClick: () => actions.openEditor(rroot, path) }] : []),
-        { label: s2?.reportSent ? 'Sent to planner' : 'Send to planner', icon: <Send />, primary: true, disabled: !!s2?.reportSent, onClick: () => { actions.sendReport(sid); } },
+        ...(path && rroot != null && !s.wf ? [{ label: 'Edit report', icon: <Pencil />, onClick: () => actions.openEditor(rroot, path) }] : []),
+        ...(s2?.wf ? [] : [{ label: s2?.reportSent ? 'Sent to planner' : 'Send to planner', icon: <Send />, primary: true, disabled: !!s2?.reportSent, onClick: () => { actions.sendReport(sid); } }]),
       ];
     },
   });

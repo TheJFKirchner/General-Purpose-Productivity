@@ -60,6 +60,7 @@ export const KIND_TAG: Record<string, { cls: string; text: string }> = {
   info: { cls: 'info', text: 'Update' },
   report: { cls: 'info', text: 'Report' },
   plan: { cls: 'ques', text: 'Plan' },
+  review: { cls: 'ques', text: 'Sign-off' },
 };
 
 /** The Role Reviewer's five tests, in the fixed order the case shows them (titles as the server writes them). */

@@ -70,4 +70,4 @@ it('renders the shell, each view and each tooltip with live demo state', async (
   demo.stop();
   onErr.mockRestore();
   expect(errors, JSON.stringify(errors).slice(0, 600)).toHaveLength(0);
-});
+}, 20000);

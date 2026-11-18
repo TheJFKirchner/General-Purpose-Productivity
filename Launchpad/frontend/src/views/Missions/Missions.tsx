@@ -12,7 +12,7 @@ import { useAnimationFrame } from '../../lib/hooks';
 import { REDUCED, usd } from '../../lib/format';
 import { AP_HINT, S_LABEL } from '../../lib/labels';
 import { ROCKS, SYS, SystemsEngine, stepXY } from './systems';
-import { FileText, MessagesSquare, Plus, Rocket, Send } from '../../components/icons';
+import { FileText, MessagesSquare, Plus, Rocket, Send, UserCheck } from '../../components/icons';
 
 const { CX, CY, R } = SYS;
 
@@ -193,8 +193,9 @@ function SystemActions({ st, s }: { st: AppState; s: Session }) {
       : <Pill size="sm" disabled={s.stopping} onClick={() => actions.stopRun(sid)}>{s.stopping ? 'Stopping…' : 'Stop run'}</Pill>) : null}
     {s.report ? <>
       <Pill size="sm" variant="primary" icon={<FileText />} onClick={() => openReport(sid)}>Read report</Pill>
-      <Pill size="sm" disabled={s.reportSent} icon={s.reportSent ? undefined : <Send />} onClick={() => actions.sendReport(sid)}>{s.reportSent ? 'Sent to planner' : 'Send to planner'}</Pill>
+      {s.wf ? null : <Pill size="sm" disabled={s.reportSent} icon={s.reportSent ? undefined : <Send />} onClick={() => actions.sendReport(sid)}>{s.reportSent ? 'Sent to planner' : 'Send to planner'}</Pill>}
     </> : null}
+    {s.wf && s.status === 'running' && sel.reviewWaiting(s) ? <Pill size="sm" variant="primary" icon={<UserCheck />} onClick={() => actions.openWorkflowReview(s.wf!.run_id)}>Open the review</Pill> : null}
     {s.draft ? <Pill size="sm" variant="soft" onClick={() => openPlan(sid)}>Read plan</Pill> : null}
     {fin && s.draft && !sel.draftLaunched(s) ? <Pill size="sm" variant="primary" icon={<Rocket />} disabled={s.approving} onClick={() => actions.approve(sid)}>{s.approving ? 'Launching…' : 'Approve new plan'}</Pill> : null}
     {sel.hasChat(s) && sid !== st.current ? <Pill size="sm" variant="ghost" icon={<MessagesSquare />} onClick={() => openArchive(sid)}>Planning chat</Pill> : null}
@@ -223,7 +224,7 @@ function LandedChip({ s }: { s: Session }) {
       <Letter state={s.status === 'done' ? 'done' : s.status === 'failed' ? 'wait' : 'off'}>{s.letter}</Letter><span className="pn">{sel.sName(s)}</span>
       <Status status={s.status} label={S_LABEL[s.status]} />
       <Pill size="xs" variant="soft" onClick={() => openReport(sid)}>Report</Pill>
-      <Pill size="xs" disabled={s.reportSent} onClick={() => actions.sendReport(sid)}>{s.reportSent ? 'Sent' : 'Send to planner'}</Pill>
+      {s.wf ? null : <Pill size="xs" disabled={s.reportSent} onClick={() => actions.sendReport(sid)}>{s.reportSent ? 'Sent' : 'Send to planner'}</Pill>}
     </span>
   );
 }

@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent, type ReactNode } from 'react';
 import { actions, sel, useComputed, useLaunchpad, type View } from '../store';
 import { lsGet, lsSet, LS_SIDEBAR } from '../lib/storage';
-import { FolderTree, MessagesSquare, Orbit, PanelLeftClose, PanelLeftOpen, Settings, Users } from './icons';
+import { FolderTree, MessagesSquare, Orbit, PanelLeftClose, PanelLeftOpen, Settings, Users, Workflow } from './icons';
 
 type NavEntry = { view: View; label: string; icon: ReactNode; title?: string; group: 'main' | 'bottom' };
 
@@ -15,6 +15,7 @@ const NAV: NavEntry[] = [
   { view: 'missions', label: 'Missions', icon: <Orbit />, group: 'main' },
   { view: 'crew', label: 'Crew', icon: <Users />, group: 'main' },
   { view: 'files', label: 'Files', icon: <FolderTree />, group: 'main' },
+  { view: 'workflows', label: 'Workflows', icon: <Workflow />, group: 'main', title: 'Workflows: studies and reports you run more than once, with review stops' },
   { view: 'settings', label: 'Settings', icon: <Settings />, group: 'bottom', title: 'Settings: connections, MCP servers, connected folders, timers, models' },
 ];
 
@@ -37,7 +38,7 @@ function useMediaQuery(query: string): boolean {
 
 export function Sidebar() {
   const view = useLaunchpad(st => st.ui.view);
-  const { running, chatWaiting } = useComputed(st => ({ running: sel.inFlight(st).length, chatWaiting: sel.plannerWaiting(st) + sel.codeWaiting(st) }));
+  const { running, chatWaiting, wfWait, wfGoing } = useComputed(st => ({ running: sel.inFlight(st).length, chatWaiting: sel.plannerWaiting(st) + sel.codeWaiting(st), wfWait: sel.wfWaiting(st), wfGoing: sel.wfRunning(st) }));
   const [pref, setPref] = useState<boolean>(() => lsGet<boolean>(LS_SIDEBAR, false) === true);
   /* at 1240 px and below the sidebar is icons only whatever the choice (the views need the room); the choice returns when the window widens */
   const narrow = useMediaQuery('(max-width: 1240px)');
@@ -64,6 +65,10 @@ export function Sidebar() {
     const on = view === t.view;
     const badge = t.view === 'plan' && chatWaiting > 0 && !on
       ? <span className="nbadge warn" aria-label={`${chatWaiting} waiting in the chats`}>{chatWaiting}</span>
+      : t.view === 'workflows' && wfWait > 0
+        ? <span className="nbadge warn" aria-label={`${wfWait} review${wfWait === 1 ? '' : 's'} waiting for you`}>{wfWait}</span>
+      : t.view === 'workflows' && wfGoing > 0 && !on
+        ? <span className="nbadge" aria-label={`${wfGoing} workflow${wfGoing === 1 ? '' : 's'} running`}>{wfGoing}</span>
       : t.view === 'missions' && running > 0
         ? <span className="nbadge" aria-label={`${running} in flight`}>{running}</span>
         : null;

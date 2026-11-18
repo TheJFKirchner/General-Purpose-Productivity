@@ -28,6 +28,11 @@ Walks the whole V1 loop so the UI can be reviewed without spending anything:
   their session folders are made up, so the reviewer says they are gone); the fake Role Reviewer walks all three
   verdicts: frontend-dev -> keep, copy-editor -> not_yet, data-migrator -> one question card, then define (the
   drafter then fills the form from the case)
+- workflows: "Demo shop" holds a sample workflow (DEMO_WORKFLOW: Explorer, Builder, copy-reviewer, a sign-off review
+  with a checklist, a closing summary-email stage) with its method pages and data, and the shipped example
+  (app/workflows/example-workflow.json), both in the primary demo folder so they show without ticking anything. seed_workflow_run() starts the sample with its first three stages
+  already finished, so the card and Missions show a run waiting at the sign-off; approving runs the last stage on the
+  fake Builder; Run / Test run work as in the real app (workflow_stage_turn scripts the stage agents)
 - Settings > Connections: Claude Code's test finds the real program and version (read-only) and sends its one
   request to the fake engine; Cursor's is the real install check. MCP library: seed_mcp() fills the demo's temp home
   with three servers (two local demo servers that really pass their test, one URL server that fails), assignments
@@ -394,6 +399,123 @@ def seed_mcp(lib, folders: list[Path], claude_home: Path) -> None:
         "projects": projects}, indent=1), encoding="utf-8")
 
 
+# ---------------------------------------------------------------- workflows (sample workflow + a run waiting at its review)
+DEMO_WORKFLOW_SLUG = "monthly-sales-report"
+DEMO_WORKFLOW = {
+    "format": 1, "name": "Monthly sales report",
+    "description": "Builds the month's sales figures from the order export, has the copy reviewer prepare a memo, "
+                   "stops for the sales lead's sign-off, then writes the summary email.",
+    "output_folder": "reports/monthly-sales", "unattended_default": False,
+    "inputs": [
+        {"name": "month_end", "label": "Month end", "kind": "date", "required": True, "default": "2026-10-31",
+         "options": [], "help": "Last day of the month the report covers."},
+        {"name": "orders_file", "label": "Order export", "kind": "file", "required": True,
+         "default": "data/orders-2026-10.csv", "options": [], "help": "CSV export from the shop."},
+        {"name": "region", "label": "Region", "kind": "choice", "required": True, "default": "All",
+         "options": ["All", "North", "South"], "help": ""}],
+    "files": ["docs/sales-report-method.md"],
+    "stages": [
+        {"kind": "agent", "title": "Find the inputs", "agent": "launchpad-astronaut",
+         "instruction": "Find the order export named in the inputs and last month's report, and say what each holds.",
+         "files": []},
+        {"kind": "agent", "title": "Build the figures", "agent": "launchpad-builder",
+         "instruction": "Total the orders for the month by product line and region, excluding refunds, as the method "
+                        "says. Save the table as figures.csv in the run folder and put the table in your result.",
+         "files": ["docs/figure-rules.md"]},
+        {"kind": "agent", "title": "Prepare the review memo", "agent": FOLDER_AGENT_NAME,
+         "instruction": "Check the figures against the method: what you verified, what looks off, and questions for "
+                        "the sales lead.", "files": []},
+        {"kind": "review", "title": "Sales lead sign-off", "checklist": [
+            {"text": "Totals tie to the order export", "kind": "tick"},
+            {"text": "Refunds are excluded", "kind": "tick"},
+            {"text": "Anything unusual this month?", "kind": "answer"}]},
+        {"kind": "agent", "title": "Write the summary email", "agent": "launchpad-builder",
+         "instruction": "Write a five-line summary email of the month's sales for the team, from the figures and "
+                        "the reviewer's notes.", "files": []}],
+}
+DEMO_WORKFLOW_FILES = {
+    f"workflows/{DEMO_WORKFLOW_SLUG}.json": None,                          # filled from DEMO_WORKFLOW
+    "docs/sales-report-method.md": "# Sales report method (made up)\n- Month = calendar month of the order date\n"
+                                   "- Refunds are excluded\n- Totals in pounds, two decimals\n",
+    "docs/figure-rules.md": "# Figure rules (made up)\n- One row per product line and region\n- Round at the end\n",
+    "data/orders-2026-10.csv": "date,product,region,amount,refund\n2026-10-02,Mugs,North,24.00,0\n"
+                               "2026-10-09,Prints,South,61.50,0\n2026-10-15,Mugs,South,12.00,1\n",
+}
+DEMO_SEED_RESULTS = {
+    0: "- `data/orders-2026-10.csv`: the October order export (date, product, region, amount, refund flag); 3 rows.\n"
+       "- No earlier report was found in `reports/monthly-sales/`; this is the first run.",
+    1: "| Product line | North | South | Total |\n|---|---|---|---|\n| Mugs | 24.00 | 0.00 | 24.00 |\n"
+       "| Prints | 0.00 | 61.50 | 61.50 |\n| **Total** | **24.00** | **61.50** | **85.50** |\n\n"
+       "One refunded order (Mugs, South, 12.00) was excluded. Table saved as `figures.csv` in the run folder.",
+    2: "## Verified\n- Totals add up to 85.50 across both regions.\n- The refunded order is left out, as the method says.\n\n"
+       "## Looks off\n- South had no mug sales apart from the refund; worth a glance.\n\n"
+       "## Questions for the sales lead\n- Should the refunded order appear as a note in the email?",
+}
+
+
+def workflow_files() -> dict[str, str]:
+    """Files the demo puts in "Demo shop" for its sample workflow (the workflow file, its method pages, the data)."""
+    import json as _json
+    return {k: (_json.dumps(DEMO_WORKFLOW, indent=2) + "\n" if v is None else v) for k, v in DEMO_WORKFLOW_FILES.items()}
+
+
+def example_workflow_file() -> tuple[str, str]:
+    """The shipped example workflow (app/workflows/example-workflow.json), for "Demo shop" beside the sample."""
+    src = Path(__file__).resolve().parent / "workflows" / "example-workflow.json"
+    return "workflows/example-weekly-status.json", src.read_text(encoding="utf-8")
+
+
+async def seed_workflow_run(hub) -> None:
+    """--fake: start the sample workflow with its first three stages already finished, so the card and Missions
+    show a believable run waiting at the sales lead's sign-off. Best-effort: a missing folder just skips it."""
+    try:
+        wid = next((w["id"] for w in hub.workflows.scan()[0] if w["slug"] == DEMO_WORKFLOW_SLUG), None)
+        if wid is None:
+            return
+        await hub.workflows.start(wid, {"month_end": "2026-10-31", "orders_file": "data/orders-2026-10.csv",
+                                        "region": "All"}, test=False, unattended=False, seed_results=DEMO_SEED_RESULTS)
+    except Exception as e:  # noqa: BLE001 -- the demo must start even if the sample run cannot be made
+        await hub.system(f"Demo: the sample workflow run was not seeded ({type(e).__name__}: {e})")
+
+
+def _run_folder(msg: str) -> str:
+    m = re.search(r"Run folder \(write any data files here\): (.+)", msg)
+    return m.group(1).strip() if m else "."
+
+
+def workflow_stage_turn(msg: str, who: str) -> list:
+    """Fake agents in a workflow stage: a few believable tool calls, then submit_report with a markdown result."""
+    m = re.search(r"stage \d+ of \d+: (.+?)(?: \(test run\))?$", msg, re.M)
+    title = m.group(1).strip() if m else "Stage"
+    folder = _run_folder(msg)
+    note = re.search(r"- (.+?) at review \"(.+?)\": (.+)", msg)
+    redo = f"\n\nRe-done after {note.group(1)}'s note: {note.group(3)}" if note else ""
+    if who == "astronaut":
+        return [fake.call("Glob", {"pattern": "data/*.csv"}), fake.call("Read", {"file_path": "data/orders-2026-10.csv"}),
+                fake.spend(0.002), fake.call("submit_report", {
+                    "result": DEMO_SEED_RESULTS[0] + redo, "status": "done", "issues": [], "assumptions": []})]
+    if who == "reviewer":
+        return [fake.call("Read", {"file_path": "docs/sales-report-method.md"}), fake.spend(0.003),
+                fake.call("submit_report", {"result": DEMO_SEED_RESULTS[2] + redo, "status": "done",
+                                            "issues": [], "assumptions": []})]
+    if "email" in title.lower():
+        return [fake.call("Read", {"file_path": "docs/sales-report-method.md"}), fake.spend(0.006),
+                fake.call("Write", {"file_path": f"{folder}/summary-email.md", "content": "October sales"}),
+                fake.call("submit_report", {"result": (
+                    "**Subject: October sales**\n\nOctober sales came to 85.50 across both regions: Mugs 24.00 "
+                    "(North), Prints 61.50 (South). One refunded order of 12.00 was left out. Nothing unusual "
+                    "beyond the quiet month for mugs in the South. Full table attached (figures.csv)." + redo),
+                    "status": "done", "issues": [], "assumptions": ["The team reads amounts in pounds"],
+                    "files": ["summary-email.md"]})]
+    return [fake.call("Read", {"file_path": "data/orders-2026-10.csv"}), fake.call("Bash", {"command": "python -c \"print(85.5)\""}),
+            fake.call("Write", {"file_path": f"{folder}/figures.csv", "content": "line,north,south\n"}),
+            fake.call("ask_question", {"title": "Round to whole pounds?", "body": "The method says two decimals; "
+                      "the old report used whole pounds.", "recommended": "Two decimals, as the method says",
+                      "options": ["Two decimals, as the method says", "Whole pounds"], "blocking": False}),
+            fake.spend(0.01), fake.call("submit_report", {"result": DEMO_SEED_RESULTS[1] + redo, "status": "done",
+                                                          "issues": [], "assumptions": [], "files": ["figures.csv"]})]
+
+
 def _section(test: str, finding: str, strength: str, quote: str = "", source: str = "") -> dict:
     return {"test": test, "finding": finding, "strength": strength,
             "evidence": [{"quote": quote, "source": source}] if quote else []}
@@ -576,6 +698,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- astronaut
     def astronaut(msg: str) -> list:
+        if msg.startswith('Workflow "'):                  # a workflow stage (app/workflows/runner.py)
+            return workflow_stage_turn(msg, "astronaut")
         links = [{"path": f, "answer": f"{f} explains how this part of the project is organised."} for f in files
                  if f != "(none)"]
         if links:
@@ -611,6 +735,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- builder
     def builder(msg: str) -> list:
+        if msg.startswith('Workflow "'):                  # a workflow stage (app/workflows/runner.py)
+            return workflow_stage_turn(msg, "builder")
         m = re.search(r"Build step (\d+)", msg)
         n = int(m.group(1)) if m else 1
         if "round 2" in msg or n >= 4:                    # revised plans and added steps: quick, no cards
@@ -678,6 +804,8 @@ def install(project: Path) -> None:
 
     # ---------------------------------------------------------------- folder agent (copy-reviewer, read-only)
     def copy_reviewer(msg: str) -> list:
+        if msg.startswith('Workflow "'):
+            return workflow_stage_turn(msg, "reviewer")
         return [fake.call("Read", {"file_path": "demo-output/landing.md"}),
                 fake.call("Grep", {"pattern": "teh|recieve|seperate", "path": "demo-output"}),
                 fake.call("Write", {"file_path": "demo-output/landing.md", "content": "fixed"}),   # refused: read-only

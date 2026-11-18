@@ -1,10 +1,10 @@
 /* Small shared display pieces (class names from the vanilla CSS in theme.css). */
 import type { ReactNode } from 'react';
 import { KIND_TAG, S_LABEL } from '../lib/labels';
-import { CircleHelp, ClipboardList, FileText, Info, Loader2, ShieldAlert } from './icons';
+import { CircleHelp, ClipboardList, FileText, Info, Loader2, ShieldAlert, UserCheck } from './icons';
 
 const KIND_ICON: Record<string, ReactNode> = {
-  question: <CircleHelp />, permission: <ShieldAlert />, info: <Info />, report: <FileText />, plan: <ClipboardList />,
+  question: <CircleHelp />, permission: <ShieldAlert />, info: <Info />, report: <FileText />, plan: <ClipboardList />, review: <UserCheck />,
 };
 
 /** Kind tag with its icon: Question / Permission / Update / Report / Plan (.tag.ques|perm|info). */

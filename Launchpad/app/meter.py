@@ -83,7 +83,10 @@ class Meter:
     # ---------------------------------------------------------------- activity feed
     async def _activity_start(self, call) -> None:
         owner = self.hub.sessions.get(self.session_id or "") or self.hub.chats.get(self.chat_id or "")
-        project = owner.folder.project if owner is not None else self.hub.settings.project
+        wf = getattr(self.hub, "workflows", None)
+        run = wf.mission(self.session_id) if wf is not None and owner is None else None
+        project = (owner.folder.project if owner is not None else
+                   run.folder.project if run is not None else self.hub.settings.project)
         roots = [project, *self.path_roots]
         try:
             roots += self.hub.extra_dirs(None)[1]
