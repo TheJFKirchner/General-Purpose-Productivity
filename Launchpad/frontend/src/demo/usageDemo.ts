@@ -1,5 +1,5 @@
-/* In-page demo for the Usage screen: about six weeks of made-up, varied history (every kind of session, three models, two
-   CLIs, many agents so "Other" appears, two running sessions), grouped the way the server groups it. Deterministic, so
+/* In-page demo for the Usage screen: about six weeks of made-up, varied history (every kind of session, short CLI chats on
+   most days as a baseline, three models, two CLIs, many agents so "Other" appears, two running sessions), grouped the way the server groups it. Deterministic, so
    the screen and its tests always see the same figures; "today" is the real day so the history always ends now. Shapes follow
    the app/server.py header ("Usage screen"): bucket objects, series with `values` / `totals` / `members`, "__other__" for the rest. */
 import type { UsageBucket, UsageBucketInfo, UsageDataEvent, UsageMeasure, UsagePeriod, UsageRequest, UsageSeries, UsageSession, UsageSessionKind, UsageSplit } from '../contract';
@@ -24,6 +24,13 @@ const SESSIONS: DemoSession[] = [
   { id: 'u-plan-6', kind: 'plan', folder: 'Claims analytics', label: 'Denials dashboard', daysAgo: 1, hour: 10, running: true, span: 2, agents: [['Planner', 'Opus'], ['Builder', 'Sonnet'], ['Explorer', 'Haiku'], ['Orchestrator', 'Sonnet'], ['Visualizer', 'Haiku']] },
   { id: 'u-chat-4', kind: 'chat', folder: 'Demo shop', label: 'CLI chat', daysAgo: 0, hour: 8, running: true, span: 1, agents: [['CLI chat', 'Sonnet']] },
 ];
+/* light day-to-day use between the big sessions (a short CLI chat on five days in seven), so the chart has the steady
+   baseline a real log builds up, with the plans and workflow runs standing out above it */
+const DAILY: DemoSession[] = Array.from({ length: 40 }, (_, k) => k + 2).filter(d => d % 7 !== 3 && d % 7 !== 4).map(d => ({
+  id: `u-chat-d${d}`, kind: 'chat' as const, folder: d % 3 ? 'Claims analytics' : 'Demo shop', label: 'CLI chat', daysAgo: d, hour: 16, running: false, span: 1,
+  agents: [['CLI chat', d % 4 ? 'Haiku' : 'Sonnet', d % 5 === 0 ? 'Cursor' : undefined]] as DemoSession['agents'],
+}));
+const ALL_SESSIONS: DemoSession[] = [...SESSIONS, ...DAILY];
 
 /* a small seeded generator: the same numbers every time */
 function rng(seed: number): () => number { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -32,7 +39,7 @@ const PRICE: Record<string, number> = { Opus: 1, Sonnet: 0.35, Haiku: 0.08 };
 function buildCalls(today: Date): Call[] {
   const out: Call[] = [];
   const r = rng(20261117);
-  for (const s of SESSIONS) {
+  for (const s of ALL_SESSIONS) {
     for (let d = 0; d < s.span; d++) {
       const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - s.daysAgo + d, s.hour, 0, 0);
       if (day.getTime() > Date.now() && !s.running) continue;
@@ -109,7 +116,7 @@ export function demoUsage(q: { period: UsagePeriod; bucket: UsageBucket; split: 
   for (const s of series) for (const m of USAGE_MEASURES) s.values[m] = s.values[m].map(v => Math.round(v * 1e6) / 1e6);
 
   const sessions: UsageSession[] = [];
-  for (const s of SESSIONS) {
+  for (const s of ALL_SESSIONS) {
     const mine = inPeriod.filter(c => c.session === s.id);
     if (!mine.length) continue;
     const t = zero();

@@ -1,4 +1,4 @@
-/* Usage: what the agents cost. Totals for the period, a stacked bar chart (bucket day / week, split CLI / model / agent,
+/* Usage: what the agents cost. Totals for the period, a smooth stacked area chart with toggleable legend pills (bucket day / week, split CLI / model / agent,
    measure cost or one of four token counts, period 7 / 30 / 90 days / all), a sessions table under it (running first,
    sortable; a click narrows the chart to that session, shown as a chip that clears it) and a CSV of what the chart shows.
    Message: usage_get -> usage_data (see the app/server.py header). Every series carries all five measures, so changing
@@ -11,7 +11,7 @@ import { USAGE_MEASURES } from '../../contract';
 import { Empty, Loading, Pill, ViewFrame } from '../../components';
 import { ArrowUpDown, ChartColumnStacked, FileDown, X } from '../../components/icons';
 import {
-  buildCsv, coloursFor, csvName, downloadText, fmtShort, fmtValue, folderName, hasBars, kindLabel, MEASURE_LABEL, sortSessions, startedText, valuesOf,
+  buildCsv, coloursFor, csvName, downloadText, fillBuckets, loadChartType, saveChartType, type ChartType, fmtShort, fmtValue, folderName, hasData, isOther, kindLabel, MEASURE_LABEL, sortSessions, startedText, valuesOf,
   type SessionSort,
 } from '../../lib/usageChart';
 
@@ -19,8 +19,10 @@ const UsageChart = lazy(() => import('./UsageChart'));
 
 const PERIODS: { v: UsagePeriod; label: string }[] = [{ v: '7d', label: '7 days' }, { v: '30d', label: '30 days' }, { v: '90d', label: '90 days' }, { v: 'all', label: 'All' }];
 const BUCKETS: { v: UsageBucket; label: string }[] = [{ v: 'day', label: 'Day' }, { v: 'week', label: 'Week' }];
+const CHART_TYPES: { v: ChartType; label: string }[] = [{ v: 'line', label: 'Line' }, { v: 'bar', label: 'Bar' }];
 const SPLITS: { v: UsageSplit; label: string }[] = [{ v: 'cli', label: 'CLI' }, { v: 'model', label: 'Model' }, { v: 'agent', label: 'Agent' }];
 const TOTAL_LABEL: Record<UsageMeasure, string> = { cost: 'Total cost', input_tokens: 'Input tokens', output_tokens: 'Output tokens', cache_read_tokens: 'Cache read tokens', cache_write_tokens: 'Cache write tokens' };
+const SPLIT_WORD: Record<UsageSplit, string> = { cli: 'CLI', model: 'model', agent: 'agent' };
 
 function Seg<T extends string | number>({ label, value, options, onPick }: { label: string; value: T; options: { v: T; label: string }[]; onPick: (v: T) => void }) {
   return (
@@ -33,24 +35,32 @@ function Seg<T extends string | number>({ label, value, options, onPick }: { lab
 
 export default function Usage() {
   const active = useLaunchpad(st => st.ui.view === 'usage');
-  const data = useLaunchpad(st => st.usage.data);
+  const raw = useLaunchpad(st => st.usage.data);
   const pending = useLaunchpad(st => st.usage.pending);
   const [period, setPeriod] = useState<UsagePeriod>('30d');
   const [bucket, setBucket] = useState<UsageBucket>('day');
   const [split, setSplit] = useState<UsageSplit>('cli');
   const [measure, setMeasure] = useState<UsageMeasure>('cost');
+  const [chartType, setChartType] = useState<ChartType>(loadChartType);   // Line / Bar, remembered (lp.usageChart); a redraw only
+  const pickChartType = (t: ChartType) => { setChartType(t); saveChartType(t); };
   const [session, setSession] = useState<string | null>(null);
   const [sort, setSort] = useState<SessionSort>({ key: 'time', dir: 'desc' });
   const all = useRef<UsageSession[]>([]);               // the sessions list as last sent for the whole period (it stays while the chart is narrowed)
+  const [hidden, setHidden] = useState<string[]>([]);   // series switched off with their legend pill (keys); cleared when the split changes
+  /* the server sends every bucket of the period; fillBuckets only adds any it skipped (zeros), so the lines always span the period */
+  const data = useMemo(() => (raw ? fillBuckets(raw, raw.request?.bucket ?? bucket) : null), [raw]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ask while the screen is showing, and again when a request control changes (not the measure: every series has all five) */
   useEffect(() => { if (active) actions.usageGet({ period, bucket, split, session }); }, [active, period, bucket, split, session]);
   /* leaving the screen: the server stops pushing */
   useEffect(() => { if (active) return () => actions.usageStop(); }, [active]);
+  useEffect(() => { setHidden([]); }, [split]);
+  const toggleSeries = (key: string) => setHidden(h => (h.includes(key) ? h.filter(k => k !== key) : [...h, key]));
   if (data && !session) all.current = data.sessions;
   const sessions = session ? all.current : data?.sessions ?? [];
   const picked = session ? sessions.find(s => s.id === session) ?? null : null;
-  const legendColours = data ? coloursFor(split, data.series) : [];
+  const dSplit = data?.request?.split ?? split;         // the split the data on screen was grouped by (a newer request may be on its way)
+  const legendColours = data ? coloursFor(dSplit, data.series) : [];
   const rows = useMemo(() => sortSessions(sessions, sort), [sessions, sort]);
 
   /* range null = nothing recorded at all (the log is empty); otherwise an empty period or session */
@@ -77,6 +87,7 @@ export default function Usage() {
                     {USAGE_MEASURES.map(m => <option key={m} value={m}>{MEASURE_LABEL[m]}</option>)}
                   </select>
                 </label>
+                <Seg label="Chart" value={chartType} options={CHART_TYPES} onPick={pickChartType} />
               </div>
 
               {empty ? (
@@ -86,8 +97,9 @@ export default function Usage() {
               ) : (
             <>
               <ul className="us-totals" aria-label="Totals for the period">
-                {USAGE_MEASURES.map(m => (
-                  <li key={m} className={m === measure ? 'on' : ''}><span className="us-tl">{TOTAL_LABEL[m]}</span><b>{fmtValue(m, data.totals[m])}</b></li>
+                {/* the chosen measure first and large, the other four quieter beside it */}
+                {[measure, ...USAGE_MEASURES.filter(x => x !== measure)].map(m => (
+                  <li key={m} className={m === measure ? 'on' : ''} aria-current={m === measure ? 'true' : undefined}><span className="us-tl">{TOTAL_LABEL[m]}</span><b>{fmtValue(m, data.totals[m])}</b></li>
                 ))}
               </ul>
 
@@ -99,17 +111,28 @@ export default function Usage() {
               ) : null}
 
               <div className={`us-chartwrap${pending > 0 ? ' busy' : ''}`}>
-                {hasBars(data, measure) ? (
+                <div className="us-chead">
+                  <h2 className="us-ctitle">{MEASURE_LABEL[measure]} <span>per {bucket}, by {SPLIT_WORD[split]}</span></h2>
+                  <ul className="us-legend" aria-label={`Series, by ${split}. Press one to hide or show it in the chart`}>
+                    {data.series.map((s, i) => {
+                      const tot = valuesOf(s, measure, data.buckets.length).reduce((a, b) => a + b, 0);
+                      const on = !hidden.includes(s.key);
+                      const tip = `${s.members.length ? `Includes: ${s.members.join(', ')}. ` : ''}${on ? 'Hide' : 'Show'} ${s.label} in the chart`;
+                      return (
+                        <li key={s.key}>
+                          <button type="button" className={`us-pill${isOther(s) ? ' other' : ''}`} aria-pressed={on} title={tip} onClick={() => toggleSeries(s.key)}>
+                            <i className="us-sw" style={{ background: legendColours[i], borderColor: legendColours[i] }} aria-hidden="true" /><span className="us-ln">{s.label}</span><span className="us-lv">{fmtValue(measure, tot)}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                {hasData(data, measure) ? (
                   <Suspense fallback={<div className="us-chartwait"><Loading>Loading chart…</Loading></div>}>
-                    <UsageChart data={data} measure={measure} bucket={bucket} split={split} label={chartLabel} />
+                    <UsageChart data={data} measure={measure} bucket={data.request?.bucket ?? bucket} split={dSplit} label={chartLabel} hidden={hidden} type={chartType} />
                   </Suspense>
                 ) : <div className="us-chartwait"><span className="us-note">Nothing to show for {MEASURE_LABEL[measure].toLowerCase()} in this view.</span></div>}
-                <ul className="us-legend" aria-label={`Series, by ${split}`}>
-                  {data.series.map((s, i) => {
-                    const tot = valuesOf(s, measure, data.buckets.length).reduce((a, b) => a + b, 0);
-                    return <li key={s.key} title={s.members.length ? `Includes: ${s.members.join(', ')}` : undefined}><i className="us-sw" style={{ background: legendColours[i] }} aria-hidden="true" /><span className="us-ln">{s.label}</span><span className="us-lv">{fmtValue(measure, tot)}</span></li>;
-                  })}
-                </ul>
               </div>
 
               {data.error ? <p className="warn" role="alert">The usage log could not be read: {data.error}</p> : null}

@@ -5,6 +5,8 @@ import { expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { dispatch, getState } from '../../store';
 import { useDemoApp, step, q, qa, click, sentOf, byText } from '../../test/demoApp';
+import { loadChartType } from '../../lib/usageChart';
+import { LS_USAGE_CHART } from '../../lib/storage';
 
 useDemoApp();
 const open = async () => { await click(q('header .usage')); await step(1000); };
@@ -49,6 +51,20 @@ it('asks again for period, bucket and split but not for the measure', async () =
   await step(500);
   expect(sentOf('usage_get').length).toBe(m);
   expect(qa('.us-totals li.on .us-tl')[0].textContent).toBe('Cache read tokens');
+});
+
+it('legend pills switch a series off and on without a request; the chosen measure leads the totals', async () => {
+  await open();
+  const n = sentOf('usage_get').length;
+  const pill = q('.us-legend .us-pill')!;
+  expect(pill.getAttribute('aria-pressed')).toBe('true');
+  await click(pill);
+  expect(q('.us-legend .us-pill')!.getAttribute('aria-pressed')).toBe('false');
+  await click(q('.us-legend .us-pill'));
+  expect(q('.us-legend .us-pill')!.getAttribute('aria-pressed')).toBe('true');
+  expect(sentOf('usage_get').length).toBe(n);
+  expect(qa('.us-totals li[aria-current="true"] .us-tl').map(e => e.textContent)).toEqual(['Total cost']);
+  expect(q('.us-ctitle')!.textContent).toContain('per day, by CLI');
 });
 
 it('a session row narrows the chart with a chip that clears it, and sorts by cost', async () => {
@@ -97,4 +113,18 @@ it('ignores a reply or push for controls the page no longer has, and stops the p
   expect(getState().usage.data).toBe(before);
   await click(q('#tab-plan'));
   expect(sentOf('usage_stop')).toHaveLength(1);
+});
+
+it('switches Line / Bar without a request and remembers the choice across a reload', async () => {
+  await open();
+  const n = sentOf('usage_get').length;
+  expect(byText('.us-ctl .seg button', 'Line')!.getAttribute('aria-pressed')).toBe('true');   // Line by default
+  expect(loadChartType()).toBe('line');
+  await click(byText('.us-ctl .seg button', 'Bar'));
+  expect(byText('.us-ctl .seg button', 'Bar')!.getAttribute('aria-pressed')).toBe('true');
+  expect(JSON.parse(localStorage.getItem(LS_USAGE_CHART)!)).toBe('bar');
+  expect(loadChartType()).toBe('bar');                                                        // what a reload starts from
+  expect(sentOf('usage_get').length).toBe(n);
+  localStorage.setItem(LS_USAGE_CHART, JSON.stringify('pie'));
+  expect(loadChartType()).toBe('line');
 });

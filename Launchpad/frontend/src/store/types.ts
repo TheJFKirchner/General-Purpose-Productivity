@@ -343,7 +343,9 @@ export interface UiState {
   queueFilter: 'all' | 'permission' | 'question';
   feedRun: string;
   feedAgent: string;
-  hov: Id | null;                         // agent hovered in Missions / feed
+  /** the right-hand panel is closed to a slim strip (every view; kept in localStorage lp.asideClosed) */
+  asideClosed: boolean;
+  hov: Id | null;                        // agent hovered in Missions / feed
   sel: Id | null;                         // agent pinned
   focus: Id | null;                       // run focused in Missions
   focusScroll: boolean;

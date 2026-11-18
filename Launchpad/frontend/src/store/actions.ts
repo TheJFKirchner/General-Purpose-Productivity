@@ -15,7 +15,7 @@ import { newReview, reviewOf } from './roles';
 import type { RoleDecision } from '../contract';
 import { MODES, WRITE_TOOLS } from '../lib/labels';
 import { REDUCED } from '../lib/format';
-import { LS_EDITOR_VIEW, lsSet } from '../lib/storage';
+import { LS_ASIDE, LS_EDITOR_VIEW, lsSet } from '../lib/storage';
 
 /* Repos panel: ask for the repo list (also when the Files tab opens); a lost answer must not leave the panel waiting */
 function gitScan(c: Ctx): void {
@@ -203,6 +203,8 @@ export const actions = {
 
   /* ---------- Incoming ---------- */
   setQueueFilter(f: 'all' | 'permission' | 'question') { run(c => { c.st.ui.queueFilter = f; }); },
+  /** Close the right-hand panel to a slim strip, or open it again (kept across a reload). */
+  setAsideClosed(closed: boolean) { lsSet(LS_ASIDE, closed); run(c => { c.st.ui.asideClosed = closed; }); },
   /** Answer a question card (an option, the recommendation or free text). */
   answerItem(id: Id, value: string) {
     run(c => {
