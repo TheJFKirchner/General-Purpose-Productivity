@@ -189,6 +189,40 @@ def filter_options(m: dict | None = None) -> dict:
     return out
 
 
+_MONTH = re.compile(r"^\d{4}-\d{2}$")
+_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def describe(m: dict | None = None) -> dict:
+    """Every table: rows, and per column its kind (number, date, month, text, boolean), a sample value, and the
+    range of a date or month column. Works for dropped-in files too (no manifest needed)."""
+    m = m or manifest()
+    out = {}
+    with LOCK.read():
+        con = _con.cursor()
+        try:
+            for name, entry in m["tables"].items():
+                src = _source_sql(_path(name, m))
+                rows = con.execute(f"SELECT COUNT(*) FROM {src}").fetchone()[0]
+                cols = {}
+                for col, kind in (entry.get("columns") or {}).items():
+                    q = f'"{col}"'
+                    sample = con.execute(f"SELECT {q} FROM {src} WHERE {q} IS NOT NULL LIMIT 1").fetchone()
+                    sample = None if sample is None else sample[0]
+                    text = str(sample)[:24] if sample is not None else ""
+                    k = "month" if _MONTH.match(text) else ("date" if kind == "date" or _DAY.match(text) else kind)
+                    k = "text" if k == "string" else k
+                    info = {"type": k, "sample": text}
+                    if k in ("date", "month"):
+                        lo, hi = con.execute(f"SELECT MIN({q}), MAX({q}) FROM {src}").fetchone()
+                        info["range"] = [str(lo)[:10], str(hi)[:10]]
+                    cols[col] = info
+                out[name] = {"rows": rows, "columns": cols}
+        finally:
+            con.close()
+    return out
+
+
 class Tables:
     """What an analytic receives: t.<table> (filtered DataFrame), t.filters, t.params (slow parameters)."""
 

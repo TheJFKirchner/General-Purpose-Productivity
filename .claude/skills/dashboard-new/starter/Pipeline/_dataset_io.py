@@ -27,6 +27,7 @@ import datetime as dt
 import importlib.util
 import inspect
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -95,13 +96,34 @@ def params() -> dict:
     return {k: (dt.date.fromisoformat(v) if spec.get(k, {}).get("type") == "month_end" else v) for k, v in values.items()}
 
 
-def write_source(name: str, path: str | Path, *, as_of_from: str | None = None, as_of: str | None = None,
-                 source: str | None = None) -> Path:
+def _report_source(report: str | Path, name: str) -> Path:
+    """The file a report's SOURCES names (report.py read as text, never run), from the dashboard folder."""
+    import ast
+
+    folder = (ROOT / report).resolve()
+    tree = ast.parse((folder / "report.py").read_text(encoding="utf-8-sig"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "SOURCES" for t in node.targets):
+            sources = ast.literal_eval(node.value)
+            if name not in sources or not isinstance(sources[name], str):
+                raise KeyError(f"{folder.name}/report.py SOURCES has no file for '{name}' ({', '.join(sources)})")
+            return (folder / sources[name]).resolve()
+    raise KeyError(f"no SOURCES in {folder / 'report.py'}")
+
+
+def write_source(name: str, path: str | Path | None = None, *, report: str | Path | None = None,
+                 as_of_from: str | None = None, as_of: str | None = None, source: str | None = None) -> Path:
     """Save a source file as it is, as table <name> (.csv .tsv .parquet .xlsx; path from the dashboard folder).
-    Every input file gets one line like this in Pipeline/sources.py, including a report's SOURCES (same names).
+    Every input file gets one line like this in Pipeline/sources.py. A report's source: write_source("claims",
+    report="../claims-review") takes the file its report.py SOURCES names, under the same name.
     as_of_from: a date column; "Data as of" becomes its latest date (a month start counts as that month's end),
     so it moves on by itself when new data arrives."""
     import pandas as pd
+
+    if path is None:
+        if report is None:
+            raise ValueError(f"{name}: give a file path, or report=<report folder>")
+        path = _report_source(report, name)
 
     f = (ROOT / path).resolve() if not Path(path).is_absolute() else Path(path)
     readers = {".csv": pd.read_csv, ".tsv": lambda x: pd.read_csv(x, sep="\t"), ".parquet": pd.read_parquet,
@@ -117,7 +139,7 @@ def write_source(name: str, path: str | Path, *, as_of_from: str | None = None, 
         last = pd.to_datetime(df[as_of_from], errors="coerce").max()
         if pd.notna(last):
             as_of = (last + pd.offsets.MonthEnd(0) if last.day == 1 else last).strftime("%Y-%m-%d")
-    return write_dataset(name, df, grain="as in the source", source=source or str(path), as_of=as_of,
+    return write_dataset(name, df, grain="as in the source", source=source or Path(os.path.relpath(f, ROOT)).as_posix(), as_of=as_of,
                          script=Path(inspect.stack()[1].filename).name)
 
 

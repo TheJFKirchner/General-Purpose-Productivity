@@ -50,6 +50,9 @@ build(report)
   itself is not changed.
 - Commentary comes from the dashboard's `commentary.json` at build time; refresh it first if it should be new.
 
+Add a section to an existing report: `--report <name>` on `new-section`, or its id as one more line in
+`"sections"`. `npm run status` lists each report's sections and those its locked filter does not narrow.
+
 ## Make one (a readout, not screenshots)
 1. Ask: which sections, which filters the reader may change, what is fixed, the file name.
 2. Write `<name>.json` and `<name>.py` (copy the two above):

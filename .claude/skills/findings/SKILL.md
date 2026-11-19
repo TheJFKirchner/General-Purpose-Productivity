@@ -22,10 +22,10 @@ One file, `findings.md`: what the work has established against the project plan,
 
 | # | Finding | Plan item | Source | As of | Added |
 | --- | --- | --- | --- | --- | --- |
-| 1 | May 2026 paid claims were $6.22M, 3.9 times a normal month (months are when claims were paid). | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py monthly`, metrics `may`, `times_normal` | Claims paid to Jun 2026 | 2026-11-16 |
+| 1 | May 2026 paid claims were $6.22M, 3.9 times a normal month (months are when claims were paid). | Goal 1: explain the May rise | `reports/may-rise/`: `python run.py s1_monthly`, metrics `may`, `times_normal` | Claims paid to Jun 2026 | 2026-11-16 |
 | 2 | The May rise is a one-off. | Goal 1: explain the May rise | Finance lead, relayed by the user, 2026-11-16 (chat); not checked against data. See 3. | | 2026-11-16 |
-| 3 | Checks finding 2: 80% of the May rise is one batch of late-paid claims for March care. | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py by_batch`, table `by_batch`, top row, column `share` | Claims paid to Jun 2026 | 2026-11-17 |
-| 4 | Rerun on the July extract: findings 1 to 3 unchanged. | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py` | Claims paid to Jul 2026 | 2026-11-20 |
+| 3 | Checks finding 2: 80% of the May rise is one batch of late-paid claims for March care. | Goal 1: explain the May rise | `reports/may-rise/`: `python run.py s2_batch`, table `by_batch`, top row, column `share` | Claims paid to Jun 2026 | 2026-11-17 |
+| 4 | Rerun on the July extract: findings 1 to 3 unchanged. | Goal 1: explain the May rise | `reports/may-rise/`: `python run.py` | Claims paid to Jul 2026 | 2026-11-20 |
 ```
 
 - Where: the "Findings" line in the map in the project's CLAUDE.md. No line: put it beside the plan and add `- Findings: [findings.md](findings.md)` under the map's "Project plan" line.

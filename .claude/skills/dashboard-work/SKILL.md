@@ -7,8 +7,9 @@ description: "Change an existing dashboard (a folder with dashboard.config.json,
 
 ## How a dashboard is built
 - Find it from the project's `CLAUDE.md` map (the `dashboard/` row). Run every command inside it.
-- Tabs hold **sections**. A section is two files sharing an id such as `s3_paid_by_region`: its **analytic** (a
-  function in `Analysis/<tab>.py` returning `data` and `metrics`) and its look (`Src/Sections/<id>.jsx`).
+- Tabs hold **sections**. A section is one file, `Src/Sections/<id>.jsx`: meta (title, tables, description, and
+  for simple ones the numbers: `x`, `y`, `agg`), note and chart. Numbers are worked out in Python: from the meta,
+  or by its own **analytic** in `Analysis/<tab>.py` when the calculation is unusual.
 - **Data:** `Data/Current/`, one file per table, filled by `Pipeline/` scripts or dropped in.
 - **Settings:** all in `dashboard.config.json`. No environment variables. Edit files with the Edit tool; on
   Windows never `Set-Content`.
@@ -23,23 +24,25 @@ description: "Change an existing dashboard (a folder with dashboard.config.json,
   Fast (`filters`) narrow loaded data; slow (`parameters`) re-query the source. Sections draw no filter dropdowns.
 
 ## First: add or edit?
-Run `npm run status`: tabs, sections, tables (source, as-of), filters, commentary ids, reports.
+Run `npm run status`: every section (file, title, chart, tables, description), every table's columns, reports.
 - "Show X", "add a chart of Y": **Add a section**. "Change", "fix", "move", "looks wrong": **Edit a section**.
 
 ## Add a section
-1. Settle with the user: what it shows, its tab, and any new filter (its level, fast or slow).
-2. Pick its tables from `npm run status`. No table has the data yet: add it first (`references/data.md`).
-3. `npm run new-section -- <name> --title "<what it shows>" --page <tab> --tables <table> --chart echarts|table|kpi|text`.
-4. Fill its analytic and its look (`references/sections.md`).
-5. Add any new filter to the config; `npm run status` must list it on the section's `filters` line.
-6. `npm run check`, fix what it names, show the user.
+Run commands in the map's `dashboard/` folder, not the project root. Read nothing else; options: `references/sections.md` "Simple add".
+1. `npm run status`. Already there (same table, grouping, measure)? Tell the user which section; ask first.
+2. `npm run new-section -- <name> --page <tab> --tables <t> --chart bar|line|table|kpi --x <col> --y <col> --note "a | b"`.
+3. `npm run check`. 4. `npm run shot -- <id> <id>.png` (starts and stops its own server), look, show the user.
+
+Several tables, an unusual calculation or a report's analytic: the same page, below STOP HERE. A new filter:
+the config, at its level; `npm run status` then lists it on the section.
 
 ## Edit a section
-First see what it does now: `python Analysis/check.py --show <id>`. Open only its two files. Then `npm run check`.
+First see what it does now: `python Analysis/check.py --show <id>`. Open only its `.jsx` (its Python function too,
+when it has one and the numbers change). Then `npm run check`.
 
 | The user wants | Change |
 |---|---|
-| Different numbers | Its analytic in `Analysis/<tab>.py` |
+| Different numbers | `x`, `y`, `agg`, `by` in its meta, or its analytic in `Analysis/<tab>.py` |
 | Another chart or table, title or note | Its `.jsx` (`references/sections.md`). Titles say what is shown |
 | Looks only (colors, fonts, spacing) | `Src/custom.css` scoped to `#<id>`, or `Themes/default/tokens.json` |
 | Another tab | `tab:` in its meta only; the analytic stays where it is |
@@ -54,7 +57,7 @@ First see what it does now: `python Analysis/check.py --show <id>`. Open only it
 | Tables for the commentary skill | `npm run tables -- --sections <id,id> --by <column> --out <file>` |
 | An offline HTML report | `references/exports.md`; then add it to the map's `dashboard/` row |
 | Hosting; many sections at once | `references/hosting.md`; `references/helpers.md` (optional helpers) |
-| Remove a section | Ask first, then delete its two files, its `index.js` line, and it from any report |
+| Remove a section | Ask first, then delete its `.jsx` (and its analytic, if any), its `index.js` line, and it from any report |
 
 ## What to open
 | | Files |
@@ -69,7 +72,7 @@ In this skill folder open only this page and the reference a step names. Helpers
 | Command | Does |
 |---|---|
 | `npm run status` / `npm run check` | Map of the dashboard / every section, filter and report is sound |
-| `npm run shot -- <tab> <out.png> [region=West]` | A screenshot (uses or starts the dashboard) |
+| `npm run shot -- <tab or id> <out.png> [region=West]` | A screenshot; starts and stops its own server if needed |
 | `npm run dev` / `npm run stop` | Open it live (keeps running; prints its `Local:` address) / stop it |
 | `python Analysis/check.py --show <id> [--filter name=value]` | One section's numbers |
 | `npm run pipeline` (`-- --try <script>`) | Refresh all data (try one script) |

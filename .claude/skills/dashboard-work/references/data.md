@@ -25,8 +25,9 @@ write_dataset("claims_monthly", df, grain="month x region", as_of="2026-10-31",
 - Scripts run from inside `Pipeline/`; build file paths from the script's place: `Path(__file__).parent.parent`.
 
 ## A report's analytics
-Sections call the report's functions live (`from_report`, `sections.md`). The dashboard only needs the tables the
-report reads, loaded in `Pipeline/sources.py` under the names its `src()` uses. Shared thresholds and periods live in the analytics file's `DEFAULTS`; override one for the dashboard with
+Sections call the report's section functions live (`from_report`, `sections.md`). The dashboard only needs the
+tables the report reads, under the same names: `write_source("claims", report="../claims-review",
+as_of_from="service_month")` in `Pipeline/sources.py` takes the file the report's `SOURCES` names. Shared thresholds and periods live in the report's `sections/_shared.py` `DEFAULTS`; override one for the dashboard with
 `"analyticsDefaults": {"material": 0.3}` in `dashboard.config.json`.
 
 ## Prep that lives outside the dashboard

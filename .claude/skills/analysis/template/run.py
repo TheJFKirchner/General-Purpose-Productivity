@@ -2,10 +2,15 @@
 """Run and build this report. Do not edit. Do not read unless a command ended in a Python
 traceback (not a STOP: line) whose last lines are in this file.
 
-  python run.py                  run every analytic; print its question, metrics and tables
-  python run.py NAME [NAME ...]  run only those analytics
-  python run.py report           run what the report uses and build <folder>.html
+  python run.py list             the registry: sections in order (file, title, chart, description),
+                                 then sources with their columns
+  python run.py                  run every section's analytic; print question, metrics, table columns
+  python run.py NAME [NAME ...]  run only those (a section name or file id) [--rows N]
+  python run.py report           build <folder>.html
   python run.py text             print the report as plain text (for a cold read)
+  python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL]
+        [--agg sum|count|mean] [--by COL] [--where COL=VALUE] [--title "..."] [--desc "..."] [--bullets N] [--after N]
+                                 write sections/sN_NAME.py (a working section) and add it to SECTIONS
   python run.py shot [OUT.png]   screenshot the built report with Edge or Chrome
   python run.py data NAME [TABLE] [--json] [--out FILE]
                                  one table of an analytic (or TABLE=metrics) as CSV or JSON
@@ -29,12 +34,13 @@ import sys
 import traceback
 from pathlib import Path
 
+sys.dont_write_bytecode = True   # no __pycache__ folders in the report
 ROOT = Path(__file__).resolve().parent
 KEEP_DIR = ROOT / "data"
 ECHARTS_CDN = "https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 NUM_RE = re.compile(r"(?<![\w.])\$?\d[\d,]*(?:\.\d+)?[%KMB]?(?![\w])")
-SECTION_KEYS = {"analytic", "title", "bullets", "chart", "table", "kpis", "layout", "note", "export"}
+
 CHART_KEYS = {"type", "table", "x", "y", "axis", "x_axis", "format", "highlight", "sort", "top",
               "names", "height", "title", "labels", "ref"}
 CHART_TYPES = ("bar", "hbar", "line", "stack", "scatter")
@@ -71,8 +77,7 @@ def load_report():
     r.PARAMS = getattr(r, "PARAMS", None) or {}
     r.KEEP = list(getattr(r, "KEEP", None) or [])
     r.ANSWER = getattr(r, "ANSWER", None) or {}
-    r.SECTIONS = list(getattr(r, "SECTIONS", None) or [])
-    r.ANALYTICS = str(getattr(r, "ANALYTICS", "analytics") or "analytics")
+    r.SECTION_IDS = [str(s) for s in (getattr(r, "SECTIONS", None) or [])]
     if not isinstance(r.SOURCES, dict):
         raise Stop("report.py: SOURCES must be a dict of name -> file or function")
     for name in list(r.SOURCES) + r.KEEP:
@@ -84,31 +89,43 @@ def load_report():
     return r
 
 
-def load_analytics(rep) -> dict:
-    """name -> (function, file shown in the report). Every public function in every .py file."""
-    folder = (ROOT / rep.ANALYTICS).resolve()
-    if not folder.is_dir():
-        raise Stop(f"report.py: ANALYTICS folder '{rep.ANALYTICS}' does not exist")
-    if str(folder) not in sys.path:
-        sys.path.insert(0, str(folder))  # so analytics can import a _helpers.py beside them
-    found = {}
-    for p in sorted(folder.glob("*.py")):
-        if p.name.startswith("_"):
+SECTIONS_DIR = ROOT / "sections"
+SECTION_FILE_RE = re.compile(r"^s(\d+)_([a-z][a-z0-9_]*)$")
+SECTION_ATTRS = {"TITLE": "title", "BULLETS": "bullets", "CHART": "chart", "TABLE": "table", "KPIS": "kpis",
+                 "LAYOUT": "layout", "NOTE": "note", "EXPORT": "export", "DESCRIPTION": "description"}
+
+
+def load_sections(rep) -> dict:
+    """Each sections/sN_<name>.py is one block: DESCRIPTION, <name>(src, params), TITLE, BULLETS, CHART ...
+    sections/_shared.py holds DEFAULTS and helpers. Returns name -> (function, file, DEFAULTS) and sets
+    rep.SECTIONS (dicts, in report order) and rep.UNUSED (section files not in the order)."""
+    if str(SECTIONS_DIR) not in sys.path:
+        sys.path.insert(0, str(SECTIONS_DIR))  # so a section can `from _shared import ...`
+    shared = SECTIONS_DIR / "_shared.py"
+    defaults = (getattr(_load(shared, "_shared"), "DEFAULTS", None) or {}) if shared.exists() else {}
+    if not isinstance(defaults, dict):
+        raise Stop("sections/_shared.py: DEFAULTS must be a dict")
+    found, secs = {}, {}
+    for p in sorted(SECTIONS_DIR.glob("s*.py"), key=lambda p: (len(p.stem), p.stem)):
+        m = SECTION_FILE_RE.match(p.stem)
+        if not m:
             continue
-        mod = _load(p, f"analytics_{p.stem}")
-        defaults = getattr(mod, "DEFAULTS", None) or {}   # shared thresholds and periods; PARAMS override
-        if not isinstance(defaults, dict):
-            raise Stop(f"{rep.ANALYTICS}/{p.name}: DEFAULTS must be a dict")
-        for name, fn in vars(mod).items():
-            if name.startswith("_") or not callable(fn) or getattr(fn, "__module__", None) != mod.__name__:
-                continue
-            if not isinstance(fn, type(_load)):
-                continue
-            if name in found:
-                raise Stop(f"two analytics are named '{name}' ({found[name][1]} and {p.name})")
-            found[name] = (fn, f"{rep.ANALYTICS.rstrip('/')}/{p.name}", defaults)
-    if not found:
-        raise Stop(f"no analytic functions in {rep.ANALYTICS}/")
+        name = m.group(2)
+        mod = _load(p, p.stem)
+        fn = getattr(mod, name, None)
+        if not callable(fn):
+            raise Stop(f"sections/{p.name} must define its analytic: def {name}(src, params)")
+        if name in found:
+            raise Stop(f"two section files are named '{name}' ({found[name][1]} and sections/{p.name})")
+        found[name] = (fn, f"sections/{p.name}", defaults)
+        sec = {"analytic": name, "file": p.name}
+        sec.update({k: getattr(mod, a) for a, k in SECTION_ATTRS.items() if hasattr(mod, a)})
+        secs[p.stem] = sec
+    missing = [s for s in rep.SECTION_IDS if s not in secs]
+    if missing:
+        raise Stop(f"report.py SECTIONS names {', '.join(missing)}, but sections/ has: {', '.join(secs) or 'nothing'}")
+    rep.SECTIONS = [secs[s] for s in rep.SECTION_IDS]
+    rep.UNUSED = [s for s in secs if s not in rep.SECTION_IDS]
     return found
 
 
@@ -210,10 +227,12 @@ class Runner:
 
     def run(self, name: str) -> dict:
         import pandas as pd
+        m = SECTION_FILE_RE.match(name.removesuffix(".py"))
+        name = m.group(2) if m and m.group(2) in self.analytics else name   # s2_paid_by_month -> paid_by_month
         if name in self.results:
             return self.results[name]
         if name not in self.analytics:
-            raise Stop(f"no analytic named '{name}'. Analytics: {', '.join(self.analytics)}")
+            raise Stop(f"no section or analytic named '{name}'. Sections: {', '.join(self.analytics) or 'none'}")
         fn, where, defaults = self.analytics[name]
         print(f"  running {name} ...", file=sys.stderr, flush=True)
         try:
@@ -412,7 +431,7 @@ def chart_option(spec: dict, res: dict, where: str) -> dict:
     df = table_of(res, spec.get("table"), where)
     x = spec.get("x") or df.columns[0]
     ys = spec.get("y") or [c for c in df.columns if c != x][:1]
-    ys = [ys] if isinstance(ys, str) else list(ys)
+    ys = [c for c in df.columns if c != x] if ys == "*" else ([ys] if isinstance(ys, str) else list(ys))
     for c in [x, *ys]:
         if c not in df.columns:
             raise Stop(f"{where}: column '{c}' is not in table '{spec.get('table')}'. "
@@ -584,7 +603,7 @@ def chart_summary(o: dict) -> list[str]:
 
 def build(rep, runner: Runner, write: bool = True):
     if not rep.SECTIONS:
-        raise Stop("report.py: SECTIONS is empty. Agree the answer and its sections first, then list them")
+        raise Stop("report.py: SECTIONS is empty. Agree the answer, then add sections (python run.py add-section ...)")
     warns: list = []
     text: list = [rep.TITLE, rep.QUESTION, ""]
     filler = Filler(runner)
@@ -614,20 +633,14 @@ def build(rep, runner: Runner, write: bool = True):
     secs_html, contents, method = [], [], []
     exported = []
     for i, sec in enumerate(rep.SECTIONS, 1):
-        where = f"SECTIONS[{i - 1}]"
-        if not isinstance(sec, dict):
-            raise Stop(f"report.py {where}: must be a dict")
-        bad = set(sec) - SECTION_KEYS
-        if bad:
-            raise Stop(f"report.py {where}: unknown keys {sorted(bad)}; allowed: {', '.join(sorted(SECTION_KEYS))}")
-        if not sec.get("analytic"):
-            raise Stop(f"report.py {where}: needs 'analytic' (the function it shows)")
         res = runner.run(sec["analytic"])
-        where = f"section {i} ({res['name']})"
+        where = f"sections/{sec['file']}"
+        if not str(sec.get("description") or "").strip():
+            warns.append(f"{where}: no DESCRIPTION (8 to 10 words, shown by `python run.py list`)")
         filler.own, filler.own_name = res["metrics"], f"analytic '{res['name']}'"
-        title = filler.fill(sec.get("title") or "", f"{where} title", warns)
+        title = filler.fill(sec.get("title") or "", f"{where} TITLE", warns)
         if not title:
-            raise Stop(f"{where}: needs a 'title' (the finding, as a sentence)")
+            raise Stop(f"{where}: needs a TITLE (the finding, as a sentence)")
         text += ["", f"SECTION {i}: {title}", f"  question: {res['question']}"]
         kpi = kpis_html(sec.get("kpis"), filler, where, warns, text, shown)
         layout = sec.get("layout", "side")
@@ -762,23 +775,29 @@ def now() -> str:
 
 # ------------------------------------------------------------------ explore and main
 
-def print_result(res: dict):
+def print_result(res: dict, rows: int = 3):
     import pandas as pd
     print(f"\n{res['name']}  ({res['where']})\n  {res['question']}")
-    for m, v in res["metrics"].items():
-        print(f"  {m} = {v!r}")
+    print("  metrics: " + (", ".join(f"{m}={(f'{v:,.0f}' if abs(v) >= 1000 else f'{v:.4g}') if isinstance(v, float) else v}"
+                                     for m, v in res["metrics"].items()) or "none"))
     for t, df in res["tables"].items():
-        print(f"  table {t}: {len(df):,} rows x {len(df.columns)} columns")
-        with pd.option_context("display.width", 160, "display.max_columns", 12):
-            print("\n".join("    " + line for line in df.head(12).to_string(index=False).splitlines()))
+        print(f"  table {t} ({len(df):,} rows): {', '.join(map(str, df.columns))}")
+        if rows:
+            with pd.option_context("display.width", 160, "display.max_columns", 12):
+                print("\n".join("    " + line for line in df.head(rows).to_string(index=False).splitlines()))
     if res["notes"]:
         print(f"  notes: {res['notes']}")
 
 
 def export_data(runner: Runner, args: list, as_json: bool, out: str | None) -> int:
     """data NAME [TABLE]: one table (or 'metrics') as CSV or JSON, to stdout or --out. Nothing else saved."""
-    if not args or len(args) > 2:
-        raise Stop("use: python run.py data NAME [TABLE] [--json] [--out FILE]")
+    m = SECTION_FILE_RE.match(args[0].removesuffix(".py")) if args else None
+    known = args and (args[0] in runner.analytics or (m and m.group(2) in runner.analytics))
+    if not known or len(args) > 2:
+        print("Analytics and their tables (python run.py data NAME TABLE [--json] [--out FILE]):")
+        print("\n".join(_analytic_line(runner, n, _live(runner.rep)) for n in runner.analytics))
+        raise Stop(f"no analytic named '{args[0]}'" if args and not known else
+                   "use: python run.py data NAME [TABLE] [--json] [--out FILE]")
     res = runner.run(args[0])
     name = args[1] if len(args) == 2 else None
     if name == "metrics":
@@ -794,6 +813,369 @@ def export_data(runner: Runner, args: list, as_json: bool, out: str | None) -> i
         print(f"Wrote {out}", file=sys.stderr)
     else:
         sys.stdout.write(body)
+    return 0
+
+
+# ------------------------------------------------------------------ list and add-section
+
+MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})")
+MONEY_RE = re.compile(r"paid|amount|cost|price|spend|revenue|charge|premium|dollar", re.I)
+
+
+def time_kind(s) -> str:
+    """'date', 'month' or '' for a column."""
+    import pandas as pd
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return "date"
+    if not (s.dtype == object or pd.api.types.is_string_dtype(s)):
+        return ""
+    v = s.dropna().astype(str).head(200)
+    if not len(v):
+        return ""
+    return "month" if v.str.match(MONTH_RE).all() else ("date" if v.str.match(DATE_RE).all() else "")
+
+
+def describe_column(name, s) -> str:
+    import pandas as pd
+    kind, v = time_kind(s), s.dropna()
+    if kind:
+        d = pd.to_datetime(v, errors="coerce").dropna()
+        f = "%Y-%m-%d" if kind == "date" else "%Y-%m"
+        info = f"{d.min():{f}} to {d.max():{f}}" if len(d) else "no dates"
+    elif pd.api.types.is_bool_dtype(s):
+        kind, info = "yes/no", f"{int(v.sum()):,} yes"
+    elif pd.api.types.is_numeric_dtype(s):
+        kind = "number"
+        info = f"{fmt_value(v.min(), 'short')} to {fmt_value(v.max(), 'short')}" if len(v) else "empty"
+    else:
+        kind, n = "text", v.nunique()
+        eg = [str(x) for x in v.drop_duplicates().head(3)]
+        info = f"all different, e.g. {eg[0]}" if n == len(v) and n > 20 else \
+            f"{n:,} values: {', '.join(eg)}" + (" ..." if n > 3 else "")
+    return f"    {str(name):<18} {kind:<7} {info}"
+
+
+def _short(items, n=8) -> str:
+    items = list(items)
+    return ", ".join(map(str, items[:n])) + (f" (+{len(items) - n} more)" if len(items) > n else "") or "none"
+
+
+def _live(rep) -> list:
+    """Sources that need a live query (no file, no kept copy)."""
+    return [n for n, s in rep.SOURCES.items() if (callable(s) or str(s).lower().endswith(".sql"))
+            and not (n in rep.KEEP and (KEEP_DIR / f"{n}.parquet").exists())]
+
+
+def _analytic_line(runner, name, live) -> str:
+    """One line: the analytic's tables with their columns, and its metric names."""
+    import contextlib
+    import io
+    if live:
+        return f"     {name}(): not run here (a source is a live query); `python run.py {name}` shows it"
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            r = runner.run(name)
+    except Stop as e:
+        return f"     {name}(): fails: {e}"
+    tabs = "; ".join(f"table {t} [{_short(df.columns, 10)}]" for t, df in r["tables"].items()) or "no tables"
+    return f"     {name}(): {tabs}; metrics {_short(r['metrics'], 10)}"
+
+
+def inventory(rep, runner) -> int:
+    """list: the registry. One line per section in order, then sources with their columns."""
+    import contextlib
+    import io
+    page = ROOT / f"{ROOT.name}.html"
+    built = dt.datetime.fromtimestamp(page.stat().st_mtime).strftime("%Y-%m-%d %H:%M") if page.exists() else "not built"
+    basis = str(rep.ANSWER.get("basis") or "(not written)")
+    out = [f"{rep.TITLE}  ({page.name}: {built})",
+           "basis: " + (basis[:140] + " ..." if len(basis) > 140 else basis),
+           f"DEFAULTS (sections/_shared.py): {_short(f'{k}={v}' for k, v in runner.all_params().items() if k not in rep.PARAMS)}"
+           f" | PARAMS: {_short(f'{k}={v}' for k, v in rep.PARAMS.items())}",
+           ""]
+    live = _live(rep)
+    out.append(f"Sections ({len(rep.SECTIONS)}), in order"
+               + ("" if live else "; tables and metrics come from running each analytic once") + ":")
+    for i, s in enumerate(rep.SECTIONS, 1):
+        ch, title = s.get("chart"), str(s.get("title") or "(no title)")
+        kind = ch.get("type", "bar") if isinstance(ch, dict) else \
+            ("custom" if callable(ch) else ("table" if s.get("table") is not None else "text"))
+        desc = str(s.get("description") or "(no description)")
+        out.append(f"  {i}. {s['file']:<28} {kind:<6} {title[:50] + '...' if len(title) > 50 else title}  | {desc}")
+        out.append(_analytic_line(runner, s["analytic"], live))
+    for sid in rep.UNUSED:
+        out.append(f"  -  {sid}.py (not in the report)")
+        out.append(_analytic_line(runner, SECTION_FILE_RE.match(sid).group(2), live))
+    out.append("Sources:")
+    for n in rep.SOURCES:
+        if n in live:
+            out.append(f"  {n}: live query, not read here")
+            continue
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                df = runner.src(n)
+        except Stop as e:
+            out.append(f"  {n}: {e}")
+            continue
+        out.append(f"  {n}: {runner.src.used[n]['from']}, {len(df):,} rows")
+        out += [describe_column(c, df[c]) for c in df.columns[:15]]
+        if len(df.columns) > 15:
+            out.append(f"    ... {len(df.columns) - 15} more columns")
+    out.append("\nAdd one: python run.py add-section NAME --source SRC --chart bar --x COL [--y COL] [--where COL=VALUE] --bullets 2 "
+               "--desc \"8 to 10 words\"")
+    print("\n".join(out))
+    return 0
+
+
+def check_section(rep, runner, name) -> int:
+    """_check NAME: fill the texts of the sections that show NAME, as a reader would see them."""
+    warns, filler = [], Filler(runner)
+    for i, sec in enumerate(rep.SECTIONS, 1):
+        if not isinstance(sec, dict) or sec.get("analytic") != name:
+            continue
+        res, where = runner.run(name), f"section {i} ({name})"
+        filler.own, filler.own_name = res["metrics"], f"analytic '{name}'"
+        print(f"  section {i}: {filler.fill(sec.get('title') or '', where + ' title', warns)}")
+        for j, b in enumerate(sec.get("bullets") or []):
+            print(f"    - {filler.fill(b, f'{where} bullet {j + 1}', warns).replace('**', '')}")
+        if isinstance(sec.get("chart"), dict):
+            chart_option(sec["chart"], res, where)
+        if sec.get("table") is not None:
+            table_spec(sec["table"], res, where)
+    for w in warns:
+        print(f"  check: {w}")
+    return 0
+
+
+WHERE_RE = re.compile(r"^\s*([^<>=]+?)\s*(>=|<=|=)\s*(.+?)\s*$")
+WHERE_WORDS = {"=": "is", ">=": "is at least", "<=": "is at most"}
+
+
+def where_text(wheres) -> str:
+    return " and ".join(f"{pretty(c).lower()} {WHERE_WORDS[op]} {v}" for c, op, v, _ in wheres)
+
+
+def _analytic_code(name, src, x, y, agg, by, timed, chart, wheres=(), sig="") -> tuple[str, str, str, list]:
+    """-> (code, table name, value column, metric names)."""
+    xcol = "month" if timed else x
+    ycol = y if agg != "count" else src
+    tname = "by_month" if timed else f"by_{x}"
+    ylab = {"sum": pretty(ycol).lower(), "count": f"the number of {pretty(src).lower()}",
+            "mean": f"the average {pretty(ycol).lower()}"}[agg]
+    xlab = f"month of {pretty(x).lower()}" if timed == "date" else pretty(x).lower()
+    q = f"How does {ylab} vary by {xlab}" + (f", split by {pretty(by).lower()}" if by else "") \
+        + (f", where {where_text(wheres)}?" if wheres else "?")
+    keys = [xcol] + ([by] if by else [])
+    L = [f"def {name}(src, params):",
+         f'    """Added by add-section: {sig}. Edit freely."""',
+         "    import pandas as pd",
+         f'    df = src("{src}")']
+    for c, op, v, numeric in wheres:      # --where filters
+        op = "==" if op == "=" else op
+        L.append(f'    df = df[df["{c}"] {op} {v!r}]' if numeric else
+                 f'    df = df[df["{c}"].astype(str) {op} {json.dumps(str(v))}]')
+    if timed:
+        L += [f'    df["month"] = pd.to_datetime(df["{x}"], errors="coerce").dt.to_period("M")',
+              '    df = df.dropna(subset=["month"])']
+    L.append(f"    g = df.groupby({keys!r}).size()" if agg == "count" else f'    g = df.groupby({keys!r})["{y}"].{agg}()')
+    if by:
+        L += ["    t = g.unstack(fill_value=0)",
+              "    t = t[t.sum().sort_values(ascending=False).index]",
+              "    if t.shape[1] > 6:   # the five largest groups, the rest summed",
+              '        t = pd.concat([t.iloc[:, :5], t.iloc[:, 5:].sum(axis=1).rename("All other")], axis=1)',
+              "    t.columns = [str(c) for c in t.columns]",
+              "    t = t.reset_index()"]
+    else:
+        L.append(f'    t = g.rename("{ycol}").reset_index()')
+        if not timed and chart != "line":
+            L.append(f'    t = t.sort_values("{ycol}", ascending=False)')
+    if timed:
+        L += ['    t = t.sort_values("month")', '    t["month"] = t["month"].dt.strftime("%b %Y")']
+    L.append(f'    labels = t["{xcol}"].astype(str).reset_index(drop=True)')
+    if by:
+        L += [f'    groups = t.drop(columns=["{xcol}"])',
+              f'    vals = groups.{"mean" if agg == "mean" else "sum"}(axis=1).reset_index(drop=True)']
+    else:
+        L.append(f'    vals = t["{ycol}"].reset_index(drop=True)')
+    names = ["overall" if agg == "mean" else "total", "largest", "largest_label", "smallest", "smallest_label",
+             "groups"] + (["latest", "latest_label"] if timed else []) + (["top_group", "top_group_total"] if by else [])
+    L.append(f"    m = dict.fromkeys({names!r})   # empty input: every metric stays None")
+    if wheres:
+        names = names + ["where"]
+        L.append(f'    m["where"] = {json.dumps(where_text(wheres))}   # the filter, in words, for the note')
+    L += ["    if len(t):",
+          "        m.update(largest=vals.max(), largest_label=labels[vals.idxmax()], smallest=vals.min(),",
+          "                 smallest_label=labels[vals.idxmin()], groups=len(t))",
+          f'        m["overall"] = df["{y}"].mean()' if agg == "mean" else '        m["total"] = vals.sum()']
+    if timed:
+        L.append("        m.update(latest=vals.iloc[-1], latest_label=labels.iloc[-1])")
+    if by:
+        L.append("        m.update(top_group=groups.sum().idxmax(), top_group_total=groups.sum().max())")
+    L.append('    # another figure: add a key to the metrics dict m, e.g. m["share"] = ..., then use it as {share}')
+    notes = (f"Months come from {pretty(x).lower()}. " if timed == "date" else "") \
+        + (f"Only {pretty(src).lower()} where {where_text(wheres)}." if wheres else "")
+    L += ["    return {", f"        \"question\": {json.dumps(q)},", f'        "tables": {{"{tname}": t}},',
+          '        "metrics": m,', f"        \"notes\": {json.dumps(notes)},", "    }"]
+    return "\n".join(L) + "\n", tname, ycol, names
+
+
+def _section_file(sid, name, src, x, y, agg, by, timed, chart, title, n_bullets, desc, code, tname, ycol,
+                  wheres=()) -> str:
+    """The text of sections/<sid>.py: everything for one visual block."""
+    xcol = "month" if timed else x
+    money = agg != "count" and bool(MONEY_RE.search(y or ""))
+    f = "$short" if money else ("," if agg == "count" else (",.1f" if agg == "mean" else ",.0f"))
+    ylab = pretty(ycol) if agg != "mean" else f"Average {pretty(ycol).lower()}"
+    xlab = f"month of {pretty(x).lower()}" if timed == "date" else pretty(x).lower()
+    if not desc:
+        what = {"sum": f"Total {pretty(ycol).lower()}", "count": f"Number of {pretty(src).lower()}",
+                "mean": f"Average {pretty(ycol).lower()}"}[agg]
+        desc = f"{what} by {xlab}" + (f" and {pretty(by).lower()}" if by else "") \
+            + (f", where {where_text(wheres)}" if wheres else f", {chart} chart")
+    if not title:
+        title = f"{ylab} by {'month' if timed else xlab}: highest {{largest:{f}}}, in {{largest_label}}"
+    total = f"**Average:** {{overall:{f}}}." if agg == "mean" else \
+        f"**Total:** {{total:{f}}} over {{groups}} {'months' if timed else 'groups'}."
+    pool = [f"**Highest:** {{largest_label}}, {{largest:{f}}}.",
+            (f"**Largest {pretty(by).lower()}:** {{top_group}}, {{top_group_total:{f}}} in total." if by else
+             f"**Latest:** {{latest_label}}, {{latest:{f}}}." if timed else
+             f"**Lowest:** {{smallest_label}}, {{smallest:{f}}}."), total]
+    q = lambda s: json.dumps(s, ensure_ascii=False)  # noqa: E731
+    L = [f'"""Section {sid}: one block of the report. Everything for it is in this file."""', "",
+         f"DESCRIPTION = {q(desc)}", "", "", code.rstrip("\n"), "", "",
+         f"TITLE = {q(title)}   # reword: the finding, as a sentence"]
+    if n_bullets:
+        L += ["BULLETS = [   # reword each: what the figure means; keep the {placeholders}"]
+        L += [f"    {q(b)}," for b in pool[:n_bullets]] + ["]"]
+    if chart == "table":
+        fmt = f', "format": {{"{ycol}": "$,.0f"}}' if money and not by else ""
+        L.append(f'TABLE = {{"table": "{tname}", "top": 15{fmt}}}')
+    else:
+        L.append(f'CHART = {{"type": "{chart}", "table": "{tname}", "x": "{xcol}", "y": "{"*" if by else ycol}",')
+        L.append(f'         "axis": "{ylab}", "format": "{f}"}}')
+        if timed:
+            L.append('LAYOUT = "wide"')
+    if wheres:
+        L.append(f"NOTE = {q(f'Only {pretty(src).lower()} where ' + '{where}.')}")
+    return "\n".join(L) + "\n"
+
+
+def _insert_section(src: str, item: str, pos: int) -> str:
+    """Put one string item into the SECTIONS list of report.py at position pos."""
+    import ast
+    node = next((n for n in ast.parse(src).body if isinstance(n, ast.Assign)
+                 and any(getattr(t, "id", "") == "SECTIONS" for t in n.targets)), None)
+    if node is None or not isinstance(node.value, ast.List):
+        raise Stop("report.py: SECTIONS is not a plain list; add the section id to it by hand")
+    b = src.encode("utf-8")
+    starts = [0]
+    for line in b.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    off = lambda ln, col: starts[ln - 1] + col  # noqa: E731
+    elts, it = node.value.elts, item.encode("utf-8")
+    if not elts:
+        lst = node.value
+        new = b"[\n    " + it + b",\n]"
+        return (b[:off(lst.lineno, lst.col_offset)] + new + b[off(lst.end_lineno, lst.end_col_offset):]).decode("utf-8")
+    if pos < len(elts):
+        at = off(elts[pos].lineno, elts[pos].col_offset)
+        return (b[:at] + it + b",\n" + b" " * elts[pos].col_offset + b[at:]).decode("utf-8")
+    at = off(elts[-1].end_lineno, elts[-1].end_col_offset)
+    return (b[:at] + b",\n" + b" " * elts[0].col_offset + it + b[at:]).decode("utf-8")
+
+
+def add_section(rep, runner, rest, a) -> int:
+    """add-section NAME ...: one new sections/sN_NAME.py and one line in SECTIONS. Mechanical only."""
+    import pandas as pd
+    import subprocess
+    if len(rest) != 1 or not NAME_RE.match(rest[0]):
+        raise Stop("use: python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL] "
+                   "(NAME in lower_snake_case)")
+    name, chart = rest[0], (a.chart or "bar")
+    if name in runner.analytics:
+        raise Stop(f"a section named '{name}' already exists ({runner.analytics[name][1]}). Pick another NAME")
+    if chart not in ("bar", "line", "table"):
+        raise Stop("--chart is bar, line or table. Anything else: edit the new file by hand (references/build.md)")
+    if a.agg not in (None, "sum", "count", "mean"):
+        raise Stop("--agg is sum, count or mean. Anything else: edit the new file by hand (references/section.md)")
+    if not a.source or not a.x:
+        raise Stop(f"--source and --x are needed. Sources: {', '.join(rep.SOURCES) or 'none'}")
+    if a.agg in ("sum", "mean") and not a.y:
+        raise Stop(f"--agg {a.agg} needs --y (the number column)")
+    if not 0 <= a.bullets <= 3:
+        raise Stop("--bullets is 0 to 3")
+    pos = len(rep.SECTIONS) if a.after is None else a.after
+    if not 0 <= pos <= len(rep.SECTIONS):
+        raise Stop(f"--after is 0 to {len(rep.SECTIONS)}")
+    df = runner.src(a.source)
+    for flag, c in (("--x", a.x), ("--y", a.y), ("--by", a.by)):
+        if c and c not in df.columns:
+            raise Stop(f"{flag} {c}: '{a.source}' has no such column. It has: {', '.join(map(str, df.columns))}")
+    numeric = bool(a.y) and pd.api.types.is_numeric_dtype(df[a.y])
+    agg = a.agg or ("sum" if numeric else "count")      # no --y, or a text --y: count rows
+    if agg != "count" and not numeric:
+        raise Stop(f"--y {a.y} is not a number column, so it cannot be {'summed' if agg == 'sum' else 'averaged'}. "
+                   "Leave out --agg to count rows")
+    wheres, rows = [], df
+    for w in a.where or []:                                  # --where col=value, col>=value, col<=value
+        mt = WHERE_RE.match(w)
+        if not mt or mt.group(1) not in df.columns:
+            raise Stop(f"--where {w}: use col=value, col>=value or col<=value with a column of '{a.source}': "
+                       f"{', '.join(map(str, df.columns))}")
+        c, op, v = mt.groups()
+        num = pd.api.types.is_numeric_dtype(df[c])
+        if num:
+            try:
+                v = int(v) if re.fullmatch(r"-?\d+", v) else float(v)
+            except ValueError:
+                raise Stop(f"--where {w}: '{c}' holds numbers, so the value must be a number")
+        keep = {"=": rows[c] == v if num else rows[c].astype(str) == v,
+                ">=": rows[c] >= v if num else rows[c].astype(str) >= v,
+                "<=": rows[c] <= v if num else rows[c].astype(str) <= v}[op]
+        if not keep.any():
+            vals = sorted(map(str, rows[c].dropna().unique()))
+            raise Stop(f"--where {w} matches no rows. '{c}' has: {', '.join(vals[:15])}"
+                       + (f" ... ({len(vals)} values)" if len(vals) > 15 else ""))
+        rows = rows[keep]
+        wheres.append((c, op, v, num))
+    sig = f"{a.source} | x={a.x} | {agg} of {a.y if agg != 'count' else 'rows'}" \
+        + (f" | by {a.by}" if a.by else "") + (f" | where {where_text(wheres)}" if wheres else "")
+    for p in sorted(SECTIONS_DIR.glob("s*.py")):          # a repeat: the same generated signature
+        if f"Added by add-section: {sig}." in p.read_text(encoding="utf-8"):
+            print(f"note: sections/{p.name} already shows this ({sig}); adding anyway")
+    timed = time_kind(df[a.x])   # "date", "month" or ""
+    code, tname, ycol, metrics = _analytic_code(name, a.source, a.x, a.y, agg, a.by, timed, chart, wheres, sig)
+    used = [int(m.group(1)) for p in SECTIONS_DIR.glob("s*.py") if (m := SECTION_FILE_RE.match(p.stem))]
+    sid = f"s{max(used, default=0) + 1}_{name}"
+    sfile, rfile = SECTIONS_DIR / f"{sid}.py", ROOT / "report.py"
+    old_r = rfile.read_text(encoding="utf-8")
+    new_r = _insert_section(old_r, json.dumps(sid), pos)
+    SECTIONS_DIR.mkdir(exist_ok=True)
+    sfile.write_text(_section_file(sid, name, a.source, a.x, a.y, agg, a.by, timed, chart, a.title, a.bullets,
+                                   a.desc, code, tname, ycol, wheres), encoding="utf-8")
+    rfile.write_text(new_r, encoding="utf-8")
+    chk = subprocess.run([sys.executable, str(ROOT / "run.py"), "_check", name], capture_output=True,
+                         text=True, encoding="utf-8", cwd=ROOT)
+    if chk.returncode != 0 or "check:" in chk.stdout or "STOP" in chk.stdout:
+        sfile.unlink()
+        rfile.write_text(old_r, encoding="utf-8")
+        print(chk.stdout + chk.stderr[-2000:])
+        raise Stop("the new section did not fill cleanly (above), so nothing was changed. Add it by hand")
+    did = {"sum": f"summed {a.y}", "mean": f"averaged {a.y}", "count": "counted rows"}[agg]
+    print(f"Added sections/{sid}.py as section {pos + 1} of {len(rep.SECTIONS) + 1}: {did} by "
+          f"{'month of ' + a.x if timed == 'date' else a.x}" + (f" and {a.by}" if a.by else "")
+          + f", {chart}. It reads now:")
+    print(chk.stdout.rstrip())
+    lines = sfile.read_text(encoding="utf-8").splitlines()
+    rew = [str(i) for i, l in enumerate(lines, 1) if l.startswith("TITLE = ")]
+    if a.bullets:
+        start = next(i for i, l in enumerate(lines, 1) if l.startswith("BULLETS"))
+        rew += [str(start + k) for k in range(1, a.bullets + 1)]
+    print(f"Left to do, all in sections/{sid}.py:\n  1. Reword lines {', '.join(rew)}: the title and bullets are "
+          f"neutral placeholders. Keep the {{placeholders}}; they pull: {', '.join(metrics)}.")
+    print("  2. Say the question (in the function) and DESCRIPTION plainly.")
+    print("  3. python run.py report, then python run.py shot")
     return 0
 
 
@@ -825,7 +1207,10 @@ def screenshot(rep, args: list) -> int:
     if not found:
         raise Stop("no Edge or Chrome found (looked in the standard Windows, macOS and Linux install "
                    f"folders and on the path for {', '.join(BROWSER_NAMES)}). Open {page.name} by hand")
-    out = Path(args[0]) if args else ROOT / f"{ROOT.name}_shot.png"
+    given = args[0] if args else ""
+    if sys.platform == "win32":
+        given = re.sub(r"^/([a-zA-Z])/", r"\1:/", given)          # /c/... from Git Bash
+    out = Path(given) if given else ROOT / f"{ROOT.name}_shot.png"
     out = out.resolve()
     out.unlink(missing_ok=True)
     tables = sum(1 for s in rep.SECTIONS if isinstance(s, dict) and s.get("table") is not None)
@@ -852,6 +1237,12 @@ def main(argv=None) -> int:
     ap.add_argument("--refresh", action="store_true", help="pull sources listed in KEEP again")
     ap.add_argument("--json", action="store_true", help="with data: JSON instead of CSV")
     ap.add_argument("--out", help="with data: write to this file instead of printing")
+    ap.add_argument("--rows", type=int, default=3, help="with NAME: table rows to print")
+    for opt in ("--source", "--chart", "--x", "--y", "--agg", "--by", "--title", "--desc"):
+        ap.add_argument(opt, help="with add-section")
+    ap.add_argument("--where", action="append", help="with add-section: col=value, col>=value or col<=value")
+    ap.add_argument("--bullets", type=int, default=2, help="with add-section: 0 to 3")
+    ap.add_argument("--after", type=int, help="with add-section: put it after section N (default last)")
     args = ap.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -860,8 +1251,14 @@ def main(argv=None) -> int:
             pass
     try:
         rep = load_report()
-        runner = Runner(rep, load_analytics(rep), args.refresh)
+        runner = Runner(rep, load_sections(rep), args.refresh)
         what = args.what
+        if what == ["list"]:
+            return inventory(rep, runner)
+        if what[:1] == ["_check"] and len(what) == 2:
+            return check_section(rep, runner, what[1])
+        if what[:1] == ["add-section"]:
+            return add_section(rep, runner, what[1:], args)
         if what[:1] == ["shot"]:
             return screenshot(rep, what[1:])
         if what[:1] == ["data"]:
@@ -877,7 +1274,7 @@ def main(argv=None) -> int:
             return 0
         names = what or list(runner.analytics)
         for n in names:
-            print_result(runner.run(n))
+            print_result(runner.run(n), args.rows)
         print("\nNothing saved. The report is `python run.py report`.")
         return 0
     except Stop as e:

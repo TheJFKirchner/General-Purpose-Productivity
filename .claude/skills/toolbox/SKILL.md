@@ -16,13 +16,13 @@ One short talk, a map in `CLAUDE.md`, a plan. Skip any question the request alre
 
 | Making | Folders, at most |
 | --- | --- |
-| Analysis | `analytics/`, `outputs/` |
+| Analysis report | `reports/` (one folder per report, made by `analysis`) |
 | Data asset | `pipeline/`, `data/` |
-| Excel file | `analytics/`, `exports/` |
+| Excel file | `exports/` |
 | Dashboard | `dashboard/` (inner folders are made by `dashboard-new`) |
 | Deck | `deck/` |
 
-- A mix: join the rows. `pipeline/` only when data must be joined or cleaned before more than one deliverable uses it. Other names only if the user asks.
+- A mix: join the rows. `pipeline/` only when data must be joined or cleaned before more than one deliverable uses it. `analytics/` only for scripts shared by more than one output (such as prep code a dashboard runs). Other names only if the user asks.
 - Create no folders except `inputs/`: files handed over go there now, unchanged. Live or large sources (a database, a shared file that updates) are not copied; name them in Choices.
 
 ## Files
@@ -34,7 +34,7 @@ One short talk, a map in `CLAUDE.md`, a plan. Skip any question the request alre
 | Folder or file | Holds |
 | --- | --- |
 | `inputs/` | `sales.csv` from finance, 2026-11-18. Replaced 2026-12-01: adds December |
-| `outputs/review/` | Quarterly report. Refresh: `python run.py` in this folder |
+| `reports/review/` | Quarterly report. Refresh: `python run.py` in this folder |
 ```
 
 - The map lists only what exists. Planned deliverables go in Making; each skill adds its own row when it makes the file or folder (Findings, Design library).

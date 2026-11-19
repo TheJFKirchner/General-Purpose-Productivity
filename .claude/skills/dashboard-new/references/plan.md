@@ -25,7 +25,7 @@ One short file in the dashboard folder: the tables, the sections per tab, and wh
 
 ## Rules to keep
 - Drops cancelled claims (old_report.py: load())
-- A threshold or period the report uses is never typed into `Analysis/`: it comes from the analytics file's
+- A threshold or period the report uses is never typed into `Analysis/`: it comes from the report's `sections/_shared.py`
   `DEFAULTS` through `from_report`.
 ```
 

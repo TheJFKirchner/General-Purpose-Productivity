@@ -36,7 +36,7 @@ Seven optional skills for analysis work. They share one vocabulary, one look, an
 | Skill or folder | What it does |
 |---|---|
 | [toolbox](.claude/skills/toolbox/SKILL.md) | Starts a new project: asks what is being made, agrees the fewest folders, writes the map and a project plan. |
-| [analysis](.claude/skills/analysis/SKILL.md) | Explore data in the conversation, or build a short HTML report when asked. Needs Python with `pandas`. |
+| [analysis](.claude/skills/analysis/SKILL.md) | Explore data in the conversation, or build a short HTML report when asked. Needs Python with `pandas`, and Edge or Chrome for screenshots. |
 | [findings](.claude/skills/findings/SKILL.md) | Keeps `findings.md`, cited results against the plan. Reports and decks take their bullets from it. |
 | [commentary](.claude/skills/commentary/SKILL.md) | Writes `commentary.json` for dashboards that need text across many filters or refreshes. |
 | [dashboard-new](.claude/skills/dashboard-new/SKILL.md) | Starts a dashboard in the project from a copied-in starter (ECharts). Settings live in `dashboard.config.json`. Needs Node.js and Python 3.10+ with fastapi, uvicorn, duckdb, pyarrow, pandas. |

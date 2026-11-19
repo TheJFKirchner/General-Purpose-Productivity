@@ -5,7 +5,17 @@ description: Build a slide deck (reveal.js HTML with ECharts charts) from work t
 
 # Presentation
 
-Existing work in, one HTML deck out. Slide text comes from the findings and results; this skill does no new analysis.
+Existing work in, one HTML deck out; slide text comes from findings and results. **Changing an existing deck: read "Existing deck" only. A new deck: go to "Start".**
+
+## Existing deck
+
+1. `node <skill>/scripts/slides.js <deck.html>`: the brief and one line per slide (`slides.js <project folder>` lists every deck).
+2. Data for a chart: `add-slide.js <deck.html> --from "<report folder>"` lists every section's tables and columns (`python run.py list` in that folder shows the report's sections).
+3. Add: `add-slide.js <deck.html> --after <id> [--id <name>] --layout chart-commentary|figures|rows|table|statement [--from "<report folder>::<section>::<table>" --x COL --y COL] [--desc "..."]`. Change one slide: `slides.js <deck.html> --show <id>`. Remove or move: `slides.js <deck.html> --remove <id>` or `--move <id> --after <id>`.
+4. Edit only the lines add-slide prints, worded by the box at the top of `references/slides.md`; stop there. Then one command: `slides.js`, `check-charts.js`, `screenshot.js`; read `sheet.png`.
+
+- No mode question and no gates unless it adds more than two slides. A `DUPLICATE` line from add-slide: tell the user. Update the map row if the ask changed.
+- Never opened on an edit: the deck HTML as a whole, anything below `SLIDES:END`, `styles.css` below `:root`, library slide files, the scripts. Open another slide only when the user says "like slide N".
 
 ## Start
 
@@ -26,11 +36,10 @@ Existing work in, one HTML deck out. Slide text comes from the findings and resu
 | --- | --- | --- | --- |
 | 1 | Draft the brief: audience, what we want from them, minutes, the answer in one sentence, basis (date basis, comparison period), sources | **User confirms** | |
 | 2 | Slide list: per slide its headline (the point as a sentence), layout or library code, visual, source, and the first question the room will ask with where the deck answers it | **User confirms** | `references/slides.md`; the library `index.md` |
-| 3 | `patterns.js` fetches every library pattern in one call. Scaffold, then one Edit fills the BRIEF and every slide. Run the chart check | | `references/slides.md`; `references/charts.md` for a chart with no library pattern |
+| 3 | `patterns.js` fetches every library pattern in one call. Scaffold, then one Edit fills the BRIEF facts and every slide (each with `data-desc`). `slides.js --sync`, chart check | | `references/slides.md`; `references/charts.md` for a chart with no library pattern |
 | 4 | Screenshot, read the contact sheet, one fix pass, one re-shot, stop (about 22 calls for seven slides). Give the user the path | | |
 
 - No subagents and no `plan.md`. Shape: title (the answer as headline), one slide per finding, a close.
-- Bullets come from findings and results: 2 or 3 per visual, each pointing at something on it.
 - A decision meeting: the close names owner, timing and cost, or shows "to agree today" for each one missing.
 - A source contradicts a finding: raise it with the user before building. Never put it on a slide as "unexplained".
 - The user is away: state the brief and slide list in your reply and carry on.
@@ -38,13 +47,6 @@ Existing work in, one HTML deck out. Slide text comes from the findings and resu
 ## Full mode
 
 Open `references/full-mode.md` and follow it: facts, interview 1, storyboard, hard-questions reviewer, interview 2, builder subagent, walk-through. Uses the grilling skill.
-
-## Existing deck
-
-- `grep -n SLIDES:END presentation.html`, then Read with that line as the limit. The BRIEF says who it is for and why.
-- A change: no mode question and no gates, unless it adds more than two slides. New slide ids: any unused `s<nn>-<name>`; ids are names, not positions.
-- A new slide takes its neighbour's section; never reopen a section. Do not repeat the close; a changed close follows the decision rule above.
-- Update the BRIEF slide list and the map row, then re-shoot every slide.
 
 ## Look
 
@@ -68,6 +70,7 @@ All in `scripts/`, run with Node. Mechanical only.
 | `create-presentation.js --title "<t>" -o <deck>/presentation.html` | Scaffold plus `styles.css`. `--plan-only` writes `plan.md` (full mode). `--refresh <file>` updates an old deck's engine |
 | `screenshot.js <html> <temp-dir> [slide-id ...]` | One image per slide plus `sheet.png`, a contact sheet of them all (Edge or Chrome; `--browser <path>` if not found) |
 | `patterns.js <library> <name> ...` | Prints the named library slides, whole, in one call |
+| `slides.js`, `add-slide.js` | Inventory, show, sync, remove, move, describe; insert a working slide (see "Existing deck") |
 | `check-charts.js <html>` | Chart JSON, limits, one item highlighted, no controls |
 | `check-overflow.js <html>`, `edit-html.js <html>` | Overflow measure (needs `puppeteer`); browser editor for wording |
 

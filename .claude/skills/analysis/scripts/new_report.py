@@ -3,10 +3,10 @@
 
 Usage:
   new_report.py <parent folder> <name> --title "Report title" --question "The question"
-                [--for "who reads it"] [--map <project CLAUDE.md>] [--analytics <folder>]
+                [--for "who reads it"] [--source NAME=FILE ...] [--map <project CLAUDE.md>]
 
-Creates <parent>/<name>/ with report.py, run.py, page.html and analytics/<name>.py.
---analytics: use the project's analytics folder instead of a new one (created if missing).
+Creates <parent>/<name>/ with report.py, run.py, page.html and sections/_shared.py.
+--source: fill SOURCES (FILE as seen from where you run this; stored relative to the report folder).
 --map: add a row for the new folder to the "| Folder or file | Holds |" table in that file.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ def main(argv=None) -> int:
     ap.add_argument("--title", required=True)
     ap.add_argument("--question", required=True)
     ap.add_argument("--map", help="the project's CLAUDE.md")
-    ap.add_argument("--analytics", help="the project's analytics folder (created if missing)")
+    ap.add_argument("--source", action="append", default=[], help="NAME=FILE, repeatable")
     ap.add_argument("--for", dest="reader", default="", help="who reads it, from the brief")
     args = ap.parse_args(argv)
 
@@ -85,14 +85,18 @@ def main(argv=None) -> int:
     if dest.exists():
         print(f"STOP: {dest} already exists")
         return 2
+    sources = {}
+    for s in args.source:
+        key, _, path = s.partition("=")
+        if not re.match(r"^[a-z][a-z0-9_]*$", key) or not path or not Path(path).exists():
+            print(f"STOP: --source {s}: use name=file, a lower_snake_case name and a file that exists")
+            return 2
+        sources[key] = Path(os.path.relpath(Path(path).resolve(), dest)).as_posix()
     dest.mkdir(parents=True)
     for f in ("run.py", "page.html"):
         shutil.copy2(TEMPLATE / f, dest / f)
-    folder = Path(args.analytics).resolve() if args.analytics else dest / "analytics"
-    analytics = Path(os.path.relpath(folder, dest)).as_posix()
-    if not folder.is_dir() or not any(folder.glob("*.py")):   # new or empty: add the starter file
-        folder.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(TEMPLATE / "analytics.py", folder / f"{name.replace('-', '_')}.py")
+    (dest / "sections").mkdir()
+    shutil.copy2(TEMPLATE / "_shared.py", dest / "sections" / "_shared.py")
 
     one = lambda s: " ".join(s.split())  # noqa: E731
     esc = lambda s: one(s).replace("\\", "\\\\").replace('"', '\\"')  # noqa: E731
@@ -101,13 +105,14 @@ def main(argv=None) -> int:
                 .replace('"__FOR__"', f'"{esc(args.reader)}"')
                 .replace("__TITLE__", one(args.title)).replace("__QUESTION__", one(args.question))
                 .replace("__FOR__", one(args.reader))
-                .replace("__ANALYTICS__", analytics).replace("__DATE__", dt.date.today().isoformat()))
+                .replace("SOURCES = {}", "SOURCES = " + (repr(sources) if sources else "{}"))
+                .replace("__DATE__", dt.date.today().isoformat()))
     (dest / "report.py").write_text(text, encoding="utf-8")
 
     print(f"Created {dest}")
     if args.map:
         print(add_map_line(Path(args.map).resolve(), dest, one(args.title)))
-    print("Next: SOURCES in report.py, then the analytics; `python run.py` prints their results.")
+    print("Next: python run.py list (sources and columns), then python run.py add-section ... for each section.")
     return 0
 
 

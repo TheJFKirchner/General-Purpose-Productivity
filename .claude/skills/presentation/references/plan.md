@@ -54,7 +54,7 @@ One block per slide, in `plan.md`. Every line is required; a slide that cannot f
 - Visual from: analysis report, "Churn by month" chart
 - Cut: onboarding = new and old; region = all; April to October. Reason: shows the gap opening after launch
 - Footnote: what is measured, the period, the source, in the audience's words
-- Source: `analytics/churn.py`, `churn_by_month()`; finding F3
+- Source: finding 3; `reports/churn`, `python run.py data churn_by_month by_month`
 ```
 
 | Line | Holds |

@@ -26,6 +26,8 @@ import './custom.css'; // looks-only overrides, hand-written; wins over styles.c
 
 export function mount(props) {
   createRoot(document.getElementById('root')).render(<App {...props} />);
+  // the page's real height, for npm run shot (it crops the screenshot to it)
+  new ResizeObserver(() => { document.body.dataset.height = String(Math.ceil(document.body.getBoundingClientRect().height) + 16); }).observe(document.body);
 }
 
 const hashTab = () => readHash().tab ?? null;
@@ -115,6 +117,7 @@ function PipelineBanner({ pending, status, lastSeconds, onConfirm, onCancel, onD
 function App({ sections, tabs = [], notes, report = null }) {
   const [state, setState] = useState({ loading: true });
   const [tab, setTab] = useState(hashTab);
+  const [only] = useState(() => readHash().only ?? null); // #only=<section id>: that section alone (npm run shot)
   const [pending, setPending] = useState(null); // slow parameter change waiting for confirmation
   const [status, setStatus] = useState(null); // pipeline run status (live dashboard only)
 
@@ -159,7 +162,7 @@ function App({ sections, tabs = [], notes, report = null }) {
 
   const tabList = tabs.filter((t) => t.text || sections.some((s) => s.meta.tab === t.id));
   const activeTab = tabList.some((t) => t.id === tab) ? tab : tabList[0]?.id;
-  const visible = tabList.length ? sections.filter((s) => s.meta.tab === activeTab) : sections;
+  const visible = only ? sections.filter((s) => s.meta.id === only) : tabList.length ? sections.filter((s) => s.meta.tab === activeTab) : sections;
   const selectTab = (id) => {
     setTab(id); // HashSync writes it to the URL
     window.scrollTo({ top: 0 });

@@ -111,6 +111,19 @@ Decisions made after the plan, from two rounds of testing:
 - **Look, deviations from the table below.** In reports the second chart series is light blue (`#7FB8E0`), not green. In dashboards orange is not a series colour; it marks "needs attention" only. `design-library/themes/` still carries the series order as first agreed. This is open for the owner to settle.
 - **Removed.** The toolbox's reference file (one file now), the analysis `_engine/` folder (the engine is `run.py`), Plotly and the neon theme in the dashboard starter, the presentation `advanced-features.md`.
 
+### Round 3: how much is read on a normal edit (2026-11-19)
+
+The owner's rule: what matters is how much gets read on a normal edit, not how many files a skill holds. On existing work, "add a bar chart of X by month and 2 bullet points" may read only the skill, at most one short reference page, and an inventory printed by a command. Copied framework files are created and never read.
+
+- **Registry.** Each of the three has one inventory command that lists every item with its file, kind and an 8 to 10 word description: `python run.py list` (report sections, plus each section's tables, columns and metrics, and the sources with columns and date ranges), `npm run status` (dashboard sections and tables), and `slides.js <deck or project folder>` (slides; this script lives in the skill). The report and dashboard commands run from the copy inside the project, because those run only from their own folder.
+- **Section definitions.** A report section is one file, `sections/sN_<name>.py`: description, analytic, title, chart and bullets. `sections/_shared.py` holds `DEFAULTS` and helpers; `report.py` keeps the brief, answer, sources and the order. A dashboard section is one `.jsx` file: for simple shapes its `meta` declares the numbers (x, y, aggregation, split) and a shared Python function computes them on the filtered table, so nothing is computed in the browser and no Python is written unless the calculation is unusual. A slide carries its own description. Accepted cost: a report folder is four files plus one per section.
+- **Add commands.** `python run.py add-section`, `npm run new-section` and `add-slide.js` each write a WORKING item (bar, line, table, plus tiles or figures) and print what is left to word. They cover a few shapes only and say so; anything unusual is a hand edit from a short page. They name an existing item that the request would repeat. `add-slide.js --from` pulls a chart's series from a report itself.
+- **Short everyday pages.** Each skill has a simple-add part of about 30 to 47 lines; rare material sits below a "stop here" line.
+- **Never read.** A report's `run.py` and `page.html`; a dashboard's app, shared code, server, tools and theme; a deck's engine below the slides marker, its stylesheet below `:root`, the scripts and library slide files.
+- **Consequence to know.** A report or dashboard keeps the copy of the framework it was created with. Older ones do not get new commands until the framework is copied in again. No update command exists yet.
+
+Round 3 results (fresh subagents, strict log of every file opened): the add case passed on all three in 11 to 19 tool calls with no framework file opened, and creating a new report, dashboard and deck passed with no copied framework file read.
+
 Tested: 32 runs over two rounds (build, together, pick-up), each by a fresh subagent, with manager reviews after each round. All seven skills were judged "roll out after must-fixes" in round 2. Those must-fixes were applied and checked by the builders, not by a further cold run.
 
 Not tested: interviews and approval gates with a real person, presentation full mode, porting existing work into a dashboard, hosting, real data volumes, and any engine other than Claude.

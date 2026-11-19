@@ -1,5 +1,31 @@
 # Building the deck
 
+## Wording a slide: the short rules
+
+Enough to word a slide that `add-slide.js` made, or to change one slide. **Stop here** unless you are building a new deck, need a layout `add-slide.js` does not make, are copying a library pattern, or need a chart rule not below (then `references/charts.md`).
+
+| Part | Rule |
+| --- | --- |
+| Headline | The slide's point as a sentence, with its number. 2 lines of at most 60 characters; never ends on one word. States the date basis (paid month, month of care) when the project uses more than one |
+| Numbers | From a `findings.md` row, the report's own chart series, or `python run.py data <analytic> <table>` (what `--from` runs). Never from memory; never a script of your own |
+| Ratios | "13 times" is allowed when both numbers are on the slide or in its cited findings rows. Round down; give the sum in the speaker notes. Otherwise add a findings row first |
+| Chart | Value labels carry units. One item in `var(--blue)`, the rest grey. Draw any line the text cites (`markLine`). A report chart keeps its kind, period and measure name |
+| Chart heading | Names what is measured and the period: "Hospital-stay claims paid, by month of care, Jan 25 to Jun 26" |
+| Bullets | 2 or 3, about 18 words each. Each points at something on the visual, with its number, and says what it means. None repeats the headline |
+| Footnote | One line: what is measured, the period, the source as finding n; report folder, section, table |
+| Description | `data-desc` on the `<section>`: what the slide is for, 8 to 10 words. Set it with `slides.js <deck> --desc <id> "..."` |
+| Section | The neighbour's. Never reopen an earlier section: the bottom bar must read in order |
+| Close | A decision close names owner, timing and cost; missing ones go on one line: "To agree today: owner, cost". Never repeat the close |
+| Text | No lead-ins ("Here's what we found"), no filler (robust, key, leverage, unlock, crucial), no sentence explaining colours |
+
+Then one command: `slides.js <deck>` (nothing flagged TO WORD, no section reopened, no missing description), `check-charts.js <deck>`, `screenshot.js <deck> <temp-dir>`. Read `sheet.png` only. One fix pass, one re-shot, stop.
+
+Never opened on an edit: the deck HTML as a whole, anything below `SLIDES:END`, `styles.css` below `:root`, library slide files, the scripts.
+
+---
+
+The rest of this page is for building a new deck.
+
 For whoever builds: you in quick mode, the builder subagent in full mode. A deck is one reveal.js HTML file plus `styles.css`. No build step; open the HTML in a browser.
 
 ## Scaffold
@@ -9,7 +35,7 @@ node <skill>/scripts/create-presentation.js --title "Short deck title" -o <deck 
 ```
 
 - Writes `presentation.html` (a BRIEF comment and one `NEW SLIDES` line) and copies the base theme to `styles.css`.
-- **A new deck is filled in one Edit:** Read the file down to `SLIDES:END`, then replace the BRIEF and the `NEW SLIDES` line with the filled BRIEF and every slide. The BRIEF is how the next person learns who the deck is for.
+- **A new deck is filled in one Edit:** Read the file down to `SLIDES:END`, then replace the BRIEF facts and the `NEW SLIDES` line with the filled facts and every slide. Leave the BRIEF `Slides:` line: `slides.js <deck> --sync` writes the list from each slide's `data-desc`.
 - Later changes: one slide per Edit, by id. Never rewrite the file with Write.
 - `<title>` (the `--title`) shows in the bottom bar: 30 characters at most. The full title goes on the title slide.
 
@@ -18,7 +44,7 @@ node <skill>/scripts/create-presentation.js --title "Short deck title" -o <deck 
 - Slides sit between `<!-- SLIDES:START -->` and `<!-- SLIDES:END -->`. Never read or edit below; it is the engine.
 
 ```html
-<section id="s03-west-kept-most" data-section="Results">
+<section id="s03-west-kept-most" data-section="Results" data-desc="Shows the West region retained the most new customers">
   <p class="kicker">Results</p>
   <h2>The West region kept the most new customers after the change</h2>
   <div class="content"> ... </div>
@@ -28,8 +54,9 @@ node <skill>/scripts/create-presentation.js --title "Short deck title" -o <deck 
 
 | Part | Rule |
 | --- | --- |
-| `id` | Unique: `s<nn>-<short-name>` |
+| `id` | A unique name, not a position: `paid-by-month`. `add-slide.js` makes one when `--id` is left out |
 | `data-section` | Section name for the bottom bar. Leave off to continue the previous section |
+| `data-desc` | What the slide is for, 8 to 10 words. The BRIEF slide list is written from it by `slides.js --sync` |
 | `.kicker` | The section name, exactly as in the bar |
 | `<h2>` | The headline: the slide's point as a sentence. 2 lines of at most 60 characters; never ends on one word |
 | `.content` | Everything below the headline. `middle` centres it: only for a statement or quote |

@@ -6,6 +6,7 @@ import { FORMATS } from '../Lib/format.js';
 export const meta = {
   id: 's1_summary',
   title: 'Summary',
+  description: 'Trailing twelve months revenue with change and sparkline',
   tab: 'overview',
   library: 'none',
 };

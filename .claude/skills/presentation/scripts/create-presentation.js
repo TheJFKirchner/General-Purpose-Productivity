@@ -151,7 +151,7 @@ function generateHTML(options) {
       Answer:
       Basis: (date basis, comparison period)
       Sources:
-      Slides: (one "id: headline" per line)
+      Slides: (written by slides.js; do not edit)
       -->
 `;
   const slidesContent = options.slidesHtml != null ? options.slidesHtml : brief + (options.structure ? generateSlides(options.structure) : '\n      <!-- NEW SLIDES: replace this line with every slide in one Edit -->\n') + '\n';

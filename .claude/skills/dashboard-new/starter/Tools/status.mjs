@@ -1,148 +1,111 @@
 // npm run status [-- --json]
-// A read-only map of this dashboard: pages, sections (and what each reads), tables, filters, reports, and the
-// check result. Use it to get oriented before changing anything. Changes nothing.
-// If the sections can't be loaded (a broken file), it still lists what it can from the folders.
+// A read-only map of this dashboard, enough to add or change a section without opening other files: each tab's
+// sections in order (title, chart, analytic function and file, tables, filters, metric names, what its note says),
+// every table's columns (type, a sample, the range of date and month columns), filters, commentary, reports (and
+// which of their sections a locked filter does not narrow), and the check result. Notes that changed since the
+// last status are listed (after a refresh: tell the user). Changes nothing.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, loadProject, readJson, reportSectionIds, validateProject } from './project.mjs';
 
 const asJson = process.argv.includes('--json');
-const out = { project: null, pages: [], cards: [], tables: [], filters: {}, parameters: {}, reports: [], check: null, problems: [] };
-
+const problems = [];
 const safe = (fn, fallback) => {
   try {
     return fn();
   } catch (e) {
-    out.problems.push(e.message);
+    problems.push(e.message);
     return fallback;
   }
 };
 const config = safe(() => readJson('dashboard.config.json'), {});
-out.project = { title: config.title ?? null, theme: config.theme ?? null, port: config.server?.port ?? 8765 };
-
 let p = null;
 try {
-  p = await loadProject();
+  p = await loadProject({ describe: true });
 } catch (e) {
-  out.problems.push(`could not load the sections (Src/Sections/index.js): ${e.message}`);
+  problems.push(`could not load the sections (Src/Sections/index.js): ${e.message}`);
 }
 
-if (p) {
-  const result = validateProject(p);
-  out.pages = (p.tabs ?? []).map((t) => ({ id: t.id, label: t.label, cards: p.registry.filter((m) => m.meta?.tab === t.id).map((m) => m.meta.id) }));
-  out.cards = (p.registry ?? []).map((m) => {
-    const id = m.meta?.id;
-    const a = p.cards[id] ?? {};
-    return {
-      id,
-      title: m.meta?.title,
-      page: m.meta?.tab ?? null,
-      chart: m.meta?.library,
-      size: m.meta?.size ?? 'full',
-      commentary: m.meta?.commentary ?? null,
-      analysis: a.module ? `Analysis/${a.module}.py` : null,
-      tables: a.tables ?? [],
-      filters: a.filters ?? [],
-      metrics: Object.keys(a.metrics ?? {}),
-      problems: result.cardErrors[id] ?? [],
-      says: m.note && a.metrics && !a.error ? p.format.renderNote(m.note.trim(), a.metrics).blocks
-        .map((b) => (b.type === 'list' ? b.items.map((s) => s.map((x) => x.text).join('')).join(' ') : b.segments.map((x) => x.text).join(''))).join(' ') : null,
-      built: !(fs.existsSync(path.join(ROOT, 'Src', 'Sections', `${id}.jsx`)) && /Not built yet\./.test(fs.readFileSync(path.join(ROOT, 'Src', 'Sections', `${id}.jsx`), 'utf8'))),
-    };
-  });
-  out.filters = Object.fromEntries(Object.entries(p.FILTERS).map(([k, f]) => [k, { label: f.label, column: f.column, level: f.section ? `section ${f.section}` : f.tab ? `tab ${f.tab}` : 'dashboard', values: f.options.filter((o) => o !== p.ALL) }]));
-  out.parameters = p.parameters ?? {};
-  out.check = { errors: result.errors, warnings: result.warnings };
-}
-
-// tables: from the manifest when there is one, else the files
-const manifest = p?.manifest ?? safe(() => readJson('Data/Current/manifest.json'), null);
-if (manifest?.tables) {
-  const filterCols = Object.entries(config.filters ?? {}).filter(([k]) => !k.startsWith('_')).map(([k, s]) => s.column ?? k);
-  out.tables = Object.entries(manifest.tables).map(([name, t]) => ({
-    name,
-    rows: t.rows ?? null,
-    grain: t.grain ?? null,
-    as_of: t.as_of ?? null,
-    source: t.source ?? null,
-    script: t.script ?? null,
-    columns: Object.keys(t.columns ?? {}),
-    filterColumns: filterCols.filter((c) => (t.columns ?? {})[c] !== undefined),
-    usedBy: out.cards.filter((c) => c.tables.includes(name)).map((c) => c.id),
-  }));
-} else {
-  const dir = path.join(ROOT, 'Data', 'Current');
-  out.tables = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.(parquet|csv)$/i.test(f)).map((f) => ({ name: f, rows: null, columns: [] })) : [];
-}
-
-// reports
+const render = (note, metrics) => p.format.renderNote(note.trim(), metrics).blocks
+  .map((b) => (b.type === 'list' ? b.items.map((s) => `- ${s.map((x) => x.text).join('')}`).join(' ') : b.segments.map((x) => x.text).join(''))).join(' ');
+const result = p ? validateProject(p) : { errors: [], warnings: [], cardErrors: {} };
+const sections = (p?.registry ?? []).map((m) => {
+  const id = m.meta?.id;
+  const a = p.cards[id] ?? {};
+  const src = safe(() => fs.readFileSync(path.join(ROOT, 'Src', 'Sections', `${id}.jsx`), 'utf8'), '');
+  return {
+    id, title: m.meta?.title, tab: m.meta?.tab ?? null, chart: m.meta?.library, size: m.meta?.size ?? 'full',
+    analytic: a.module === '(meta)' ? 'numbers from its meta' : a.module ? `${a.function ?? '?'}() in Analysis/${a.module}.py` : '(no analytic)',
+    chartKind: m.meta?.chart ?? m.meta?.library, description: m.meta?.description ?? '(no description)',
+    tables: a.tables ?? [], filters: a.filters ?? [], metrics: Object.keys(a.metrics ?? {}), commentary: m.meta?.commentary ?? null,
+    built: !/Not built yet\./.test(src), problems: result.cardErrors[id] ?? [],
+    says: m.note && a.metrics && !a.error ? render(m.note, a.metrics) : null,
+  };
+});
+const described = p?.analysis?.describe ?? {};
+const manifest = p?.manifest?.tables ?? {};
+const reports = [];
 const rdir = path.join(ROOT, 'Reports');
-for (const f of fs.existsSync(rdir) ? fs.readdirSync(rdir).filter((x) => x.endsWith('.json')) : []) {
+for (const f of fs.existsSync(rdir) ? fs.readdirSync(rdir).filter((x) => x.endsWith('.json') && !x.startsWith('_')) : []) {
   const r = safe(() => readJson(`Reports/${f}`), null);
   if (!r) continue;
-  const ids = p ? reportSectionIds(r, p) : Array.isArray(r.sections) ? r.sections : [];
-  const known = new Set(out.cards.map((c) => c.id));
-  out.reports.push({ name: f.replace(/\.json$/, ''), title: r.title ?? null, script: r.script ?? null, cards: ids, missing: p ? ids.filter((id) => !known.has(id)) : [] });
+  const ids = p ? reportSectionIds(r, p) : r.sections ?? [];
+  const locked = Object.entries(r.filters ?? {}).filter(([, s]) => s?.locked && s.value !== undefined && String(s.value) !== 'All');
+  const notNarrowed = locked.flatMap(([n, s]) => ids.filter((id) => p?.cards[id] && !(p.cards[id].filters ?? []).includes(n)).map((id) => `${id} (${n}=${s.value})`));
+  reports.push({ name: f.replace(/\.json$/, ''), sections: ids, script: r.script ?? null, locked: locked.map(([n, s]) => `${n}=${s.value}`), notNarrowed });
 }
 
-// pipeline scripts and Analysis files nothing points to (useful when tidying)
-const pdir = path.join(ROOT, 'Pipeline');
-out.pipeline = fs.existsSync(pdir) ? fs.readdirSync(pdir).filter((f) => f.endsWith('.py') && f !== 'run_all.py' && !f.startsWith('_')) : [];
+// notes that changed since the last status
+const saidFile = path.join(ROOT, 'Data', '.status-notes.json');
+const said = Object.fromEntries(sections.filter((s) => s.says).map((s) => [s.id, s.says]));
+const before = fs.existsSync(saidFile) ? safe(() => JSON.parse(fs.readFileSync(saidFile, 'utf8')), null) : null;
+const changed = before ? Object.entries(said).filter(([id, s]) => before[id] !== undefined && before[id] !== s) : [];
+if (Object.keys(said).length && fs.existsSync(path.join(ROOT, 'Data'))) fs.writeFileSync(saidFile, `${JSON.stringify(said, null, 1)}\n`);
 
 if (asJson) {
-  console.log(JSON.stringify(out, null, 2));
+  console.log(JSON.stringify({ title: config.title, tabs: p?.tabs ?? [], sections, tables: described, filters: p?.FILTERS ?? {}, reports, changed, check: result, problems }, null, 2));
   process.exit(0);
 }
 
 const line = (s = '') => console.log(s);
-line(`${out.project.title ?? '(untitled)'}   theme ${out.project.theme}, data server port ${out.project.port}`);
-line();
-if (out.pages.length) {
-  line('Pages');
-  for (const pg of out.pages) line(`  ${pg.id.padEnd(16)} ${pg.label} (${pg.cards.length} section${pg.cards.length === 1 ? '' : 's'})`);
+line(`${config.title ?? '(untitled)'}   (theme ${config.theme}; analysis server port ${config.server?.port ?? 8765})`);
+line(`Check: ${result.errors.length ? `${result.errors.length} error(s)` : 'OK'}, ${result.warnings.length} warning(s)`);
+for (const e of result.errors) line(`  ERROR ${e}`);
+for (const w of result.warnings.slice(0, 3)) line(`  warn  ${w}`);
+if (result.warnings.length > 3) line(`  ... ${result.warnings.length - 3} more: npm run check`);
+const groups = p?.tabs?.length ? p.tabs.map((t) => [`Tab ${t.id} "${t.label}"`, sections.filter((s) => s.tab === t.id)]) : [['Sections', sections]];
+for (const [head, list] of groups) {
   line();
-}
-line(`Sections (${out.cards.length}, in page order)`);
-if (!out.cards.length) line('  none yet: npm run new-section -- <name>');
-for (const c of out.cards) {
-  const flags = [c.size === 'half' ? 'half' : null, c.built ? null : 'NOT BUILT', c.problems.length ? `${c.problems.length} problem(s)` : null].filter(Boolean).join(', ');
-  line(`  ${c.id.padEnd(28)} ${String(c.title).slice(0, 40).padEnd(40)} ${(c.page ?? '').padEnd(12)} ${String(c.chart).padEnd(8)} ${flags}`);
-  line(`  ${''.padEnd(28)} reads ${c.tables.join(', ') || '(no tables)'}; filters ${c.filters.join(', ') || 'none'}; analytic in ${c.analysis ?? '(none yet)'}${c.commentary ? `; commentary ${c.commentary}` : ''}`);
-  if (c.says) line(`  ${''.padEnd(28)} says: ${c.says}`);
-}
-line();
-line(`Tables in Data/Current (${out.tables.length})`);
-if (!out.tables.length) line('  none yet: npm run pipeline, or put .parquet/.csv files in Data/Current');
-for (const t of out.tables) {
-  line(`  ${t.name.padEnd(28)} ${t.rows ?? '?'} rows${t.grain ? `, ${t.grain}` : ''}, as of ${t.as_of || 'none'}${t.script ? `, from Pipeline/${t.script}` : ''}${t.source ? `, reads ${t.source}` : ''}`);
-  if (t.columns.length) line(`  ${''.padEnd(28)} columns: ${t.columns.join(', ')}`);
-  if (t.usedBy) line(`  ${''.padEnd(28)} used by: ${t.usedBy.join(', ') || 'no section'}${t.filterColumns?.length ? `; filterable by ${t.filterColumns.join(', ')}` : ''}`);
+  line(head);
+  if (!list.length) line('  none yet: npm run new-section -- <name> ...');
+  for (const s of list) {
+    const flags = [s.size === 'half' ? 'half' : null, s.built ? null : 'NOT BUILT', s.problems.length ? `${s.problems.length} problem(s)` : null, s.commentary ? `commentary ${s.commentary}` : null].filter(Boolean);
+    line(`  ${s.id}  ${s.id}.jsx  "${s.title}"  ${s.chartKind}  ${s.tables.join(', ') || '-'}  ${s.description}${flags.length ? `  [${flags.join(', ')}]` : ''}`);
+    line(`      ${s.analytic}; filters ${s.filters.join(', ') || 'none'}; metrics ${s.metrics.join(', ') || 'none'}`);
+    if (s.says) line(`      says: ${s.says}`);
+  }
 }
 line();
-// answers that changed since the last npm run status (e.g. after a refresh): the notes, unfiltered
-const saidFile = path.join(ROOT, 'Data', '.status-notes.json');
-const said = Object.fromEntries(out.cards.filter((c) => c.says).map((c) => [c.id, c.says]));
-const before = fs.existsSync(saidFile) ? safe(() => JSON.parse(fs.readFileSync(saidFile, 'utf8')), {}) : null;
-if (before) {
-  const changed = Object.entries(said).filter(([id, s]) => before[id] !== undefined && before[id] !== s);
-  line(changed.length ? 'Changed since the last status (tell the user):' : 'No note changed since the last status.');
-  for (const [id, s] of changed) line(`  ${id}: was "${before[id]}"\n  ${''.padEnd(id.length)}  now "${s}"`);
-  line();
+line('Tables');
+if (!Object.keys(described).length) line('  none yet: one write_source line per input file in Pipeline/sources.py, then npm run pipeline');
+for (const [name, t] of Object.entries(described)) {
+  const e = manifest[name] ?? {};
+  line(`  ${name}  ${t.rows.toLocaleString('en-US')} rows, as of ${e.as_of || 'none'}, ${e.script ? `from Pipeline/${e.script}` : `file ${e.path ?? '?'}`}${e.source && e.script ? ` (${e.source})` : ''}`);
+  line(`      ${Object.entries(t.columns).map(([c, i]) => `${c} ${i.type} ${i.range ? `${i.range[0]}..${i.range[1]}` : i.sample}`).join('; ')}`);
 }
-if (Object.keys(said).length && fs.existsSync(path.join(ROOT, 'Data'))) fs.writeFileSync(saidFile, `${JSON.stringify(said, null, 1)}\n`);
-const fnames = Object.keys(out.filters);
-line(`Filters: ${fnames.length ? fnames.map((k) => `${k} (${out.filters[k].level}, ${out.filters[k].values.length} values)`).join(', ') : 'none'}`);
+line();
+const F = p?.FILTERS ?? {};
+line(`Filters: ${Object.keys(F).length ? Object.entries(F).map(([k, f]) => `${k} (${f.section ? `section ${f.section}` : f.tab ? `tab ${f.tab}` : 'dashboard'}, ${f.options.length - 1} values)`).join(', ') : 'none'}`);
 const items = p?.commentaryItems;
-line(`Commentary: ${Array.isArray(items) ? (items.length ? `${new Set(items.map((i) => i?.id)).size} id(s) in commentary.json` : 'none (no commentary.json)') : `commentary.json ${items?.error ?? 'unreadable'}`}`);
-const pnames = Object.keys(out.parameters);
-if (pnames.length) line(`Refresh settings: ${pnames.join(', ')}`);
-line(`Pipeline scripts: ${out.pipeline.join(', ') || 'none'}`);
-line(`Reports: ${out.reports.length ? out.reports.map((r) => `${r.name} (${r.cards.length} sections${r.script ? `, python Reports/${r.script}` : ''}${r.missing.length ? `, MISSING ${r.missing.join(', ')}` : ''})`).join('; ') : 'none'}`);
-line();
-if (out.check) {
-  line(`Check: ${out.check.errors.length} error(s), ${out.check.warnings.length} warning(s)`);
-  for (const e of out.check.errors) line(`  ERROR ${e}`);
-  for (const w of out.check.warnings.slice(0, 15)) line(`  warn  ${w}`);
-  if (out.check.warnings.length > 15) line(`  ... ${out.check.warnings.length - 15} more warning(s): npm run check`);
+line(`Commentary: ${Array.isArray(items) ? (items.length ? `${new Set(items.map((i) => i?.id)).size} id(s) in commentary.json` : 'none') : `commentary.json ${items?.error ?? 'unreadable'}`}`);
+line(`Reports: ${reports.length ? '' : 'none'}`);
+for (const r of reports) {
+  line(`  ${r.name}: ${r.sections.join(', ')}${r.script ? `; python Reports/${r.script}` : ''}${r.locked.length ? `; locks ${r.locked.join(', ')}` : ''}`);
+  if (r.notNarrowed.length) line(`      not narrowed by its locked filter: ${r.notNarrowed.join(', ')}`);
 }
-for (const pr of out.problems) line(`PROBLEM ${pr}`);
+if (changed.length) {
+  line();
+  line('Changed since the last status (tell the user):');
+  for (const [id, s] of changed) line(`  ${id}: was "${before[id]}"\n  ${''.padEnd(id.length)}  now "${s}"`);
+}
+for (const pr of problems) line(`PROBLEM ${pr}`);

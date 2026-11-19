@@ -39,7 +39,7 @@ Setup copies the starter in and writes `dashboard.config.json`. After that nothi
 ### 2. Plan
 - **New:** ask what it should answer, where the data is, which filters readers need. Write `PLAN.md` in the shape
   in `references/plan.md`. Every goal in the project plan gets a section that shows it directly (a rate or a
-  change, not an 18-month total). Agree it.
+  change, not an 18-month total). The user's own list of sections wins; note any gap with the goals. Agree it.
 - **Port:** open `references/port.md`. It sends one inventory helper, then you settle the plan.
 - For each filter settle its level (what it applies to) and fast or slow (does a change re-query?).
 
@@ -47,8 +47,8 @@ Setup copies the starter in and writes `dashboard.config.json`. After that nothi
 - **Every input file:** one line in `Pipeline/sources.py`: `write_source("claims", "../inputs/claims.csv",
   as_of_from="service_month")` (the date column gives "Data as of"). Never copy files into `Data/Current`.
 - **Needs prep:** `Pipeline/<table>.py` ending in `write_dataset("<table>", df, grain=..., source=..., as_of=...)`.
-- **Reusing a report's analytics** (analysis skill): one function, both places. Load each of its `SOURCES` in
-  `sources.py` under the same name; each section calls `from_report("../<report>/analytics/x.py", "fn", t)`.
+- **Reusing a report's analytics** (analysis skill): one function, both places. Load its sources in `sources.py`
+  (`write_source("claims", report="../<report>")`); a section calls `from_report("../<report>", "s2_<name>", t)`.
   Filters act on it; unfiltered figures equal the report's. Never cache a report's finished tables.
 - `npm run pipeline` once (`-- --try <script>` tries one).
 - Fast filters go in `dashboard.config.json`: `"region": { "label": "Region", "column": "region" }`, plus `"tab"` or
@@ -56,11 +56,12 @@ Setup copies the starter in and writes `dashboard.config.json`. After that nothi
   Slow filters, prep outside the folder: `dashboard-work` `references/data.md`.
 
 ### 4. Sections
-1. Make every shell first: `npm run new-section -- <name> --page <tab> --tables <table> --chart echarts|table|kpi|text`.
-2. Fill them, following `dashboard-work` `references/sections.md`. Headline KPI tiles first.
+1. Each simple section is one command (`dashboard-work` `references/sections.md`, "Simple add"):
+   `npm run new-section -- <name> --page <tab> --tables <t> --chart bar|line|table|kpi --x <col> --y <col>`.
+2. Reword each note; headline KPI tiles first. Unusual ones: the same page, below STOP HERE.
 3. Many sections at once (about eight or more): up to 2 helpers, `dashboard-work` `references/helpers.md`.
 4. `npm run check`; `npm run status` lists every section in `PLAN.md`.
-5. Look: `npm run shot -- <tab> <out.png> [region=West]`, then show the user. `npm run dev` opens it live
+5. Look: `npm run shot -- <tab> <out.png> [region=West]` (starts and stops its own server). `npm run dev` opens it live
    (`npm run stop` ends it).
 
 Later changes, reports and commentary go through **dashboard-work**.

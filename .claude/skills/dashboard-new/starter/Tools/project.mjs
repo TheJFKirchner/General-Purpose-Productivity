@@ -36,8 +36,8 @@ export function python(args, opts = {}) {
 }
 
 /** python Analysis/check.py -> { cards (one per analytic), modules, filters, parameters, manifest } or { error }. */
-export function analysisCheck(cards) {
-  const r = python([path.join('Analysis', 'check.py'), ...(cards ? ['--cards', cards.join(',')] : [])]);
+export function analysisCheck(cards, { describe = false } = {}) {
+  const r = python([path.join('Analysis', 'check.py'), ...(cards ? ['--cards', cards.join(',')] : []), ...(describe ? ['--describe'] : [])]);
   try {
     return JSON.parse(r.stdout);
   } catch {
@@ -63,7 +63,7 @@ export function readCommentary() {
  *   analysis = check.py output; cards = analysis.cards ({id: {filters, tables, metrics, error}});
  *   FILTERS = dashboard.config.json fast filters ({name: {label, column, options}}, options from the data).
  */
-export async function loadProject({ analysis: runAnalysis = true } = {}) {
+export async function loadProject({ analysis: runAnalysis = true, describe = false } = {}) {
   // the registry is loaded in its own process (Tools/registry.mjs), so this one never starts Vite in dev mode
   const r = spawnSync(process.execPath, [path.join(ROOT, 'Tools', 'registry.mjs')], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   let registryModule;
@@ -76,7 +76,7 @@ export async function loadProject({ analysis: runAnalysis = true } = {}) {
   registryModule.default = registryModule.sections;
   const config = readJson('dashboard.config.json');
   const themes = fs.readdirSync(path.join(ROOT, 'Themes')).filter((t) => fs.existsSync(path.join(ROOT, 'Themes', t, 'tokens.json')));
-  const analysis = runAnalysis ? analysisCheck() : { cards: {}, modules: {}, filters: {}, parameters: {}, manifest: null };
+  const analysis = runAnalysis ? analysisCheck(null, { describe }) : { cards: {}, modules: {}, filters: {}, parameters: {}, manifest: null };
   const manifestFile = path.join(ROOT, 'Data', 'Current', 'manifest.json');
   const manifest = analysis.manifest ?? (fs.existsSync(manifestFile) ? readJsonFile(manifestFile) : null);
   const FILTERS = Object.fromEntries(
@@ -176,6 +176,7 @@ export function validateProject(p) {
     else if (meta.commentary && !commentaryIds.has(meta.commentary)) warnings.push(`${where}: commentary id "${meta.commentary}" is not in commentary.json (nothing shows until it is)`);
     if (!fs.existsSync(sectionPath(meta.id))) err(`file Src/Sections/${meta.id}.jsx not found (file name must equal id)`);
     if (!meta.title) err('meta.title missing');
+    if (!meta.description) warnings.push(`${where}: no meta.description (8 to 10 words on what it shows; npm run status lists it)`);
     // recommended: echarts; any other library is allowed (dashboard-work: references/sections.md)
     if (!/^[a-z][a-z0-9_-]*$/.test(meta.library ?? '')) err(`meta.library must name the chart library (e.g. ${LIBRARIES.join(', ')})`);
     if (tabIds.size && !tabIds.has(meta.tab)) err(`meta.tab must be one of ${[...tabIds].join(', ')} (tabs are defined in Src/Sections/index.js)`);
@@ -231,7 +232,7 @@ export function validateProject(p) {
     }
   }
 
-  for (const id of Object.keys(p.cards)) if (!ids.has(id) && p.cards[id].module) warnings.push(`analytic for "${id}" (Analysis/${p.cards[id].module}.py) has no section in Src/Sections/index.js`);
+  for (const id of Object.keys(p.cards)) if (!ids.has(id) && p.cards[id].module) warnings.push(`analytic for "${id}" (${p.cards[id].module === '(meta)' ? `Src/Sections/${id}.jsx meta` : `Analysis/${p.cards[id].module}.py`}) has no section in Src/Sections/index.js`);
   const dir = path.join(ROOT, 'Src', 'Sections');
   for (const f of fs.readdirSync(dir)) {
     if (f.endsWith('.md')) {

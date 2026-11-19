@@ -9,6 +9,7 @@ import { fx } from '../Lib/theme.js';
 export const meta = {
   id: 's2_revenue_trend',
   title: 'Monthly revenue',
+  description: 'Revenue by month over two years, as a line',
   tab: 'overview',
   library: 'echarts',
   commentary: 'C1',

@@ -1,16 +1,17 @@
-"""Run a report analytic (the analysis skill's shape) live inside a dashboard section.
+"""Run a report section's analytic (the analysis skill's shape) live inside a dashboard section.
 
     from Shared.reuse import from_report
 
-    @section("s4_cost_by_region", tables=["claims", "membership"])   # the report's SOURCES names, saved as they are
-    def cost_by_region(t):
-        r = from_report("../analytics/claims_cost.py", "region_cost", t)
-        return {"data": {"rows": r["tables"]["by_region"]}, "metrics": r["metrics"]}
+    @section("s4_paid_by_month", tables=["claims"])     # the report's SOURCES names, loaded as they are
+    def paid_by_month(t):
+        r = from_report("../claims-review", "s1_paid_by_month", t)   # report folder, section file (or function name)
+        return {"data": {"rows": r["tables"]["by_month"]}, "metrics": r["metrics"]}
 
-One function, both places: the report runs it on the whole source, the dashboard on the section's already-filtered
-tables (src(name) = t.<name>). Params = the analytics file's DEFAULTS, then "analyticsDefaults" in
-dashboard.config.json, then any keyword given here. A thin slice (empty table, a missing row) raises NoData, which
-the section shows as "Not enough data for this selection".
+A report keeps one file per section: <report>/sections/sN_<name>.py with one fn(src, params), and DEFAULTS in
+<report>/sections/_shared.py. One function, both places: the report runs it on the whole source, the dashboard on
+the section's already-filtered tables (src(name) = t.<name>). Params = DEFAULTS, then "analyticsDefaults" in
+dashboard.config.json, then any keyword given here. A thin slice raises NoData, shown as "Not enough data for this
+selection". (A path to a single .py file still works: its own DEFAULTS, and the function named.)
 """
 from __future__ import annotations
 
@@ -28,29 +29,65 @@ class NoData(Exception):
     """The current filter choice leaves too little data for this analytic."""
 
 
-def _module(script: str):
-    path = (ROOT / script).resolve()
-    if not path.exists():
-        raise FileNotFoundError(f"report analytics not found: {path} (paths are relative to the dashboard folder)")
+def _load(path: Path):
+    """Import a file by path (again after it changes). Its folder goes on the import path, so `from _shared import`
+    works; a `_shared` from another report is dropped first."""
     stamp = path.stat().st_mtime
-    if _modules.get(path, (None, None))[1] != stamp:   # reload after an edit to the analytics file
-        if str(path.parent) not in sys.path:
-            sys.path.insert(0, str(path.parent))
-        spec = importlib.util.spec_from_file_location(f"report_{path.stem}", path)
+    if _modules.get(path, (None, None))[1] != stamp:
+        if str(path.parent) in sys.path:
+            sys.path.remove(str(path.parent))
+        sys.path.insert(0, str(path.parent))
+        shared = sys.modules.get("_shared")
+        if shared is not None and Path(getattr(shared, "__file__", "")).resolve().parent != path.parent:
+            del sys.modules["_shared"]
+        spec = importlib.util.spec_from_file_location(f"report_{path.parent.parent.name}_{path.stem}", path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         _modules[path] = (mod, stamp)
     return _modules[path][0]
 
 
-def from_report(script: str, function: str, t, **overrides) -> dict:
-    """{params, question, tables (lists of records), metrics, notes} from a report analytic on the filtered tables.
-    A keyword (e.g. material=0.3) overrides one param for this call only."""
-    mod = _module(script)
-    fn = getattr(mod, function, None)
+def _own_functions(mod) -> list[str]:
+    return [n for n, v in vars(mod).items() if callable(v) and not n.startswith("_") and getattr(v, "__module__", "") == mod.__name__]
+
+
+def _find(report: str, name: str | None):
+    """(module, function name, DEFAULTS) for a report folder + section file or function name, or a single file."""
+    where = (ROOT / report).resolve()
+    if where.is_file():
+        mod = _load(where)
+        fn = name or (_own_functions(mod)[0] if len(_own_functions(mod)) == 1 else None)
+        return mod, fn, getattr(mod, "DEFAULTS", None) or {}
+    folder = where / "sections"
+    if not folder.is_dir():
+        raise FileNotFoundError(f"no report sections in {folder} (from_report takes the report folder, relative to the dashboard folder)")
+    files = sorted(folder.glob("s*.py"))
+    hit = folder / f"{name}.py" if name else None
+    if hit is not None and hit.exists():
+        mod = _load(hit)
+        own = _own_functions(mod)
+        if len(own) != 1:
+            raise AttributeError(f"{hit.name} has {len(own)} functions ({', '.join(own)}); give the function name instead")
+        fn = own[0]
+    else:
+        mod = next((m for m in (_load(f) for f in files) if name in _own_functions(m)), None)
+        if mod is None:
+            raise AttributeError(f"no section file or function '{name}' in {folder} (files: {', '.join(f.stem for f in files) or 'none'})")
+        fn = name
+    shared = folder / "_shared.py"
+    defaults = getattr(_load(shared), "DEFAULTS", None) if shared.exists() else None
+    return mod, fn, defaults if isinstance(defaults, dict) else {}
+
+
+def from_report(report: str, section: str | None, t, **overrides) -> dict:
+    """{params, question, tables (lists of records), metrics, notes} from a report section's analytic, run on the
+    dashboard section's filtered tables. report = the report folder; section = its file name (s1_paid_by_month)
+    or function name. A keyword (e.g. material=0.3) overrides one param for this call only."""
+    mod, function, defaults = _find(report, section)
+    fn = getattr(mod, function or "", None)
     if fn is None:
-        raise AttributeError(f"{Path(script).name} has no function {function}()")
-    params = {**getattr(mod, "DEFAULTS", {}), **(tables.config().get("analyticsDefaults") or {}), **overrides}
+        raise AttributeError(f"no function '{function}' to run in {report}")
+    params = {**defaults, **(tables.config().get("analyticsDefaults") or {}), **overrides}
 
     def src(name: str):
         df = getattr(t, name)

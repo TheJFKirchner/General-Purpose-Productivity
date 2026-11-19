@@ -53,6 +53,8 @@ def import_modules() -> dict:
             if isinstance(e, SyntaxError) and e.lineno:
                 where = f"{Path(e.filename or f).name}:{e.lineno}"
             out[name] = f"{type(e).__name__}: {e}" + (f" ({where})" if where else "")
+    from Shared.registry import register_shapes
+    register_shapes()   # sections declared in their .jsx meta
     return out
 
 
@@ -146,6 +148,8 @@ def main() -> int:
     ap.add_argument("--sections", help="with --tables: comma-separated section ids")
     ap.add_argument("--by", default="", help="with --tables: comma-separated filter columns to vary")
     ap.add_argument("--out", help="with --tables: write the JSON here (default: print it)")
+    ap.add_argument("--describe", action="store_true", help="add every table's columns (type, sample, date range)")
+    ap.add_argument("--describe-only", action="store_true", help="print only the tables' columns (used by new-section)")
     a = ap.parse_args()
 
     modules = import_modules()
@@ -153,6 +157,9 @@ def main() -> int:
     if not m["tables"]:
         print(json.dumps({"error": "No data yet. Add write_source lines to Pipeline/sources.py, then npm run pipeline", "modules": modules}))
         return 2
+    if a.describe_only:
+        print(json.dumps({"describe": tables.describe(m)}, default=str))
+        return 0
     if a.tables:
         if not a.sections:
             raise SystemExit("npm run tables -- --sections <id,id> [--by <filter column,column>] [--out <file>]")
@@ -194,6 +201,7 @@ def main() -> int:
             "declared": c.declared is not None,
             "tables": c.tables,
             "module": c.module,
+            "function": c.fn.__name__,
             "metrics": result.get("metrics", {}),
             "error": result.get("error"),
             "slices": slice_failures(cid, options) if uses_report(cid) and "error" not in result else [],
@@ -206,6 +214,7 @@ def main() -> int:
         "filters": options,
         "parameters": parameters(m),
         "manifest": m,
+        **({"describe": tables.describe(m)} if a.describe else {}),
     }, default=str))
     return 0
 

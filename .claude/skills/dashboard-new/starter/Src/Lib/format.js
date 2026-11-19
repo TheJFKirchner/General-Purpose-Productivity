@@ -52,6 +52,13 @@ export const FORMATS = {
     if (!Number.isInteger(d) || d < 0 || d > 6) throw new Error(`num decimals must be 0-6, got "${arg}"`);
     return isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : NA;
   },
+  // fractional change in words: "up 5.2%", "down 3.1%", or "flat" within half a percent; arg = decimals (default 1)
+  change: (v, arg = '1') => {
+    const d = Number(arg);
+    if (!Number.isInteger(d) || d < 0 || d > 3) throw new Error(`change decimals must be 0-3, got "${arg}"`);
+    if (!isNum(v)) return NA;
+    return v > 0.005 ? `up ${(v * 100).toFixed(d)}%` : v < -0.005 ? `down ${(-v * 100).toFixed(d)}%` : 'flat';
+  },
   // fractional change -> rose / fell / was flat; arg = flat band in percent (default 0.5)
   direction: (v, arg = '0.5') => {
     const band = Number(arg);

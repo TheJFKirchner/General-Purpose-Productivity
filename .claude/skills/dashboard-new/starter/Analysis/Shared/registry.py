@@ -70,17 +70,19 @@ class Card:
     id: str
     fn: Callable
     tables: list[str]
-    declared: list[str] | None = None   # explicit filters=[...] (older projects); None = worked out from levels
+    declared: list[str] | None = None   # explicit filters=[...]; None = worked out from levels
     module: str = ""
+    ignore: tuple = ()                   # filters that must not narrow it (meta ignore: [...], e.g. it compares regions)
 
     @property
     def filters(self) -> list[str]:
-        return list(self.declared) if self.declared is not None else section_filters(self.id, self.tables)
+        base = list(self.declared) if self.declared is not None else section_filters(self.id, self.tables)
+        return [f for f in base if f not in self.ignore]
 
 
 def card(card_id: str, *, tables: list[str], filters: list[str] | tuple | None = None):
     def deco(fn):
-        if card_id in CARDS and CARDS[card_id].fn.__qualname__ != fn.__qualname__:
+        if card_id in CARDS and CARDS[card_id].module != SHAPE and CARDS[card_id].fn.__qualname__ != fn.__qualname__:
             raise ValueError(f"section {card_id} registered twice ({CARDS[card_id].module} and {fn.__module__})")
         CARDS[card_id] = Card(card_id, fn, list(tables), None if filters is None else list(filters), fn.__module__)
         return fn
@@ -88,6 +90,24 @@ def card(card_id: str, *, tables: list[str], filters: list[str] | tuple | None =
 
 
 section = card   # the name used in new projects: @section("s3_paid_by_region", tables=[...])
+SHAPE = "(meta)"   # module name shown for sections whose numbers are declared in their .jsx meta (Shared/shapes.py)
+
+
+def register_shapes() -> None:
+    """Sections that declare x (and tables) in their .jsx meta and have no @section function: computed by
+    Shared.shapes.compute, in Python, on the filtered table."""
+    from . import shapes
+    for f in sorted(SECTIONS.glob("s*.jsx")):
+        try:
+            spec = shapes.spec_from_jsx(f.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        if not spec or (spec["id"] in CARDS and CARDS[spec["id"]].module != SHAPE):
+            continue
+
+        def shape(t, spec=spec):
+            return shapes.compute(t, spec)
+        CARDS[spec["id"]] = Card(spec["id"], shape, [spec["table"]], None, SHAPE, tuple(spec["ignore"]))
 
 
 def discover(reload: bool = False) -> dict[str, Card]:
@@ -105,4 +125,5 @@ def discover(reload: bool = False) -> dict[str, Card]:
             importlib.reload(sys.modules[name])
         else:
             importlib.import_module(name)
+    register_shapes()
     return CARDS

@@ -6,7 +6,7 @@
 | --- | --- |
 | One or two headline figures | No chart: `kpis` |
 | Size across a few categories | `bar` sorted, or `hbar` when labels are long |
-| Change over time | `line` (`bar` for six or fewer periods), `layout: "wide"` |
+| Change over time | `line` (`bar` for six or fewer periods), `LAYOUT = "wide"` |
 | Two sources or periods side by side | `bar` with two `y` columns, or two lines |
 | Where a gap sits | A bar of the gap itself, not two near-equal bars |
 | Parts of a whole across groups | `stack` |
@@ -21,7 +21,7 @@
 
 ## A chart function
 
-When the shorthand cannot draw it, `chart` takes a function of the analytic's tables that returns an ECharts option:
+When the keys cannot draw it, `CHART` in the section file takes a function of the analytic's tables that returns an ECharts option:
 
 ```python
 def _waterfall(t):
@@ -37,7 +37,7 @@ def _waterfall(t):
                     "label": {"show": True, "position": "top"}}],
     }
 
-SECTIONS = [{"analytic": "bridge", "title": "...", "chart": _waterfall}]
+CHART = _waterfall          # in the same section file, below the function
 ```
 
 - DataFrame columns can be passed as data; `run.py` converts them.

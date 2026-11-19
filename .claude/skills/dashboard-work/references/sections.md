@@ -1,88 +1,97 @@
-# Writing a section
+# Sections
 
-A section is two files sharing an id, e.g. `s3_paid_by_region`. Start one with:
-```
-npm run new-section -- paid_by_region --page costs --tables claims_monthly --chart echarts
-```
-It picks the next number, writes both files as shells ("Not built yet") and adds the section to
-`Src/Sections/index.js` (and the tab if new). Options: `--title "Paid by region"`, `--size half`,
-`--chart echarts | table | kpi | text`.
+A section is defined by one file, `Src/Sections/<id>.jsx`: its `meta` (title, tab, tables, a short description,
+its numbers), its note and its chart. An edit opens that file only; its Python function too only when it has one
+and the numbers change. Never open other sections, components or helper files to copy from.
 
-## 1. The analytic: `Analysis/<tab>.py`
-One function per section, one question. It gets its tables already filtered and returns `data` (for the
-drawing) and `metrics` (single named values for the note).
+## Simple add (one chart, table or tile row from one table)
+1. `npm run status`: the tabs, sections, and every table's columns with a sample and date range.
+2. One command writes a working section:
+   ```
+   npm run new-section -- paid_by_month --page overview --tables claims --chart bar --x service_month --y paid_amount \
+     --note "Paid in {latest_label|month} was {latest|compact}, {change|change} {change_label|name}. | Peak: {largest_label|month}."
+   ```
+   | Option | Means |
+   |---|---|
+   | `--chart` | `bar`, `line`, `table` or `kpi` |
+   | `--x` | the category or month column (a month gives a time axis, latest and change) |
+   | `--y` / `--agg` | the value column; `sum` (default), `mean`, or `count` (counts rows, no `--y`) |
+   | `--by` | a second column: one series per value (stacked bars, lines, table columns) |
+   | `--title`, `--desc` | what it shows (title), and 8 to 10 words for the status list |
+   | `--note "a \| b"` | the bullets, split by ` \| `; without it, neutral generated lines (`--bullets N`, default 2) |
+   | `--compare` | month x: change on the same month a year earlier (`year`, default with a year of data) or `prev` |
+   | `--keep-filter` | by default a filter on the `--x`/`--by` column does not narrow it (it compares those values) |
+   | more | `--size half`; `--report <name>` adds it to a report |
+3. It prints the metrics and the note lines. To reword later, edit those lines in the `.jsx`; keep each `{metric|format}`.
+4. `npm run check`, then `npm run shot -- <id> <id>.png` (starts and stops its own server) and look.
+
+What the file holds, so you never need another one:
+```jsx
+export const meta = {
+  id: 's8_paid_by_month', title: 'Paid by month', tab: 'overview', chart: 'bar', library: 'echarts',
+  description: 'Paid amount by service month, summed, as bars',
+  tables: ['claims'], x: 'service_month', y: 'paid_amount', agg: 'sum',   // the numbers, worked out in Python
+};
+export const note = `
+- {latest|compact} in {latest_label|month}, {change|change} {change_label|name}.
+`;
+```
+- Change the numbers: edit `x`, `y`, `agg`, `by`. Change the look: the chart code under the note.
+- Metrics: `total` (or `average`), `largest`, `largest_label`, `count`; a month x adds `latest`, `latest_label`,
+  `change`, `change_label` ("vs Jun 25"); other x adds `largest_share`, `smallest`, `smallest_label`; `--by` adds
+  `top_series`, `top_series_share`.
+- Note formats: `compact` money ($913.2K), `int` counts, `short`, `num:1`, `pct:1`, `change` (up 5.2%, down 3.1%,
+  flat), `month` (Jun 26), `name`.
+
+---
+**STOP HERE for a simple add. Below: unusual sections only** (several tables, a calculation the options can't
+say, a report's analytic).
+
+---
+
+## A hand-written analytic
+`npm run new-section -- <name> --page <tab> --tables <t1,t2> --desc "..."` (no `--x`) writes a shell and a stub in
+`Analysis/<tab>.py`. Fill the function; delete `x`/`y`/`agg` from the meta.
 ```python
-from Shared.registry import section
-
-@section("s3_paid_by_region", tables=["claims_monthly"])
+@section("s3_paid_by_region", tables=["claims"], filters=["product"])   # filters=: only these reach it
 def paid_by_region(t):
     """Which regions carry the most paid claims?"""
-    by = t.claims_monthly.groupby("region", as_index=False)["paid"].sum().sort_values("paid", ascending=False)
-    return {"data": {"rows": by.to_dict("records")},
-            "metrics": {"top_region": by["region"].iloc[0], "total_paid": by["paid"].sum()}}
+    by = t.claims.groupby("region", as_index=False)["paid_amount"].sum().sort_values("paid_amount", ascending=False)
+    return {"data": {"rows": by.to_dict("records")}, "metrics": {"top_region": by["region"].iloc[0]}}
 ```
-- **Filters are already applied**; never filter again. `t.filters["region"]` is the choice ("All" when unset).
-- A section that compares one dimension (regions) is not narrowed by that filter: `@section(..., filters=["product"])`
-  lists the filters it takes. The page then tags it "Region: all" when Region is set.
-- Group, total and sort here, so the `.jsx` only draws. `None` for a value that can't be worked out ("n/a").
-- Helpers (`from Shared.periods import ...`): `total`, `sum_by`, `last_periods(df, 12)`, `change(cur, prior)`,
-  `ratio(a, b)`, `month_label("2026-10")`. They return `None`, not errors.
+- Tables arrive filtered; never filter again. `t.filters["region"]` is the choice, `t.params` the slow filters.
+- A section comparing regions leaves `region` out of `filters=[...]`; the page tags it "Region: all".
+- `from Shared.periods import change, ratio, total, sum_by, last_periods, month_label`: `change(cur, prior)`,
+  `ratio(a, b)`, `total(df, col)`, `sum_by(df, key, col)`, `last_periods(df, 12, offset=0)`, `month_label("2026-10")`
+  ("Oct 2026"). All return `None` rather than fail.
 
-**A report analytic, live.** The analysis skill's `fn(src, params)` runs here on the filtered tables, so one
-function serves both places and filters act on it:
+## A report's analytic, live
+One function serves the report and the dashboard; filters act on it. Load the report's sources under the same
+names first (`write_source("claims", report="../claims-review")` in `Pipeline/sources.py`). Then a shell
+(`new-section` without `--x`) and, in its stub:
 ```python
 from Shared.reuse import from_report
 
-@section("s4_cost_by_region", tables=["claims", "membership"], filters=["product"])   # the report's SOURCES names
-def cost_by_region(t):
-    r = from_report("../report/analytics/claims_cost.py", "region_cost", t)
+@section("s4_paid_by_region", tables=["claims"], filters=["product"])
+def paid_by_region(t):
+    r = from_report("../claims-review", "s2_paid_by_region", t)   # report folder; section file or function name
     return {"data": {"rows": r["tables"]["by_region"]}, "metrics": r["metrics"]}
 ```
-- `from_report(script, function, t, **overrides)` returns `params`, `question`, `tables` (lists of rows),
-  `metrics`, `notes`. Params: the analytics file's `DEFAULTS`, then `"analyticsDefaults"` in the config, then a
-  keyword for this call only (`from_report(..., material=0.3)`). Read `r["params"]["month"]`; never retype one.
+- Returns `params`, `question`, `tables` (lists of rows), `metrics`, `notes`. Params: `DEFAULTS` from the report's
+  `sections/_shared.py`, then `"analyticsDefaults"` in the config, then a keyword for this call
+  (`from_report(..., material=0.3)`).
 - A slice too thin for it shows "Not enough data for this selection".
 
-## 2. The look: `Src/Sections/s3_paid_by_region.jsx`
-```jsx
-export const meta = { id: 's3_paid_by_region', title: 'Paid by region', tab: 'costs', library: 'echarts', size: 'half', commentary: 'C2' };
-
-export const note = `{top_region|name} had the most paid claims, out of {total_paid|compact} in total.`;
-
-export default function Section({ data, metrics }) { /* draw data.rows */ }
-```
-- `library`: `echarts`, or `none` for tables, tiles and text. `tab`: the tab id (none on a one-page dashboard).
-- `note`: one line of takeaway. It names metrics; it never types numbers in.
-- `commentary` (optional): one id from `commentary.json`; the matching item shows under the section.
-- No filter dropdowns here. A view switch (count vs amount) inside the section is fine.
-
-## Note formats
-| Write | Shows |
-|---|---|
-| `{x\|compact}` / `{x\|money}` | $913.2K / $1,234 (money: both add $) |
-| `{x\|short}` / `{x\|int}` / `{x\|num:2}` | 913.2K / 12,345 / 4.64 (counts: no $) |
-| `{x\|pct:1}` / `{x\|pts:1}` | 5.2% (size only; pair with direction) / 2.4 points |
-| `{x\|direction}` / `{x\|month}` / `{x\|name}` | rose, fell, was flat / Jun 26 / the text as it is |
-
-## Drawing
-- **Readout first:** KPI tiles (`<div className="kpis">` with `<KpiTile label value format change goodWhen="up" />`)
-  lead a tab. Short category bars (a few regions) go `size: 'half'` at about 220px high.
-- **ECharts:** `<ChartECharts option={option} height={300} />`, `option` built in `useMemo(() => ..., [data])`. The
-  theme colors series in order (blue, green, navy, teal, muted): no `itemStyle` needed. Orange only means "needs
-  attention": `color: fx().bad` (`fx` from `../Lib/theme.js`) on the one bar or cell.
-
-## Cookbook
+## Drawing by hand
 | Need | Write |
 |---|---|
-| KPI tile | `<KpiTile label="Paid, Jun 26" value={metrics.paid} format={FORMATS.compact} change={metrics.change} goodWhen="down" changeLabel="vs Jun 25" />` (`format` is a `FORMATS` function) |
+| A chart | `<ChartECharts option={option} height={300} />` (`../Components/ChartECharts.jsx`), `option` in `useMemo(() => ..., [data])`; the theme colors series, no `itemStyle` |
+| KPI tile | `<KpiTile label="Paid, Jun 26" value={metrics.paid} format={FORMATS.compact} change={metrics.change} goodWhen="down" changeLabel="vs Jun 25" />` inside `<div className="kpis">` |
+| Formats | `import { FORMATS } from '../Lib/format.js'`: `FORMATS.compact(v)`, `.short`, `.int`, `.num(v, 1)`, `.pct(v, 1)`, `.month` |
 | Percent axis | `axisLabel: { formatter: (v) => FORMATS.pct(v, 0) }` |
-| Largest bar on top (horizontal) | `yAxis: { type: 'category', inverse: true, data: rows.map((r) => r.region) }` with rows sorted largest first |
-| Highlight one bar | `data: rows.map((r) => ({ value: r.paid, itemStyle: r.flag ? { color: fx().bad } : undefined }))` |
-| Count rows | in the analytic: `df.groupby("month").size()` (or `["claim_id"].nunique()`) |
-- **Axes and labels:** `FORMATS.compact` for money, `FORMATS.short` for counts, `FORMATS.month` for months.
-  `FORMATS` is in `../Lib/format.js`.
-- **Tables:** `<table className="data">`; number cells `className="num"` (right-aligned); `good` / `bad` flags.
-- Looks-only tweaks: `Src/custom.css`, scoped to `#<id>`, with the theme variables (`--blue`, `--navy`, `--rule`).
+| Largest bar on top | `yAxis: { type: 'category', inverse: true, data }` with rows sorted largest first |
+| Needs attention | `itemStyle: { color: fx().bad }` on one bar (`fx` from `../Lib/theme.js`); orange means only that |
+| Table | `<table className="data">`; number cells `className="num"`; `good` / `bad` flags |
+| Looks only | `Src/custom.css`, scoped to `#<id>`, with `--blue`, `--navy`, `--rule` ... |
 
-## Checking
-`npm run check` once when done. One section's numbers: `python Analysis/check.py --show <id> [--filter region=East]`.
+One section's numbers: `python Analysis/check.py --show <id> [--filter region=East]`.

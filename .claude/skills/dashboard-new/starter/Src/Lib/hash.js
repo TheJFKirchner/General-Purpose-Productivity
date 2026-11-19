@@ -11,6 +11,8 @@ export function readHash() {
 /** Rewrite the hash (no new history entry, no hashchange event) when it differs. */
 export function writeHash(tab, filters) {
   const q = new URLSearchParams();
+  const only = readHash().only; // a one-section view (npm run shot -- <section id>) keeps its marker
+  if (only) q.set('only', only);
   if (tab) q.set('tab', tab);
   for (const [name, value] of Object.entries(filters)) {
     if (name !== 'tab' && value && value !== ALL) q.set(name, value);

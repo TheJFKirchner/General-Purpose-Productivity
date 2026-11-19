@@ -23,7 +23,7 @@ In this order. Never write a script to call analytics.
 2. The series already in the report's chart: grep `"data": [` in the report HTML; it holds the full series.
 3. `python run.py data <analytic> [<table>]` in the report folder (`--json` for JSON). It prints the whole table with the report's own parameters.
 
-None of these has the number: tell the user it is missing. Take only the rows of the chosen cut and hard-code them. The footnote names what is measured, the cut in plain words, the period and the source as file, function, table and finding: `analytics/claims_cost.py, nov_rise, by_month (finding 1)`.
+None of these has the number: tell the user it is missing. Take only the rows of the chosen cut and hard-code them. The footnote names what is measured, the cut in plain words, the period and the source as finding number, report folder and table: `finding 1; reports/nov-claims, python run.py data by_month by_month`.
 
 - From a report chart: take its series and keep its kind, period and measure name. Restyle only, and draw any line the text cites. The user's pick is not second-guessed.
 - A ratio of two cited numbers ("13 times") is allowed when both are on the slide or in its cited findings rows. Round down and give the sum in the speaker notes. Otherwise add a findings row first.

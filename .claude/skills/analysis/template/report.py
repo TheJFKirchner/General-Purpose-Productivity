@@ -13,21 +13,20 @@ QUESTION = "__QUESTION__"
 FOR = "__FOR__"           # the reader, shown at the top: "For <reader> · <date>"
 
 # name -> file, or a function returning a DataFrame. Paths are relative to this report folder.
-# Analytics call src("name"). A .sql file needs run_query(sql) below.
+# Sections call src("name"). A .sql file needs run_query(sql) below.
 SOURCES = {}
-PARAMS = {}               # only where this report differs from the analytics' DEFAULTS
+PARAMS = {}               # only where this report differs from DEFAULTS in sections/_shared.py
 KEEP = []                 # sources to save in data/ and reuse until --refresh (slow queries only)
-ANALYTICS = "__ANALYTICS__"
 
-# The agreed answer. Every result is a placeholder: {analytic.metric:format}
+# The agreed answer. Every result is a placeholder: {section_name.metric:format}
 ANSWER = {
     "headline": "",
     "basis": "",          # required: which date, compared with what, exclusions, data through when
-    "bullets": [],
-    "kpis": [],           # ("Label", "{analytic.metric:$short}", "optional note")
+    "bullets": [],       # optional
+    "kpis": [],           # optional: ("Label", "{section_name.metric:$short}", "optional note")
 }
 
-# One block per analytic, in reading order.
+# The order of the sections; each one is a file in sections/. `python run.py add-section` adds one.
 SECTIONS = []
 
 

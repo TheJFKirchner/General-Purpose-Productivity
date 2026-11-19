@@ -32,7 +32,8 @@ _mtimes: dict = {}
 
 
 def _sources() -> dict:
-    return {p: p.stat().st_mtime for p in [*HERE.glob("*.py"), *(HERE / "Shared").glob("*.py")]}
+    return {p: p.stat().st_mtime for p in [*HERE.glob("*.py"), *(HERE / "Shared").glob("*.py"),
+                                         *(HERE.parent / "Src" / "Sections").glob("s*.jsx")]}   # meta-declared numbers
 
 
 _manifest_mtime = None
