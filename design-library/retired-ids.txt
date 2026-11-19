@@ -1,5 +1,7 @@
-# Retired ids, never reused; replaced by CT-01->CT-02 CT-03->CT-20 CT-05->CT-07 CT-09->CT-19 (keep each pair one word: build-index.js reads every word here as a retired id)
+# Retired ids, never reused; replaced by CT-01->CT-02 CT-03->CT-20 CT-05->CT-07 CT-09->CT-19 CT-25->CT-08 CT-26->CT-19 (keep each pair one word: build-index.js reads every word here as a retired id)
 CT-01
 CT-03
 CT-05
 CT-09
+CT-25
+CT-26

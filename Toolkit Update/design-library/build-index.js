@@ -63,11 +63,23 @@ all.forEach(it => {
   if (!h.purpose || /^WRITE/i.test(h.purpose)) say(it, 'no purpose sentence');
   if (!h.from) say(it, 'no "from" (the skill it came from)');
   if (h.type === 'slide' && !new RegExp(`<section id="${h.name}" data-component="${h.id}"`).test(it.text)) say(it, 'the slide\'s section needs id="<name>" data-component="<id>"');
+  // an embedded font: only in a theme item, only @font-face rules with woff2 data: URIs, its licence file named and present.
+  // That block is the one place a data: URI and a font name are allowed; it is checked here, then left out of the checks below.
+  let text = it.text;
+  const fb = text.match(/<style id="theme-fonts">([\s\S]*?)<\/style>/);
+  if (fb) {
+    if (h.type !== 'theme') say(it, 'an embedded font (style#theme-fonts) belongs only in a theme item');
+    const face = /@font-face\s*\{\s*font-family:\s*"[^"]+";(?:\s*[a-z-]+:\s*[^;{}()]+;)*\s*src:\s*url\(data:font\/woff2;base64,[A-Za-z0-9+/]+=*\)\s*format\("woff2"\);(?:\s*[a-z-]+:\s*[^;{}()]+;)*\s*\}/g;
+    if (fb[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(face, '').trim()) say(it, 'style#theme-fonts may hold only @font-face rules with woff2 data: URIs');
+    const lic = (fb[1].match(/themes\/([\w.-]+\.txt)/) || [])[1];
+    if (!lic || !fs.existsSync(path.join(S.LIB, 'themes', lic))) say(it, 'an embedded font needs its licence file named in its block (themes/<file>.txt) and present');
+    text = text.replace(fb[0], '');
+  }
   // nothing from outside the file but ECharts
-  const refs = [...it.text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"|(?<![A-Za-z])url\(([^)]*)\)|@import|<link\b/g)];   // url( in CSS, not createObjectURL(
+  const refs = [...text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"|(?<![A-Za-z])url\(([^)]*)\)|@import|<link\b/g)];   // url( in CSS, not createObjectURL(
   refs.forEach(m => { const v = m[1] || m[2] || m[0]; if (v !== S.ECHARTS && !/^#/.test(v)) say(it, `loads "${v}" from outside the item; only the ECharts CDN is allowed`); });
   // colours and fonts only through tokens
-  const body = it.text
+  const body = text
     .replace(/<style id="tokens">[\s\S]*?<\/style>/, '')
     .replace(/<script type="application\/json" id="theme">[\s\S]*?<\/script>/, '')
     .replace(/<!-- SOURCE[\s\S]*?<!-- SOURCE END -->/, '')
@@ -84,7 +96,7 @@ all.forEach(it => {
 
   // Saved items (not the hand-made originals): no dates, at most 6 points, no word from the project copied
   if (originals.includes(h.id)) return;
-  const all = it.text.replace(/<style id="(tokens|deck-css|kit-css)">[\s\S]*?<\/style>/g, '').replace(/<script id="item-engine">[\s\S]*?<\/script>/, '').replace(S.ECHARTS, '');
+  const all = text.replace(/<style id="(tokens|deck-css|kit-css)">[\s\S]*?<\/style>/g, '').replace(/<script id="item-engine">[\s\S]*?<\/script>/, '').replace(S.ECHARTS, '');
   const date = all.match(/\b(?:19|20)\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+'?\d{2}\b/i);
   if (date) say(it, `date "${date[0]}": a saved item carries no dates; use plain month names or "Group A"`);
   for (const m of it.text.matchAll(/<script type="application\/json">([\s\S]*?)<\/script>/g)) {
@@ -122,8 +134,14 @@ fs.writeFileSync(path.join(S.LIB, 'index.md'), md.join('\n'));
 
 /* ---------- index.html ---------- */
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const themes = byType('theme').map(i => ({ id: i.h.id, name: i.h.name, purpose: i.h.purpose,
-  theme: JSON.parse(i.text.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/)[1]) }));
+/* A theme's embedded font is held once here (themes that share a font share one copy) and sent with its tokens. */
+const FONTS = {};
+const themes = byType('theme').map(i => {
+  const f = S.fontsOf(i.h.id), key = f ? S.hash(f) : '';
+  if (f) FONTS[key] = f;
+  return { id: i.h.id, name: i.h.name, purpose: i.h.purpose, font: key,
+    theme: JSON.parse(i.text.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/)[1]) };
+});
 const moves = i => i.h.type === 'animation' || /\bdata-animate\b/.test(i.text.replace(/<script id="item-engine">[\s\S]*?<\/script>/, ''));
 const shown = order.flatMap(byType);
 const cards = shown.map((i, n) => `<button type="button" class="card" data-type="${esc(i.h.type)}" data-i="${n}"${moves(i) ? ' data-moves' : ''} aria-label="Preview ${esc(i.h.id)} ${esc(i.h.name)}">
@@ -194,6 +212,8 @@ ${cards}
 <script>
 (function () {
   var THEMES = ${JSON.stringify(themes)};
+  /* embedded theme fonts, once each; their licence is named inside each (themes/*.txt) */
+  var FONTS = ${JSON.stringify(FONTS)};
   var ITEMS = ${itemsJson};
   var TYPES = ['all'].concat(${JSON.stringify(order)});
   function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
@@ -207,7 +227,10 @@ ${cards}
   var pop = document.getElementById('pop'), frame = document.getElementById('pop-frame');
   function theme() { return THEMES.filter(function (t) { return t.id === current; })[0]; }
   function send(f, msg) { try { f.contentWindow.postMessage(msg, '*'); } catch (e) { /* not loaded yet */ } }
-  function sendTheme(f) { send(f, { theme: theme().theme }); }
+  /* the theme as sent to an item: its tokens and series, plus its embedded font faces when it has them */
+  function full(t) { return t.font ? Object.assign({}, t.theme, { fonts: FONTS[t.font] }) : t.theme; }
+  function sendTheme(f) { send(f, { theme: full(theme()) }); }
+  function link(t) { return '#theme=' + encodeURIComponent(JSON.stringify(full(t))); }
 
   /* theme and type dropdowns */
   var ts = document.getElementById('theme'), ty = document.getElementById('type');
@@ -218,7 +241,10 @@ ${cards}
     Object.keys(t.theme.css).forEach(function (k) { r.style.setProperty(k, t.theme.css[k]); });
     ts.value = t.id; ts.title = t.purpose;
     cards.forEach(function (c) { sendTheme(c.querySelector('iframe')); });
-    if (!pop.hidden) { sendTheme(frame); var po = document.getElementById('pop-open'); po.href = po.href.split('#')[0] + '#theme=' + encodeURIComponent(JSON.stringify(t.theme)); }
+    var live = document.getElementById('theme-fonts-live');   /* the index itself takes the theme's font too */
+    if (t.font) { if (!live) { live = document.createElement('style'); live.id = 'theme-fonts-live'; document.head.appendChild(live); } if (live.textContent !== FONTS[t.font]) live.textContent = FONTS[t.font]; }
+    else if (live) live.parentNode.removeChild(live);
+    if (!pop.hidden) { sendTheme(frame); var po = document.getElementById('pop-open'); po.href = po.href.split('#')[0] + link(t); }
   }
   function visible() { return cards.filter(function (c) { return !c.hidden; }); }
   function applyType() {
@@ -246,7 +272,7 @@ ${cards}
     document.getElementById('pop-name').textContent = it.name;
     document.getElementById('pop-type').textContent = it.type + ' \u00b7 from ' + (it.from || '?');
     document.getElementById('pop-purpose').textContent = it.purpose;
-    document.getElementById('pop-open').href = it.rel + '#theme=' + encodeURIComponent(JSON.stringify(theme().theme));   /* opens in the theme the popup shows */
+    document.getElementById('pop-open').href = it.rel + link(theme());   /* opens in the theme the popup shows, font included */
     frame.title = it.id + ' ' + it.name;
     frame.onload = function () { sendTheme(frame); if (it.moves) send(frame, { replay: true, explicit: true }); };   /* opening it is the request: plays even under reduced motion */
     frame.src = it.rel;

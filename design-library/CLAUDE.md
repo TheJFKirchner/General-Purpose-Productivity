@@ -13,6 +13,7 @@ Reusable slides, charts, tables, hero cards, animations, layout pieces and theme
 
 ## Themes
 - A theme is an item (`themes/TH-nn-<name>.html`) whose JSON block holds every token and the chart series order. TH-01 is the default every item carries.
+- A theme may embed its font (TH-04 to TH-07 carry Barlow, licence in `themes/barlow-OFL.txt`); copying a theme into a template means copying its `theme-fonts` block and that licence file with its tokens.
 - Add one: `node save-item.js theme --from TH-01 --name <name>`, then edit its tokens. Token list and the james-themes mapping: `AUTHORING.md`.
 
 ## Use

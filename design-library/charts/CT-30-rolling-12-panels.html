@@ -341,8 +341,29 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       requestAnimationFrame(step);
     });
   }
+  /* A theme may embed its typeface as @font-face rules with data: URIs, held only in the theme item (style#theme-fonts).
+     They travel with its tokens (index message or #theme= link) into style#theme-fonts-live. Charts and Replay wait
+     until the faces have loaded, so ECharts measures its labels in that font. A theme without fonts removes them. */
+  var fontWait = null;
+  function facesLoaded(style) {
+    if (!style || !style.sheet || !document.fonts || !document.fonts.load) return Promise.resolve();
+    var asks = Array.prototype.filter.call(style.sheet.cssRules, function (r) { return r.type === 5; }).map(function (r) {
+      return document.fonts.load((r.style.getPropertyValue('font-weight') || '400') + ' 16px ' + r.style.getPropertyValue('font-family')).catch(function () {});
+    });
+    return Promise.all(asks).then(function () { return document.fonts.ready; });
+  }
+  function waitFor(style) { var w = fontWait = facesLoaded(style).then(function () { if (fontWait === w) fontWait = null; }); return w; }
+  function faces(text) {
+    var s = document.getElementById('theme-fonts-live');
+    if (!text) { if (s) s.parentNode.removeChild(s); return null; }
+    if (!s) { s = document.createElement('style'); s.id = 'theme-fonts-live'; document.head.appendChild(s); }
+    if (s.textContent !== text) s.textContent = text;
+    return waitFor(s);
+  }
+  if (document.getElementById('theme-fonts')) waitFor(document.getElementById('theme-fonts'));   /* a theme item showing its own font */
   /* Replay: charts draw in again, numbers count up again, CSS motion under html.play runs again. Never loops. */
   function replay(explicit) {
+    if (fontWait) { fontWait.then(function () { fit(); replay(explicit); }); return; }   /* draw once the theme's font is in */
     forced = !!explicit; root.classList.toggle('forced', forced);
     draw(true); tickUp();
     if (moves(document.querySelector('[data-animate]'))) { root.classList.remove('play'); void root.offsetWidth; root.classList.add('play'); }
@@ -354,7 +375,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
   function fit() {
     var f = document.querySelector('.fit');
     if (!f) return;
-    var narrow = texty && window.innerWidth < 720;
+    /* reflow at readable size only when opened by itself on a narrow screen; inside a frame (index grid, popup) always scale */
+    var narrow = texty && window.self === window.top && window.innerWidth < 720;
     root.classList.toggle('narrow', narrow);
     Array.prototype.forEach.call(document.querySelectorAll('.lib-table'), function (t) { t.parentElement.classList.toggle('lib-scroll', narrow); });
     if (narrow) { f.style.transform = 'none'; return; }
@@ -371,14 +393,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     if (!t || body.hasAttribute('data-own-theme')) return;
     Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
     if (t.series) root.style.setProperty('--series', t.series.join(' '));
-    draw(false);
+    var w = faces(t.fonts);
+    if (w) w.then(function () { fit(); draw(false); }); else draw(false);
   });
   /* Any item that opts into motion (body or one element marked data-animate) gets the Replay control, in a strip
      of its own above the content (never on it). In the index grid (#grid) the strip is left out: cards are clicked. */
   var strip = 0, grid = /(^|[#&])grid(&|$)/.test(location.hash);
   var linked = (location.hash.match(/(?:^#|&)theme=([^&]+)/) || [])[1];
   if (linked && !body.hasAttribute('data-own-theme')) {
-    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); } catch (e) { /* a theme id, not tokens: keep the default */ }
+    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); faces(lt.fonts); } catch (e) { /* a theme id, not tokens: keep the default */ }
   }
   if (document.querySelector('[data-animate]') && !grid) {
     strip = 40;

@@ -71,6 +71,11 @@ function themeOf(id = DEFAULT_THEME) {
   if (!it) throw new Error(`no theme ${id}`);
   return JSON.parse(it.text.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/)[1]);
 }
+/* A theme's embedded font faces (the inside of its <style id="theme-fonts">), or '' when it has none. Held only in the theme item. */
+function fontsOf(id = DEFAULT_THEME) {
+  const it = items().find(i => i.h.id === id);
+  return it ? ((it.text.match(/<style id="theme-fonts">\n?([\s\S]*?)\n?<\/style>/) || [])[1] || '') : '';
+}
 const tokensBlock = theme => `<style id="tokens">:root {\n${Object.entries(theme.css).map(([k, v]) => `  ${k}: ${v};`).join('\n')}\n  --series: ${theme.series.join(' ')};\n}</style>`;
 
 /* The deck stylesheet without its colour and font tokens (those come from the theme). */
@@ -224,8 +229,29 @@ const ENGINE = `(function () {
       requestAnimationFrame(step);
     });
   }
+  /* A theme may embed its typeface as @font-face rules with data: URIs, held only in the theme item (style#theme-fonts).
+     They travel with its tokens (index message or #theme= link) into style#theme-fonts-live. Charts and Replay wait
+     until the faces have loaded, so ECharts measures its labels in that font. A theme without fonts removes them. */
+  var fontWait = null;
+  function facesLoaded(style) {
+    if (!style || !style.sheet || !document.fonts || !document.fonts.load) return Promise.resolve();
+    var asks = Array.prototype.filter.call(style.sheet.cssRules, function (r) { return r.type === 5; }).map(function (r) {
+      return document.fonts.load((r.style.getPropertyValue('font-weight') || '400') + ' 16px ' + r.style.getPropertyValue('font-family')).catch(function () {});
+    });
+    return Promise.all(asks).then(function () { return document.fonts.ready; });
+  }
+  function waitFor(style) { var w = fontWait = facesLoaded(style).then(function () { if (fontWait === w) fontWait = null; }); return w; }
+  function faces(text) {
+    var s = document.getElementById('theme-fonts-live');
+    if (!text) { if (s) s.parentNode.removeChild(s); return null; }
+    if (!s) { s = document.createElement('style'); s.id = 'theme-fonts-live'; document.head.appendChild(s); }
+    if (s.textContent !== text) s.textContent = text;
+    return waitFor(s);
+  }
+  if (document.getElementById('theme-fonts')) waitFor(document.getElementById('theme-fonts'));   /* a theme item showing its own font */
   /* Replay: charts draw in again, numbers count up again, CSS motion under html.play runs again. Never loops. */
   function replay(explicit) {
+    if (fontWait) { fontWait.then(function () { fit(); replay(explicit); }); return; }   /* draw once the theme's font is in */
     forced = !!explicit; root.classList.toggle('forced', forced);
     draw(true); tickUp();
     if (moves(document.querySelector('[data-animate]'))) { root.classList.remove('play'); void root.offsetWidth; root.classList.add('play'); }
@@ -237,7 +263,8 @@ const ENGINE = `(function () {
   function fit() {
     var f = document.querySelector('.fit');
     if (!f) return;
-    var narrow = texty && window.innerWidth < 720;
+    /* reflow at readable size only when opened by itself on a narrow screen; inside a frame (index grid, popup) always scale */
+    var narrow = texty && window.self === window.top && window.innerWidth < 720;
     root.classList.toggle('narrow', narrow);
     Array.prototype.forEach.call(document.querySelectorAll('.lib-table'), function (t) { t.parentElement.classList.toggle('lib-scroll', narrow); });
     if (narrow) { f.style.transform = 'none'; return; }
@@ -254,14 +281,15 @@ const ENGINE = `(function () {
     if (!t || body.hasAttribute('data-own-theme')) return;
     Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
     if (t.series) root.style.setProperty('--series', t.series.join(' '));
-    draw(false);
+    var w = faces(t.fonts);
+    if (w) w.then(function () { fit(); draw(false); }); else draw(false);
   });
   /* Any item that opts into motion (body or one element marked data-animate) gets the Replay control, in a strip
      of its own above the content (never on it). In the index grid (#grid) the strip is left out: cards are clicked. */
   var strip = 0, grid = /(^|[#&])grid(&|$)/.test(location.hash);
   var linked = (location.hash.match(/(?:^#|&)theme=([^&]+)/) || [])[1];
   if (linked && !body.hasAttribute('data-own-theme')) {
-    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); } catch (e) { /* a theme id, not tokens: keep the default */ }
+    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); faces(lt.fonts); } catch (e) { /* a theme id, not tokens: keep the default */ }
   }
   if (document.querySelector('[data-animate]') && !grid) {
     strip = 40;
@@ -425,12 +453,12 @@ function chartItem(h, theme, optionJson, title) {
     `<div class="fit">\n<h2>${title || 'Heading: what is measured, the period'}</h2>\n<!-- ITEM:START -->\n<div class="chart" data-echart>\n<script type="application/json">\n${optionJson.trim()}\n</script>\n</div>\n<!-- ITEM:END -->\n</div>`);
 }
 
-function themeItem(h, theme) {
+function themeItem(h, theme, fonts = '') {
   const sw = Object.keys(theme.css).filter(k => !/font|weight|radius/.test(k))
     .map(k => `<div class="sw"><i style="background: var(${k})"></i><span>${k}</span></div>`).join('\n');
   const option = { xAxis: { type: 'category', data: ['A', 'B', 'C', 'D', 'E', 'F'] }, yAxis: { type: 'value', show: false },
     series: theme.series.map((t, i) => ({ type: 'bar', name: t, data: [3, 5, 4, 6, 5, 7].map(v => v + i) })) };
-  return page(h, theme, `${FRAME_BLOCK}\n<style id="theme-page">
+  return page(h, theme, `${fonts ? `<style id="theme-fonts">\n${fonts}\n</style>\n` : ''}${FRAME_BLOCK}\n<style id="theme-page">
 .sw { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 6px 0; font-size: 13px; color: var(--muted); }
 .sw i { width: 22px; height: 22px; border: 1px solid var(--rule); display: inline-block; }
 </style>`,
@@ -950,7 +978,8 @@ function cli() {
   if (kind === 'theme') {
     const t = themeOf(opt('--from') || DEFAULT_THEME);
     const h = Object.assign({}, base, { id: nextId('TH'), type: 'theme', name: nameFor('new-theme'), from: 'design-library' });
-    return write(h, themeItem(h, t), [], [`theme: a copy of ${opt('--from') || DEFAULT_THEME}'s tokens and series order, to edit`]);
+    const fonts = fontsOf(opt('--from') || DEFAULT_THEME);
+    return write(h, themeItem(h, t, fonts), [], [`theme: a copy of ${opt('--from') || DEFAULT_THEME}'s tokens and series order${fonts ? ', with its embedded font' : ''}, to edit`]);
   }
 
   /* The purpose line of a saved item, set without opening the file. Only the header line changes. Hand-made items are refused. */
@@ -970,6 +999,6 @@ function cli() {
   stop('first argument: slide | chart | report-section | dashboard-section | theme | new | purpose (see the top of this file)');
 }
 
-module.exports = { LIB, TYPES, PREFIX, GROUPS, DEFAULT_THEME, ECHARTS, ENGINE, KIT_CSS, PERIOD, readHeader, header, items, nextId, themeOf, tokensBlock, deckCss,
+module.exports = { LIB, TYPES, PREFIX, GROUPS, DEFAULT_THEME, ECHARTS, ENGINE, KIT_CSS, PERIOD, readHeader, header, items, nextId, themeOf, fontsOf, tokensBlock, deckCss,
   slideItem, chartItem, kitItem, sectionItem, themeItem, neutralChart, neutralHtml, sampleOption, hash };
 if (require.main === module) cli();

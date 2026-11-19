@@ -41,6 +41,11 @@ For anyone filling the library by hand. Start every item with `node save-item.js
 
 `--blue` primary and highlight · `--navy` headings, strong text, borders · `--green` `--teal` `--orange` accents (orange also focus) · `--ink` body text · `--muted` notes, axes · `--rule` lines · `--wash` page ground · `--paper` cards · `--chart-muted` context marks, last year · `--chart-grid` gridlines · `--good` `--bad` `--neutral` status · `--track` meter and tick background · `--tint` lead card, lead row, hover · `--shadow` hover shadow (`3px 3px 0 var(--shadow)`, nothing moves) · `--band` `--on-band` header band and its text · `--menu` `--on-menu` side menu · `--radius` corners · `--heading-font` `--body-font` `--heading-weight` · `--series` chart colour order (token names).
 
+## A theme's embedded font
+
+- Only in a theme item, as `<style id="theme-fonts">` holding `@font-face` rules whose `src` is `url(data:font/woff2;base64,...) format("woff2")`, one per weight in use (usually 400, 600, 700; Latin subset). Expect about 22 KB per weight, about 30 KB as base64: roughly 90 KB added to the theme item. The index and the engine carry it to every item; nothing else is copied.
+- Only a font whose licence allows embedding (SIL Open Font License or similar). Start the block with a comment giving the copyright line, the licence name and `themes/<font>-OFL.txt`, and put that full licence text file in `themes/` (the OFL requires it with every copy). `build-index.js` fails a font block without its licence file, with anything but woff2 `data:` faces, or outside a theme item.
+
 ## james-themes mapping (TH-04 to TH-07)
 
 | james-themes | Library | | james-themes | Library |
@@ -53,6 +58,6 @@ For anyone filling the library by hand. Start every item with `node save-item.js
 | `--prior` | `--neutral`; chart `dim` is `--chart-muted` | | `--tick` | `--orange` |
 | chart `grid` | `--chart-grid` | | `--cat1` to `--cat5` | series `--navy --blue --teal --green --orange` (`--teal` = cat3, `--green` = cat4; the dark themes' cat5 becomes their tick colour) |
 | `--good`, `--bad` (groundwork) | `--good`, `--bad` | | `--r-card` 14px | `--radius` |
-| Barlow (not loaded) | `--heading-font`, `--body-font` (Barlow first, safe fallbacks) | | not mapped | `--menuSub`, `--menuEdge`, `--actBg/Fg`, `--menuHover`, `--leadTrack`, `--bandSoft`, `--goodMark/--badMark`, chart `ramp` |
+| Barlow (embedded, see below) | `--heading-font`, `--body-font` (Barlow first, safe fallbacks) | | not mapped | `--menuSub`, `--menuEdge`, `--actBg/Fg`, `--menuHover`, `--leadTrack`, `--bandSoft`, `--goodMark/--badMark`, chart `ramp` |
 
 TH-05 and TH-07 are made fully dark in the kit's navy and teal families (the kit's "dark" variants only darken the band and menu). In the light kit themes the series use darker shades of the kit cyan, green and amber so every series colour reads at 3:1 or more on cards; the bright amber stays `--orange` for the band tick. Focus ring: `--ink` (`--on-band` on the band).
