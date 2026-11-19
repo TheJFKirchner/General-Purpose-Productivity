@@ -362,4 +362,4 @@ const blocks = [];
 wordLines.forEach(n => { const b = blocks[blocks.length - 1]; if (b && n === b[1] + 1) b[1] = n; else blocks.push([n, n]); });
 console.log(`\nLeft to word: ${todo.join('; ')}. Edit only these lines; Read just them first (${blocks.map(b => `offset ${b[0]} limit ${b[1] - b[0] + 1}`).join(', ')}):`);
 wordLines.forEach(n => console.log(`  ${n}: ${lines[n - 1].trim().slice(0, 150)}`));
-console.log(`\nThen, in one command:\n  node "${S}/slides.js" ${file} && node "${S}/check-charts.js" ${file} && node "${S}/screenshot.js" ${file} <temp-dir>\nRead sheet.png. slides.js flags anything still marked WORD.`);
+console.log(`\nThen, in one command:\n  node "${S}/slides.js" ${file} && node "${S}/check-charts.js" ${file} && node "${S}/screenshot.js" ${file}\nRead sheet.png (the path it prints). slides.js flags anything still marked WORD.`);

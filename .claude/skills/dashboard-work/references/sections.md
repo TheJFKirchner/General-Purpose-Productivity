@@ -23,7 +23,7 @@ and the numbers change. Never open other sections, components or helper files to
    | `--keep-filter` | by default a filter on the `--x`/`--by` column does not narrow it (it compares those values) |
    | more | `--size half`; `--report <name>` adds it to a report |
 3. It prints the metrics and the note lines. To reword later, edit those lines in the `.jsx`; keep each `{metric|format}`.
-4. `npm run check`, then `npm run shot -- <id> <id>.png` (starts and stops its own server) and look.
+4. `npm run check`, then `npm run shot -- <id>` (own server; saved in `Data/.shots/`, not kept) and look.
 
 What the file holds, so you never need another one:
 ```jsx
@@ -67,14 +67,14 @@ def paid_by_region(t):
 
 ## A report's analytic, live
 One function serves the report and the dashboard; filters act on it. Load the report's sources under the same
-names first (`write_source("claims", report="../claims-review")` in `Pipeline/sources.py`). Then a shell
+names first (`write_source("claims", report="../reports/claims-review")` in `Pipeline/sources.py`). Then a shell
 (`new-section` without `--x`) and, in its stub:
 ```python
 from Shared.reuse import from_report
 
 @section("s4_paid_by_region", tables=["claims"], filters=["product"])
 def paid_by_region(t):
-    r = from_report("../claims-review", "s2_paid_by_region", t)   # report folder; section file or function name
+    r = from_report("../reports/claims-review", "s2_paid_by_region", t)   # report folder; section file or function name
     return {"data": {"rows": r["tables"]["by_region"]}, "metrics": r["metrics"]}
 ```
 - Returns `params`, `question`, `tables` (lists of rows), `metrics`, `notes`. Params: `DEFAULTS` from the report's

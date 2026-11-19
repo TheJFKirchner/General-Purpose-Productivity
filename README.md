@@ -43,7 +43,7 @@ Seven optional skills for analysis work. They share one vocabulary, one look, an
 | [dashboard-work](.claude/skills/dashboard-work/SKILL.md) | Adds or changes sections, reports and looks in an existing dashboard. Same needs as dashboard-new. |
 | [presentation](.claude/skills/presentation/SKILL.md) | Builds a reveal.js deck with ECharts charts: quick mode for short decks, full mode for real readouts. Needs Node.js, internet when a deck is opened, and Edge or Chrome for screenshots. Parts adapted from the MIT-licensed ryanbbrown/revealjs-skill. |
 | [Toolkit Update/design-library/](Toolkit%20Update/design-library/CLAUDE.md) | The design library: shared slides, charts, tables, hero cards, animations, layout pieces and themes, one self-contained file each; `index.html` shows them all in any theme. Its only copy, edited in place. Saved by the `design-librarian` agent. |
-| [Toolkit Update/](Toolkit%20Update/README.md) | The seven skills, their two agents and brain-intake copied into one folder with the design library, ready to add to another workspace, with one page for the main agent file. The skills, agents and brain-intake there are copies: refresh them after editing the originals. |
+| [Toolkit Update/](Toolkit%20Update/README.md) | The seven skills, their two agents and brain-intake copied into one folder with the design library, ready to add to another workspace, with two pages to paste: [add-to-main-agent.md](Toolkit%20Update/add-to-main-agent.md) for the main agent file and [add-to-claude-md.md](Toolkit%20Update/add-to-claude-md.md) for the workspace CLAUDE.md. The skills, agents and brain-intake there are copies: refresh them after editing the originals. |
 
 ## Working from desktop and phone
 

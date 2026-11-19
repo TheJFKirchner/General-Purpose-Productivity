@@ -18,7 +18,7 @@ Enough to word a slide that `add-slide.js` made, or to change one slide. **Stop 
 | Close | A decision close names owner, timing and cost; missing ones go on one line: "To agree today: owner, cost". Never repeat the close |
 | Text | No lead-ins ("Here's what we found"), no filler (robust, key, leverage, unlock, crucial), no sentence explaining colours |
 
-Then one command: `slides.js <deck>` (nothing flagged TO WORD, no section reopened, no missing description), `check-charts.js <deck>`, `screenshot.js <deck> <temp-dir>`. Read `sheet.png` only. One fix pass, one re-shot, stop.
+Then one command: `slides.js <deck>` (nothing flagged TO WORD, no section reopened, no missing description), `check-charts.js <deck>`, `screenshot.js <deck>` (writes to the system temp folder). Read `sheet.png` only. One fix pass, one re-shot, stop.
 
 Never opened on an edit: the deck HTML as a whole, anything below `SLIDES:END`, `styles.css` below `:root`, library slide files, the scripts.
 
@@ -190,7 +190,7 @@ Full mode uses `references/writing.md`. Quick mode, these:
 ## Check
 
 1. `node <skill>/scripts/check-charts.js <deck>/presentation.html`
-2. `node <skill>/scripts/screenshot.js <deck>/presentation.html <temp-dir>`. Read only `sheet.png`, the contact sheet of every slide; open one slide's image only if the sheet cannot settle a doubt. Never write images into the deck folder.
+2. `node <skill>/scripts/screenshot.js <deck>/presentation.html` (images go to the system temp folder's `deck-shots/<deck folder>/`, for looking, not kept). Read only `sheet.png`, the contact sheet of every slide; open one slide's image only if the sheet cannot settle a doubt. Never write images into the deck folder.
 3. Look for: headlines over two lines or ending on one word, empty bands, value labels without units, colliding or clipped labels, text overflowing, the bar's sections in order on every slide after the title.
 4. One fix pass covering everything found, one re-shot, read the new sheet, stop. About 22 calls for a seven-slide deck.
 

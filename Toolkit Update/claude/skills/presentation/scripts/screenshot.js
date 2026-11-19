@@ -5,7 +5,8 @@
  * then joins them into one contact sheet, sheet.png: read that one image, not each slide.
  * No dependencies. Images are for checking the deck; keep them out of the presentation folder.
  *
- * Usage: node screenshot.js <path-to-html> <output-dir> [slide-id ...] [--browser <path>]
+ * Usage: node screenshot.js <path-to-html> [<output-dir> or -] [slide-id ...] [--browser <path>]
+ * Default output: <system temp>/deck-shots/<deck folder name>/.
  */
 
 const fs = require('fs');
@@ -30,11 +31,13 @@ function main() {
   const args = process.argv.slice(2);
   const b = args.indexOf('--browser');
   const given = b !== -1 ? args.splice(b, 2)[1] : null;
-  const [htmlPath, outDir, ...only] = args;
-  if (!htmlPath || !outDir) {
-    console.error('Usage: node screenshot.js <path-to-html> <output-dir> [slide-id ...] [--browser <path>]');
+  let [htmlPath, outDir, ...only] = args;
+  if (!htmlPath) {
+    console.error('Usage: node screenshot.js <path-to-html> [<output-dir> or -] [slide-id ...] [--browser <path>]');
     process.exit(1);
   }
+  // default (no folder, or -): the system temp folder, deck-shots/<deck folder name>; for looking, not kept
+  if (!outDir || outDir === '-') outDir = path.join(os.tmpdir(), 'deck-shots', path.basename(path.dirname(path.resolve(htmlPath))));
   const browser = [given, ...BROWSERS].filter(Boolean).find(p => fs.existsSync(p));
   if (!browser) {
     console.error('STOP: no Edge or Chrome found. Pass --browser <path to the browser>, or look at the deck in a browser instead.');

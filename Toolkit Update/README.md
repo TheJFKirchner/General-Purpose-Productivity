@@ -3,7 +3,7 @@
 The analysis toolbox and brain in one folder, ready to add to a Claude Code workspace.
 
 - The skills, agents and brain files here are copies; their working copies live elsewhere in this repo (see "Keeping this folder current").
-- `design-library\` is not a copy: it lives only here and is edited here.
+- `design-library\` and `add-to-claude-md.md` are not copies: they live only here and are edited here.
 - `claude\` has no dot on purpose: sessions on this repo do not load every skill twice.
 
 ## What is in it
@@ -26,7 +26,8 @@ The analysis toolbox and brain in one folder, ready to add to a Claude Code work
 | `claude\agents\brain-*.md` (4) | Do the reading and writing for the brain skills |
 | `design-library\` | Shared slides, charts, tables, hero cards, animations, layout pieces and themes; `index.html` shows them all |
 | `brain\scripts\wiki_index.py` | Lists every wiki page for the brain agents |
-| `add-to-main-agent.md` | One page to paste into the main agent file |
+| `add-to-main-agent.md` | Paste into the main agent file: how the main conversation records facts, picks a skill and works beside an existing orchestrator |
+| `add-to-claude-md.md` | Paste into the workspace or user-level CLAUDE.md: install places, software, synced folders, project layout |
 
 ## Install
 
@@ -34,7 +35,8 @@ The analysis toolbox and brain in one folder, ready to add to a Claude Code work
 2. Put `design-library\` beside whichever `.claude` folder you used (same parent folder), or put its path on a "Design library:" line in a project's map. The presentation skill looks at the map line first, then beside `.claude`.
 3. Put `brain\` anywhere that stays put (beside `.claude\` is fine).
 4. Paste everything below the line in `add-to-main-agent.md` into the main agent file. Fill its two paths: the `brain\` folder and the wiki root.
-5. Build the brain index: `python "<brain folder>\scripts\wiki_index.py" "<wiki root>"`. It prints how many pages it listed.
+5. Paste everything below the line in `add-to-claude-md.md` into the workspace or user-level CLAUDE.md. Fill the `.claude` folder and a dashboards folder outside OneDrive. Nothing goes into project CLAUDE.md files; the toolbox writes their maps.
+6. Build the brain index: `python "<brain folder>\scripts\wiki_index.py" "<wiki root>"`. It prints how many pages it listed.
 
 The wiki must already have:
 
@@ -50,9 +52,9 @@ The wiki must already have:
 
 | Skill | Needs |
 | --- | --- |
-| analysis | Python with pandas; Edge or Chrome for screenshots |
+| analysis | Python with pandas; pyarrow for kept or `.parquet` sources; openpyxl for `.xlsx` sources and Excel exports; Edge or Chrome for screenshots |
 | dashboard-new, dashboard-work | Node.js; Python 3.10+ with fastapi, uvicorn, duckdb, pyarrow, pandas; Edge or Chrome for screenshots |
-| presentation | Node.js; Edge or Chrome for screenshots |
+| presentation | Node.js; Edge or Chrome for screenshots; optional `puppeteer` in the skill's `scripts\` for the overflow check |
 | design-library | Node.js to save items or rebuild the index |
 | brain skills | Python |
 | Reports, decks, library items | Internet when opened: the chart library loads from a CDN |
@@ -69,7 +71,7 @@ The wiki must already have:
 ## Keeping this folder current
 
 - Never edit the copies here. Edit the working copies, then refresh this folder.
-- The design library is the exception: edit it in place in `design-library\`, then rebuild its index there with `node build-index.js`.
+- The exceptions: edit the design library in place in `design-library\`, then rebuild its index there with `node build-index.js`; edit `add-to-claude-md.md` in place.
 
 | Working copy (in this repo) | Copied to |
 | --- | --- |

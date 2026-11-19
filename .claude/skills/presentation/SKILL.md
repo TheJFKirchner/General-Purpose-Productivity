@@ -20,7 +20,7 @@ Existing work in, one HTML deck out; slide text comes from findings and results.
 ## Start
 
 1. Read the project's `CLAUDE.md` map: the project plan, findings, existing decks. Follow links one level; do not survey the project.
-2. Find the design library, first that exists: the map's `Design library:` line; `<skill>/../../../design-library`; `<skill>/../../../Toolkit Update/design-library`. Skip it if the user says no; none: use the basic layouts in `references/slides.md`.
+2. Find the design library, first that exists: the map's `Design library:` line (optional, for a library kept elsewhere); `<skill>/../../../design-library`; `<skill>/../../../Toolkit Update/design-library`. Skip it if the user says no; none: use the basic layouts in `references/slides.md`.
 3. Ask one question: quick or full, with your pick (quick under about eight slides; full for a decision meeting or a senior room). The user's answer wins. In quick mode, put the drafted brief in the same message.
 
 ## Where the deck goes
@@ -69,11 +69,11 @@ All in `scripts/`, run with Node. Mechanical only.
 | Script | Does |
 | --- | --- |
 | `create-presentation.js --title "<t>" -o <deck>/presentation.html` | Scaffold plus `styles.css`. `--plan-only` writes `plan.md` (full mode). `--refresh <file>` updates an old deck's engine |
-| `screenshot.js <html> <temp-dir> [slide-id ...]` | One image per slide plus `sheet.png`, a contact sheet of them all (Edge or Chrome; `--browser <path>` if not found) |
+| `screenshot.js <html> [- slide-id ...]` | One image per slide plus `sheet.png`, a contact sheet, in the system temp folder's `deck-shots/<deck folder>/` (prints it); for looking, not kept (Edge or Chrome; `--browser <path>` if not found) |
 | `patterns.js <library> <id> ...` | Prints the reusable part of each named library item, in one call |
 | `slides.js`, `add-slide.js` | Inventory, show, sync, remove, move, describe; insert a working slide (see "Existing deck") |
 | `check-charts.js <html>` | Chart JSON, limits, one item highlighted, no controls |
-| `check-overflow.js <html>`, `edit-html.js <html>` | Overflow measure (needs `puppeteer`); browser editor for wording |
+| `check-overflow.js <html>`, `edit-html.js <html>` | Overflow measure (optional; needs `puppeteer`, installed only in this skill's `scripts/`, never in a project); browser editor for wording |
 
 Needs: Node.js; internet when a deck opens (reveal.js and ECharts from a CDN); Edge or Chrome for screenshots.
 

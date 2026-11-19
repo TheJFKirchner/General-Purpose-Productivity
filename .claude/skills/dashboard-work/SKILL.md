@@ -31,7 +31,7 @@ Run `npm run status`: every section (file, title, chart, tables, description), e
 Run commands in the map's `dashboard/` folder, not the project root. Read nothing else; options: `references/sections.md` "Simple add".
 1. `npm run status`. Already there (same table, grouping, measure)? Tell the user which section; ask first.
 2. `npm run new-section -- <name> --page <tab> --tables <t> --chart bar|line|table|kpi --x <col> --y <col> --note "a | b"`.
-3. `npm run check`. 4. `npm run shot -- <id> <id>.png` (starts and stops its own server), look, show the user.
+3. `npm run check`. 4. `npm run shot -- <id>` (own server; saved in `Data/.shots/`, not kept), look, show the user.
 
 Several tables, an unusual calculation or a report's analytic: the same page, below STOP HERE. A new filter:
 the config, at its level; `npm run status` then lists it on the section.
@@ -54,11 +54,11 @@ when it has one and the numbers change). Then `npm run check`.
 |---|---|
 | **New data** | `npm run status`; replace the input files where it shows each source (same names); `npm run pipeline`, `npm run check`, `npm run status` again: it lists notes that changed; tell the user which answers moved. Regenerate commentary if `commentary.json` exists. Update the map's `dashboard/` row |
 | Data, report analytics, slow filters | `references/data.md` |
-| Tables for the commentary skill | `npm run tables -- --sections <id,id> --by <column> --out <file>` |
+| Tables for the commentary skill | `npm run tables -- --sections <id,id> --by <column>`; use the file name it prints |
 | An offline HTML report | `references/exports.md`; then add it to the map's `dashboard/` row |
 | Hosting; many sections at once | `references/hosting.md`; `references/helpers.md` (optional helpers) |
 | Remove a section | Ask first, then delete its `.jsx` (and its analytic, if any), its `index.js` line, and it from any report |
-| User likes a visual, or says save it | Launch `design-librarian` with the files and the library folder (the map's `Design library:` line, else `design-library` beside `.claude`, else `Toolkit Update/design-library`) |
+| User likes a visual, or says save it | Launch `design-librarian` with the files and the library folder (the map's optional `Design library:` line, for a library kept elsewhere; else `design-library` beside `.claude`, else `Toolkit Update/design-library`) |
 
 ## What to open
 | | Files |
@@ -73,7 +73,7 @@ In this skill folder open only this page and the reference a step names. Helpers
 | Command | Does |
 |---|---|
 | `npm run status` / `npm run check` | Map of the dashboard / every section, filter and report is sound |
-| `npm run shot -- <tab or id> <out.png> [region=West]` | A screenshot; starts and stops its own server if needed |
+| `npm run shot -- <tab or id> [region=West]` | A screenshot in `Data/.shots/` (git-ignored, not kept); starts and stops its own server if needed |
 | `npm run dev` / `npm run stop` | Open it live (keeps running; prints its `Local:` address) / stop it |
 | `python Analysis/check.py --show <id> [--filter name=value]` | One section's numbers |
 | `npm run pipeline` (`-- --try <script>`) | Refresh all data (try one script) |
