@@ -4,7 +4,7 @@
  * slide, the bottom section bar and the charts read the variables below.
  * Slides never carry colours of their own.
  *
- * The colour tokens are the toolbox Look. The library theme TH-01 (design-library/themes/) holds the same values.
+ * The colour tokens are the toolbox Look. The library theme TH-01 (the design library's themes/) holds the same values.
  * Font sizes use pt on the fixed 1280 x 720 slide.
  * Adapted from github.com/ryanbbrown/revealjs-skill (MIT).
  */

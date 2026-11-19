@@ -2,7 +2,8 @@
 
 The analysis toolbox and brain in one folder, ready to add to a Claude Code workspace.
 
-- This is a copy. The working copies live elsewhere in this repo; see "Keeping this folder current".
+- The skills, agents and brain files here are copies; their working copies live elsewhere in this repo (see "Keeping this folder current").
+- `design-library\` is not a copy: it lives only here and is edited here.
 - `claude\` has no dot on purpose: sessions on this repo do not load every skill twice.
 
 ## What is in it
@@ -30,7 +31,7 @@ The analysis toolbox and brain in one folder, ready to add to a Claude Code work
 ## Install
 
 1. Copy the contents of `claude\skills\` into your `.claude` folder's `skills\` (the workspace's, or the user-level one), and `claude\agents\` into its `agents\`.
-2. Put `design-library\` beside whichever `.claude` folder you used (same parent folder), or put its path on a "Design library:" line in a project's map. The presentation skill looks in those two places.
+2. Put `design-library\` beside whichever `.claude` folder you used (same parent folder), or put its path on a "Design library:" line in a project's map. The presentation skill looks at the map line first, then beside `.claude`.
 3. Put `brain\` anywhere that stays put (beside `.claude\` is fine).
 4. Paste everything below the line in `add-to-main-agent.md` into the main agent file. Fill its two paths: the `brain\` folder and the wiki root.
 5. Build the brain index: `python "<brain folder>\scripts\wiki_index.py" "<wiki root>"`. It prints how many pages it listed.
@@ -67,7 +68,8 @@ The wiki must already have:
 
 ## Keeping this folder current
 
-- Never edit here. Edit the working copies, then refresh this folder.
+- Never edit the copies here. Edit the working copies, then refresh this folder.
+- The design library is the exception: edit it in place in `design-library\`, then rebuild its index there with `node build-index.js`.
 
 | Working copy (in this repo) | Copied to |
 | --- | --- |
@@ -75,7 +77,6 @@ The wiki must already have:
 | `brain-intake\skills\` (4) | `claude\skills\` |
 | `.claude\agents\commentary-generator.md`, `design-librarian.md` | `claude\agents\` |
 | `brain-intake\agents\` (4) | `claude\agents\` |
-| `design-library\` | `design-library\` |
 | `brain-intake\scripts\wiki_index.py` | `brain\scripts\` |
 | `brain-intake\add-to-main-agent.md` | `add-to-main-agent.md` |
 
@@ -91,10 +92,9 @@ foreach ($s in "brain-cite", "brain-file", "brain-ingest", "brain-promote") {
   robocopy "brain-intake\skills\$s" "$T\claude\skills\$s" /MIR /XD $X $Q }
 robocopy ".claude\agents" "$T\claude\agents" commentary-generator.md design-librarian.md $Q
 robocopy "brain-intake\agents" "$T\claude\agents" *.md $Q
-robocopy "design-library" "$T\design-library" /MIR /XD $X /XF denylist.json $Q
 robocopy "brain-intake\scripts" "$T\brain\scripts" wiki_index.py $Q
 Copy-Item "brain-intake\add-to-main-agent.md" "$T\add-to-main-agent.md"
 ```
 
-- Left out on purpose: `node_modules`, `__pycache__`, `.pytest_cache`, test helpers (`tests`), and the library's `denylist.json` (local hashes of project words).
+- Left out on purpose: `node_modules`, `__pycache__`, `.pytest_cache`, test helpers (`tests`). The library's `denylist.json` (local hashes of project words) is git-ignored.
 - A new skill or agent: add it to the commands and the tables above.

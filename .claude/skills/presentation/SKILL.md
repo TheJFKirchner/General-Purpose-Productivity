@@ -20,7 +20,7 @@ Existing work in, one HTML deck out; slide text comes from findings and results.
 ## Start
 
 1. Read the project's `CLAUDE.md` map: the project plan, findings, existing decks. Follow links one level; do not survey the project.
-2. Find the design library: the map's `Design library:` line if there is one, else `design-library/` three folders up from this skill (`<skill>/../../../design-library`), unless the user says no. Neither: use the basic layouts in `references/slides.md`.
+2. Find the design library, first that exists: the map's `Design library:` line; `<skill>/../../../design-library`; `<skill>/../../../Toolkit Update/design-library`. Skip it if the user says no; none: use the basic layouts in `references/slides.md`.
 3. Ask one question: quick or full, with your pick (quick under about eight slides; full for a decision meeting or a senior room). The user's answer wins. In quick mode, put the drafted brief in the same message.
 
 ## Where the deck goes
@@ -60,7 +60,7 @@ Open `references/full-mode.md` and follow it: facts, interview 1, storyboard, ha
 - The user's picks (a visual, a cut, wording) stand. Raise a concern once, only when it cannot work as asked.
 - Changing a chart's period or series: update its heading, its footnote period and any bullet citing what was removed, in the same pass.
 - A new deck in one Edit; later changes one slide per Edit, by id. Never rewrite `presentation.html` whole; never read below `<!-- SLIDES:END -->`.
-- User likes a visual, or says save it: launch `design-librarian` with the files; it saves them to the design library.
+- User likes a visual, or says save it: launch `design-librarian` with the files and the library folder found in Start step 2.
 
 ## Scripts
 

@@ -1,8 +1,0 @@
-# Hand-made items: the original samples, the imported ones, and every item started with `node save-item.js new` (which adds its id here). Exempt from the saved-item checks (dates, the 6-point cap, the denylist); held to the hand-made rule in CLAUDE.md. Ids saved by the design-librarian never go here.
-BD-01 BD-02 BD-03 BD-04 BD-05 BD-06 BD-07 BD-08 BK-01 BK-02 CH-01 CH-02 CH-03 CH-04 CH-05 CH-06 CH-07 CP-01 CP-02 CP-03 CP-04 CP-05 CP-06 CP-07 CP-08 CT-02 CT-04 CT-06 CT-07 CT-08 CT-10 CT-11 DE-01 DE-02 DE-03 DE-04 DE-05 DE-06 DE-07 EX-01 EX-02 FR-01 FR-02 FR-03 FR-04 FR-05 LV-01 LV-02 LV-03 LV-04 LV-05 LV-06 TH-01 TH-02 TH-03 UN-01 UN-02 HC-01 TB-01 AN-01 LY-01 LY-02 LY-03 LY-04 LY-05 LY-06 LY-07 LY-08 LY-09 TH-04 TH-05 TH-06 TH-07
-TB-02 TB-03 TB-04 TB-05 TB-06 TB-07
-HC-02 HC-03 HC-04 HC-05 HC-06 HC-07 HC-08 HC-09 HC-10 HC-11 HC-12 HC-13 HC-14
-AN-02 AN-03 AN-04 AN-05 AN-06 AN-07 AN-08 AN-09 AN-10
-CT-12 CT-13 CT-14 CT-15 CT-16 CT-17 CT-18 CT-19 CT-20 CT-21 CT-22 CT-23 CT-24 CT-27 CT-28
-TB-08
-CT-29 CT-30 CT-31 CT-32 CT-33

@@ -80,8 +80,11 @@ const tokensBlock = theme => `<style id="tokens">:root {\n${Object.entries(theme
 
 /* The deck stylesheet without its colour and font tokens (those come from the theme). */
 function deckCss(theme) {
-  const skillCss = path.join(LIB, '..', '.claude', 'skills', 'presentation', 'references', 'base-styles.css');
-  if (!fs.existsSync(skillCss)) {
+  // the presentation skill's stylesheet, first that exists: beside the library in an installed workspace (.claude),
+  // the repo's working copy (the library lives in Toolkit Update/), the bundle's copy (claude, no dot)
+  const ref = ['skills', 'presentation', 'references', 'base-styles.css'];
+  const skillCss = [path.join(LIB, '..', '.claude', ...ref), path.join(LIB, '..', '..', '.claude', ...ref), path.join(LIB, '..', 'claude', ...ref)].find(p => fs.existsSync(p));
+  if (!skillCss) {
     // a copy of the library without the skill beside it: reuse the stylesheet a slide item already carries
     const one = items().find(i => i.h.type === 'slide');
     if (!one) throw new Error('no presentation skill beside the library and no slide item to take the stylesheet from');
