@@ -17,327 +17,788 @@
   --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   --heading-weight: 600;
-  --series: --blue --green --navy --teal --orange --muted;
+  --good: #2E7D32;
+  --bad: #B45309;
+  --neutral: #8A96A0;
+  --track: #E8EDF2;
+  --tint: #EAF3FA;
+  --shadow: #C9D4DE;
+  --band: #002D72;
+  --on-band: #FFFFFF;
+  --menu: #FFFFFF;
+  --on-menu: #002D72;
+  --radius: 2px;
+  --series: --blue --navy --green --teal --muted;
 }</style>
 <style>
-  body { margin: 0; display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
-  aside { position: sticky; top: 0; height: 100vh; overflow: auto; box-sizing: border-box; padding: 22px 18px; background: var(--paper); border-right: 1px solid var(--rule); }
-  h1 { font: var(--heading-weight) 22px var(--heading-font); color: var(--navy); margin: 0 0 4px; }
-  h2 { font: var(--heading-weight) 12px var(--body-font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
-  .now { font-size: 13px; color: var(--muted); margin: 0; }
-  button { display: block; width: 100%; text-align: left; font: 14px var(--body-font); color: var(--ink); background: none; border: 1px solid transparent; border-left: 3px solid transparent; padding: 7px 10px; cursor: pointer; }
-  button:hover { background: var(--wash); }
-  button.on { border-left-color: var(--blue); background: var(--wash); color: var(--navy); font-weight: 600; }
-  button small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
-  main { padding: 22px 26px 60px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .card { background: var(--paper); border: 1px solid var(--rule); }
-  .card:hover { border-color: var(--blue); }
-  .pv { position: relative; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
+  body { margin: 0; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
+  body.locked { overflow: hidden; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 12px 24px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+  h1 { font: var(--heading-weight) 20px var(--heading-font); color: var(--navy); margin: 0 auto 0 0; }
+  label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  select { font: 14px var(--body-font); color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); padding: 6px 8px; min-height: 36px; }
+  .count { font-size: 13px; color: var(--muted); }
+  main { padding: 20px 24px 60px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; padding: 0; cursor: pointer; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }
+  .card[hidden] { display: none; }
+  .card:hover, .card:focus-visible { border-color: var(--blue); box-shadow: 3px 3px 0 var(--shadow); }
+  .card:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+  .pv { position: relative; display: block; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
   .pv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
-  .name { display: block; padding: 10px 12px 2px; text-decoration: none; color: var(--navy); font-size: 14px; }
-  .name b { color: var(--blue); margin-right: 4px; }
-  .card p { margin: 0; padding: 0 12px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
-  .count { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .name { display: block; padding: 10px 12px 2px; color: var(--navy); font-size: 14px; }
+  .name b, .pop .id { color: var(--blue); margin-right: 4px; }
+  .purpose { display: block; padding: 0 12px 6px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .from { display: block; padding: 0 12px 12px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  /* popup */
+  .pop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--navy) 55%, transparent); }
+  .pop[hidden] { display: none; }
+  .box { width: min(1180px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); padding: 14px 16px 16px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 14px; }
+  .bar h2 { flex: 1 1 260px; margin: 0; font: var(--heading-weight) 18px var(--heading-font); color: var(--navy); }
+  .bar .type { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-left: 6px; }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  .tools button { font: 600 14px var(--body-font); min-width: 44px; min-height: 40px; padding: 6px 12px; cursor: pointer; color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); }
+  .tools button:hover { background: var(--tint); }
+  .about { margin: 0; font-size: 14px; color: var(--muted); }
+  .about a { color: var(--blue); margin-left: 8px; font-size: 13px; white-space: nowrap; }
+  .stage { position: relative; aspect-ratio: 16 / 9; width: 100%; border: 1px solid var(--rule); }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  @media (max-width: 640px) { header { padding: 10px 14px; } main { padding: 14px; } .pop { padding: 6px; } .box { padding: 10px; } .stage { aspect-ratio: 4 / 3; } }
 </style></head><body>
-<aside>
+<header>
 <h1>Design library</h1>
-<p class="now">Theme: <b id="now"></b></p>
-<h2>Themes</h2>
-<div id="themes"></div>
-<h2>Show</h2>
-<div id="types"></div>
-</aside>
+<label>Theme <select id="theme" aria-label="Theme"></select></label>
+<label>Show <select id="type" aria-label="Type of item"></select></label>
+<span class="count" id="count" aria-live="polite"></span>
+</header>
 <main>
-<p class="count" id="count"></p>
 <div class="grid">
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/FR-01-title.html" title="FR-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/FR-01-title.html" target="_blank"><b>FR-01</b> title</a>
-<p>Large headline, kicker above, one line below, no visual; for opening with the answer or the subject, or telling the audience who is presenting and when.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/FR-02-section-divider.html" title="FR-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/FR-02-section-divider.html" target="_blank"><b>FR-02</b> section-divider</a>
-<p>Section name large, one line saying what the section will show; for marking a change of topic in a longer deck, or giving the audience a breath before a new line of argument.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/FR-03-agenda-rows.html" title="FR-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/FR-03-agenda-rows.html" target="_blank"><b>FR-03</b> agenda-rows</a>
-<p>Numbered rows: part name and one line each; for showing the route through a longer deck, or matching what is said to the sections in the bottom bar.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/FR-04-goal-three-cards.html" title="FR-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/FR-04-goal-three-cards.html" target="_blank"><b>FR-04</b> goal-three-cards</a>
-<p>Three cards side by side, the third tinted; for reminding the audience of the original goal, or laying out problem, action and measure of success in one view.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/FR-05-statement-quote.html" title="FR-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/FR-05-statement-quote.html" target="_blank"><b>FR-05</b> statement-quote</a>
-<p>One sentence or quote in large type, source line under it; for making the audience hear one message with nothing competing, or letting a customer or stakeholder say it in their own words.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/EX-01-steps-flow.html" title="EX-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/EX-01-steps-flow.html" target="_blank"><b>EX-01</b> steps-flow</a>
-<p>Three to five steps on a line, each with a title and one line; for showing a method or process in order, or showing a timeline or plan with the current point marked.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/EX-02-data-two-cards.html" title="EX-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/EX-02-data-two-cards.html" target="_blank"><b>EX-02</b> data-two-cards</a>
-<p>Two cards: what was used (rows) and how it was checked (bullets); for showing what the analysis rests on and why it can be trusted, or answering scope and data-quality questions before they are asked.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-01-stats-three.html" title="LV-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-01-stats-three.html" target="_blank"><b>LV-01</b> stats-three</a>
-<p>Three large figures in a row, each with a label and a comparison note, one sentence under them, no chart; for landing two or three results at once, or showing results against target or prior without a chart.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-02-hero-number-line.html" title="LV-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-02-hero-number-line.html" target="_blank"><b>LV-02</b> hero-number-line</a>
-<p>One very large figure with its meaning in plain words, a line chart beside it; for making one number the whole message, or showing the figure and the path that led to it.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-03-hero-number-quote.html" title="LV-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-03-hero-number-quote.html" target="_blank"><b>LV-03</b> hero-number-quote</a>
-<p>One very large figure beside a one-sentence statement; for closing on the one thing to remember, or pairing a figure with the sentence that explains it.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-04-stats-over-bars.html" title="LV-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-04-stats-over-bars.html" target="_blank"><b>LV-04</b> stats-over-bars</a>
-<p>Three figure cards across the top, a bar chart and two bullets under; for stating a position with its two inputs and the gap between them, or showing the headline figures and how one of them has moved.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-05-bars-highlight-commentary.html" title="LV-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-05-bars-highlight-commentary.html" target="_blank"><b>LV-05</b> bars-highlight-commentary</a>
-<p>Vertical bars with one highlighted, commentary bullets and a so-what line on the right; for showing which category stands out, or comparing a handful of groups on one measure and saying why one differs.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/LV-06-bars-ranked-commentary.html" title="LV-06" tabindex="-1"></iframe></div>
-<a class="name" href="slides/LV-06-bars-ranked-commentary.html" target="_blank"><b>LV-06</b> bars-ranked-commentary</a>
-<p>Sorted horizontal bars with the leader highlighted, fuller commentary on the right; for ranking items when the labels are long, or showing which item drives a result.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-01-line-fit-commentary.html" title="CH-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-01-line-fit-commentary.html" target="_blank"><b>CH-01</b> line-fit-commentary</a>
-<p>Actual line with a dashed fitted line, commentary and so-what on the right; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-02-line-event-callout.html" title="CH-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-02-line-event-callout.html" target="_blank"><b>CH-02</b> line-event-callout</a>
-<p>Callout with one figure and three bullets on the left; two lines with an event marked on the right; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-03-dots-two-fits.html" title="CH-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-03-dots-two-fits.html" target="_blank"><b>CH-03</b> dots-two-fits</a>
-<p>Commentary on the left; actual points with a longer and a shorter fitted line on the right; for asking whether a rate of change is speeding up or slowing, or comparing a long-run view with a recent view of the same measure.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-04-bars-outlier-callout.html" title="CH-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-04-bars-outlier-callout.html" target="_blank"><b>CH-04</b> bars-outlier-callout</a>
-<p>One callout sentence over full-width bars with one period highlighted; for calling out an unusual period and how it was treated, or a lean slide for a senior audience: one sentence, one picture.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-05-bars-before-after.html" title="CH-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-05-bars-before-after.html" target="_blank"><b>CH-05</b> bars-before-after</a>
-<p>Callout with the size of the change and two bullets; bars by period with the later periods highlighted; for showing a level shift after a change, or stating the size of an effect next to the evidence for it.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-06-two-charts-bullets.html" title="CH-06" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-06-two-charts-bullets.html" target="_blank"><b>CH-06</b> two-charts-bullets</a>
-<p>Two small line charts side by side, one muted and one highlighted, three bullets in a row under them; for splitting a result into two measures to show which one is moving, or showing that one thing is stable while another is not.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CH-07-change-cards-bars.html" title="CH-07" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CH-07-change-cards-bars.html" target="_blank"><b>CH-07</b> change-cards-bars</a>
-<p>Three stacked cards, each a change with its size and direction, beside a bar chart of the total at each review; for saying what is different since the audience last saw this, or listing a few changes with their sizes alongside the overall movement.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-01-paired-bars-commentary.html" title="CP-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-01-paired-bars-commentary.html" target="_blank"><b>CP-01</b> paired-bars-commentary</a>
-<p>Paired bars by category (two series), commentary and so-what on the right; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-02-bars-target-tick.html" title="CP-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-02-bars-target-tick.html" target="_blank"><b>CP-02</b> bars-target-tick</a>
-<p>Horizontal bars with a tick marking the target for each, the miss highlighted; commentary on the right; for showing performance against a target or plan for each item, or picking out the one item that missed.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-03-two-lines-fuller-commentary.html" title="CP-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-03-two-lines-fuller-commentary.html" target="_blank"><b>CP-03</b> two-lines-fuller-commentary</a>
-<p>Fuller commentary on the left, two lines over time on the right; for comparing our experience with a benchmark or peer, or a comparison meant to be read without a presenter.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-04-two-lines-choice-cards.html" title="CP-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-04-two-lines-choice-cards.html" target="_blank"><b>CP-04</b> two-lines-choice-cards</a>
-<p>Two lines over time, then one card per alternative with the chosen one tinted; for showing two approaches that give different answers and which was chosen, or explaining a judgement call between two views.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-05-dumbbell-callout.html" title="CP-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-05-dumbbell-callout.html" target="_blank"><b>CP-05</b> dumbbell-callout</a>
-<p>Full-width dumbbell chart (two points joined per category), one sentence under it; for showing movement between two points for several items at once, or showing which items moved most and in which direction.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-06-two-numbers-difference.html" title="CP-06" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-06-two-numbers-difference.html" target="_blank"><b>CP-06</b> two-numbers-difference</a>
-<p>Two large figures in cards with the difference stated between them, no chart; for a before and after, or an old and new, in one glance, or when the difference is the message and a chart would add nothing.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-07-table-key-row-commentary.html" title="CP-07" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-07-table-key-row-commentary.html" target="_blank"><b>CP-07</b> table-key-row-commentary</a>
-<p>Small table with one highlighted row, commentary and so-what beside it; for showing plan, actual and difference where exact figures will be read, or any small table where one row carries the point.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/CP-08-option-cards-recommendation.html" title="CP-08" tabindex="-1"></iframe></div>
-<a class="name" href="slides/CP-08-option-cards-recommendation.html" target="_blank"><b>CP-08</b> option-cards-recommendation</a>
-<p>Two cards comparing options on the same rows, then the recommendation, no chart; for putting two options side by side on cost, benefit and risk, or leading the audience to a recommendation they can see the basis for.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-01-waterfall-callout.html" title="BD-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-01-waterfall-callout.html" target="_blank"><b>BD-01</b> waterfall-callout</a>
-<p>Full-width vertical waterfall from one figure to another, one-sentence callout under it; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-02-waterfall-horizontal-commentary.html" title="BD-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-02-waterfall-horizontal-commentary.html" target="_blank"><b>BD-02</b> waterfall-horizontal-commentary</a>
-<p>Horizontal waterfall on the left, fuller commentary on the right; for building up a result from its components when labels are long, or a bridge that needs explaining step by step, readable without a presenter.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-03-number-small-waterfall.html" title="BD-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-03-number-small-waterfall.html" target="_blank"><b>BD-03</b> number-small-waterfall</a>
-<p>Callout with one large figure and two bullets on the left, a three-bar waterfall on the right; for stating the effect of one decision and showing where it lands, or a simple from, change, to story.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-04-rows-plus-bars.html" title="BD-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-04-rows-plus-bars.html" target="_blank"><b>BD-04</b> rows-plus-bars</a>
-<p>Three numbered rows on the left, the same three effects as bars on the right; for splitting a change into a few named effects, or giving each effect a sentence and showing their relative size.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-05-stacked-mix-shift.html" title="BD-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-05-stacked-mix-shift.html" target="_blank"><b>BD-05</b> stacked-mix-shift</a>
-<p>Two 100% stacked bars, bullets and a callout under them; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-06-stats-over-stacked-bars.html" title="BD-06" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-06-stats-over-stacked-bars.html" target="_blank"><b>BD-06</b> stats-over-stacked-bars</a>
-<p>Three figures across the top, stacked horizontal bars by category, commentary beside; for splitting a total into two factors across several categories, or showing the headline figures and which category is behind them.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-07-hero-number-donut.html" title="BD-07" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-07-hero-number-donut.html" target="_blank"><b>BD-07</b> hero-number-donut</a>
-<p>One very large figure in a callout with a two-part doughnut, no commentary; for showing that one part explains most of the whole, or a lean slide where a single share is the message.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BD-08-table-bars-sensitivity.html" title="BD-08" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BD-08-table-bars-sensitivity.html" target="_blank"><b>BD-08</b> table-bars-sensitivity</a>
-<p>Small table and two bullets on the left, bars for each scenario on the right; for showing what the result becomes under different assumptions, or giving exact figures and their shape together.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/UN-01-range-bar-commentary.html" title="UN-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/UN-01-range-bar-commentary.html" target="_blank"><b>UN-01</b> range-bar-commentary</a>
-<p>One low-to-high range bar with the central and held figures marked, commentary under it; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/UN-02-scenario-bars-caveats.html" title="UN-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/UN-02-scenario-bars-caveats.html" target="_blank"><b>UN-02</b> scenario-bars-caveats</a>
-<p>Scenario bars on the left, four caveats and a so-what line on the right; for telling the audience what could change the answer before they decide, or sizing a few scenarios against the central view.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-01-summary-stats-ask.html" title="DE-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-01-summary-stats-ask.html" target="_blank"><b>DE-01</b> summary-stats-ask</a>
-<p>Answer as the headline, three large figures, the ask in a strip along the bottom; for an executive summary on one slide, or giving the answer, its support and the ask together.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-02-numbered-findings.html" title="DE-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-02-numbered-findings.html" target="_blank"><b>DE-02</b> numbered-findings</a>
-<p>Numbered rows, each a finding with its figure on the right; for listing the takeaways with their sizes, or listing risks or issues ranked by size.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-03-audience-rows.html" title="DE-03" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-03-audience-rows.html" target="_blank"><b>DE-03</b> audience-rows</a>
-<p>One row per audience group: who, what it means for them, the one figure; for translating a result for each group in the room, or showing each team what changes for them.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-04-scorecard-status.html" title="DE-04" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-04-scorecard-status.html" target="_blank"><b>DE-04</b> scorecard-status</a>
-<p>Table with a status dot per row, one row highlighted, one line under it; for giving the status of several items at a glance, or showing which item needs attention.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-05-decision-two-paths.html" title="DE-05" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-05-decision-two-paths.html" target="_blank"><b>DE-05</b> decision-two-paths</a>
-<p>The decision in a callout, then one card for what happens if approved and one for if it waits; for asking for a decision and showing the consequence of each answer, or making the cost of delay explicit.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-06-ask-and-actions.html" title="DE-06" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-06-ask-and-actions.html" target="_blank"><b>DE-06</b> ask-and-actions</a>
-<p>The decision needed in a callout on the left, rows of action, timing and owner on the right; for closing with the ask and who does what by when, or any decision followed by a short action list.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/DE-07-ask-and-timeline.html" title="DE-07" tabindex="-1"></iframe></div>
-<a class="name" href="slides/DE-07-ask-and-timeline.html" target="_blank"><b>DE-07</b> ask-and-timeline</a>
-<p>A starting point in a callout over a five-step timeline with dates and owners; for showing the sequence of work that follows a decision, or a plan where order and dates matter more than detail.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BK-01-answer-with-bars.html" title="BK-01" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BK-01-answer-with-bars.html" target="_blank"><b>BK-01</b> answer-with-bars</a>
-<p>The answer as the headline; the question, a short answer and horizontal bars below; for answering a question the audience is likely to ask, or holding supporting evidence without lengthening the main story.</p></div>
-<div class="card" data-type="slide">
-<div class="pv"><iframe loading="lazy" src="slides/BK-02-heatmap-callout.html" title="BK-02" tabindex="-1"></iframe></div>
-<a class="name" href="slides/BK-02-heatmap-callout.html" target="_blank"><b>BK-02</b> heatmap-callout</a>
-<p>One callout sentence over a small heatmap grid with one diagonal highlighted; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-01-bar-highlight.html" title="CT-01" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-01-bar-highlight.html" target="_blank"><b>CT-01</b> bar-highlight</a>
-<p>Vertical bars, one highlighted in blue, the rest grey, values on top; for showing which category stands out, or comparing a handful of groups on one measure.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-02-bars-ranked.html" title="CT-02" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-02-bars-ranked.html" target="_blank"><b>CT-02</b> bars-ranked</a>
-<p>Horizontal bars sorted largest first, the leader in blue, values at the bar ends; for ranking items when the labels are long, or showing which item drives a result.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-03-line-event.html" title="CT-03" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-03-line-event.html" target="_blank"><b>CT-03</b> line-event</a>
-<p>Two lines over time, the one that matters in blue, both ends labelled, an event marked with a dashed line; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-04-line-fit.html" title="CT-04" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-04-line-fit.html" target="_blank"><b>CT-04</b> line-fit</a>
-<p>Actual line in blue with a dashed grey fitted line, both ends labelled; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-05-paired-bars.html" title="CT-05" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-05-paired-bars.html" target="_blank"><b>CT-05</b> paired-bars</a>
-<p>Two bars per category (expected in light grey, actual darker), the category that matters in blue, legend at top left; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-06-waterfall.html" title="CT-06" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-06-waterfall.html" target="_blank"><b>CT-06</b> waterfall</a>
-<p>Vertical bridge from a starting total to an ending total; totals dark grey, the step that matters blue, other steps light grey; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-07-target-tick-bars.html" title="CT-07" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-07-target-tick-bars.html" target="_blank"><b>CT-07</b> target-tick-bars</a>
-<p>Horizontal bars with a dark tick marking each item's target, the miss in blue with its value inside the bar; for showing performance against a target or plan for each item, or picking out the one item that missed.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-08-dumbbell.html" title="CT-08" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-08-dumbbell.html" target="_blank"><b>CT-08</b> dumbbell</a>
-<p>Two dots per item joined by a short bar, the earlier point light grey, the later dark, the item that matters in blue; for showing movement between two points for several items at once, or showing which items moved most and in which direction.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-09-stacked-share.html" title="CT-09" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-09-stacked-share.html" target="_blank"><b>CT-09</b> stacked-share</a>
-<p>Two 100% stacked horizontal bars, the part that changed in blue with its label inside, the other parts grey; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-10-heatmap-grid.html" title="CT-10" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-10-heatmap-grid.html" target="_blank"><b>CT-10</b> heatmap-grid</a>
-<p>A small grid of figures on light grey cells, the cells that matter in blue with white text; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.</p></div>
-<div class="card" data-type="chart">
-<div class="pv"><iframe loading="lazy" src="charts/CT-11-range-bar.html" title="CT-11" tabindex="-1"></iframe></div>
-<a class="name" href="charts/CT-11-range-bar.html" target="_blank"><b>CT-11</b> range-bar</a>
-<p>One low-to-high grey bar with the central figure as a dashed line and the chosen figure as a solid blue line; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.</p></div>
-<div class="card" data-type="theme">
-<div class="pv"><iframe loading="lazy" src="themes/TH-01-light.html" title="TH-01" tabindex="-1"></iframe></div>
-<a class="name" href="themes/TH-01-light.html" target="_blank"><b>TH-01</b> light</a>
-<p>The default look: white page, navy headings, one blue highlight against grey context, sharp corners.</p></div>
-<div class="card" data-type="theme">
-<div class="pv"><iframe loading="lazy" src="themes/TH-02-dark.html" title="TH-02" tabindex="-1"></iframe></div>
-<a class="name" href="themes/TH-02-dark.html" target="_blank"><b>TH-02</b> dark</a>
-<p>Example dark theme: light text on a deep slate page, for screens in a dim room.</p></div>
-<div class="card" data-type="theme">
-<div class="pv"><iframe loading="lazy" src="themes/TH-03-print-grey.html" title="TH-03" tabindex="-1"></iframe></div>
-<a class="name" href="themes/TH-03-print-grey.html" target="_blank"><b>TH-03</b> print-grey</a>
-<p>Example greyscale theme for print: black and greys only, serif headings, no colour needed.</p></div>
+<button type="button" class="card" data-type="slide" data-i="0" aria-label="Preview FR-01 title">
+<span class="pv"><iframe loading="lazy" src="slides/FR-01-title.html#grid" title="FR-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>FR-01</b> title</span>
+<span class="purpose">Large headline, kicker above, one line below, no visual; for opening with the answer or the subject, or telling the audience who is presenting and when.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="1" aria-label="Preview FR-02 section-divider">
+<span class="pv"><iframe loading="lazy" src="slides/FR-02-section-divider.html#grid" title="FR-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>FR-02</b> section-divider</span>
+<span class="purpose">Section name large, one line saying what the section will show; for marking a change of topic in a longer deck, or giving the audience a breath before a new line of argument.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="2" aria-label="Preview FR-03 agenda-rows">
+<span class="pv"><iframe loading="lazy" src="slides/FR-03-agenda-rows.html#grid" title="FR-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>FR-03</b> agenda-rows</span>
+<span class="purpose">Numbered rows: part name and one line each; for showing the route through a longer deck, or matching what is said to the sections in the bottom bar.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="3" aria-label="Preview FR-04 goal-three-cards">
+<span class="pv"><iframe loading="lazy" src="slides/FR-04-goal-three-cards.html#grid" title="FR-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>FR-04</b> goal-three-cards</span>
+<span class="purpose">Three cards side by side, the third tinted; for reminding the audience of the original goal, or laying out problem, action and measure of success in one view.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="4" aria-label="Preview FR-05 statement-quote">
+<span class="pv"><iframe loading="lazy" src="slides/FR-05-statement-quote.html#grid" title="FR-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>FR-05</b> statement-quote</span>
+<span class="purpose">One sentence or quote in large type, source line under it; for making the audience hear one message with nothing competing, or letting a customer or stakeholder say it in their own words.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="5" aria-label="Preview EX-01 steps-flow">
+<span class="pv"><iframe loading="lazy" src="slides/EX-01-steps-flow.html#grid" title="EX-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>EX-01</b> steps-flow</span>
+<span class="purpose">Three to five steps on a line, each with a title and one line; for showing a method or process in order, or showing a timeline or plan with the current point marked.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="6" aria-label="Preview EX-02 data-two-cards">
+<span class="pv"><iframe loading="lazy" src="slides/EX-02-data-two-cards.html#grid" title="EX-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>EX-02</b> data-two-cards</span>
+<span class="purpose">Two cards: what was used (rows) and how it was checked (bullets); for showing what the analysis rests on and why it can be trusted, or answering scope and data-quality questions before they are asked.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="7" aria-label="Preview LV-01 stats-three">
+<span class="pv"><iframe loading="lazy" src="slides/LV-01-stats-three.html#grid" title="LV-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-01</b> stats-three</span>
+<span class="purpose">Three large figures in a row, each with a label and a comparison note, one sentence under them, no chart; for landing two or three results at once, or showing results against target or prior without a chart.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="8" aria-label="Preview LV-02 hero-number-line">
+<span class="pv"><iframe loading="lazy" src="slides/LV-02-hero-number-line.html#grid" title="LV-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-02</b> hero-number-line</span>
+<span class="purpose">One very large figure with its meaning in plain words, a line chart beside it; for making one number the whole message, or showing the figure and the path that led to it.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="9" aria-label="Preview LV-03 hero-number-quote">
+<span class="pv"><iframe loading="lazy" src="slides/LV-03-hero-number-quote.html#grid" title="LV-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-03</b> hero-number-quote</span>
+<span class="purpose">One very large figure beside a one-sentence statement; for closing on the one thing to remember, or pairing a figure with the sentence that explains it.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="10" aria-label="Preview LV-04 stats-over-bars">
+<span class="pv"><iframe loading="lazy" src="slides/LV-04-stats-over-bars.html#grid" title="LV-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-04</b> stats-over-bars</span>
+<span class="purpose">Three figure cards across the top, a bar chart and two bullets under; for stating a position with its two inputs and the gap between them, or showing the headline figures and how one of them has moved.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="11" aria-label="Preview LV-05 bars-highlight-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/LV-05-bars-highlight-commentary.html#grid" title="LV-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-05</b> bars-highlight-commentary</span>
+<span class="purpose">Vertical bars with one highlighted, commentary bullets and a so-what line on the right; for showing which category stands out, or comparing a handful of groups on one measure and saying why one differs.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="12" aria-label="Preview LV-06 bars-ranked-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/LV-06-bars-ranked-commentary.html#grid" title="LV-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LV-06</b> bars-ranked-commentary</span>
+<span class="purpose">Sorted horizontal bars with the leader highlighted, fuller commentary on the right; for ranking items when the labels are long, or showing which item drives a result.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="13" aria-label="Preview CH-01 line-fit-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/CH-01-line-fit-commentary.html#grid" title="CH-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-01</b> line-fit-commentary</span>
+<span class="purpose">Actual line with a dashed fitted line, commentary and so-what on the right; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="14" aria-label="Preview CH-02 line-event-callout">
+<span class="pv"><iframe loading="lazy" src="slides/CH-02-line-event-callout.html#grid" title="CH-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-02</b> line-event-callout</span>
+<span class="purpose">Callout with one figure and three bullets on the left; two lines with an event marked on the right; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="15" aria-label="Preview CH-03 dots-two-fits">
+<span class="pv"><iframe loading="lazy" src="slides/CH-03-dots-two-fits.html#grid" title="CH-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-03</b> dots-two-fits</span>
+<span class="purpose">Commentary on the left; actual points with a longer and a shorter fitted line on the right; for asking whether a rate of change is speeding up or slowing, or comparing a long-run view with a recent view of the same measure.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="16" aria-label="Preview CH-04 bars-outlier-callout">
+<span class="pv"><iframe loading="lazy" src="slides/CH-04-bars-outlier-callout.html#grid" title="CH-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-04</b> bars-outlier-callout</span>
+<span class="purpose">One callout sentence over full-width bars with one period highlighted; for calling out an unusual period and how it was treated, or a lean slide for a senior audience: one sentence, one picture.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="17" aria-label="Preview CH-05 bars-before-after">
+<span class="pv"><iframe loading="lazy" src="slides/CH-05-bars-before-after.html#grid" title="CH-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-05</b> bars-before-after</span>
+<span class="purpose">Callout with the size of the change and two bullets; bars by period with the later periods highlighted; for showing a level shift after a change, or stating the size of an effect next to the evidence for it.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="18" aria-label="Preview CH-06 two-charts-bullets">
+<span class="pv"><iframe loading="lazy" src="slides/CH-06-two-charts-bullets.html#grid" title="CH-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-06</b> two-charts-bullets</span>
+<span class="purpose">Two small line charts side by side, one muted and one highlighted, three bullets in a row under them; for splitting a result into two measures to show which one is moving, or showing that one thing is stable while another is not.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="19" aria-label="Preview CH-07 change-cards-bars">
+<span class="pv"><iframe loading="lazy" src="slides/CH-07-change-cards-bars.html#grid" title="CH-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CH-07</b> change-cards-bars</span>
+<span class="purpose">Three stacked cards, each a change with its size and direction, beside a bar chart of the total at each review; for saying what is different since the audience last saw this, or listing a few changes with their sizes alongside the overall movement.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="20" aria-label="Preview CP-01 paired-bars-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/CP-01-paired-bars-commentary.html#grid" title="CP-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-01</b> paired-bars-commentary</span>
+<span class="purpose">Paired bars by category (two series), commentary and so-what on the right; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="21" aria-label="Preview CP-02 bars-target-tick">
+<span class="pv"><iframe loading="lazy" src="slides/CP-02-bars-target-tick.html#grid" title="CP-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-02</b> bars-target-tick</span>
+<span class="purpose">Horizontal bars with a tick marking the target for each, the miss highlighted; commentary on the right; for showing performance against a target or plan for each item, or picking out the one item that missed.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="22" aria-label="Preview CP-03 two-lines-fuller-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/CP-03-two-lines-fuller-commentary.html#grid" title="CP-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-03</b> two-lines-fuller-commentary</span>
+<span class="purpose">Fuller commentary on the left, two lines over time on the right; for comparing our experience with a benchmark or peer, or a comparison meant to be read without a presenter.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="23" aria-label="Preview CP-04 two-lines-choice-cards">
+<span class="pv"><iframe loading="lazy" src="slides/CP-04-two-lines-choice-cards.html#grid" title="CP-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-04</b> two-lines-choice-cards</span>
+<span class="purpose">Two lines over time, then one card per alternative with the chosen one tinted; for showing two approaches that give different answers and which was chosen, or explaining a judgement call between two views.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="24" aria-label="Preview CP-05 dumbbell-callout">
+<span class="pv"><iframe loading="lazy" src="slides/CP-05-dumbbell-callout.html#grid" title="CP-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-05</b> dumbbell-callout</span>
+<span class="purpose">Full-width dumbbell chart (two points joined per category), one sentence under it; for showing movement between two points for several items at once, or showing which items moved most and in which direction.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="25" aria-label="Preview CP-06 two-numbers-difference">
+<span class="pv"><iframe loading="lazy" src="slides/CP-06-two-numbers-difference.html#grid" title="CP-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-06</b> two-numbers-difference</span>
+<span class="purpose">Two large figures in cards with the difference stated between them, no chart; for a before and after, or an old and new, in one glance, or when the difference is the message and a chart would add nothing.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="26" aria-label="Preview CP-07 table-key-row-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/CP-07-table-key-row-commentary.html#grid" title="CP-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-07</b> table-key-row-commentary</span>
+<span class="purpose">Small table with one highlighted row, commentary and so-what beside it; for showing plan, actual and difference where exact figures will be read, or any small table where one row carries the point.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="27" aria-label="Preview CP-08 option-cards-recommendation">
+<span class="pv"><iframe loading="lazy" src="slides/CP-08-option-cards-recommendation.html#grid" title="CP-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CP-08</b> option-cards-recommendation</span>
+<span class="purpose">Two cards comparing options on the same rows, then the recommendation, no chart; for putting two options side by side on cost, benefit and risk, or leading the audience to a recommendation they can see the basis for.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="28" aria-label="Preview BD-01 waterfall-callout">
+<span class="pv"><iframe loading="lazy" src="slides/BD-01-waterfall-callout.html#grid" title="BD-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-01</b> waterfall-callout</span>
+<span class="purpose">Full-width vertical waterfall from one figure to another, one-sentence callout under it; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="29" aria-label="Preview BD-02 waterfall-horizontal-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/BD-02-waterfall-horizontal-commentary.html#grid" title="BD-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-02</b> waterfall-horizontal-commentary</span>
+<span class="purpose">Horizontal waterfall on the left, fuller commentary on the right; for building up a result from its components when labels are long, or a bridge that needs explaining step by step, readable without a presenter.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="30" aria-label="Preview BD-03 number-small-waterfall">
+<span class="pv"><iframe loading="lazy" src="slides/BD-03-number-small-waterfall.html#grid" title="BD-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-03</b> number-small-waterfall</span>
+<span class="purpose">Callout with one large figure and two bullets on the left, a three-bar waterfall on the right; for stating the effect of one decision and showing where it lands, or a simple from, change, to story.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="31" aria-label="Preview BD-04 rows-plus-bars">
+<span class="pv"><iframe loading="lazy" src="slides/BD-04-rows-plus-bars.html#grid" title="BD-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-04</b> rows-plus-bars</span>
+<span class="purpose">Three numbered rows on the left, the same three effects as bars on the right; for splitting a change into a few named effects, or giving each effect a sentence and showing their relative size.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="32" aria-label="Preview BD-05 stacked-mix-shift">
+<span class="pv"><iframe loading="lazy" src="slides/BD-05-stacked-mix-shift.html#grid" title="BD-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-05</b> stacked-mix-shift</span>
+<span class="purpose">Two 100% stacked bars, bullets and a callout under them; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="33" aria-label="Preview BD-06 stats-over-stacked-bars">
+<span class="pv"><iframe loading="lazy" src="slides/BD-06-stats-over-stacked-bars.html#grid" title="BD-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-06</b> stats-over-stacked-bars</span>
+<span class="purpose">Three figures across the top, stacked horizontal bars by category, commentary beside; for splitting a total into two factors across several categories, or showing the headline figures and which category is behind them.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="34" aria-label="Preview BD-07 hero-number-donut">
+<span class="pv"><iframe loading="lazy" src="slides/BD-07-hero-number-donut.html#grid" title="BD-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-07</b> hero-number-donut</span>
+<span class="purpose">One very large figure in a callout with a two-part doughnut, no commentary; for showing that one part explains most of the whole, or a lean slide where a single share is the message.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="35" aria-label="Preview BD-08 table-bars-sensitivity">
+<span class="pv"><iframe loading="lazy" src="slides/BD-08-table-bars-sensitivity.html#grid" title="BD-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BD-08</b> table-bars-sensitivity</span>
+<span class="purpose">Small table and two bullets on the left, bars for each scenario on the right; for showing what the result becomes under different assumptions, or giving exact figures and their shape together.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="36" aria-label="Preview UN-01 range-bar-commentary">
+<span class="pv"><iframe loading="lazy" src="slides/UN-01-range-bar-commentary.html#grid" title="UN-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>UN-01</b> range-bar-commentary</span>
+<span class="purpose">One low-to-high range bar with the central and held figures marked, commentary under it; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="37" aria-label="Preview UN-02 scenario-bars-caveats">
+<span class="pv"><iframe loading="lazy" src="slides/UN-02-scenario-bars-caveats.html#grid" title="UN-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>UN-02</b> scenario-bars-caveats</span>
+<span class="purpose">Scenario bars on the left, four caveats and a so-what line on the right; for telling the audience what could change the answer before they decide, or sizing a few scenarios against the central view.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="38" aria-label="Preview DE-01 summary-stats-ask">
+<span class="pv"><iframe loading="lazy" src="slides/DE-01-summary-stats-ask.html#grid" title="DE-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-01</b> summary-stats-ask</span>
+<span class="purpose">Answer as the headline, three large figures, the ask in a strip along the bottom; for an executive summary on one slide, or giving the answer, its support and the ask together.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="39" aria-label="Preview DE-02 numbered-findings">
+<span class="pv"><iframe loading="lazy" src="slides/DE-02-numbered-findings.html#grid" title="DE-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-02</b> numbered-findings</span>
+<span class="purpose">Numbered rows, each a finding with its figure on the right; for listing the takeaways with their sizes, or listing risks or issues ranked by size.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="40" aria-label="Preview DE-03 audience-rows">
+<span class="pv"><iframe loading="lazy" src="slides/DE-03-audience-rows.html#grid" title="DE-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-03</b> audience-rows</span>
+<span class="purpose">One row per audience group: who, what it means for them, the one figure; for translating a result for each group in the room, or showing each team what changes for them.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="41" aria-label="Preview DE-04 scorecard-status">
+<span class="pv"><iframe loading="lazy" src="slides/DE-04-scorecard-status.html#grid" title="DE-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-04</b> scorecard-status</span>
+<span class="purpose">Table with a status dot per row, one row highlighted, one line under it; for giving the status of several items at a glance, or showing which item needs attention.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="42" aria-label="Preview DE-05 decision-two-paths">
+<span class="pv"><iframe loading="lazy" src="slides/DE-05-decision-two-paths.html#grid" title="DE-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-05</b> decision-two-paths</span>
+<span class="purpose">The decision in a callout, then one card for what happens if approved and one for if it waits; for asking for a decision and showing the consequence of each answer, or making the cost of delay explicit.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="43" aria-label="Preview DE-06 ask-and-actions">
+<span class="pv"><iframe loading="lazy" src="slides/DE-06-ask-and-actions.html#grid" title="DE-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-06</b> ask-and-actions</span>
+<span class="purpose">The decision needed in a callout on the left, rows of action, timing and owner on the right; for closing with the ask and who does what by when, or any decision followed by a short action list.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="44" aria-label="Preview DE-07 ask-and-timeline">
+<span class="pv"><iframe loading="lazy" src="slides/DE-07-ask-and-timeline.html#grid" title="DE-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>DE-07</b> ask-and-timeline</span>
+<span class="purpose">A starting point in a callout over a five-step timeline with dates and owners; for showing the sequence of work that follows a decision, or a plan where order and dates matter more than detail.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="45" aria-label="Preview BK-01 answer-with-bars">
+<span class="pv"><iframe loading="lazy" src="slides/BK-01-answer-with-bars.html#grid" title="BK-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BK-01</b> answer-with-bars</span>
+<span class="purpose">The answer as the headline; the question, a short answer and horizontal bars below; for answering a question the audience is likely to ask, or holding supporting evidence without lengthening the main story.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="slide" data-i="46" aria-label="Preview BK-02 heatmap-callout">
+<span class="pv"><iframe loading="lazy" src="slides/BK-02-heatmap-callout.html#grid" title="BK-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>BK-02</b> heatmap-callout</span>
+<span class="purpose">One callout sentence over a small heatmap grid with one diagonal highlighted; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.</span>
+<span class="from">slide &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="47" aria-label="Preview CT-02 bars-ranked">
+<span class="pv"><iframe loading="lazy" src="charts/CT-02-bars-ranked.html#grid" title="CT-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-02</b> bars-ranked</span>
+<span class="purpose">Use to rank items on one measure when the labels are long, or to show which item drives a result, such as PMPM trend by service category; draws horizontal bars sorted largest first, the leader in blue, values at the bar ends and the overall figure as a reference line.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="48" aria-label="Preview CT-04 line-fit">
+<span class="pv"><iframe loading="lazy" src="charts/CT-04-line-fit.html#grid" title="CT-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-04</b> line-fit</span>
+<span class="purpose">Use to show a steady rate of change, or how closely actuals follow a fitted or expected path, such as quarterly PMPM against a fitted annual trend; draws the actual line in blue, the latest period dashed as an estimate, and a dashed grey fitted line, both ends labelled.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="49" aria-label="Preview CT-06 waterfall">
+<span class="pv"><iframe loading="lazy" src="charts/CT-06-waterfall.html#grid" title="CT-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-06</b> waterfall</span>
+<span class="purpose">Use to bridge from a starting figure to an ending figure by cause, or to show which driver accounts for most of a change, such as prior to current PMPM by trend component; draws a vertical bridge with the totals dark grey, the step that matters in blue and the other steps light grey.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="50" aria-label="Preview CT-07 target-tick-bars">
+<span class="pv"><iframe loading="lazy" src="charts/CT-07-target-tick-bars.html#grid" title="CT-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-07</b> target-tick-bars</span>
+<span class="purpose">Use to show each item against its own target or plan and pick out the one item the reader must look at, a miss or a beat, such as loss ratio by product against target; draws horizontal bars with a dark tick at each target, the chosen item in blue with its value inside the bar.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="51" aria-label="Preview CT-08 dumbbell">
+<span class="pv"><iframe loading="lazy" src="charts/CT-08-dumbbell.html#grid" title="CT-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-08</b> dumbbell</span>
+<span class="purpose">Use to show movement between two points for several items at once, and which moved most and which way, such as loss ratio by product last year against this year to date; draws two dots per item joined by a short bar, the earlier grey, the later dark, the item that matters in blue.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="52" aria-label="Preview CT-10 heatmap-grid">
+<span class="pv"><iframe loading="lazy" src="charts/CT-10-heatmap-grid.html#grid" title="CT-10 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-10</b> heatmap-grid</span>
+<span class="purpose">Use to show a pattern across two dimensions or point at one part of a grid of figures, such as the latest diagonal of a claims development triangle; draws a small grid of figures on light grey cells, the cells that matter in blue with paper-coloured text.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="53" aria-label="Preview CT-11 range-bar">
+<span class="pv"><iframe loading="lazy" src="charts/CT-11-range-bar.html#grid" title="CT-11 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-11</b> range-bar</span>
+<span class="purpose">Use to show where a selected figure sits within a reasonable range and how wide the uncertainty is, such as the IBNR reserve against its low-to-high range; draws one grey bar from low to high on a value axis, the central estimate as a dashed line and the selected estimate as a solid blue line.</span>
+<span class="from">chart &#183; from presentation</span></button>
+<button type="button" class="card" data-type="chart" data-i="54" aria-label="Preview CT-12 year-overlay-lines">
+<span class="pv"><iframe loading="lazy" src="charts/CT-12-year-overlay-lines.html#grid" title="CT-12 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-12</b> year-overlay-lines</span>
+<span class="purpose">Use to read seasonality and the year-over-year gap at once, such as PMPM by incurred month for three years; draws one line per year across the calendar months, the current year in blue with its incomplete months dashed and the earlier years in greys.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="55" aria-label="Preview CT-13 product-panels">
+<span class="pv"><iframe loading="lazy" src="charts/CT-13-product-panels.html#grid" title="CT-13 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-13</b> product-panels</span>
+<span class="purpose">Use to compare several products over time without a tangle of lines, such as PMPM actual against expected by quarter; draws one small panel per product on a shared scale, actual against expected in each, with the A/E ratio in the panel title and the line coloured by whether it is over, under or within tolerance.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="56" aria-label="Preview CT-14 bars-rate-dual-axis">
+<span class="pv"><iframe loading="lazy" src="charts/CT-14-bars-rate-dual-axis.html#grid" title="CT-14 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-14</b> bars-rate-dual-axis</span>
+<span class="purpose">Use to show two measures of different units for the same groups, such as PMPM and trend by product against the pricing trend; draws two side-by-side panels on one product axis, each with its own titled value axis, and puts every group past the reference in blue in both panels.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="57" aria-label="Preview CT-15 trend-decomp-bars">
+<span class="pv"><iframe loading="lazy" src="charts/CT-15-trend-decomp-bars.html#grid" title="CT-15 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-15</b> trend-decomp-bars</span>
+<span class="purpose">Use to show what drives each product's trend and where the drivers offset; draws horizontal bars per product split into unit cost, utilisation and mix, increases right of zero and decreases left, a tick at the net and the net trend in a right-hand column.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="58" aria-label="Preview CT-16 development-curves">
+<span class="pv"><iframe loading="lazy" src="charts/CT-16-development-curves.html#grid" title="CT-16 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-16</b> development-curves</span>
+<span class="purpose">Use to show how fast claims complete and whether recent months are paying slower or faster than a complete month; draws one cumulative curve per incurral month against months of run-out, a complete month as the grey reference, recent months stopping where their data ends and the latest projected to ultimate as a dashed line.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="59" aria-label="Preview CT-17 ae-range-rows">
+<span class="pv"><iframe loading="lazy" src="charts/CT-17-ae-range-rows.html#grid" title="CT-17 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-17</b> ae-range-rows</span>
+<span class="purpose">Use to show actual against expected by segment over time, fairly across segments of different size; draws one row per segment with its expected range as a grey bar around 100%, the last three quarters as hollow dots, the current quarter as a dashed estimate marker, and any value outside the range as a labelled diamond in the favourable or unfavourable colour.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="60" aria-label="Preview CT-18 cost-use-bubbles">
+<span class="pv"><iframe loading="lazy" src="charts/CT-18-cost-use-bubbles.html#grid" title="CT-18 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-18</b> cost-use-bubbles</span>
+<span class="purpose">Use to see which service categories drive one product's trend through price, through use, or both; draws bubbles placed by change in utilisation and change in unit cost, sized by PMPM with the PMPM printed on each label, quadrant labels and a diagonal at the pricing trend, the categories past it in blue.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="61" aria-label="Preview CT-19 mix-shift-columns">
+<span class="pv"><iframe loading="lazy" src="charts/CT-19-mix-shift-columns.html#grid" title="CT-19 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-19</b> mix-shift-columns</span>
+<span class="purpose">Use to show how the make-up of spend changes over time, or that a result changed because the mix changed (two columns for two points), such as service category mix of PMPM; draws 100% stacked columns across several years, the shifting segment at the base in blue, the rest grey, shares inside, names at the right and the total level under each year.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="62" aria-label="Preview CT-20 target-band-lines">
+<span class="pv"><iframe loading="lazy" src="charts/CT-20-target-band-lines.html#grid" title="CT-20 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-20</b> target-band-lines</span>
+<span class="purpose">Use to show a rate against its target or assumption over time, such as loss ratio by product against target, or the effect of a change against a group that did not change; draws several lines against a shaded target range and a thin target line, the line that matters in blue, an event marked, the latest period dashed as an estimate and each line labelled at its end.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="63" aria-label="Preview CT-21 paid-ibnr-bars">
+<span class="pv"><iframe loading="lazy" src="charts/CT-21-paid-ibnr-bars.html#grid" title="CT-21 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-21</b> paid-ibnr-bars</span>
+<span class="purpose">Use for a monthly measure whose recent months are not yet complete, such as incurred PMPM with IBNR; draws bars by incurred month with the paid amount solid and the estimated unreported amount as a dashed, lighter cap, the total above each bar and last year as a dashed line.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="64" aria-label="Preview CT-22 plan-drift-steps">
+<span class="pv"><iframe loading="lazy" src="charts/CT-22-plan-drift-steps.html#grid" title="CT-22 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-22</b> plan-drift-steps</span>
+<span class="purpose">Use to show when a gap to budget started to open and how large it has grown; draws bars for each month's amount over or under budget, shaded by direction, with the running total as a dark step line, dashed where it includes an estimate, and its year-to-date figure and percent of budget labelled at the end.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="65" aria-label="Preview CT-23 variance-split">
+<span class="pv"><iframe loading="lazy" src="charts/CT-23-variance-split.html#grid" title="CT-23 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-23</b> variance-split</span>
+<span class="purpose">Use to show which groups are over or under plan and by how much, in dollars and as a percent of plan; draws horizontal bars around a zero line, over in the warning colour extending right, under in the favourable colour extending left, sorted, with the total as a last row.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="66" aria-label="Preview CT-24 pareto-bars">
+<span class="pv"><iframe loading="lazy" src="charts/CT-24-pareto-bars.html#grid" title="CT-24 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-24</b> pareto-bars</span>
+<span class="purpose">Use to show that a few drivers explain most of a total, such as large-claimant spend by condition; draws ranked bars with the leading few in blue, the claimant count under each name, and a running-share line on a second axis with an 80% reference.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="67" aria-label="Preview CT-25 rank-bump">
+<span class="pv"><iframe loading="lazy" src="charts/CT-25-rank-bump.html#grid" title="CT-25 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-25</b> rank-bump</span>
+<span class="purpose">Use to show how the rank order of groups shifts over time, such as regions ranked by PMPM trend, when the order matters more than the gaps; draws straight lines joining each group's rank across periods, rank numbers inside the dots, and each group's name with its underlying value at both ends, the group that matters in blue.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="68" aria-label="Preview CT-26 flow-ribbon">
+<span class="pv"><iframe loading="lazy" src="charts/CT-26-flow-ribbon.html#grid" title="CT-26 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-26</b> flow-ribbon</span>
+<span class="purpose">Use to show one total split two ways at once, such as spend by product and by service category; draws ribbons from one split to the other, each as wide as its amount, the flows into the category that matters in blue and the rest grey, with each side's amounts, shares and total printed.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="69" aria-label="Preview CT-27 state-tiles">
+<span class="pv"><iframe loading="lazy" src="charts/CT-27-state-tiles.html#grid" title="CT-27 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-27</b> state-tiles</span>
+<span class="purpose">Use to compare states fairly whatever their area, such as PMPM trend by state, without reading noise from small states; draws equal-size tiles laid out like a map of the US states, each shaded by its value in four steps of one colour, low-volume states outlined and unshaded, beside a readout of the overall, highest and lowest.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="70" aria-label="Preview CT-28 capsule-count">
+<span class="pv"><iframe loading="lazy" src="charts/CT-28-capsule-count.html#grid" title="CT-28 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-28</b> capsule-count</span>
+<span class="purpose">Use to show that a small share of members carries a large share of spend; draws two blocks of 100 capsules side by side, one for members and one for allowed dollars, the high-cost group in blue in both, with a large figure under each.</span>
+<span class="from">chart &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="chart" data-i="71" aria-label="Preview CT-29 rate-buildup-bridge">
+<span class="pv"><iframe loading="lazy" src="charts/CT-29-rate-buildup-bridge.html#grid" title="CT-29 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-29</b> rate-buildup-bridge</span>
+<span class="purpose">Use to walk a renewal from experience to the required premium and set it against the current premium and the proposed rate action; draws a PMPM bridge through trend, plan changes, the credibility blend with manual, administration and margin, with the current and proposed premiums as reference lines.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="72" aria-label="Preview CT-30 rolling-12-panels">
+<span class="pv"><iframe loading="lazy" src="charts/CT-30-rolling-12-panels.html#grid" title="CT-30 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-30</b> rolling-12-panels</span>
+<span class="purpose">Use to show the run rate of a cost and its trend without the noise of single months, such as rolling 12-month PMPM and rolling 12-month trend; draws two stacked panels on one month axis, the level above and the trend percent below against the pricing trend, the months not yet complete shaded and dashed.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="73" aria-label="Preview CT-31 tornado-fan">
+<span class="pv"><iframe loading="lazy" src="charts/CT-31-tornado-fan.html#grid" title="CT-31 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-31</b> tornado-fan</span>
+<span class="purpose">Use to show how uncertain a projection is and which assumptions move it most, such as projected PMPM for next year; draws a sensitivity tornado of each assumption's effect on the central estimate beside a fan of the projection with 50% and 90% ranges around the dashed central line.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="74" aria-label="Preview CT-32 util-per-1000-panels">
+<span class="pv"><iframe loading="lazy" src="charts/CT-32-util-per-1000-panels.html#grid" title="CT-32 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-32</b> util-per-1000-panels</span>
+<span class="purpose">Use to compare utilisation per 1,000 members by service category against last year and a benchmark, each in its own unit; draws one small panel per category with last year and this year to date as bars, the benchmark as a line, and the change on each in the panel title, categories more than 5% over benchmark in blue.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="chart" data-i="75" aria-label="Preview CT-33 stop-loss-excess">
+<span class="pv"><iframe loading="lazy" src="charts/CT-33-stop-loss-excess.html#grid" title="CT-33 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>CT-33</b> stop-loss-excess</span>
+<span class="purpose">Use to show how often and how far large claimants pierce the specific stop-loss attachment, year by year, against the expected excess; draws bars of excess dollars above the attachment with the claimant count under each year and the expected excess as a dashed line, the latest year dashed as an estimate.</span>
+<span class="from">chart &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="76" aria-label="Preview TB-01 ledger-meters">
+<span class="pv"><iframe loading="lazy" src="tables/TB-01-ledger-meters.html#grid" title="TB-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-01</b> ledger-meters</span>
+<span class="purpose">Paid and PMPM by service category against plan, each PMPM with an inline meter carrying a plan tick (over plan in the bad colour), the gap to plan in dollars and percent, the lead row marked and a CSV button; for a monthly or quarterly cost readout against plan.</span>
+<span class="from">table &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="table" data-i="77" aria-label="Preview TB-02 pivot-regroup">
+<span class="pv"><iframe loading="lazy" src="tables/TB-02-pivot-regroup.html#grid" title="TB-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-02</b> pivot-regroup</span>
+<span class="purpose">A pivot the reader regroups in place: pick what goes down the rows, across the columns and which measure fills the cells (paid, member months or PMPM, which is recomputed from the sums, never added), with row and column totals and a CSV of the current view.</span>
+<span class="from">table &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="table" data-i="78" aria-label="Preview TB-03 development-triangle">
+<span class="pv"><iframe loading="lazy" src="tables/TB-03-development-triangle.html#grid" title="TB-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-03</b> development-triangle</span>
+<span class="purpose">Cumulative paid claims by incurral month and lag with the latest diagonal boxed, age-to-age and completion factors in the footer, and the ultimate and IBNR each row implies; for setting or explaining a lag reserve.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="79" aria-label="Preview TB-04 experience-contribution">
+<span class="pv"><iframe loading="lazy" src="tables/TB-04-experience-contribution.html#grid" title="TB-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-04</b> experience-contribution</span>
+<span class="purpose">PMPM by service category, prior against current, with trend split into utilisation and unit cost for every row and the total, each trend coloured against the pricing assumption and a centred bar for each category's points of the total trend; for explaining what drove cost trend.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="80" aria-label="Preview TB-05 rate-walk">
+<span class="pv"><iframe loading="lazy" src="tables/TB-05-rate-walk.html#grid" title="TB-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-05</b> rate-walk</span>
+<span class="purpose">A renewal rate build-up as a table: experience PMPM, then each adjustment with its basis, factor and signed dollar step, a running total that ties to the cent and an inline walk bar, ending in the required premium and the rate action against current; for showing how a renewal rate was reached.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="81" aria-label="Preview TB-06 large-claim-pooling">
+<span class="pv"><iframe loading="lazy" src="tables/TB-06-large-claim-pooling.html#grid" title="TB-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-06</b> large-claim-pooling</span>
+<span class="purpose">Largest claimants ranked with paid amount, share and cumulative share of total paid, and the part above the pooling point, with the pooling point drawn through every bar and as a line in the table; for showing how few claimants drive a total and what pooling removes.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="82" aria-label="Preview TB-07 heat-matrix-target">
+<span class="pv"><iframe loading="lazy" src="tables/TB-07-heat-matrix-target.html#grid" title="TB-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-07</b> heat-matrix-target</span>
+<span class="purpose">Loss ratio by product and quarter with every cell shaded by its distance from target (good below, bad above, in three steps), over-target figures in bold so the reading survives greyscale, a premium-weighted year and total; for spotting where and when a book runs over target.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="table" data-i="83" aria-label="Preview TB-08 monthly-experience">
+<span class="pv"><iframe loading="lazy" src="tables/TB-08-monthly-experience.html#grid" title="TB-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TB-08</b> monthly-experience</span>
+<span class="purpose">Monthly experience by incurral month: member months, paid, IBNR, incurred, percent complete, PMPM against plan and the variance, with year-to-date and rolling-12 rows and months under 95% complete marked as estimates; for the regular monthly experience report.</span>
+<span class="from">table &#183; from design-library</span></button>
+<button type="button" class="card" data-type="hero card" data-i="84" aria-label="Preview HC-01 plan-tiles">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-01-plan-tiles.html#grid" title="HC-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-01</b> plan-tiles</span>
+<span class="purpose">Supporting measures as tiles against plan: the value, a bar to the plan tick and last year, a status top bar and note.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="85" aria-label="Preview HC-02 spotlight-tick">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-02-spotlight-tick.html#grid" title="HC-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-02</b> spotlight-tick</span>
+<span class="purpose">The page's one lead measure against its target: a large figure with its gap, a sentence saying why, a bar to the target tick and the basis; use it for the headline figure of a report or dashboard, such as loss ratio against target.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="86" aria-label="Preview HC-03 split-strip">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-03-split-strip.html#grid" title="HC-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-03</b> split-strip</span>
+<span class="purpose">A figure with the parts that make it up, as one share strip and a key of values and shares; use it when a total such as PMPM or member months needs its split by service category or product beside it.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="87" aria-label="Preview HC-04 recent-range">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-04-recent-range.html#grid" title="HC-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-04</b> recent-range</span>
+<span class="purpose">A figure placed within its own recent range, as a marker on a track with the range shaded; use it for utilisation per 1,000 or any rate where the question is whether this period is unusual for it.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="88" aria-label="Preview HC-05 streak-months">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-05-streak-months.html#grid" title="HC-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-05</b> streak-months</span>
+<span class="purpose">How long a result has persisted, as a run of months marked favourable or unfavourable under the current streak; use it when the point is that claims have run above expected, or under target, for several months in a row.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="89" aria-label="Preview HC-06 rank-dots">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-06-rank-dots.html#grid" title="HC-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-06</b> rank-dots</span>
+<span class="purpose">Where one group stands among its peers, as its figure and a numbered row of rank positions with its own filled; use it when a region, product or plan needs to be placed against the others, such as second-highest PMPM of six regions.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="90" aria-label="Preview HC-07 driver-sentence">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-07-driver-sentence.html#grid" title="HC-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-07</b> driver-sentence</span>
+<span class="purpose">One sentence naming the biggest driver of a change, on the band colour, with a strip showing its share of the total; use it beside the figure cards when the reader's next question is what caused the movement.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="91" aria-label="Preview HC-08 figure-trend-slate">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-08-figure-trend-slate.html#grid" title="HC-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-08</b> figure-trend-slate</span>
+<span class="purpose">A figure with its change on last year and a small this-year-against-last-year line under it in the same card; use it on a dashboard when the latest month's PMPM or utilisation needs its path shown, not just its level.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="92" aria-label="Preview HC-09 card-row-basis">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-09-card-row-basis.html#grid" title="HC-09 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-09</b> card-row-basis</span>
+<span class="purpose">A row of four small figure cards that work as a set at the top of a report or dashboard, each with its change and good direction, sharing one basis line; use it for the opening summary of member months, PMPM, loss ratio and completion.</span>
+<span class="from">hero card &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="hero card" data-i="93" aria-label="Preview HC-10 trend-split-three">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-10-trend-split-three.html#grid" title="HC-10 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-10</b> trend-split-three</span>
+<span class="purpose">A PMPM trend with its split into unit cost, utilisation and mix as three small signed bars on one scale; use it when the reader needs to see which of the three moved the cost trend, and whether any part pulled the other way.</span>
+<span class="from">hero card &#183; from design-library</span></button>
+<button type="button" class="card" data-type="hero card" data-i="94" aria-label="Preview HC-11 estimate-range-completion">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-11-estimate-range-completion.html#grid" title="HC-11 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-11</b> estimate-range-completion</span>
+<span class="purpose">A best estimate of incurred claims as paid to date plus IBNR, with its low-to-high range and how complete the period is; use it to report an ultimate or reserve estimate so the reader sees both the figure and how much of it is still estimated.</span>
+<span class="from">hero card &#183; from design-library</span></button>
+<button type="button" class="card" data-type="hero card" data-i="95" aria-label="Preview HC-12 volume-cost-share">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-12-volume-cost-share.html#grid" title="HC-12 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-12</b> volume-cost-share</span>
+<span class="purpose">A count over a threshold set against its share of members and its share of total cost, as two bars on one scale; use it for large claimants over a pooling point, or any few cases that carry a large part of a total.</span>
+<span class="from">hero card &#183; from design-library</span></button>
+<button type="button" class="card" data-type="hero card" data-i="96" aria-label="Preview HC-13 build-up-rows">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-13-build-up-rows.html#grid" title="HC-13 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-13</b> build-up-rows</span>
+<span class="purpose">A proposed rate change with the three drivers that build it as signed bars from a zero line, checked against the indicated rate; use it in a renewal readout so the underwriter sees the final figure and what made it in one card.</span>
+<span class="from">hero card &#183; from design-library</span></button>
+<button type="button" class="card" data-type="hero card" data-i="97" aria-label="Preview HC-14 ratio-centre-bar">
+<span class="pv"><iframe loading="lazy" src="hero-cards/HC-14-ratio-centre-bar.html#grid" title="HC-14 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>HC-14</b> ratio-centre-bar</span>
+<span class="purpose">An actual-to-expected ratio as a bar from 1.00 with the band of normal variation for its credibility, and a plain-words reading; use it to say whether experience really ran above or below the pricing basis or is within chance.</span>
+<span class="from">hero card &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="98" data-moves aria-label="Preview AN-01 lead-count-up">
+<span class="pv"><iframe loading="lazy" src="animations/AN-01-lead-count-up.html#grid" title="AN-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-01</b> lead-count-up</span>
+<span class="purpose">A named measure (medical PMPM, year to date) counts up, its bar grows towards the plan tick and its monthly trend against last year draws in, so the reader takes in the figure, what it is measured against and its basis; the kit's three motions in one exhibit.</span>
+<span class="from">animation &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="animation" data-i="99" data-moves aria-label="Preview AN-02 rate-build-steps">
+<span class="pv"><iframe loading="lazy" src="animations/AN-02-rate-build-steps.html#grid" title="AN-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-02</b> rate-build-steps</span>
+<span class="purpose">A rate build-up waterfall whose bars land one at a time, from experience claims through trend, benefit changes and pooling to projected claims, then admin and margin to the required premium, set against current premium so the rate action is measured on the right base; use to walk a renewal audience through the build step by step.</span>
+<span class="from">animation &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="animation" data-i="100" data-moves aria-label="Preview AN-03 year-stepper">
+<span class="pv"><iframe loading="lazy" src="animations/AN-03-year-stepper.html#grid" title="AN-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-03</b> year-stepper</span>
+<span class="purpose">Monthly PMPM for one year against the year before, stepping 2022 to 2024 once on load or by the year buttons, so the line moves up while its seasonal shape stays visible; use for seasonality and year over year.</span>
+<span class="from">animation &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="101" data-moves aria-label="Preview AN-04 projection-extend">
+<span class="pv"><iframe loading="lazy" src="animations/AN-04-projection-extend.html#grid" title="AN-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-04</b> projection-extend</span>
+<span class="purpose">A monthly PMPM line that draws in to the latest actual month, pauses, then extends as a dashed projection with its range opening behind it, against a monthly plan line and a full-year projected-against-plan readout, so the reader sees where actuals stop and compares like with like; use for year-end projections.</span>
+<span class="from">animation &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="animation" data-i="102" data-moves aria-label="Preview AN-05 triangle-fill">
+<span class="pv"><iframe loading="lazy" src="animations/AN-05-triangle-fill.html#grid" title="AN-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-05</b> triangle-fill</span>
+<span class="purpose">A paid claims development triangle that fills in one calendar diagonal at a time and ends on the latest diagonal highlighted, so the reader sees that each new month of payments adds one diagonal; use to explain lag triangles, run-out and IBNR.</span>
+<span class="from">animation &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="103" data-moves aria-label="Preview AN-06 focus-recede">
+<span class="pv"><iframe loading="lazy" src="animations/AN-06-focus-recede.html#grid" title="AN-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-06</b> focus-recede</span>
+<span class="purpose">A plain bar chart in which, after a beat, one bar stays in colour and the rest recede to grey while the finding appears, so the room looks at the one category that matters; use when one category drives a change.</span>
+<span class="from">animation &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="104" data-moves aria-label="Preview AN-07 basis-morph">
+<span class="pv"><iframe loading="lazy" src="animations/AN-07-basis-morph.html#grid" title="AN-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-07</b> basis-morph</span>
+<span class="purpose">Monthly claims by incurred month that start as paid to date, where recent months look low, then the IBNR estimate rises on top of each month to the completed view, so the reader sees the dip is unpaid claims, not lower cost; use when explaining paid against incurred and IBNR.</span>
+<span class="from">animation &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="animation" data-i="105" data-moves aria-label="Preview AN-08 stack-regroup">
+<span class="pv"><iframe loading="lazy" src="animations/AN-08-stack-regroup.html#grid" title="AN-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-08</b> stack-regroup</span>
+<span class="purpose">A stacked column chart whose blocks slide from columns by product into columns by region, each block keeping its colour and label, so the reader follows the same pieces into the new grouping; use when one total has to be read two ways.</span>
+<span class="from">animation &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="106" data-moves aria-label="Preview AN-09 slide-steps">
+<span class="pv"><iframe loading="lazy" src="animations/AN-09-slide-steps.html#grid" title="AN-09 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-09</b> slide-steps</span>
+<span class="purpose">A slide that reveals its headline, then its chart, then each of its two points on a step (Space or Enter, a click or the Next step button; it plays through once on load), so a presenter can talk to one thing at a time; everything shows at once when motion is off.</span>
+<span class="from">animation &#183; from design-library</span></button>
+<button type="button" class="card" data-type="animation" data-i="107" data-moves aria-label="Preview AN-10 total-split">
+<span class="pv"><iframe loading="lazy" src="animations/AN-10-total-split.html#grid" title="AN-10 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>AN-10</b> total-split</span>
+<span class="purpose">A PMPM trend that counts up as one bar and then splits into unit cost, utilisation and mix, each part sized by its share and named underneath, so the reader sees the total first and then what it is made of; use for trend decomposition.</span>
+<span class="from">animation &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="108" aria-label="Preview LY-01 console-band">
+<span class="pv"><iframe loading="lazy" src="layout/LY-01-console-band.html#grid" title="LY-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-01</b> console-band</span>
+<span class="purpose">The page header band: kicker, headline, band buttons and removable filter chips, with the lead card and a trend beside it.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="109" aria-label="Preview LY-02 rail-menu">
+<span class="pv"><iframe loading="lazy" src="layout/LY-02-rail-menu.html#grid" title="LY-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-02</b> rail-menu</span>
+<span class="purpose">Section links down the side of a page, the current one filled, others shifting slightly on hover.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="110" aria-label="Preview LY-03 panel-pair">
+<span class="pv"><iframe loading="lazy" src="layout/LY-03-panel-pair.html#grid" title="LY-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-03</b> panel-pair</span>
+<span class="purpose">Two panels side by side, each a finding over its chart, stacking when the page is narrow.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="111" aria-label="Preview LY-04 finding-panel">
+<span class="pv"><iframe loading="lazy" src="layout/LY-04-finding-panel.html#grid" title="LY-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-04</b> finding-panel</span>
+<span class="purpose">A panel framing a chart under its finding, with Show table / Show chart flip, Download all, a note and a source line.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="112" aria-label="Preview LY-05 note-and-source">
+<span class="pv"><iframe loading="lazy" src="layout/LY-05-note-and-source.html#grid" title="LY-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-05</b> note-and-source</span>
+<span class="purpose">The written takeaway under a chart and the small source line naming data-through date and basis.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="113" aria-label="Preview LY-06 filter-chips">
+<span class="pv"><iframe loading="lazy" src="layout/LY-06-filter-chips.html#grid" title="LY-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-06</b> filter-chips</span>
+<span class="purpose">Removable chips naming the filters a page reflects, each with its own remove button, working on white or on the band.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="114" aria-label="Preview LY-07 period-switch">
+<span class="pv"><iframe loading="lazy" src="layout/LY-07-period-switch.html#grid" title="LY-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-07</b> period-switch</span>
+<span class="purpose">A segmented switch choosing the time smoothing; the chosen line is drawn bold, the others stay as grey context.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="115" aria-label="Preview LY-08 range-gate">
+<span class="pv"><iframe loading="lazy" src="layout/LY-08-range-gate.html#grid" title="LY-08 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-08</b> range-gate</span>
+<span class="purpose">Two sliders picking a low and a high bound that hide groups outside the range, with a count of how many are shown.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="layout" data-i="116" aria-label="Preview LY-09 buttons">
+<span class="pv"><iframe loading="lazy" src="layout/LY-09-buttons.html#grid" title="LY-09 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>LY-09</b> buttons</span>
+<span class="purpose">The button set: primary and secondary on white, solid and outline on the band, and a small CSV button that downloads its rows.</span>
+<span class="from">layout &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="theme" data-i="117" aria-label="Preview TH-01 light">
+<span class="pv"><iframe loading="lazy" src="themes/TH-01-light.html#grid" title="TH-01 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-01</b> light</span>
+<span class="purpose">The default look: white page, navy headings, one blue highlight against grey context, sharp corners.</span>
+<span class="from">theme &#183; from design-library</span></button>
+<button type="button" class="card" data-type="theme" data-i="118" aria-label="Preview TH-02 dark">
+<span class="pv"><iframe loading="lazy" src="themes/TH-02-dark.html#grid" title="TH-02 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-02</b> dark</span>
+<span class="purpose">Example dark theme: light text on a deep slate page, for screens in a dim room.</span>
+<span class="from">theme &#183; from design-library</span></button>
+<button type="button" class="card" data-type="theme" data-i="119" aria-label="Preview TH-03 print-grey">
+<span class="pv"><iframe loading="lazy" src="themes/TH-03-print-grey.html#grid" title="TH-03 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-03</b> print-grey</span>
+<span class="purpose">Example greyscale theme for print: black and greys only, serif headings, no colour needed.</span>
+<span class="from">theme &#183; from design-library</span></button>
+<button type="button" class="card" data-type="theme" data-i="120" aria-label="Preview TH-04 cigna-light">
+<span class="pv"><iframe loading="lazy" src="themes/TH-04-cigna-light.html#grid" title="TH-04 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-04</b> cigna-light</span>
+<span class="purpose">Imported james-themes look: navy text, brand-blue band, white side menu, Barlow, rounded cards with status top bars.</span>
+<span class="from">theme &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="theme" data-i="121" aria-label="Preview TH-05 cigna-dark">
+<span class="pv"><iframe loading="lazy" src="themes/TH-05-cigna-dark.html#grid" title="TH-05 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-05</b> cigna-dark</span>
+<span class="purpose">Imported james-themes look made fully dark: deep navy page and cards, light text, a blue-only category palette, Barlow, rounded cards.</span>
+<span class="from">theme &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="theme" data-i="122" aria-label="Preview TH-06 evernorth-light">
+<span class="pv"><iframe loading="lazy" src="themes/TH-06-evernorth-light.html#grid" title="TH-06 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-06</b> evernorth-light</span>
+<span class="purpose">Imported james-themes look: deep-teal text, teal band, white side menu, Barlow, rounded cards with status top bars.</span>
+<span class="from">theme &#183; from james-themes</span></button>
+<button type="button" class="card" data-type="theme" data-i="123" aria-label="Preview TH-07 evernorth-dark">
+<span class="pv"><iframe loading="lazy" src="themes/TH-07-evernorth-dark.html#grid" title="TH-07 preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>TH-07</b> evernorth-dark</span>
+<span class="purpose">Imported james-themes look made fully dark: deep teal page and cards, light text, a teal-only category palette, Barlow, rounded cards.</span>
+<span class="from">theme &#183; from james-themes</span></button>
 </div>
 </main>
+<div class="pop" id="pop" hidden>
+<div class="box" role="dialog" aria-modal="true" aria-labelledby="pop-title">
+<div class="bar"><h2 id="pop-title"><span class="id" id="pop-id"></span><span id="pop-name"></span><span class="type" id="pop-type"></span></h2>
+<div class="tools"><button type="button" id="prev" aria-label="Previous item">&#8592;</button><button type="button" id="next" aria-label="Next item">&#8594;</button><button type="button" id="close" aria-label="Close">Close</button></div></div>
+<p class="about"><span id="pop-purpose"></span><a id="pop-open" href="#" target="_blank" rel="noopener">Open by itself</a></p>
+<div class="stage"><iframe id="pop-frame" name="pop" title="Item preview"></iframe></div>
+</div>
+</div>
 <script>
 (function () {
-  var THEMES = [{"id":"TH-01","name":"light","purpose":"The default look: white page, navy headings, one blue highlight against grey context, sharp corners.","theme":{"css":{"--blue":"#0170BC","--navy":"#002D72","--green":"#56A944","--teal":"#00A9A5","--orange":"#F68621","--ink":"#1F2A37","--muted":"#5B6770","--rule":"#D9E2EA","--wash":"#F4F8FB","--paper":"#FFFFFF","--chart-muted":"#C3CDD6","--chart-grid":"#E8EDF2","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600"},"series":["--blue","--green","--navy","--teal","--orange","--muted"]}},{"id":"TH-02","name":"dark","purpose":"Example dark theme: light text on a deep slate page, for screens in a dim room.","theme":{"css":{"--blue":"#4DA3E0","--navy":"#F2F5F8","--green":"#7BC96A","--teal":"#38C6C1","--orange":"#F7A35C","--ink":"#DCE3EA","--muted":"#93A1AF","--rule":"#33414F","--wash":"#1B2632","--paper":"#111A23","--chart-muted":"#3F4E5E","--chart-grid":"#26323F","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600"},"series":["--blue","--green","--teal","--orange","--muted"]}},{"id":"TH-03","name":"print-grey","purpose":"Example greyscale theme for print: black and greys only, serif headings, no colour needed.","theme":{"css":{"--blue":"#1A1A1A","--navy":"#000000","--green":"#6B6B6B","--teal":"#8C8C8C","--orange":"#404040","--ink":"#1A1A1A","--muted":"#5C5C5C","--rule":"#CFCFCF","--wash":"#F2F2F2","--paper":"#FFFFFF","--chart-muted":"#C2C2C2","--chart-grid":"#E6E6E6","--heading-font":"Georgia, \"Times New Roman\", serif","--body-font":"Arial, Helvetica, sans-serif","--heading-weight":"700"},"series":["--blue","--muted","--green","--teal","--orange"]}}];
-  var TYPES = ['all'].concat(["slide","chart","report section","dashboard section","theme"]);
+  var THEMES = [{"id":"TH-01","name":"light","purpose":"The default look: white page, navy headings, one blue highlight against grey context, sharp corners.","theme":{"css":{"--blue":"#0170BC","--navy":"#002D72","--green":"#56A944","--teal":"#00A9A5","--orange":"#F68621","--ink":"#1F2A37","--muted":"#5B6770","--rule":"#D9E2EA","--wash":"#F4F8FB","--paper":"#FFFFFF","--chart-muted":"#C3CDD6","--chart-grid":"#E8EDF2","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600","--good":"#2E7D32","--bad":"#B45309","--neutral":"#8A96A0","--track":"#E8EDF2","--tint":"#EAF3FA","--shadow":"#C9D4DE","--band":"#002D72","--on-band":"#FFFFFF","--menu":"#FFFFFF","--on-menu":"#002D72","--radius":"2px"},"series":["--blue","--navy","--green","--teal","--muted"]}},{"id":"TH-02","name":"dark","purpose":"Example dark theme: light text on a deep slate page, for screens in a dim room.","theme":{"css":{"--blue":"#4DA3E0","--navy":"#F2F5F8","--green":"#7BC96A","--teal":"#38C6C1","--orange":"#F7A35C","--ink":"#DCE3EA","--muted":"#93A1AF","--rule":"#33414F","--wash":"#1B2632","--paper":"#111A23","--chart-muted":"#3F4E5E","--chart-grid":"#26323F","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600","--good":"#7BC96A","--bad":"#F7A35C","--neutral":"#93A1AF","--track":"#26323F","--tint":"#1B2E40","--shadow":"#05090D","--band":"#1E3A52","--on-band":"#F2F5F8","--menu":"#0B1219","--on-menu":"#DCE3EA","--radius":"2px"},"series":["--blue","--green","--teal","--orange","--muted"]}},{"id":"TH-03","name":"print-grey","purpose":"Example greyscale theme for print: black and greys only, serif headings, no colour needed.","theme":{"css":{"--blue":"#1A1A1A","--navy":"#000000","--green":"#6B6B6B","--teal":"#8C8C8C","--orange":"#404040","--ink":"#1A1A1A","--muted":"#5C5C5C","--rule":"#CFCFCF","--wash":"#F2F2F2","--paper":"#FFFFFF","--chart-muted":"#C2C2C2","--chart-grid":"#E6E6E6","--heading-font":"Georgia, \"Times New Roman\", serif","--body-font":"Arial, Helvetica, sans-serif","--heading-weight":"700","--good":"#4D4D4D","--bad":"#000000","--neutral":"#8C8C8C","--track":"#E6E6E6","--tint":"#F2F2F2","--shadow":"#BFBFBF","--band":"#1A1A1A","--on-band":"#FFFFFF","--menu":"#FFFFFF","--on-menu":"#000000","--radius":"0px"},"series":["--blue","--muted","--green","--teal","--orange"]}},{"id":"TH-04","name":"cigna-light","purpose":"Imported james-themes look: navy text, brand-blue band, white side menu, Barlow, rounded cards with status top bars.","theme":{"css":{"--blue":"#0033FF","--navy":"#0A1F5C","--green":"#00843D","--teal":"#0081A6","--orange":"#FFB020","--ink":"#0A1F5C","--muted":"#3F4B6E","--rule":"#D5DBE8","--wash":"#EEF2FB","--paper":"#FFFFFF","--chart-muted":"#B9C3DD","--chart-grid":"#DDE3EF","--heading-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--body-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--heading-weight":"700","--good":"#00703C","--bad":"#A84D00","--neutral":"#8D99B8","--track":"#E3E8F2","--tint":"#EAF0FF","--shadow":"#B9C3DD","--band":"#0033FF","--on-band":"#FFFFFF","--menu":"#FFFFFF","--on-menu":"#0A1F5C","--radius":"14px"},"series":["--navy","--blue","--teal","--green","--muted"]}},{"id":"TH-05","name":"cigna-dark","purpose":"Imported james-themes look made fully dark: deep navy page and cards, light text, a blue-only category palette, Barlow, rounded cards.","theme":{"css":{"--blue":"#7D96FF","--navy":"#FFFFFF","--green":"#D0D9FF","--teal":"#A9BBFF","--orange":"#03CC54","--ink":"#E6ECFF","--muted":"#AEB9D9","--rule":"#2E4483","--wash":"#08163F","--paper":"#0E2160","--chart-muted":"#4E62A0","--chart-grid":"#1E3473","--heading-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--body-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--heading-weight":"700","--good":"#3FD98A","--bad":"#FFA24D","--neutral":"#8D99B8","--track":"#1E3473","--tint":"#1A3280","--shadow":"#020818","--band":"#0033FF","--on-band":"#FFFFFF","--menu":"#0033FF","--on-menu":"#FFFFFF","--radius":"14px"},"series":["--blue","--teal","--green","--orange","--muted"]}},{"id":"TH-06","name":"evernorth-light","purpose":"Imported james-themes look: deep-teal text, teal band, white side menu, Barlow, rounded cards with status top bars.","theme":{"css":{"--blue":"#007F8C","--navy":"#06363D","--green":"#4D7F1D","--teal":"#00806F","--orange":"#FFB020","--ink":"#06363D","--muted":"#3F5A5E","--rule":"#D2E0E1","--wash":"#EEF6F6","--paper":"#FFFFFF","--chart-muted":"#B5CFD1","--chart-grid":"#D9E6E7","--heading-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--body-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--heading-weight":"700","--good":"#00703C","--bad":"#A84D00","--neutral":"#8FA6A8","--track":"#DFEBEC","--tint":"#E3F4F3","--shadow":"#B5CFD1","--band":"#007F8C","--on-band":"#FFFFFF","--menu":"#FFFFFF","--on-menu":"#06363D","--radius":"14px"},"series":["--navy","--blue","--teal","--green","--muted"]}},{"id":"TH-07","name":"evernorth-dark","purpose":"Imported james-themes look made fully dark: deep teal page and cards, light text, a teal-only category palette, Barlow, rounded cards.","theme":{"css":{"--blue":"#3FC2C6","--navy":"#FFFFFF","--green":"#CDEDED","--teal":"#8FD6D6","--orange":"#5FE3C8","--ink":"#E3F4F3","--muted":"#A9C8C9","--rule":"#24595F","--wash":"#062C31","--paper":"#0A3C43","--chart-muted":"#3F6C71","--chart-grid":"#174A50","--heading-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--body-font":"\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, Arial, sans-serif","--heading-weight":"700","--good":"#4FD68E","--bad":"#FFA24D","--neutral":"#8FA6A8","--track":"#174A50","--tint":"#12515A","--shadow":"#021619","--band":"#007F8C","--on-band":"#FFFFFF","--menu":"#007F8C","--on-menu":"#FFFFFF","--radius":"14px"},"series":["--blue","--teal","--green","--orange","--muted"]}}];
+  var ITEMS = [{"id":"FR-01","name":"title","type":"slide","from":"presentation","purpose":"Large headline, kicker above, one line below, no visual; for opening with the answer or the subject, or telling the audience who is presenting and when.","rel":"slides/FR-01-title.html","moves":false},{"id":"FR-02","name":"section-divider","type":"slide","from":"presentation","purpose":"Section name large, one line saying what the section will show; for marking a change of topic in a longer deck, or giving the audience a breath before a new line of argument.","rel":"slides/FR-02-section-divider.html","moves":false},{"id":"FR-03","name":"agenda-rows","type":"slide","from":"presentation","purpose":"Numbered rows: part name and one line each; for showing the route through a longer deck, or matching what is said to the sections in the bottom bar.","rel":"slides/FR-03-agenda-rows.html","moves":false},{"id":"FR-04","name":"goal-three-cards","type":"slide","from":"presentation","purpose":"Three cards side by side, the third tinted; for reminding the audience of the original goal, or laying out problem, action and measure of success in one view.","rel":"slides/FR-04-goal-three-cards.html","moves":false},{"id":"FR-05","name":"statement-quote","type":"slide","from":"presentation","purpose":"One sentence or quote in large type, source line under it; for making the audience hear one message with nothing competing, or letting a customer or stakeholder say it in their own words.","rel":"slides/FR-05-statement-quote.html","moves":false},{"id":"EX-01","name":"steps-flow","type":"slide","from":"presentation","purpose":"Three to five steps on a line, each with a title and one line; for showing a method or process in order, or showing a timeline or plan with the current point marked.","rel":"slides/EX-01-steps-flow.html","moves":false},{"id":"EX-02","name":"data-two-cards","type":"slide","from":"presentation","purpose":"Two cards: what was used (rows) and how it was checked (bullets); for showing what the analysis rests on and why it can be trusted, or answering scope and data-quality questions before they are asked.","rel":"slides/EX-02-data-two-cards.html","moves":false},{"id":"LV-01","name":"stats-three","type":"slide","from":"presentation","purpose":"Three large figures in a row, each with a label and a comparison note, one sentence under them, no chart; for landing two or three results at once, or showing results against target or prior without a chart.","rel":"slides/LV-01-stats-three.html","moves":false},{"id":"LV-02","name":"hero-number-line","type":"slide","from":"presentation","purpose":"One very large figure with its meaning in plain words, a line chart beside it; for making one number the whole message, or showing the figure and the path that led to it.","rel":"slides/LV-02-hero-number-line.html","moves":false},{"id":"LV-03","name":"hero-number-quote","type":"slide","from":"presentation","purpose":"One very large figure beside a one-sentence statement; for closing on the one thing to remember, or pairing a figure with the sentence that explains it.","rel":"slides/LV-03-hero-number-quote.html","moves":false},{"id":"LV-04","name":"stats-over-bars","type":"slide","from":"presentation","purpose":"Three figure cards across the top, a bar chart and two bullets under; for stating a position with its two inputs and the gap between them, or showing the headline figures and how one of them has moved.","rel":"slides/LV-04-stats-over-bars.html","moves":false},{"id":"LV-05","name":"bars-highlight-commentary","type":"slide","from":"presentation","purpose":"Vertical bars with one highlighted, commentary bullets and a so-what line on the right; for showing which category stands out, or comparing a handful of groups on one measure and saying why one differs.","rel":"slides/LV-05-bars-highlight-commentary.html","moves":false},{"id":"LV-06","name":"bars-ranked-commentary","type":"slide","from":"presentation","purpose":"Sorted horizontal bars with the leader highlighted, fuller commentary on the right; for ranking items when the labels are long, or showing which item drives a result.","rel":"slides/LV-06-bars-ranked-commentary.html","moves":false},{"id":"CH-01","name":"line-fit-commentary","type":"slide","from":"presentation","purpose":"Actual line with a dashed fitted line, commentary and so-what on the right; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.","rel":"slides/CH-01-line-fit-commentary.html","moves":false},{"id":"CH-02","name":"line-event-callout","type":"slide","from":"presentation","purpose":"Callout with one figure and three bullets on the left; two lines with an event marked on the right; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.","rel":"slides/CH-02-line-event-callout.html","moves":false},{"id":"CH-03","name":"dots-two-fits","type":"slide","from":"presentation","purpose":"Commentary on the left; actual points with a longer and a shorter fitted line on the right; for asking whether a rate of change is speeding up or slowing, or comparing a long-run view with a recent view of the same measure.","rel":"slides/CH-03-dots-two-fits.html","moves":false},{"id":"CH-04","name":"bars-outlier-callout","type":"slide","from":"presentation","purpose":"One callout sentence over full-width bars with one period highlighted; for calling out an unusual period and how it was treated, or a lean slide for a senior audience: one sentence, one picture.","rel":"slides/CH-04-bars-outlier-callout.html","moves":false},{"id":"CH-05","name":"bars-before-after","type":"slide","from":"presentation","purpose":"Callout with the size of the change and two bullets; bars by period with the later periods highlighted; for showing a level shift after a change, or stating the size of an effect next to the evidence for it.","rel":"slides/CH-05-bars-before-after.html","moves":false},{"id":"CH-06","name":"two-charts-bullets","type":"slide","from":"presentation","purpose":"Two small line charts side by side, one muted and one highlighted, three bullets in a row under them; for splitting a result into two measures to show which one is moving, or showing that one thing is stable while another is not.","rel":"slides/CH-06-two-charts-bullets.html","moves":false},{"id":"CH-07","name":"change-cards-bars","type":"slide","from":"presentation","purpose":"Three stacked cards, each a change with its size and direction, beside a bar chart of the total at each review; for saying what is different since the audience last saw this, or listing a few changes with their sizes alongside the overall movement.","rel":"slides/CH-07-change-cards-bars.html","moves":false},{"id":"CP-01","name":"paired-bars-commentary","type":"slide","from":"presentation","purpose":"Paired bars by category (two series), commentary and so-what on the right; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.","rel":"slides/CP-01-paired-bars-commentary.html","moves":false},{"id":"CP-02","name":"bars-target-tick","type":"slide","from":"presentation","purpose":"Horizontal bars with a tick marking the target for each, the miss highlighted; commentary on the right; for showing performance against a target or plan for each item, or picking out the one item that missed.","rel":"slides/CP-02-bars-target-tick.html","moves":false},{"id":"CP-03","name":"two-lines-fuller-commentary","type":"slide","from":"presentation","purpose":"Fuller commentary on the left, two lines over time on the right; for comparing our experience with a benchmark or peer, or a comparison meant to be read without a presenter.","rel":"slides/CP-03-two-lines-fuller-commentary.html","moves":false},{"id":"CP-04","name":"two-lines-choice-cards","type":"slide","from":"presentation","purpose":"Two lines over time, then one card per alternative with the chosen one tinted; for showing two approaches that give different answers and which was chosen, or explaining a judgement call between two views.","rel":"slides/CP-04-two-lines-choice-cards.html","moves":false},{"id":"CP-05","name":"dumbbell-callout","type":"slide","from":"presentation","purpose":"Full-width dumbbell chart (two points joined per category), one sentence under it; for showing movement between two points for several items at once, or showing which items moved most and in which direction.","rel":"slides/CP-05-dumbbell-callout.html","moves":false},{"id":"CP-06","name":"two-numbers-difference","type":"slide","from":"presentation","purpose":"Two large figures in cards with the difference stated between them, no chart; for a before and after, or an old and new, in one glance, or when the difference is the message and a chart would add nothing.","rel":"slides/CP-06-two-numbers-difference.html","moves":false},{"id":"CP-07","name":"table-key-row-commentary","type":"slide","from":"presentation","purpose":"Small table with one highlighted row, commentary and so-what beside it; for showing plan, actual and difference where exact figures will be read, or any small table where one row carries the point.","rel":"slides/CP-07-table-key-row-commentary.html","moves":false},{"id":"CP-08","name":"option-cards-recommendation","type":"slide","from":"presentation","purpose":"Two cards comparing options on the same rows, then the recommendation, no chart; for putting two options side by side on cost, benefit and risk, or leading the audience to a recommendation they can see the basis for.","rel":"slides/CP-08-option-cards-recommendation.html","moves":false},{"id":"BD-01","name":"waterfall-callout","type":"slide","from":"presentation","purpose":"Full-width vertical waterfall from one figure to another, one-sentence callout under it; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.","rel":"slides/BD-01-waterfall-callout.html","moves":false},{"id":"BD-02","name":"waterfall-horizontal-commentary","type":"slide","from":"presentation","purpose":"Horizontal waterfall on the left, fuller commentary on the right; for building up a result from its components when labels are long, or a bridge that needs explaining step by step, readable without a presenter.","rel":"slides/BD-02-waterfall-horizontal-commentary.html","moves":false},{"id":"BD-03","name":"number-small-waterfall","type":"slide","from":"presentation","purpose":"Callout with one large figure and two bullets on the left, a three-bar waterfall on the right; for stating the effect of one decision and showing where it lands, or a simple from, change, to story.","rel":"slides/BD-03-number-small-waterfall.html","moves":false},{"id":"BD-04","name":"rows-plus-bars","type":"slide","from":"presentation","purpose":"Three numbered rows on the left, the same three effects as bars on the right; for splitting a change into a few named effects, or giving each effect a sentence and showing their relative size.","rel":"slides/BD-04-rows-plus-bars.html","moves":false},{"id":"BD-05","name":"stacked-mix-shift","type":"slide","from":"presentation","purpose":"Two 100% stacked bars, bullets and a callout under them; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.","rel":"slides/BD-05-stacked-mix-shift.html","moves":false},{"id":"BD-06","name":"stats-over-stacked-bars","type":"slide","from":"presentation","purpose":"Three figures across the top, stacked horizontal bars by category, commentary beside; for splitting a total into two factors across several categories, or showing the headline figures and which category is behind them.","rel":"slides/BD-06-stats-over-stacked-bars.html","moves":false},{"id":"BD-07","name":"hero-number-donut","type":"slide","from":"presentation","purpose":"One very large figure in a callout with a two-part doughnut, no commentary; for showing that one part explains most of the whole, or a lean slide where a single share is the message.","rel":"slides/BD-07-hero-number-donut.html","moves":false},{"id":"BD-08","name":"table-bars-sensitivity","type":"slide","from":"presentation","purpose":"Small table and two bullets on the left, bars for each scenario on the right; for showing what the result becomes under different assumptions, or giving exact figures and their shape together.","rel":"slides/BD-08-table-bars-sensitivity.html","moves":false},{"id":"UN-01","name":"range-bar-commentary","type":"slide","from":"presentation","purpose":"One low-to-high range bar with the central and held figures marked, commentary under it; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.","rel":"slides/UN-01-range-bar-commentary.html","moves":false},{"id":"UN-02","name":"scenario-bars-caveats","type":"slide","from":"presentation","purpose":"Scenario bars on the left, four caveats and a so-what line on the right; for telling the audience what could change the answer before they decide, or sizing a few scenarios against the central view.","rel":"slides/UN-02-scenario-bars-caveats.html","moves":false},{"id":"DE-01","name":"summary-stats-ask","type":"slide","from":"presentation","purpose":"Answer as the headline, three large figures, the ask in a strip along the bottom; for an executive summary on one slide, or giving the answer, its support and the ask together.","rel":"slides/DE-01-summary-stats-ask.html","moves":false},{"id":"DE-02","name":"numbered-findings","type":"slide","from":"presentation","purpose":"Numbered rows, each a finding with its figure on the right; for listing the takeaways with their sizes, or listing risks or issues ranked by size.","rel":"slides/DE-02-numbered-findings.html","moves":false},{"id":"DE-03","name":"audience-rows","type":"slide","from":"presentation","purpose":"One row per audience group: who, what it means for them, the one figure; for translating a result for each group in the room, or showing each team what changes for them.","rel":"slides/DE-03-audience-rows.html","moves":false},{"id":"DE-04","name":"scorecard-status","type":"slide","from":"presentation","purpose":"Table with a status dot per row, one row highlighted, one line under it; for giving the status of several items at a glance, or showing which item needs attention.","rel":"slides/DE-04-scorecard-status.html","moves":false},{"id":"DE-05","name":"decision-two-paths","type":"slide","from":"presentation","purpose":"The decision in a callout, then one card for what happens if approved and one for if it waits; for asking for a decision and showing the consequence of each answer, or making the cost of delay explicit.","rel":"slides/DE-05-decision-two-paths.html","moves":false},{"id":"DE-06","name":"ask-and-actions","type":"slide","from":"presentation","purpose":"The decision needed in a callout on the left, rows of action, timing and owner on the right; for closing with the ask and who does what by when, or any decision followed by a short action list.","rel":"slides/DE-06-ask-and-actions.html","moves":false},{"id":"DE-07","name":"ask-and-timeline","type":"slide","from":"presentation","purpose":"A starting point in a callout over a five-step timeline with dates and owners; for showing the sequence of work that follows a decision, or a plan where order and dates matter more than detail.","rel":"slides/DE-07-ask-and-timeline.html","moves":false},{"id":"BK-01","name":"answer-with-bars","type":"slide","from":"presentation","purpose":"The answer as the headline; the question, a short answer and horizontal bars below; for answering a question the audience is likely to ask, or holding supporting evidence without lengthening the main story.","rel":"slides/BK-01-answer-with-bars.html","moves":false},{"id":"BK-02","name":"heatmap-callout","type":"slide","from":"presentation","purpose":"One callout sentence over a small heatmap grid with one diagonal highlighted; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.","rel":"slides/BK-02-heatmap-callout.html","moves":false},{"id":"CT-02","name":"bars-ranked","type":"chart","from":"presentation","purpose":"Use to rank items on one measure when the labels are long, or to show which item drives a result, such as PMPM trend by service category; draws horizontal bars sorted largest first, the leader in blue, values at the bar ends and the overall figure as a reference line.","rel":"charts/CT-02-bars-ranked.html","moves":false},{"id":"CT-04","name":"line-fit","type":"chart","from":"presentation","purpose":"Use to show a steady rate of change, or how closely actuals follow a fitted or expected path, such as quarterly PMPM against a fitted annual trend; draws the actual line in blue, the latest period dashed as an estimate, and a dashed grey fitted line, both ends labelled.","rel":"charts/CT-04-line-fit.html","moves":false},{"id":"CT-06","name":"waterfall","type":"chart","from":"presentation","purpose":"Use to bridge from a starting figure to an ending figure by cause, or to show which driver accounts for most of a change, such as prior to current PMPM by trend component; draws a vertical bridge with the totals dark grey, the step that matters in blue and the other steps light grey.","rel":"charts/CT-06-waterfall.html","moves":false},{"id":"CT-07","name":"target-tick-bars","type":"chart","from":"presentation","purpose":"Use to show each item against its own target or plan and pick out the one item the reader must look at, a miss or a beat, such as loss ratio by product against target; draws horizontal bars with a dark tick at each target, the chosen item in blue with its value inside the bar.","rel":"charts/CT-07-target-tick-bars.html","moves":false},{"id":"CT-08","name":"dumbbell","type":"chart","from":"presentation","purpose":"Use to show movement between two points for several items at once, and which moved most and which way, such as loss ratio by product last year against this year to date; draws two dots per item joined by a short bar, the earlier grey, the later dark, the item that matters in blue.","rel":"charts/CT-08-dumbbell.html","moves":false},{"id":"CT-10","name":"heatmap-grid","type":"chart","from":"presentation","purpose":"Use to show a pattern across two dimensions or point at one part of a grid of figures, such as the latest diagonal of a claims development triangle; draws a small grid of figures on light grey cells, the cells that matter in blue with paper-coloured text.","rel":"charts/CT-10-heatmap-grid.html","moves":false},{"id":"CT-11","name":"range-bar","type":"chart","from":"presentation","purpose":"Use to show where a selected figure sits within a reasonable range and how wide the uncertainty is, such as the IBNR reserve against its low-to-high range; draws one grey bar from low to high on a value axis, the central estimate as a dashed line and the selected estimate as a solid blue line.","rel":"charts/CT-11-range-bar.html","moves":false},{"id":"CT-12","name":"year-overlay-lines","type":"chart","from":"design-library","purpose":"Use to read seasonality and the year-over-year gap at once, such as PMPM by incurred month for three years; draws one line per year across the calendar months, the current year in blue with its incomplete months dashed and the earlier years in greys.","rel":"charts/CT-12-year-overlay-lines.html","moves":false},{"id":"CT-13","name":"product-panels","type":"chart","from":"james-themes","purpose":"Use to compare several products over time without a tangle of lines, such as PMPM actual against expected by quarter; draws one small panel per product on a shared scale, actual against expected in each, with the A/E ratio in the panel title and the line coloured by whether it is over, under or within tolerance.","rel":"charts/CT-13-product-panels.html","moves":false},{"id":"CT-14","name":"bars-rate-dual-axis","type":"chart","from":"design-library","purpose":"Use to show two measures of different units for the same groups, such as PMPM and trend by product against the pricing trend; draws two side-by-side panels on one product axis, each with its own titled value axis, and puts every group past the reference in blue in both panels.","rel":"charts/CT-14-bars-rate-dual-axis.html","moves":false},{"id":"CT-15","name":"trend-decomp-bars","type":"chart","from":"design-library","purpose":"Use to show what drives each product's trend and where the drivers offset; draws horizontal bars per product split into unit cost, utilisation and mix, increases right of zero and decreases left, a tick at the net and the net trend in a right-hand column.","rel":"charts/CT-15-trend-decomp-bars.html","moves":false},{"id":"CT-16","name":"development-curves","type":"chart","from":"design-library","purpose":"Use to show how fast claims complete and whether recent months are paying slower or faster than a complete month; draws one cumulative curve per incurral month against months of run-out, a complete month as the grey reference, recent months stopping where their data ends and the latest projected to ultimate as a dashed line.","rel":"charts/CT-16-development-curves.html","moves":false},{"id":"CT-17","name":"ae-range-rows","type":"chart","from":"james-themes","purpose":"Use to show actual against expected by segment over time, fairly across segments of different size; draws one row per segment with its expected range as a grey bar around 100%, the last three quarters as hollow dots, the current quarter as a dashed estimate marker, and any value outside the range as a labelled diamond in the favourable or unfavourable colour.","rel":"charts/CT-17-ae-range-rows.html","moves":false},{"id":"CT-18","name":"cost-use-bubbles","type":"chart","from":"design-library","purpose":"Use to see which service categories drive one product's trend through price, through use, or both; draws bubbles placed by change in utilisation and change in unit cost, sized by PMPM with the PMPM printed on each label, quadrant labels and a diagonal at the pricing trend, the categories past it in blue.","rel":"charts/CT-18-cost-use-bubbles.html","moves":false},{"id":"CT-19","name":"mix-shift-columns","type":"chart","from":"james-themes","purpose":"Use to show how the make-up of spend changes over time, or that a result changed because the mix changed (two columns for two points), such as service category mix of PMPM; draws 100% stacked columns across several years, the shifting segment at the base in blue, the rest grey, shares inside, names at the right and the total level under each year.","rel":"charts/CT-19-mix-shift-columns.html","moves":false},{"id":"CT-20","name":"target-band-lines","type":"chart","from":"james-themes","purpose":"Use to show a rate against its target or assumption over time, such as loss ratio by product against target, or the effect of a change against a group that did not change; draws several lines against a shaded target range and a thin target line, the line that matters in blue, an event marked, the latest period dashed as an estimate and each line labelled at its end.","rel":"charts/CT-20-target-band-lines.html","moves":false},{"id":"CT-21","name":"paid-ibnr-bars","type":"chart","from":"james-themes","purpose":"Use for a monthly measure whose recent months are not yet complete, such as incurred PMPM with IBNR; draws bars by incurred month with the paid amount solid and the estimated unreported amount as a dashed, lighter cap, the total above each bar and last year as a dashed line.","rel":"charts/CT-21-paid-ibnr-bars.html","moves":false},{"id":"CT-22","name":"plan-drift-steps","type":"chart","from":"james-themes","purpose":"Use to show when a gap to budget started to open and how large it has grown; draws bars for each month's amount over or under budget, shaded by direction, with the running total as a dark step line, dashed where it includes an estimate, and its year-to-date figure and percent of budget labelled at the end.","rel":"charts/CT-22-plan-drift-steps.html","moves":false},{"id":"CT-23","name":"variance-split","type":"chart","from":"james-themes","purpose":"Use to show which groups are over or under plan and by how much, in dollars and as a percent of plan; draws horizontal bars around a zero line, over in the warning colour extending right, under in the favourable colour extending left, sorted, with the total as a last row.","rel":"charts/CT-23-variance-split.html","moves":false},{"id":"CT-24","name":"pareto-bars","type":"chart","from":"james-themes","purpose":"Use to show that a few drivers explain most of a total, such as large-claimant spend by condition; draws ranked bars with the leading few in blue, the claimant count under each name, and a running-share line on a second axis with an 80% reference.","rel":"charts/CT-24-pareto-bars.html","moves":false},{"id":"CT-25","name":"rank-bump","type":"chart","from":"james-themes","purpose":"Use to show how the rank order of groups shifts over time, such as regions ranked by PMPM trend, when the order matters more than the gaps; draws straight lines joining each group's rank across periods, rank numbers inside the dots, and each group's name with its underlying value at both ends, the group that matters in blue.","rel":"charts/CT-25-rank-bump.html","moves":false},{"id":"CT-26","name":"flow-ribbon","type":"chart","from":"james-themes","purpose":"Use to show one total split two ways at once, such as spend by product and by service category; draws ribbons from one split to the other, each as wide as its amount, the flows into the category that matters in blue and the rest grey, with each side's amounts, shares and total printed.","rel":"charts/CT-26-flow-ribbon.html","moves":false},{"id":"CT-27","name":"state-tiles","type":"chart","from":"james-themes","purpose":"Use to compare states fairly whatever their area, such as PMPM trend by state, without reading noise from small states; draws equal-size tiles laid out like a map of the US states, each shaded by its value in four steps of one colour, low-volume states outlined and unshaded, beside a readout of the overall, highest and lowest.","rel":"charts/CT-27-state-tiles.html","moves":false},{"id":"CT-28","name":"capsule-count","type":"chart","from":"james-themes","purpose":"Use to show that a small share of members carries a large share of spend; draws two blocks of 100 capsules side by side, one for members and one for allowed dollars, the high-cost group in blue in both, with a large figure under each.","rel":"charts/CT-28-capsule-count.html","moves":false},{"id":"CT-29","name":"rate-buildup-bridge","type":"chart","from":"design-library","purpose":"Use to walk a renewal from experience to the required premium and set it against the current premium and the proposed rate action; draws a PMPM bridge through trend, plan changes, the credibility blend with manual, administration and margin, with the current and proposed premiums as reference lines.","rel":"charts/CT-29-rate-buildup-bridge.html","moves":false},{"id":"CT-30","name":"rolling-12-panels","type":"chart","from":"design-library","purpose":"Use to show the run rate of a cost and its trend without the noise of single months, such as rolling 12-month PMPM and rolling 12-month trend; draws two stacked panels on one month axis, the level above and the trend percent below against the pricing trend, the months not yet complete shaded and dashed.","rel":"charts/CT-30-rolling-12-panels.html","moves":false},{"id":"CT-31","name":"tornado-fan","type":"chart","from":"design-library","purpose":"Use to show how uncertain a projection is and which assumptions move it most, such as projected PMPM for next year; draws a sensitivity tornado of each assumption's effect on the central estimate beside a fan of the projection with 50% and 90% ranges around the dashed central line.","rel":"charts/CT-31-tornado-fan.html","moves":false},{"id":"CT-32","name":"util-per-1000-panels","type":"chart","from":"design-library","purpose":"Use to compare utilisation per 1,000 members by service category against last year and a benchmark, each in its own unit; draws one small panel per category with last year and this year to date as bars, the benchmark as a line, and the change on each in the panel title, categories more than 5% over benchmark in blue.","rel":"charts/CT-32-util-per-1000-panels.html","moves":false},{"id":"CT-33","name":"stop-loss-excess","type":"chart","from":"design-library","purpose":"Use to show how often and how far large claimants pierce the specific stop-loss attachment, year by year, against the expected excess; draws bars of excess dollars above the attachment with the claimant count under each year and the expected excess as a dashed line, the latest year dashed as an estimate.","rel":"charts/CT-33-stop-loss-excess.html","moves":false},{"id":"TB-01","name":"ledger-meters","type":"table","from":"james-themes","purpose":"Paid and PMPM by service category against plan, each PMPM with an inline meter carrying a plan tick (over plan in the bad colour), the gap to plan in dollars and percent, the lead row marked and a CSV button; for a monthly or quarterly cost readout against plan.","rel":"tables/TB-01-ledger-meters.html","moves":false},{"id":"TB-02","name":"pivot-regroup","type":"table","from":"james-themes","purpose":"A pivot the reader regroups in place: pick what goes down the rows, across the columns and which measure fills the cells (paid, member months or PMPM, which is recomputed from the sums, never added), with row and column totals and a CSV of the current view.","rel":"tables/TB-02-pivot-regroup.html","moves":false},{"id":"TB-03","name":"development-triangle","type":"table","from":"design-library","purpose":"Cumulative paid claims by incurral month and lag with the latest diagonal boxed, age-to-age and completion factors in the footer, and the ultimate and IBNR each row implies; for setting or explaining a lag reserve.","rel":"tables/TB-03-development-triangle.html","moves":false},{"id":"TB-04","name":"experience-contribution","type":"table","from":"design-library","purpose":"PMPM by service category, prior against current, with trend split into utilisation and unit cost for every row and the total, each trend coloured against the pricing assumption and a centred bar for each category's points of the total trend; for explaining what drove cost trend.","rel":"tables/TB-04-experience-contribution.html","moves":false},{"id":"TB-05","name":"rate-walk","type":"table","from":"design-library","purpose":"A renewal rate build-up as a table: experience PMPM, then each adjustment with its basis, factor and signed dollar step, a running total that ties to the cent and an inline walk bar, ending in the required premium and the rate action against current; for showing how a renewal rate was reached.","rel":"tables/TB-05-rate-walk.html","moves":false},{"id":"TB-06","name":"large-claim-pooling","type":"table","from":"design-library","purpose":"Largest claimants ranked with paid amount, share and cumulative share of total paid, and the part above the pooling point, with the pooling point drawn through every bar and as a line in the table; for showing how few claimants drive a total and what pooling removes.","rel":"tables/TB-06-large-claim-pooling.html","moves":false},{"id":"TB-07","name":"heat-matrix-target","type":"table","from":"design-library","purpose":"Loss ratio by product and quarter with every cell shaded by its distance from target (good below, bad above, in three steps), over-target figures in bold so the reading survives greyscale, a premium-weighted year and total; for spotting where and when a book runs over target.","rel":"tables/TB-07-heat-matrix-target.html","moves":false},{"id":"TB-08","name":"monthly-experience","type":"table","from":"design-library","purpose":"Monthly experience by incurral month: member months, paid, IBNR, incurred, percent complete, PMPM against plan and the variance, with year-to-date and rolling-12 rows and months under 95% complete marked as estimates; for the regular monthly experience report.","rel":"tables/TB-08-monthly-experience.html","moves":false},{"id":"HC-01","name":"plan-tiles","type":"hero card","from":"james-themes","purpose":"Supporting measures as tiles against plan: the value, a bar to the plan tick and last year, a status top bar and note.","rel":"hero-cards/HC-01-plan-tiles.html","moves":false},{"id":"HC-02","name":"spotlight-tick","type":"hero card","from":"james-themes","purpose":"The page's one lead measure against its target: a large figure with its gap, a sentence saying why, a bar to the target tick and the basis; use it for the headline figure of a report or dashboard, such as loss ratio against target.","rel":"hero-cards/HC-02-spotlight-tick.html","moves":false},{"id":"HC-03","name":"split-strip","type":"hero card","from":"james-themes","purpose":"A figure with the parts that make it up, as one share strip and a key of values and shares; use it when a total such as PMPM or member months needs its split by service category or product beside it.","rel":"hero-cards/HC-03-split-strip.html","moves":false},{"id":"HC-04","name":"recent-range","type":"hero card","from":"james-themes","purpose":"A figure placed within its own recent range, as a marker on a track with the range shaded; use it for utilisation per 1,000 or any rate where the question is whether this period is unusual for it.","rel":"hero-cards/HC-04-recent-range.html","moves":false},{"id":"HC-05","name":"streak-months","type":"hero card","from":"james-themes","purpose":"How long a result has persisted, as a run of months marked favourable or unfavourable under the current streak; use it when the point is that claims have run above expected, or under target, for several months in a row.","rel":"hero-cards/HC-05-streak-months.html","moves":false},{"id":"HC-06","name":"rank-dots","type":"hero card","from":"james-themes","purpose":"Where one group stands among its peers, as its figure and a numbered row of rank positions with its own filled; use it when a region, product or plan needs to be placed against the others, such as second-highest PMPM of six regions.","rel":"hero-cards/HC-06-rank-dots.html","moves":false},{"id":"HC-07","name":"driver-sentence","type":"hero card","from":"james-themes","purpose":"One sentence naming the biggest driver of a change, on the band colour, with a strip showing its share of the total; use it beside the figure cards when the reader's next question is what caused the movement.","rel":"hero-cards/HC-07-driver-sentence.html","moves":false},{"id":"HC-08","name":"figure-trend-slate","type":"hero card","from":"james-themes","purpose":"A figure with its change on last year and a small this-year-against-last-year line under it in the same card; use it on a dashboard when the latest month's PMPM or utilisation needs its path shown, not just its level.","rel":"hero-cards/HC-08-figure-trend-slate.html","moves":false},{"id":"HC-09","name":"card-row-basis","type":"hero card","from":"james-themes","purpose":"A row of four small figure cards that work as a set at the top of a report or dashboard, each with its change and good direction, sharing one basis line; use it for the opening summary of member months, PMPM, loss ratio and completion.","rel":"hero-cards/HC-09-card-row-basis.html","moves":false},{"id":"HC-10","name":"trend-split-three","type":"hero card","from":"design-library","purpose":"A PMPM trend with its split into unit cost, utilisation and mix as three small signed bars on one scale; use it when the reader needs to see which of the three moved the cost trend, and whether any part pulled the other way.","rel":"hero-cards/HC-10-trend-split-three.html","moves":false},{"id":"HC-11","name":"estimate-range-completion","type":"hero card","from":"design-library","purpose":"A best estimate of incurred claims as paid to date plus IBNR, with its low-to-high range and how complete the period is; use it to report an ultimate or reserve estimate so the reader sees both the figure and how much of it is still estimated.","rel":"hero-cards/HC-11-estimate-range-completion.html","moves":false},{"id":"HC-12","name":"volume-cost-share","type":"hero card","from":"design-library","purpose":"A count over a threshold set against its share of members and its share of total cost, as two bars on one scale; use it for large claimants over a pooling point, or any few cases that carry a large part of a total.","rel":"hero-cards/HC-12-volume-cost-share.html","moves":false},{"id":"HC-13","name":"build-up-rows","type":"hero card","from":"design-library","purpose":"A proposed rate change with the three drivers that build it as signed bars from a zero line, checked against the indicated rate; use it in a renewal readout so the underwriter sees the final figure and what made it in one card.","rel":"hero-cards/HC-13-build-up-rows.html","moves":false},{"id":"HC-14","name":"ratio-centre-bar","type":"hero card","from":"design-library","purpose":"An actual-to-expected ratio as a bar from 1.00 with the band of normal variation for its credibility, and a plain-words reading; use it to say whether experience really ran above or below the pricing basis or is within chance.","rel":"hero-cards/HC-14-ratio-centre-bar.html","moves":false},{"id":"AN-01","name":"lead-count-up","type":"animation","from":"james-themes","purpose":"A named measure (medical PMPM, year to date) counts up, its bar grows towards the plan tick and its monthly trend against last year draws in, so the reader takes in the figure, what it is measured against and its basis; the kit's three motions in one exhibit.","rel":"animations/AN-01-lead-count-up.html","moves":true},{"id":"AN-02","name":"rate-build-steps","type":"animation","from":"james-themes","purpose":"A rate build-up waterfall whose bars land one at a time, from experience claims through trend, benefit changes and pooling to projected claims, then admin and margin to the required premium, set against current premium so the rate action is measured on the right base; use to walk a renewal audience through the build step by step.","rel":"animations/AN-02-rate-build-steps.html","moves":true},{"id":"AN-03","name":"year-stepper","type":"animation","from":"design-library","purpose":"Monthly PMPM for one year against the year before, stepping 2022 to 2024 once on load or by the year buttons, so the line moves up while its seasonal shape stays visible; use for seasonality and year over year.","rel":"animations/AN-03-year-stepper.html","moves":true},{"id":"AN-04","name":"projection-extend","type":"animation","from":"james-themes","purpose":"A monthly PMPM line that draws in to the latest actual month, pauses, then extends as a dashed projection with its range opening behind it, against a monthly plan line and a full-year projected-against-plan readout, so the reader sees where actuals stop and compares like with like; use for year-end projections.","rel":"animations/AN-04-projection-extend.html","moves":true},{"id":"AN-05","name":"triangle-fill","type":"animation","from":"design-library","purpose":"A paid claims development triangle that fills in one calendar diagonal at a time and ends on the latest diagonal highlighted, so the reader sees that each new month of payments adds one diagonal; use to explain lag triangles, run-out and IBNR.","rel":"animations/AN-05-triangle-fill.html","moves":true},{"id":"AN-06","name":"focus-recede","type":"animation","from":"design-library","purpose":"A plain bar chart in which, after a beat, one bar stays in colour and the rest recede to grey while the finding appears, so the room looks at the one category that matters; use when one category drives a change.","rel":"animations/AN-06-focus-recede.html","moves":true},{"id":"AN-07","name":"basis-morph","type":"animation","from":"james-themes","purpose":"Monthly claims by incurred month that start as paid to date, where recent months look low, then the IBNR estimate rises on top of each month to the completed view, so the reader sees the dip is unpaid claims, not lower cost; use when explaining paid against incurred and IBNR.","rel":"animations/AN-07-basis-morph.html","moves":true},{"id":"AN-08","name":"stack-regroup","type":"animation","from":"design-library","purpose":"A stacked column chart whose blocks slide from columns by product into columns by region, each block keeping its colour and label, so the reader follows the same pieces into the new grouping; use when one total has to be read two ways.","rel":"animations/AN-08-stack-regroup.html","moves":true},{"id":"AN-09","name":"slide-steps","type":"animation","from":"design-library","purpose":"A slide that reveals its headline, then its chart, then each of its two points on a step (Space or Enter, a click or the Next step button; it plays through once on load), so a presenter can talk to one thing at a time; everything shows at once when motion is off.","rel":"animations/AN-09-slide-steps.html","moves":true},{"id":"AN-10","name":"total-split","type":"animation","from":"james-themes","purpose":"A PMPM trend that counts up as one bar and then splits into unit cost, utilisation and mix, each part sized by its share and named underneath, so the reader sees the total first and then what it is made of; use for trend decomposition.","rel":"animations/AN-10-total-split.html","moves":true},{"id":"LY-01","name":"console-band","type":"layout","from":"james-themes","purpose":"The page header band: kicker, headline, band buttons and removable filter chips, with the lead card and a trend beside it.","rel":"layout/LY-01-console-band.html","moves":false},{"id":"LY-02","name":"rail-menu","type":"layout","from":"james-themes","purpose":"Section links down the side of a page, the current one filled, others shifting slightly on hover.","rel":"layout/LY-02-rail-menu.html","moves":false},{"id":"LY-03","name":"panel-pair","type":"layout","from":"james-themes","purpose":"Two panels side by side, each a finding over its chart, stacking when the page is narrow.","rel":"layout/LY-03-panel-pair.html","moves":false},{"id":"LY-04","name":"finding-panel","type":"layout","from":"james-themes","purpose":"A panel framing a chart under its finding, with Show table / Show chart flip, Download all, a note and a source line.","rel":"layout/LY-04-finding-panel.html","moves":false},{"id":"LY-05","name":"note-and-source","type":"layout","from":"james-themes","purpose":"The written takeaway under a chart and the small source line naming data-through date and basis.","rel":"layout/LY-05-note-and-source.html","moves":false},{"id":"LY-06","name":"filter-chips","type":"layout","from":"james-themes","purpose":"Removable chips naming the filters a page reflects, each with its own remove button, working on white or on the band.","rel":"layout/LY-06-filter-chips.html","moves":false},{"id":"LY-07","name":"period-switch","type":"layout","from":"james-themes","purpose":"A segmented switch choosing the time smoothing; the chosen line is drawn bold, the others stay as grey context.","rel":"layout/LY-07-period-switch.html","moves":false},{"id":"LY-08","name":"range-gate","type":"layout","from":"james-themes","purpose":"Two sliders picking a low and a high bound that hide groups outside the range, with a count of how many are shown.","rel":"layout/LY-08-range-gate.html","moves":false},{"id":"LY-09","name":"buttons","type":"layout","from":"james-themes","purpose":"The button set: primary and secondary on white, solid and outline on the band, and a small CSV button that downloads its rows.","rel":"layout/LY-09-buttons.html","moves":false},{"id":"TH-01","name":"light","type":"theme","from":"design-library","purpose":"The default look: white page, navy headings, one blue highlight against grey context, sharp corners.","rel":"themes/TH-01-light.html","moves":false},{"id":"TH-02","name":"dark","type":"theme","from":"design-library","purpose":"Example dark theme: light text on a deep slate page, for screens in a dim room.","rel":"themes/TH-02-dark.html","moves":false},{"id":"TH-03","name":"print-grey","type":"theme","from":"design-library","purpose":"Example greyscale theme for print: black and greys only, serif headings, no colour needed.","rel":"themes/TH-03-print-grey.html","moves":false},{"id":"TH-04","name":"cigna-light","type":"theme","from":"james-themes","purpose":"Imported james-themes look: navy text, brand-blue band, white side menu, Barlow, rounded cards with status top bars.","rel":"themes/TH-04-cigna-light.html","moves":false},{"id":"TH-05","name":"cigna-dark","type":"theme","from":"james-themes","purpose":"Imported james-themes look made fully dark: deep navy page and cards, light text, a blue-only category palette, Barlow, rounded cards.","rel":"themes/TH-05-cigna-dark.html","moves":false},{"id":"TH-06","name":"evernorth-light","type":"theme","from":"james-themes","purpose":"Imported james-themes look: deep-teal text, teal band, white side menu, Barlow, rounded cards with status top bars.","rel":"themes/TH-06-evernorth-light.html","moves":false},{"id":"TH-07","name":"evernorth-dark","type":"theme","from":"james-themes","purpose":"Imported james-themes look made fully dark: deep teal page and cards, light text, a teal-only category palette, Barlow, rounded cards.","rel":"themes/TH-07-evernorth-dark.html","moves":false}];
+  var TYPES = ['all'].concat(["slide","chart","table","hero card","animation","layout","theme"]);
   function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
   function put(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* works without storage */ } }
   var current = get('design-library-theme', THEMES[0].id), type = get('design-library-type', 'all');
   var hash = (location.hash.match(/theme=([A-Z]{2}-[0-9]+)/) || [])[1]; if (hash) current = hash;
+  var ht = (location.hash.match(/type=([a-z%0-9]+)/) || [])[1]; if (ht) type = decodeURIComponent(ht);
   if (!THEMES.some(function (t) { return t.id === current; })) current = THEMES[0].id;
-  var frames = Array.prototype.slice.call(document.querySelectorAll('.pv iframe'));
+  if (TYPES.indexOf(type) === -1) type = 'all';
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var pop = document.getElementById('pop'), frame = document.getElementById('pop-frame');
   function theme() { return THEMES.filter(function (t) { return t.id === current; })[0]; }
-  function send(f) { try { f.contentWindow.postMessage({ theme: theme().theme }, '*'); } catch (e) { /* not loaded yet */ } }
+  function send(f, msg) { try { f.contentWindow.postMessage(msg, '*'); } catch (e) { /* not loaded yet */ } }
+  function sendTheme(f) { send(f, { theme: theme().theme }); }
+
+  /* theme and type dropdowns */
+  var ts = document.getElementById('theme'), ty = document.getElementById('type');
+  THEMES.forEach(function (t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.id + ' ' + t.name; o.title = t.purpose; ts.appendChild(o); });
+  TYPES.forEach(function (t) { var o = document.createElement('option'); o.value = t; o.textContent = t === 'all' ? 'All types' : t; ty.appendChild(o); });
   function applyTheme() {
     var t = theme(), r = document.documentElement;
     Object.keys(t.theme.css).forEach(function (k) { r.style.setProperty(k, t.theme.css[k]); });
-    document.getElementById('now').textContent = t.id + ' ' + t.name;
-    frames.forEach(send);
-    draw();
+    ts.value = t.id; ts.title = t.purpose;
+    cards.forEach(function (c) { sendTheme(c.querySelector('iframe')); });
+    if (!pop.hidden) { sendTheme(frame); var po = document.getElementById('pop-open'); po.href = po.href.split('#')[0] + '#theme=' + encodeURIComponent(JSON.stringify(t.theme)); }
   }
+  function visible() { return cards.filter(function (c) { return !c.hidden; }); }
   function applyType() {
-    var n = 0;
-    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
-      var show = type === 'all' || c.getAttribute('data-type') === type;
-      c.style.display = show ? '' : 'none'; if (show) n++;
-    });
-    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's') + (type === 'all' ? '' : ' of type ' + type);
-    draw();
+    cards.forEach(function (c) { c.hidden = !(type === 'all' || c.getAttribute('data-type') === type); });
+    ty.value = type;
+    var n = visible().length;
+    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's');
   }
-  function button(label, sub, on, click) {
-    var b = document.createElement('button'); b.className = on ? 'on' : '';
-    b.textContent = label; if (sub) { var s = document.createElement('small'); s.textContent = sub; b.appendChild(s); }
-    b.onclick = click; return b;
+  ts.addEventListener('change', function () { current = ts.value; put('design-library-theme', current); applyTheme(); });
+  ty.addEventListener('change', function () { type = ty.value; put('design-library-type', type); applyType(); });
+  cards.forEach(function (c) { c.querySelector('iframe').addEventListener('load', function () { sendTheme(this); }); });
+
+  /* moving items replay when they scroll into view; never loop */
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) send(e.target, { replay: true }); }); }, { threshold: 0.6 });
+    cards.forEach(function (c) { if (c.hasAttribute('data-moves')) io.observe(c.querySelector('iframe')); });
   }
-  function draw() {
-    var th = document.getElementById('themes'), ty = document.getElementById('types');
-    th.innerHTML = ''; ty.innerHTML = '';
-    THEMES.forEach(function (t) { th.appendChild(button(t.id + ' ' + t.name, t.purpose, t.id === current, function () { current = t.id; put('design-library-theme', current); applyTheme(); })); });
-    TYPES.forEach(function (t) { ty.appendChild(button(t, '', t === type, function () { type = t; put('design-library-type', type); applyType(); })); });
+
+  /* popup in the same window */
+  var at = -1, opener = null;
+  function show(card) {
+    var it = ITEMS[+card.getAttribute('data-i')];
+    at = visible().indexOf(card);
+    document.getElementById('pop-id').textContent = it.id;
+    document.getElementById('pop-name').textContent = it.name;
+    document.getElementById('pop-type').textContent = it.type + ' · from ' + (it.from || '?');
+    document.getElementById('pop-purpose').textContent = it.purpose;
+    document.getElementById('pop-open').href = it.rel + '#theme=' + encodeURIComponent(JSON.stringify(theme().theme));   /* opens in the theme the popup shows */
+    frame.title = it.id + ' ' + it.name;
+    frame.onload = function () { sendTheme(frame); if (it.moves) send(frame, { replay: true, explicit: true }); };   /* opening it is the request: plays even under reduced motion */
+    frame.src = it.rel;
   }
-  frames.forEach(function (f) { f.addEventListener('load', function () { send(f); }); });
+  function open(card) {
+    opener = card; show(card);
+    pop.hidden = false; document.body.classList.add('locked');
+    document.getElementById('close').focus();
+  }
+  function close() {
+    pop.hidden = true; document.body.classList.remove('locked'); frame.removeAttribute('src');
+    var v = visible(); if (v[at]) opener = v[at];
+    if (opener) opener.focus();
+  }
+  function step(d) { var v = visible(); if (!v.length) return; at = (at + d + v.length) % v.length; show(v[at]); }
+  cards.forEach(function (c) { c.addEventListener('click', function () { open(c); }); });
+  document.getElementById('close').addEventListener('click', close);
+  document.getElementById('prev').addEventListener('click', function () { step(-1); });
+  document.getElementById('next').addEventListener('click', function () { step(1); });
+  pop.addEventListener('click', function (e) { if (e.target === pop) close(); });
+  /* Escape pressed while focus is inside the item: its engine passes the key up */
+  window.addEventListener('message', function (e) { if (!pop.hidden && e.source === frame.contentWindow && e.data && e.data.escape) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (pop.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && document.activeElement !== frame && (document.activeElement === document.body || document.activeElement.closest('.tools'))) {
+      e.preventDefault(); step(e.key === 'ArrowLeft' ? -1 : 1);   /* the item keeps its own arrow keys: Tab into it to drive its steps */
+    }
+    else if (e.key === 'Tab') {   /* keep focus inside the popup */
+      var f = Array.prototype.slice.call(pop.querySelectorAll('button, a[href], iframe'));
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  /* for links and checks: #open=<id> opens that item */
+  var oh = (location.hash.match(/open=([A-Z]{2}-[0-9]+)/) || [])[1];
   applyTheme(); applyType();
+  if (oh) { var k = ITEMS.map(function (x) { return x.id; }).indexOf(oh); if (k !== -1) { if (cards[k].hidden) { type = 'all'; applyType(); } open(cards[k]); } }
 })();
 </script>
 </body></html>

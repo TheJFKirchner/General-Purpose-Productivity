@@ -10,7 +10,7 @@
  *
  * Fails on: a missing or duplicate id or name, an id in the wrong scheme or a retired one, a missing
  * purpose, anything loaded from outside the file except the ECharts CDN, and a colour or font
- * written outside the tokens. Items saved by the librarian (all but original-samples.txt) also fail
+ * written outside the tokens (exceptions: `transparent`, `currentColor`, `font: inherit`). Items saved by the librarian (all but original-samples.txt) also fail
  * on a date, on more than 6 data points, and on any word denylist.json recorded from their source. Not checked for colours: the tokens block, a theme's JSON block,
  * an embedded SOURCE block (the code to copy) and HTML comments. No other exceptions.
  */
@@ -32,6 +32,7 @@ S.items().forEach(it => {
   if (own.css) t = t.replace(/<style id="tokens">[\s\S]*?<\/style>/, () => S.tokensBlock(own));
   t = t.replace(/<script id="item-engine">[\s\S]*?<\/script>/, () => `<script id="item-engine">\n${S.ENGINE}\n</script>`);
   if (it.h.type === 'slide') t = t.replace(/<style id="deck-css">[\s\S]*?<\/style>/, () => `<style id="deck-css">\n${css}\n</style>`);
+  t = t.replace(/<style id="kit-css">[\s\S]*?<\/style>/, () => `<style id="kit-css">\n${S.KIT_CSS}\n</style>`);
   if (t !== it.text) { fs.writeFileSync(it.file, t); synced++; }
 });
 
@@ -63,7 +64,7 @@ all.forEach(it => {
   if (!h.from) say(it, 'no "from" (the skill it came from)');
   if (h.type === 'slide' && !new RegExp(`<section id="${h.name}" data-component="${h.id}"`).test(it.text)) say(it, 'the slide\'s section needs id="<name>" data-component="<id>"');
   // nothing from outside the file but ECharts
-  const refs = [...it.text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"|url\(([^)]*)\)|@import|<link\b/gi)];
+  const refs = [...it.text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"|(?<![A-Za-z])url\(([^)]*)\)|@import|<link\b/g)];   // url( in CSS, not createObjectURL(
   refs.forEach(m => { const v = m[1] || m[2] || m[0]; if (v !== S.ECHARTS && !/^#/.test(v)) say(it, `loads "${v}" from outside the item; only the ECharts CDN is allowed`); });
   // colours and fonts only through tokens
   const body = it.text
@@ -71,19 +72,19 @@ all.forEach(it => {
     .replace(/<script type="application\/json" id="theme">[\s\S]*?<\/script>/, '')
     .replace(/<!-- SOURCE[\s\S]*?<!-- SOURCE END -->/, '')
     .replace(/<!--[\s\S]*?-->/g, '');
-  const hex = body.match(/#[0-9a-fA-F]{3,8}\b/);
+  const hex = body.match(/(?<![&\w])#[0-9a-fA-F]{3,8}\b/);   // not an HTML entity such as &#9650;
   if (hex) say(it, `hard-coded colour ${hex[0]}; use a token such as var(--blue)`);
   if (/\b(?:rgba?|hsla?)\(/.test(body)) say(it, 'hard-coded rgb()/hsl() colour; use a token');
   const named = body.match(NAMED);
   if (named) say(it, `hard-coded colour "${named[1]}"; use a token`);
   const font = body.match(/font-family\s*:\s*([^;}"]*)/i) || body.match(/"fontFamily"\s*:\s*"([^"]*)"/);
   if (font && !/var\(--/.test(font[1])) say(it, `hard-coded font "${font[1].trim()}"; use var(--body-font) or var(--heading-font)`);
-  const short = [...body.matchAll(/[{;\s]font\s*:\s*([^;}]*)/g)].find(m => !/var\(--[a-z-]*font\)/.test(m[1]));
+  const short = [...body.matchAll(/[{;\s]font\s*:\s*([^;}]*)/g)].find(m => !/var\(--[a-z-]*font\)/.test(m[1]) && m[1].trim() !== 'inherit');   // font: inherit is allowed
   if (short) say(it, `font shorthand without a font token: "${short[1].trim()}"`);
 
   // Saved items (not the hand-made originals): no dates, at most 6 points, no word from the project copied
   if (originals.includes(h.id)) return;
-  const all = it.text.replace(/<style id="(tokens|deck-css)">[\s\S]*?<\/style>/g, '').replace(/<script id="item-engine">[\s\S]*?<\/script>/, '').replace(S.ECHARTS, '');
+  const all = it.text.replace(/<style id="(tokens|deck-css|kit-css)">[\s\S]*?<\/style>/g, '').replace(/<script id="item-engine">[\s\S]*?<\/script>/, '').replace(S.ECHARTS, '');
   const date = all.match(/\b(?:19|20)\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+'?\d{2}\b/i);
   if (date) say(it, `date "${date[0]}": a saved item carries no dates; use plain month names or "Group A"`);
   for (const m of it.text.matchAll(/<script type="application\/json">([\s\S]*?)<\/script>/g)) {
@@ -123,90 +124,168 @@ fs.writeFileSync(path.join(S.LIB, 'index.md'), md.join('\n'));
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const themes = byType('theme').map(i => ({ id: i.h.id, name: i.h.name, purpose: i.h.purpose,
   theme: JSON.parse(i.text.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/)[1]) }));
-const cards = order.flatMap(byType).map(i => `<div class="card" data-type="${esc(i.h.type)}">
-<div class="pv"><iframe loading="lazy" src="${esc(i.rel)}" title="${esc(i.h.id)}" tabindex="-1"></iframe></div>
-<a class="name" href="${esc(i.rel)}" target="_blank"><b>${esc(i.h.id)}</b> ${esc(i.h.name)}</a>
-<p>${esc(i.h.purpose)}</p></div>`).join('\n');
+const moves = i => i.h.type === 'animation' || /\bdata-animate\b/.test(i.text.replace(/<script id="item-engine">[\s\S]*?<\/script>/, ''));
+const shown = order.flatMap(byType);
+const cards = shown.map((i, n) => `<button type="button" class="card" data-type="${esc(i.h.type)}" data-i="${n}"${moves(i) ? ' data-moves' : ''} aria-label="Preview ${esc(i.h.id)} ${esc(i.h.name)}">
+<span class="pv"><iframe loading="lazy" src="${esc(i.rel)}#grid" title="${esc(i.h.id)} preview" tabindex="-1" aria-hidden="true"></iframe></span>
+<span class="name"><b>${esc(i.h.id)}</b> ${esc(i.h.name)}</span>
+<span class="purpose">${esc(i.h.purpose)}</span>
+<span class="from">${esc(i.h.type)} &#183; from ${esc(i.h.from || '?')}</span></button>`).join('\n');
+const itemsJson = JSON.stringify(shown.map(i => ({ id: i.h.id, name: i.h.name, type: i.h.type, from: i.h.from, purpose: i.h.purpose, rel: i.rel, moves: moves(i) })));
 fs.writeFileSync(path.join(S.LIB, 'index.html'), `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Design library</title>
 ${S.tokensBlock(def)}
 <style>
-  body { margin: 0; display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
-  aside { position: sticky; top: 0; height: 100vh; overflow: auto; box-sizing: border-box; padding: 22px 18px; background: var(--paper); border-right: 1px solid var(--rule); }
-  h1 { font: var(--heading-weight) 22px var(--heading-font); color: var(--navy); margin: 0 0 4px; }
-  h2 { font: var(--heading-weight) 12px var(--body-font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
-  .now { font-size: 13px; color: var(--muted); margin: 0; }
-  button { display: block; width: 100%; text-align: left; font: 14px var(--body-font); color: var(--ink); background: none; border: 1px solid transparent; border-left: 3px solid transparent; padding: 7px 10px; cursor: pointer; }
-  button:hover { background: var(--wash); }
-  button.on { border-left-color: var(--blue); background: var(--wash); color: var(--navy); font-weight: 600; }
-  button small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
-  main { padding: 22px 26px 60px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .card { background: var(--paper); border: 1px solid var(--rule); }
-  .card:hover { border-color: var(--blue); }
-  .pv { position: relative; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
+  body { margin: 0; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
+  body.locked { overflow: hidden; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 12px 24px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+  h1 { font: var(--heading-weight) 20px var(--heading-font); color: var(--navy); margin: 0 auto 0 0; }
+  label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  select { font: 14px var(--body-font); color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); padding: 6px 8px; min-height: 36px; }
+  .count { font-size: 13px; color: var(--muted); }
+  main { padding: 20px 24px 60px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; padding: 0; cursor: pointer; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }
+  .card[hidden] { display: none; }
+  .card:hover, .card:focus-visible { border-color: var(--blue); box-shadow: 3px 3px 0 var(--shadow); }
+  .card:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+  .pv { position: relative; display: block; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
   .pv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
-  .name { display: block; padding: 10px 12px 2px; text-decoration: none; color: var(--navy); font-size: 14px; }
-  .name b { color: var(--blue); margin-right: 4px; }
-  .card p { margin: 0; padding: 0 12px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
-  .count { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .name { display: block; padding: 10px 12px 2px; color: var(--navy); font-size: 14px; }
+  .name b, .pop .id { color: var(--blue); margin-right: 4px; }
+  .purpose { display: block; padding: 0 12px 6px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .from { display: block; padding: 0 12px 12px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  /* popup */
+  .pop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--navy) 55%, transparent); }
+  .pop[hidden] { display: none; }
+  .box { width: min(1180px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); padding: 14px 16px 16px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 14px; }
+  .bar h2 { flex: 1 1 260px; margin: 0; font: var(--heading-weight) 18px var(--heading-font); color: var(--navy); }
+  .bar .type { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-left: 6px; }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  .tools button { font: 600 14px var(--body-font); min-width: 44px; min-height: 40px; padding: 6px 12px; cursor: pointer; color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); }
+  .tools button:hover { background: var(--tint); }
+  .about { margin: 0; font-size: 14px; color: var(--muted); }
+  .about a { color: var(--blue); margin-left: 8px; font-size: 13px; white-space: nowrap; }
+  .stage { position: relative; aspect-ratio: 16 / 9; width: 100%; border: 1px solid var(--rule); }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  @media (max-width: 640px) { header { padding: 10px 14px; } main { padding: 14px; } .pop { padding: 6px; } .box { padding: 10px; } .stage { aspect-ratio: 4 / 3; } }
 </style></head><body>
-<aside>
+<header>
 <h1>Design library</h1>
-<p class="now">Theme: <b id="now"></b></p>
-<h2>Themes</h2>
-<div id="themes"></div>
-<h2>Show</h2>
-<div id="types"></div>
-</aside>
+<label>Theme <select id="theme" aria-label="Theme"></select></label>
+<label>Show <select id="type" aria-label="Type of item"></select></label>
+<span class="count" id="count" aria-live="polite"></span>
+</header>
 <main>
-<p class="count" id="count"></p>
 <div class="grid">
 ${cards}
 </div>
 </main>
+<div class="pop" id="pop" hidden>
+<div class="box" role="dialog" aria-modal="true" aria-labelledby="pop-title">
+<div class="bar"><h2 id="pop-title"><span class="id" id="pop-id"></span><span id="pop-name"></span><span class="type" id="pop-type"></span></h2>
+<div class="tools"><button type="button" id="prev" aria-label="Previous item">&#8592;</button><button type="button" id="next" aria-label="Next item">&#8594;</button><button type="button" id="close" aria-label="Close">Close</button></div></div>
+<p class="about"><span id="pop-purpose"></span><a id="pop-open" href="#" target="_blank" rel="noopener">Open by itself</a></p>
+<div class="stage"><iframe id="pop-frame" name="pop" title="Item preview"></iframe></div>
+</div>
+</div>
 <script>
 (function () {
   var THEMES = ${JSON.stringify(themes)};
+  var ITEMS = ${itemsJson};
   var TYPES = ['all'].concat(${JSON.stringify(order)});
   function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
   function put(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* works without storage */ } }
   var current = get('design-library-theme', THEMES[0].id), type = get('design-library-type', 'all');
   var hash = (location.hash.match(/theme=([A-Z]{2}-[0-9]+)/) || [])[1]; if (hash) current = hash;
+  var ht = (location.hash.match(/type=([a-z%0-9]+)/) || [])[1]; if (ht) type = decodeURIComponent(ht);
   if (!THEMES.some(function (t) { return t.id === current; })) current = THEMES[0].id;
-  var frames = Array.prototype.slice.call(document.querySelectorAll('.pv iframe'));
+  if (TYPES.indexOf(type) === -1) type = 'all';
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var pop = document.getElementById('pop'), frame = document.getElementById('pop-frame');
   function theme() { return THEMES.filter(function (t) { return t.id === current; })[0]; }
-  function send(f) { try { f.contentWindow.postMessage({ theme: theme().theme }, '*'); } catch (e) { /* not loaded yet */ } }
+  function send(f, msg) { try { f.contentWindow.postMessage(msg, '*'); } catch (e) { /* not loaded yet */ } }
+  function sendTheme(f) { send(f, { theme: theme().theme }); }
+
+  /* theme and type dropdowns */
+  var ts = document.getElementById('theme'), ty = document.getElementById('type');
+  THEMES.forEach(function (t) { var o = document.createElement('option'); o.value = t.id; o.textContent = t.id + ' ' + t.name; o.title = t.purpose; ts.appendChild(o); });
+  TYPES.forEach(function (t) { var o = document.createElement('option'); o.value = t; o.textContent = t === 'all' ? 'All types' : t; ty.appendChild(o); });
   function applyTheme() {
     var t = theme(), r = document.documentElement;
     Object.keys(t.theme.css).forEach(function (k) { r.style.setProperty(k, t.theme.css[k]); });
-    document.getElementById('now').textContent = t.id + ' ' + t.name;
-    frames.forEach(send);
-    draw();
+    ts.value = t.id; ts.title = t.purpose;
+    cards.forEach(function (c) { sendTheme(c.querySelector('iframe')); });
+    if (!pop.hidden) { sendTheme(frame); var po = document.getElementById('pop-open'); po.href = po.href.split('#')[0] + '#theme=' + encodeURIComponent(JSON.stringify(t.theme)); }
   }
+  function visible() { return cards.filter(function (c) { return !c.hidden; }); }
   function applyType() {
-    var n = 0;
-    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
-      var show = type === 'all' || c.getAttribute('data-type') === type;
-      c.style.display = show ? '' : 'none'; if (show) n++;
-    });
-    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's') + (type === 'all' ? '' : ' of type ' + type);
-    draw();
+    cards.forEach(function (c) { c.hidden = !(type === 'all' || c.getAttribute('data-type') === type); });
+    ty.value = type;
+    var n = visible().length;
+    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's');
   }
-  function button(label, sub, on, click) {
-    var b = document.createElement('button'); b.className = on ? 'on' : '';
-    b.textContent = label; if (sub) { var s = document.createElement('small'); s.textContent = sub; b.appendChild(s); }
-    b.onclick = click; return b;
+  ts.addEventListener('change', function () { current = ts.value; put('design-library-theme', current); applyTheme(); });
+  ty.addEventListener('change', function () { type = ty.value; put('design-library-type', type); applyType(); });
+  cards.forEach(function (c) { c.querySelector('iframe').addEventListener('load', function () { sendTheme(this); }); });
+
+  /* moving items replay when they scroll into view; never loop */
+  if (window.IntersectionObserver) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) send(e.target, { replay: true }); }); }, { threshold: 0.6 });
+    cards.forEach(function (c) { if (c.hasAttribute('data-moves')) io.observe(c.querySelector('iframe')); });
   }
-  function draw() {
-    var th = document.getElementById('themes'), ty = document.getElementById('types');
-    th.innerHTML = ''; ty.innerHTML = '';
-    THEMES.forEach(function (t) { th.appendChild(button(t.id + ' ' + t.name, t.purpose, t.id === current, function () { current = t.id; put('design-library-theme', current); applyTheme(); })); });
-    TYPES.forEach(function (t) { ty.appendChild(button(t, '', t === type, function () { type = t; put('design-library-type', type); applyType(); })); });
+
+  /* popup in the same window */
+  var at = -1, opener = null;
+  function show(card) {
+    var it = ITEMS[+card.getAttribute('data-i')];
+    at = visible().indexOf(card);
+    document.getElementById('pop-id').textContent = it.id;
+    document.getElementById('pop-name').textContent = it.name;
+    document.getElementById('pop-type').textContent = it.type + ' \u00b7 from ' + (it.from || '?');
+    document.getElementById('pop-purpose').textContent = it.purpose;
+    document.getElementById('pop-open').href = it.rel + '#theme=' + encodeURIComponent(JSON.stringify(theme().theme));   /* opens in the theme the popup shows */
+    frame.title = it.id + ' ' + it.name;
+    frame.onload = function () { sendTheme(frame); if (it.moves) send(frame, { replay: true, explicit: true }); };   /* opening it is the request: plays even under reduced motion */
+    frame.src = it.rel;
   }
-  frames.forEach(function (f) { f.addEventListener('load', function () { send(f); }); });
+  function open(card) {
+    opener = card; show(card);
+    pop.hidden = false; document.body.classList.add('locked');
+    document.getElementById('close').focus();
+  }
+  function close() {
+    pop.hidden = true; document.body.classList.remove('locked'); frame.removeAttribute('src');
+    var v = visible(); if (v[at]) opener = v[at];
+    if (opener) opener.focus();
+  }
+  function step(d) { var v = visible(); if (!v.length) return; at = (at + d + v.length) % v.length; show(v[at]); }
+  cards.forEach(function (c) { c.addEventListener('click', function () { open(c); }); });
+  document.getElementById('close').addEventListener('click', close);
+  document.getElementById('prev').addEventListener('click', function () { step(-1); });
+  document.getElementById('next').addEventListener('click', function () { step(1); });
+  pop.addEventListener('click', function (e) { if (e.target === pop) close(); });
+  /* Escape pressed while focus is inside the item: its engine passes the key up */
+  window.addEventListener('message', function (e) { if (!pop.hidden && e.source === frame.contentWindow && e.data && e.data.escape) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (pop.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && document.activeElement !== frame && (document.activeElement === document.body || document.activeElement.closest('.tools'))) {
+      e.preventDefault(); step(e.key === 'ArrowLeft' ? -1 : 1);   /* the item keeps its own arrow keys: Tab into it to drive its steps */
+    }
+    else if (e.key === 'Tab') {   /* keep focus inside the popup */
+      var f = Array.prototype.slice.call(pop.querySelectorAll('button, a[href], iframe'));
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  /* for links and checks: #open=<id> opens that item */
+  var oh = (location.hash.match(/open=([A-Z]{2}-[0-9]+)/) || [])[1];
   applyTheme(); applyType();
+  if (oh) { var k = ITEMS.map(function (x) { return x.id; }).indexOf(oh); if (k !== -1) { if (cards[k].hidden) { type = 'all'; applyType(); } open(cards[k]); } }
 })();
 </script>
 </body></html>

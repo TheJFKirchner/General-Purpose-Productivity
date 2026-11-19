@@ -1,24 +1,26 @@
 # Design library
 
-Reusable slides, charts, report sections, dashboard sections and themes for the analysis toolbox.
+Reusable slides, charts, tables, hero cards, animations, layout pieces and themes for the analysis toolbox.
 
 ## Rules
 - One item = one HTML file in its type folder, `<id>-<name>.html`, that renders by itself (ECharts from its CDN is the only outside file).
-- Header block at the top: `id`, `type`, `name`, `purpose` (one sentence), `from` (the skill it came from).
-- Ids: two capitals, a hyphen, two digits. Slides by group (FR EX LV CH CP BD UN DE BK); CT chart, RS report section, DS dashboard section, TH theme. An id never changes and is never reused (`retired-ids.txt`).
-- Sample data inline: 4 to 6 points, made-up round values, no dates. No company names, no real data or wording.
-- Colours and fonts only as tokens (`var(--blue)`, `var(--body-font)` ...), so every item takes any theme.
-- Report and dashboard sections carry, in the SOURCE block, a generic definition of their shape (never the project's own calculation), with the command that recreates it as the first line.
+- Header block at the top: `id`, `type`, `name`, `purpose` (one sentence), `from` (the skill or kit it came from).
+- Ids: two capitals, a hyphen, two digits; never changed, never reused (`retired-ids.txt`). Slides by group (FR EX LV CH CP BD UN DE BK); CT chart, TB table, HC hero card, AN animation, LY layout, TH theme.
+- Colours and fonts only as tokens (`var(--blue)`, `var(--good)`, `var(--body-font)` ...), so every item takes any theme. No company names, except the imported themes TH-04 to TH-07, named by the owner.
+- Saved items (by the librarian): sample data of 4 to 6 points, made-up round values, no dates, no real names or wording.
+- Hand-made items (`original-samples.txt`): as little data as draws the visual properly, made-up round values, no real names.
+- A saved report or dashboard section becomes a chart, table or hero card; its SOURCE block starts with the commands that recreate it, then generic definitions (never the project's own calculation).
 
 ## Themes
-- A theme is an item (`themes/TH-nn-<name>.html`): its JSON block holds the CSS tokens and the chart series order. TH-01 is the default every item carries.
-- Add one like any item: the librarian saves it (`save-item.js theme --from TH-01 --name <name>`, then edit the tokens).
+- A theme is an item (`themes/TH-nn-<name>.html`) whose JSON block holds every token and the chart series order. TH-01 is the default every item carries.
+- Add one: `node save-item.js theme --from TH-01 --name <name>`, then edit its tokens. Token list and the james-themes mapping: `AUTHORING.md`.
 
 ## Use
 - Read `index.md` (id, type, name, purpose). Open only the item you need; copy the part between `ITEM:START` and `ITEM:END`, or the SOURCE block.
 - Slides into a deck: `add-slide.js <deck> --after <id> --pattern <id>`; several at once: `patterns.js <library> <id> ...` (presentation skill scripts).
-- See every item, in every theme: open `index.html`.
+- See every item in every theme: open `index.html` (theme and type dropdowns; click an item for a popup with previous and next).
 
 ## Save
-- Launch the `design-librarian` agent with the visuals (source files, and the deck, slide, report or section ids). Never by hand.
-- After any change: `node build-index.js`. It fails on a bad id or name, a missing purpose, an outside file, a hard-coded colour, and in saved items a date, over 6 points or a word recorded from the source (`denylist.json`, hashed). `original-samples.txt` lists the hand-made samples exempt from the last three.
+- A visual the user liked: launch the `design-librarian` agent with the files. Never by hand.
+- An item written by hand: `node save-item.js new <chart|table|hero-card|animation|layout|slide> --name <name>`, then fill it as `AUTHORING.md` says.
+- After any change: `node build-index.js`. It fails on a bad id or name, a missing purpose, an outside file, a hard-coded colour or font, and in saved items a date, over 6 points or a word recorded from the source (`denylist.json`, hashed).
