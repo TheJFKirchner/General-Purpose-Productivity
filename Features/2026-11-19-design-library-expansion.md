@@ -1,5 +1,7 @@
 # Design library expansion
 
+> Note, 2026-11-19: the design library now lives only in `Toolkit Update/design-library/`. Paths in the text below refer to its old location.
+
 Status: built
 Date: 2026-11-19
 

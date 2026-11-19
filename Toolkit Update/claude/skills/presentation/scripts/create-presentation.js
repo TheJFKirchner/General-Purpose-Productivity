@@ -83,7 +83,7 @@ Also writes styles.css (from base-styles.css) next to the HTML file, unless it a
 Examples:
   node create-presentation.js --slides 5 --title "Churn update" -o deck/2026-11-churn/presentation.html
   node create-presentation.js --structure 1,1,d,1,1,1,d,1 --title "Q4 Review" -o deck/2026-11-q4/presentation.html
-  node create-presentation.js --refresh design-library/slides/level/slides.html
+  node create-presentation.js --refresh deck/2026-11-churn/presentation.html
 `);
 }
 

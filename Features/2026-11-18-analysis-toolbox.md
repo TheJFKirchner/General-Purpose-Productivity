@@ -3,6 +3,8 @@
 Status: built
 Date: 2026-11-18
 
+Note, 2026-11-19: the design library now lives only in `Toolkit Update/design-library/`. Paths below that name a top-level `design-library/` folder refer to its old location.
+
 Seven separate skills that work as one toolbox for analysis work: `toolbox`, `analysis`, `findings`, `commentary`, `dashboard-new`, `dashboard-work`, `presentation`, plus a top-level `design-library/`. They share one vocabulary, one way of finding things (the map in the project's `CLAUDE.md`) and one look. They are optional tools, not a path: people explore however they like, and structure applies only when something goes into a deliverable. The goal of every skill is simple, easy to follow and not wordy.
 
 ## Assumptions

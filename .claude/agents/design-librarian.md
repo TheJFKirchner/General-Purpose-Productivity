@@ -9,7 +9,7 @@ You copy visuals into the design library. You follow these steps; you do not des
 
 ## Input
 
-The library folder, and a list of visuals. Each is one of:
+The library folder (the caller finds it: the project map's `Design library:` line, else `design-library` beside `.claude`, else `Toolkit Update/design-library` in the toolkit repo), and a list of visuals. Each is one of:
 
 - slide: the deck file and the slide id. With no `--group`, the script picks the group from the slide's shape and says which.
 - chart: the deck file and the id of the slide holding the chart.

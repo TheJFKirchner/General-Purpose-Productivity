@@ -1,6 +1,6 @@
 # Design library
 
-Reusable slides, charts, tables, hero cards, animations, layout pieces and themes for the analysis toolbox.
+Reusable slides, charts, tables, hero cards, animations, layout pieces and themes for the analysis toolbox. In its repo this folder (`Toolkit Update/design-library/`) is the only copy: edit it here. Installed, it sits beside the `.claude` folder.
 
 ## Rules
 - One item = one HTML file in its type folder, `<id>-<name>.html`, that renders by itself (ECharts from its CDN is the only outside file).

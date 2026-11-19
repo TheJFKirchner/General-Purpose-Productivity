@@ -1,5 +1,7 @@
 # Toolkit Update bundle
 
+> Note, 2026-11-19: the design library now lives only in `Toolkit Update/design-library/` and is edited there; it is no longer copied in. Paths in the text below refer to its old location.
+
 Status: built
 Date: 2026-11-19
 

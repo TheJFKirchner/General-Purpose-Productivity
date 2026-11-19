@@ -31,5 +31,4 @@ Thumbs.db
 node_modules/
 
 # Design library: local hashes of project words
-design-library/denylist.json
 Toolkit Update/design-library/denylist.json

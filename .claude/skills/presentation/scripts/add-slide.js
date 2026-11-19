@@ -264,7 +264,8 @@ function body() {
   return `${I(8)}<blockquote>\n${I(10)}<p>WORD: the one sentence the room should hear.</p>\n${I(10)}<cite>WORD: who said it, or where it is from</cite>\n${I(8)}</blockquote>`;
 }
 
-/* The design library: the project map's "Design library:" line, else the one in this repo. */
+/* The design library, first that exists: the project map's "Design library:" line; design-library beside the
+   .claude folder (an installed workspace, or the Toolkit Update bundle); Toolkit Update/design-library (this repo). */
 function library() {
   for (let d = path.dirname(path.resolve(file)), i = 0; i < 6; i++, d = path.dirname(d)) {
     const map = path.join(d, 'CLAUDE.md');
@@ -273,12 +274,13 @@ function library() {
     if (m && fs.existsSync(path.resolve(d, m[1].replace(/`/g, '')))) return path.resolve(d, m[1].replace(/`/g, ''));
     break;
   }
-  return path.join(SKILL, '..', '..', '..', 'design-library');
+  const near = [path.join(SKILL, '..', '..', '..', 'design-library'), path.join(SKILL, '..', '..', '..', 'Toolkit Update', 'design-library')];
+  return near.find(p => fs.existsSync(path.join(p, 'slides'))) || near[0];
 }
 
 function fromPattern(code) {
   const lib = path.join(library(), 'slides');
-  if (!fs.existsSync(lib)) stop('no design library found (map line or this repo); use --layout');
+  if (!fs.existsSync(lib)) stop('no design library found (map line, design-library beside .claude, or Toolkit Update/design-library); use --layout');
   const f = fs.readdirSync(lib).find(x => x.startsWith(code + '-') && x.endsWith('.html'));
   if (f) {
     const h = fs.readFileSync(path.join(lib, f), 'utf8');

@@ -58,7 +58,7 @@ when it has one and the numbers change). Then `npm run check`.
 | An offline HTML report | `references/exports.md`; then add it to the map's `dashboard/` row |
 | Hosting; many sections at once | `references/hosting.md`; `references/helpers.md` (optional helpers) |
 | Remove a section | Ask first, then delete its `.jsx` (and its analytic, if any), its `index.js` line, and it from any report |
-| User likes a visual, or says save it | Launch `design-librarian` with the files; it saves them to the design library |
+| User likes a visual, or says save it | Launch `design-librarian` with the files and the library folder (the map's `Design library:` line, else `design-library` beside `.claude`, else `Toolkit Update/design-library`) |
 
 ## What to open
 | | Files |
