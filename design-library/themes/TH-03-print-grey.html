@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- ITEM
+id: TH-03
+type: theme
+name: print-grey
+purpose: Example greyscale theme for print: black and greys only, serif headings, no colour needed.
+from: design-library
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TH-03 print-grey</title>
+<style id="tokens">:root {
+  --blue: #1A1A1A;
+  --navy: #000000;
+  --green: #6B6B6B;
+  --teal: #8C8C8C;
+  --orange: #404040;
+  --ink: #1A1A1A;
+  --muted: #5C5C5C;
+  --rule: #CFCFCF;
+  --wash: #F2F2F2;
+  --paper: #FFFFFF;
+  --chart-muted: #C2C2C2;
+  --chart-grid: #E6E6E6;
+  --heading-font: Georgia, "Times New Roman", serif;
+  --body-font: Arial, Helvetica, sans-serif;
+  --heading-weight: 700;
+  --series: --blue --muted --green --teal --orange;
+}</style>
+<style id="frame">
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--body-font); }
+.fit { width: 960px; height: 540px; transform-origin: 0 0; box-sizing: border-box; padding: 28px 36px; display: flex; flex-direction: column; gap: 10px; }
+.fit h2 { margin: 0; font: var(--heading-weight) 24px var(--heading-font); color: var(--navy); }
+.fit p { margin: 0; font-size: 15px; color: var(--muted); }
+.chart { position: relative; flex: 1; min-height: 0; }
+.source { display: none; }
+</style>
+<style id="theme-page">
+.sw { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 6px 0; font-size: 13px; color: var(--muted); }
+.sw i { width: 22px; height: 22px; border: 1px solid var(--rule); display: inline-block; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body data-own-theme>
+<div class="fit">
+<h2>Theme print-grey: headings in the heading font</h2>
+<p>Body text in the body font. Swatches are the tokens; bars are the series order.</p>
+<div><div class="sw"><i style="background: var(--blue)"></i><span>--blue</span></div>
+<div class="sw"><i style="background: var(--navy)"></i><span>--navy</span></div>
+<div class="sw"><i style="background: var(--green)"></i><span>--green</span></div>
+<div class="sw"><i style="background: var(--teal)"></i><span>--teal</span></div>
+<div class="sw"><i style="background: var(--orange)"></i><span>--orange</span></div>
+<div class="sw"><i style="background: var(--ink)"></i><span>--ink</span></div>
+<div class="sw"><i style="background: var(--muted)"></i><span>--muted</span></div>
+<div class="sw"><i style="background: var(--rule)"></i><span>--rule</span></div>
+<div class="sw"><i style="background: var(--wash)"></i><span>--wash</span></div>
+<div class="sw"><i style="background: var(--paper)"></i><span>--paper</span></div>
+<div class="sw"><i style="background: var(--chart-muted)"></i><span>--chart-muted</span></div>
+<div class="sw"><i style="background: var(--chart-grid)"></i><span>--chart-grid</span></div></div>
+<div class="chart" data-echart>
+<script type="application/json">
+{"xAxis":{"type":"category","data":["A","B","C","D","E","F"]},"yAxis":{"type":"value","show":false},"series":[{"type":"bar","name":"--blue","data":[3,5,4,6,5,7]},{"type":"bar","name":"--muted","data":[4,6,5,7,6,8]},{"type":"bar","name":"--green","data":[5,7,6,8,7,9]},{"type":"bar","name":"--teal","data":[6,8,7,9,8,10]},{"type":"bar","name":"--orange","data":[7,9,8,10,9,11]}]}
+</script>
+</div>
+</div>
+<!-- THEME: the tokens. css: CSS variables every item uses; series: the chart colours, in order, as token names -->
+<script type="application/json" id="theme">
+{
+ "css": {
+  "--blue": "#1A1A1A",
+  "--navy": "#000000",
+  "--green": "#6B6B6B",
+  "--teal": "#8C8C8C",
+  "--orange": "#404040",
+  "--ink": "#1A1A1A",
+  "--muted": "#5C5C5C",
+  "--rule": "#CFCFCF",
+  "--wash": "#F2F2F2",
+  "--paper": "#FFFFFF",
+  "--chart-muted": "#C2C2C2",
+  "--chart-grid": "#E6E6E6",
+  "--heading-font": "Georgia, \"Times New Roman\", serif",
+  "--body-font": "Arial, Helvetica, sans-serif",
+  "--heading-weight": "700"
+ },
+ "series": [
+  "--blue",
+  "--muted",
+  "--green",
+  "--teal",
+  "--orange"
+ ]
+}
+</script>
+<script id="item-engine">
+(function () {
+  var root = document.documentElement;
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
+  function resolve(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (typeof v === 'string' && v.indexOf('var(--') === 0) o[k] = css(v.slice(4, -1)) || v;
+      else if (v && typeof v === 'object') resolve(v);
+    });
+  }
+  function theme() {
+    var axis = { axisLine: { lineStyle: { color: css('--rule') } }, axisTick: { show: false }, axisLabel: { color: css('--muted'), fontSize: 15 } };
+    return {
+      color: series(), textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
+      legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+      bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+      markLine: { label: { fontSize: 14, color: css('--muted') } },
+      pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+    };
+  }
+  var drawn = 0;
+  function draw() {
+    if (!window.echarts) return;
+    var name = 'item' + (++drawn);
+    echarts.registerTheme(name, theme());
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
+      var src = box.querySelector('script[type="application/json"]');
+      if (!src) return;
+      var o = JSON.parse(src.textContent);
+      resolve(o);
+      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+      [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; });
+      o.animation = false;
+      if (box._chart) box._chart.dispose();
+      if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
+      box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
+      box._chart.setOption(o);
+    });
+  }
+  function fit() {
+    var f = document.querySelector('.fit');
+    if (!f) return;
+    var s = Math.min(window.innerWidth / f.offsetWidth, window.innerHeight / f.offsetHeight);
+    f.style.transform = 'scale(' + s + ')';
+  }
+  /* A theme from the index: {theme: {css: {...}, series: [...]}}. Items keep their own look when opened alone. */
+  window.addEventListener('message', function (e) {
+    var t = e.data && e.data.theme;
+    if (!t || document.body.hasAttribute('data-own-theme')) return;
+    Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
+    if (t.series) root.style.setProperty('--series', t.series.join(' '));
+    draw();
+  });
+  window.addEventListener('resize', function () { fit(); draw(); });
+  fit(); draw();
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# Step 5: hard questions
+# Full mode, step 5: hard questions
 
 Before gate 2, a reviewer who has seen nothing but `plan.md` asks what this audience will ask. Cheaper to fix a storyboard than a deck.
 
@@ -31,12 +31,12 @@ Then one line: the single question most likely to derail the meeting.
 
 ## Sort the answers with the user
 
-The questions join Interview 2 (`SKILL.md`, "Interviews") as one table with your recommended pick for each, put to the user once. Ask a question on its own only where the user may know the answer or who has it. For each question, the pick is one of:
+The questions join Interview 2 (`references/full-mode.md`, "Interviews") as one table with your recommended pick for each, put to the user once. Ask a question on its own only where the user may know the answer or who has it. For each question, the pick is one of:
 
 | Decision | What changes |
 | --- | --- |
 | Answer on a slide | Add or change a storyboard row |
-| Backup slide | Add an appendix block (pattern BK-01 `library/backup/slides.html#/answer-with-bars`) |
+| Backup slide | Add an appendix block (pattern BK-01, the library's answer-with-bars slide; no library: `chart-commentary` with the question as the kicker) |
 | Say it | Add to that slide's speaker notes. Deck also circulated or sent to be read: the answer must be on the slide too (a bullet or the footnote); notes alone do not reach a reader |
 | Cannot answer yet | Record under "Open questions"; the user decides whether to present before it is answered |
 | Not relevant | Drop it; no record |

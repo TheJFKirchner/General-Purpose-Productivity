@@ -1,162 +1,80 @@
 ---
 name: presentation
-description: Build a slide presentation (reveal.js HTML with ECharts charts) from work that already exists (a project plan, an analysis folder, a dashboard, commentary). Interview-led, not automatic. Gathers context with subagents, agrees a brief (original goal, audience, what is in and out), workshops a storyboard, has a reviewer raise the questions the audience will ask, then builds the deck and walks through it with the user. Use for "make a presentation / deck / slides / readout on ...", or to change an existing presentation folder. Not for a .pptx file, and not for a written report (that is the analysis skill).
+description: Build a slide deck (reveal.js HTML with ECharts charts) from work that already exists - findings, an analysis, a dashboard, a project plan. Two modes. Quick, the default for decks under about eight slides - one confirmed brief, one confirmed slide list, built in the conversation. Full, for a real readout or when asked - interviews, a hard-questions reviewer and a builder subagent. Use for "make a deck / slides / presentation / readout on ...", or to change an existing deck. Not for .pptx, and not for a written report (that is the analysis skill).
 ---
 
 # Presentation
 
-Existing work in, one HTML deck out. The work is usually an analysis or a dashboard whose visuals already exist: the user says which ones go in and which cut of each, and the deck hard-codes them. The user is interviewed at every gate; never build straight from a request.
+Existing work in, one HTML deck out; slide text comes from findings and results. **Changing an existing deck: read "Existing deck" only. A new deck: go to "Start".**
 
-Used with the **grilling** skill. Grilling says how to interview (rounds, numbered questions, a recommended answer for each, waiting). This skill says what has to be found out and settled. See "Interviews".
+## Existing deck
 
-## The folder
+1. `node <skill>/scripts/slides.js <deck.html>`: the brief and one line per slide (`slides.js <project folder>` lists every deck).
+2. Data for a chart: `add-slide.js <deck.html> --from "<report folder>"` lists every section's tables and columns (`python run.py list` in that folder shows the report's sections).
+3. Add: `add-slide.js <deck.html> --after <id> [--id <name>] --layout chart-commentary|figures|rows|table|statement [--from "<report folder>::<section>::<table>" --x COL --y COL] [--desc "..."]`. Change one slide: `slides.js <deck.html> --show <id>`. Remove or move: `slides.js <deck.html> --remove <id>` or `--move <id> --after <id>`.
+4. Edit only the lines add-slide prints, worded by the box at the top of `references/slides.md`; stop there. Then one command: `slides.js`, `check-charts.js`, `screenshot.js`; read `sheet.png`.
 
-Three files per presentation. Create nothing else.
+- No mode question and no gates unless it adds more than two slides. A `DUPLICATE` line from add-slide: tell the user. Update the map row if the ask changed.
+- Never opened on an edit: the deck HTML as a whole, anything below `SLIDES:END`, `styles.css` below `:root`, library slide files, the scripts. Open another slide only when the user says "like slide N".
 
-```
-presentations/<yyyy-mm-name>/
-  plan.md             brief, in and out, sources, storyboard, questions, review notes   you write
-  presentation.html   the slides (reveal.js)                                            scaffolded; you fill slides with Edit
-  styles.css          the whole look: colours, fonts, sizes                             copied; edit only to restyle
-```
+## Start
 
-- Sources (documents, charts, commentary) are pointed to from `plan.md`, never copied in.
-- The tone document belongs to the user, not the presentation. `plan.md` records its path.
+1. Read the project's `CLAUDE.md` map: the project plan, findings, existing decks. Follow links one level; do not survey the project.
+2. Find the design library: the map's `Design library:` line if there is one, else `design-library/` three folders up from this skill (`<skill>/../../../design-library`), unless the user says no. Neither: use the basic layouts in `references/slides.md`.
+3. Ask one question: quick or full, with your pick (quick under about eight slides; full for a decision meeting or a senior room). The user's answer wins. In quick mode, put the drafted brief in the same message.
 
-## Steps
+## Where the deck goes
 
-In order. Gate = stop until the user approves.
+- In the folder the map's deck rows use; none yet, `deck/<yyyy-mm-short-name>/`.
+- Add one map row per deck: `` | `deck/<name>/` | Deck: <title>, for <audience>, <ask> | ``.
+- No map, or no map table: ask where, in one line. Then write `## Map`, the header `` | Folder or file | Holds | ``, the separator `` | --- | --- | ``, then the row.
+- The folder holds `presentation.html` and `styles.css`; full mode adds `plan.md`. Sources are pointed to, never copied.
+
+## Quick mode
 
 | # | Step | Gate | Read |
 | --- | --- | --- | --- |
-| 1 | Find the facts: project plan, linked documents, where charts and commentary live. No questions to the user yet | | `references/context.md` |
-| 2 | Grill for the brief: settle everything under "Interview 1" | **Gate 1:** user confirms the brief | "Interviews" below; `references/plan.md` for the audience and type tables |
-| 3 | `node <skill>/scripts/create-presentation.js --plan-only --title "<title>" -o <folder>/presentation.html`. It copies the blank plan (`references/plan-template.md`). Write the brief and takeaways into `plan.md` | | |
-| 4 | Draft the storyboard, one block per slide | | `references/plan.md`; `library/index.md`; `references/charts.md` (rules and "Which chart"); `references/writing.md` ("Commentary") |
-| 5 | Hard questions: a read-only reviewer asks what this audience will ask. Then grill once on the storyboard and the questions: "Interview 2" | **Gate 2:** user confirms the storyboard | `references/questions.md` |
-| 6 | Hand the build to a builder subagent: scaffold, fill each slide from its Pattern link, check. Then you do the writing pass on its screenshots | | See "Delegating". You read `references/writing.md` only |
-| 7 | Walk through the deck with the user. Fix slide by slide | **Gate 3:** user signs off | `references/slides.md`, "Walk-through" |
+| 1 | Draft the brief: audience, what we want from them, minutes, the answer in one sentence, basis (date basis, comparison period), sources | **User confirms** | |
+| 2 | Slide list: per slide its headline (the point as a sentence), layout or library code, visual, source, and the first question the room will ask with where the deck answers it | **User confirms** | `references/slides.md`; the library `index.md` |
+| 3 | `patterns.js` fetches every library pattern in one call. Scaffold, then one Edit fills the BRIEF facts and every slide (each with `data-desc`). `slides.js --sync`, chart check | | `references/slides.md`; `references/charts.md` for a chart with no library pattern |
+| 4 | Screenshot, read the contact sheet, one fix pass, one re-shot, stop (about 22 calls for seven slides). Give the user the path | | |
 
-Existing presentation folder: read its `plan.md` first. Changes go through the storyboard row, then the slide.
+- No subagents and no `plan.md`. Shape: title (the answer as headline), one slide per finding, a close.
+- A decision meeting: the close names owner, timing and cost, or shows "to agree today" for each one missing.
+- A source contradicts a finding: raise it with the user before building. Never put it on a slide as "unexplained".
+- The user is away: state the brief and slide list in your reply and carry on.
 
-## Interviews
+## Full mode
 
-Run both interviews with the grilling skill. What follows is its subject matter: what to settle, which items are real questions, and where your recommended answer comes from.
+Open `references/full-mode.md` and follow it: facts, interview 1, storyboard, hard-questions reviewer, interview 2, builder subagent, walk-through. Uses the grilling skill.
 
-How this skill shapes the grilling:
+## Look
 
-- **Facts are never asked.** The goal as first written, what was done, the numbers, where files live: step 1 finds them.
-- **Draft first, then ask.** Rows marked Draft are things the files or the request already answer. Write them up as one drafted brief (or one drafted storyboard) and put the whole draft to the user as a single question: "anything to change?". Only rows marked Ask become questions of their own.
-- **The frontier is the Ask rows only.** About 8 questions an interview, in 2 or 3 rounds. More than that: you are asking things you could have drafted.
-- **Missing things first.** Open Interview 1 with one batch: everything step 1 could not find, each with "do you have this, or who does?". These are the answers that take the user longest to get.
-- **Every Ask question carries a recommended answer**, worded so "yes" accepts it. No basis for one: say so; do not invent it.
-- **Ask in plain words.** Describe a slide by what the audience sees, never by component code or pattern name.
-- **The user's picks stand.** A visual, cut, slide or wording the user chose is used as chosen. Do not question it, offer alternatives to it, or ask them to justify it. Raise a concern only when the pick cannot work as asked (it will not fit a slide legibly, its numbers cannot be traced, it contradicts its own headline): once, in one line, with the fix you will apply unless they say otherwise.
-- **Ask once.** An item the user accepted as open is recorded and not raised again in a later round or step. It is listed at the gate.
-- **The session ends at the gate.** Every row settled or accepted as open, and the user confirms. Nothing is built before that.
-- **The record is `plan.md`**, not a separate decisions file (this replaces the grilling skill's `Features/` record). Interview 1 fills Brief, Terms, Takeaways, In and Left out. Interview 2 fills Storyboard and Questions.
-- Grilling skill not available: same content, in rounds of numbered questions with a recommended answer each.
-
-### Interview 1: the brief (gate 1)
-
-| Settle | What it is | Draft or Ask | Recommended answer from |
-| --- | --- | --- | --- |
-| Not found | Each thing step 1 could not find that the deck needs | Ask, first, as one batch | None. Ask who has it |
-| Audience | Who is in the room, who is most senior, who is least expert, what each cares about | Ask | The request; who the project plan says it is for |
-| What we want from them | A decision, approval, feedback, or awareness | Ask | The project plan's goal and success lines |
-| Setting | Presented live, sent to be read, or both. Minutes available, as its own question | Ask | The request |
-| Who presents | The user, or someone else whose voice the text should fit | Ask | The request |
-| Tone document | A path, or none | Ask, once | None |
-| Why this answer | For a recommendation: why this figure or option over the nearest alternative, and who can say | Ask | Often in no file |
-| What it means for them | The effect in the audience's own terms (dollars, price, workload), with its base | Ask | The sources if they say |
-| After the decision | Who does what by when once it is made | Ask, when we want a decision | Often in no file |
-| Answer and takeaways | The one sentence, and two to four bullets the audience should leave with | Ask, after audience is settled | Findings ranked by what this audience cares about |
-| Visuals to use | Which of the existing visuals go in the deck | Ask: step 1's list of visuals, your suggested picks marked, "which do you want?" | The takeaways each visual supports |
-| The cut of each | For every chosen visual with a dropdown, filter or tab: the one setting to show, and the reason for that cut | Ask: one table (visual, cut, reason), your suggestion filled in | The cut that proves the takeaway it serves |
-| Original goal, part of, how it was met | From the project plan | Draft | Step 1 |
-| What they already know, type | From the audience and what we want | Draft | `references/plan.md`, audience and type tables |
-| In, left out | Findings that prove the takeaways; work that does not serve the goal | Draft | Step 1's findings and its "off the goal" list |
-| Terms | One name and one plain definition for each measure, and the sign convention | Draft | The sources; the least expert person's vocabulary |
-
-### Interview 2: the storyboard (gate 2)
-
-Draft the whole storyboard, then run the hard-questions reviewer (step 5) on it, then interview once with both in hand.
-
-| Settle | What it is | Draft or Ask | Recommended answer from |
-| --- | --- | --- | --- |
-| The story | The headlines in order: do they tell it and reach the answer | Ask: the numbered list, "anything to change?" | Your draft |
-| Cuts and merges | Among slides you added, not ones the user asked for: any that could go or combine | Ask, naming each candidate, one question | The audience and type tables; your view, stated |
-| Real choices | A slide you added where two different treatments are both reasonable. Never for a visual the user picked | Ask, describing both in plain words | Your pick and why |
-| How much commentary | Fuller or lighter, across the deck | Ask, one question | Audience and setting (`references/writing.md`, "Commentary") |
-| Hard questions | The reviewer's questions as one table, each with your pick (answer on a slide, backup slide, say it, cannot answer yet, drop) | Ask: the table, "anything to change?" | `references/questions.md` |
-| Hard questions the user can add to | Any where the user may know the answer, or who does | Ask, each on its own | None |
-| Derived figures | Any figure you computed that is not in the sources, before it goes on a main slide | Ask, each on its own | State how it was computed |
-| Open items | Present with these unanswered, or wait | Ask, once, at the end | State what is missing and who in the audience will care |
-| Sections, each slide's pattern, what is on each page | Bottom-bar names, the library component, the visual and bullets | Draft | `library/index.md`; `references/plan.md` |
-
-- A hard question that changes a main slide: change the draft, show the changed headlines once.
-- Three or more hard questions unanswered on things this audience cares about: say plainly the work may not be ready, and recommend waiting or presenting as interim. Do not recommend simply going ahead.
-
-## References
-
-| File | Holds | Origin |
-| --- | --- | --- |
-| `references/context.md` | Step 1: what to find, the subagent brief | Ours |
-| `references/plan.md` | Steps 2 and 4: interview, audience and type tables, storyboard rules | Ours |
-| `references/questions.md` | Step 5: the reviewer's brief, sorting the answers | Ours |
-| `references/writing.md` | Slide text rules, tone document | Ours, rules from humanizer |
-| `references/slides.md` | For the builder: scaffold, slide HTML, using patterns, bottom bar, look, checks. Also the walk-through | revealjs-skill, adapted |
-| `references/charts.md` | Chart rules, ECharts patterns, sizing | revealjs-skill, moved to ECharts |
-| `references/advanced-features.md` | Fragments, notes, backgrounds, transitions. Only when asked | revealjs-skill |
-| `references/base-styles.css` | The theme each deck's `styles.css` is copied from | revealjs-skill, adapted |
-| `references/plan-template.md` | Blank `plan.md` | Ours |
-| `library/index.md` | The slide library's index: every component by purpose, with its code, what it looks like, what it is good for, and related components. Generated | Ours |
-| `references/new-component.md` | Adding a component to the library: what it must include, its structure, rebuilding the index. Only when asked | Ours |
-| `library/<purpose>/slides.html` | The sample slides themselves. For the builder | Ours |
-| `library/index.html` | The same index as a page, for the user to browse | Ours |
-
-## Do not read
-
-| File | Read only when |
-| --- | --- |
-| `library/<purpose>/slides.html` | Never, in the main conversation. You plan from `library/index.md`; the builder subagent opens the slides the plan links to |
-| `references/slides.md` above "Walk-through", `references/advanced-features.md` | Never, in the main conversation. They are the builder's |
-| `presentation.html` below `<!-- SLIDES:END -->` | Never. It is the engine |
-| `styles.css` below the `:root` block | Adding a class for a repeated pattern |
-| `scripts/*.js` | A script fails |
-
-## Delegating
-
-| Step handed over | Give the subagent | You read |
-| --- | --- | --- |
-| Read source documents | The brief in `references/context.md` | `references/context.md` |
-| Hard questions | The brief in `references/questions.md`, the path to `plan.md` | `references/questions.md` |
-| Build the deck (always handed over) | The path to `plan.md`; `references/slides.md`, `references/charts.md`, `references/writing.md`; the skill folder's full path (Pattern links are relative to it); tell it to follow each block's Pattern link, take every number from the block's Source, screenshot and look at every slide, and return: slide ids, anything that did not fit its pattern, anything it could not source, the screenshot folder | Nothing. Then look at the screenshots |
-| Change slides after the walk-through | The slide ids, the change, the same three references | Nothing |
-
-Always yours (you hold the gates): the interview, the storyboard, the walk-through. One-line wording fixes to a slide you may make yourself by its id.
+- The base theme carries the toolbox Look tokens (`--blue`, `--navy`, `--ink` ...) at the top of `styles.css`. Light, readout level, sharp: blue highlight, grey context.
+- Colours only through the tokens. No company name, no logo. Light hover only; nothing moves; no controls on a slide.
 
 ## Rules
 
-- Before gate 1: look only. Create nothing.
-- No HTML before gate 2.
-- Present the goal and how it was met, not everything that was done. Work that does not serve the goal goes under "Left out" in `plan.md`, one line each.
-- The audience decides depth. Cut background the audience already has.
-- Every slide makes one point, stated in its headline. A slide with no point is cut.
-- A visual shows one metric or one relationship and proves its slide's headline. No exploratory charts.
-- Every visual is one fixed cut, hard-coded, chosen for a stated reason. No dropdowns, filters, tabs, toggles or links to a live dashboard on a slide.
-- Light hover only, and it is built in: a one-line tooltip on chart marks, a slight lift on cards, a tint on rows. A slide must read in full with no pointer on it.
-- Every number on a slide traces to a source listed in `plan.md`.
-- Text follows `references/writing.md`; the user's tone document overrides it.
-- Colours and fonts live only in `styles.css`. Slides and chart JSON use its variables, never their own colours.
-- Every storyboard block links to its pattern in the library. Planning reads the index only; the builder reads the linked slides.
-- Slides are filled and changed with Edit, one at a time, by id. Never rewrite `presentation.html` whole.
+- One point per slide, in its headline. The visual shows the headline's own number, one fixed cut.
+- Every number traces to a source named in the slide's footnote (and in `plan.md` in full mode).
+- The user's picks (a visual, a cut, wording) stand. Raise a concern once, only when it cannot work as asked.
+- Changing a chart's period or series: update its heading, its footnote period and any bullet citing what was removed, in the same pass.
+- A new deck in one Edit; later changes one slide per Edit, by id. Never rewrite `presentation.html` whole; never read below `<!-- SLIDES:END -->`.
+- User likes a visual, or says save it: launch `design-librarian` with the files; it saves them to the design library.
 
-## Needs
+## Scripts
 
-- Node.js, for the scripts.
-- Internet when a deck is opened: reveal.js and ECharts load from a CDN.
-- Edge or Chrome, for `screenshot.js`.
-- Optional: `puppeteer` for `check-overflow.js`.
+All in `scripts/`, run with Node. Mechanical only.
 
-Deck structure, scripts and references adapted from github.com/ryanbbrown/revealjs-skill (MIT, see `LICENSE-revealjs-skill`).
+| Script | Does |
+| --- | --- |
+| `create-presentation.js --title "<t>" -o <deck>/presentation.html` | Scaffold plus `styles.css`. `--plan-only` writes `plan.md` (full mode). `--refresh <file>` updates an old deck's engine |
+| `screenshot.js <html> <temp-dir> [slide-id ...]` | One image per slide plus `sheet.png`, a contact sheet of them all (Edge or Chrome; `--browser <path>` if not found) |
+| `patterns.js <library> <id> ...` | Prints the reusable part of each named library item, in one call |
+| `slides.js`, `add-slide.js` | Inventory, show, sync, remove, move, describe; insert a working slide (see "Existing deck") |
+| `check-charts.js <html>` | Chart JSON, limits, one item highlighted, no controls |
+| `check-overflow.js <html>`, `edit-html.js <html>` | Overflow measure (needs `puppeteer`); browser editor for wording |
+
+Needs: Node.js; internet when a deck opens (reveal.js and ECharts from a CDN); Edge or Chrome for screenshots.
+
+Deck engine, scripts and parts of the references adapted from github.com/ryanbbrown/revealjs-skill (MIT, see `LICENSE-revealjs-skill`).

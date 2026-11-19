@@ -1,8 +1,8 @@
-# Steps 2 and 4: the brief and the storyboard
+# Full mode, steps 2 and 4: the brief and the storyboard
 
 Both live in `plan.md`. Both are agreed with the user, not written for them.
 
-- What to settle with the user, and in what order: `SKILL.md`, "Interviews". How to ask: the grilling skill.
+- What to settle with the user, and in what order: `references/full-mode.md`, "Interviews". How to ask: the grilling skill.
 - This page holds the tables those interviews draw on, and the storyboard format.
 
 ## The brief (step 2)
@@ -47,21 +47,21 @@ One block per slide, in `plan.md`. Every line is required; a slide that cannot f
 ### 4. Churn fell from 5.1% to 3.1% after launch
 
 - Section: Results
-- Pattern: CH-02 `library/change/slides.html#/line-event-callout`
+- Pattern: CH-02 (a design library id; `add-slide.js --pattern CH-02`) (no library: a layout name, such as `chart-commentary`)
 - Showing: monthly early churn for customers on the new and old onboarding, April to October
 - Purpose: the main proof that the change worked. Serves takeaway 1
 - On the page: line chart, new onboarding highlighted, launch marked; the October figure called out; 3 commentary bullets (when the drop started, that it held, what the old group did)
 - Visual from: analysis report, "Churn by month" chart
 - Cut: onboarding = new and old; region = all; April to October. Reason: shows the gap opening after launch
 - Footnote: what is measured, the period, the source, in the audience's words
-- Source: analysis `data/sections/s2`; commentary C3
+- Source: finding 3; `reports/churn`, `python run.py data churn_by_month by_month`
 ```
 
 | Line | Holds |
 | --- | --- |
 | Heading | The headline: the slide's point as a full sentence. Not a topic |
 | Section | 3 to 5 across the deck, two words at most (they show in the bottom bar) |
-| Pattern | The code and link of the library component this slide follows, from `library/index.md`. Chosen by what the slide has to do (the index's "Good for" lines), not by subject |
+| Pattern | With a design library: the code and link of the component this slide follows, from its `index.md`, chosen by its "Good for" lines, not by subject. Without one: a layout from `references/slides.md` |
 | Showing | What the audience sees, in plain words |
 | Purpose | What the slide does for the story, and which takeaway it serves |
 | On the page | The visual (kind, exact metric, highlighted item) or "no visual"; how many commentary bullets and what each covers; numbers called out. Rules: `references/charts.md` |
@@ -87,6 +87,6 @@ Rules:
 - Cut what the audience table says this audience does not need.
 - Detail someone may ask for goes to the appendix, after the closing slide.
 
-Choosing patterns: read `library/index.md` only. Do not open the library's slide files; the builder subagent does that. Do not use the same pattern on more than two slides running. Check a component's Related codes before settling. Nothing fits: say so to the user and agree the nearest, or agree to add one (`references/new-component.md`).
+Choosing patterns: read the library's `index.md` only. Do not open its slide files; the builder subagent does that. Do not use the same pattern on more than two slides running. Check a component's Related codes before settling. Nothing fits: say so to the user and agree the nearest, or agree to add one (`new-component.md` in the design library).
 
-Draft every block, then run Interview 2 (`SKILL.md`, "Interviews"): the headlines as a numbered list first, then the slides by section. Run step 5 (`references/questions.md`) once the story is settled, so its questions join the same interview. Then gate 2.
+Draft every block, then run Interview 2 (`references/full-mode.md`, "Interviews"): the headlines as a numbered list first, then the slides by section. Run step 5 (`references/questions.md`) once the story is settled, so its questions join the same interview. Then gate 2.

@@ -1,0 +1,6 @@
+node_modules/
+Dist/
+.export/
+Exports/*.html
+Data/
+__pycache__/

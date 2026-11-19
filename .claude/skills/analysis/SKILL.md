@@ -1,111 +1,69 @@
 ---
 name: analysis
-description: One-off or occasional data analysis that answers one question (compare two sources, test a relationship, explain a change, find outliers), delivered as one HTML report. Two phases. Analysis: define the request, test, save findings as small Python section files; no HTML. Report: only once the answer is agreed, build the HTML from the sections that prove it, add number-checked commentary, and have a cold reader confirm it answers the request. Use for "can you tell me if / where / why ..." requests on data, or to rerun or change an existing analysis folder. Not for standing weekly or monthly reporting; that is a dashboard.
+description: Data analysis in two modes. Explore (the default) tests things in the conversation, creating and saving nothing. Report, only when asked, builds a quick templated HTML readout, one file per section (an analytic returning tables and metrics, its chart, and author-written bullets whose figures are pulled from those metrics). Use for "can you tell me if / where / why ..." questions on data, and to rerun or change an existing report folder. Not for standing weekly or monthly views; that is a dashboard.
 ---
 
 # Analysis
 
-One question in, one HTML report out. One self-contained, rerunnable folder per analysis.
+Explore by default. Build a report only when asked.
 
-| Analysis (this skill) | Dashboard (not this skill) |
+## First
+
+- Read the project's `CLAUDE.md` map. Open the project plan and findings it lists when they bear on the question.
+
+## Explore
+
+- Test however suits the question: Python or SQL in the session, counts, cuts, comparisons. No required file format.
+- Results go in the conversation: a small table or a few figures, each with one line on what it shows.
+- Create no folders and save no files unless asked.
+- Open question ("why is X high?"): name the few things you will test, likeliest first. Ask before chasing something off that list.
+- Data with more than one date (paid, service, received): check the answer on each. If they disagree, say so.
+- Say when a result looks worth a report. The person decides.
+
+## Report
+
+Only when asked ("write it up", "make a report").
+
+| Request | Before building |
 | --- | --- |
-| Asked once, or a few times a year | Weekly or monthly monitoring |
-| Answers one question | Standing view with filters and history |
+| Small: one question, one or two sections | One message: the question, who reads it, the answer and the sections you will show. One yes covers it |
+| Larger, or an open question | 1. Brief: question, reader, what they must be able to say or do after, sources, things to test. Yes. 2. The answer in two sentences, one line per section (its claim, its chart). Yes |
 
-## Mode
+Told "just do it": skip the yes and list what you assumed at hand-over.
 
-| Mode | Gates 1 and 2 | Ends with |
-| --- | --- | --- |
-| Guided (default) | User answers and approves | The report |
-| Auto | You answer; each answer logged as an assumption | The report + a note: what was done, assumptions, "do these sound right?" (`references/auto.md`) |
+A caveat from exploring that changes the size or reading of the answer goes in the headline, `basis` or an answer bullet, never only in a note.
 
-- Mode not stated: ask in one line before step 1.
-- "Just run it", "don't ask me", "auto": auto.
+1. **Where.** The map's folder for reports or outputs. No fitting folder, or no map: ask where.
+2. **Create.** `python <this skill>/scripts/new_report.py <parent> <name> --title "..." --question "..." --for "<reader>" --source <name>=<file> --map <project CLAUDE.md>`. It adds the map line.
+3. **Sections.** `python run.py list` shows the sources and columns. Per section: `python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL] [--agg sum|count|mean] [--where COL=VALUE] --bullets N --desc "8 to 10 words"` (no `--y`: counts rows; `--y`: sums; `--where` limits rows; quote `"COL>=VALUE"` and `<=`). It writes a working `sections/sN_NAME.py`; reword the lines it prints. It notes a section that seems to repeat one already there: tell the user or ask which they meant. Other shapes: edit that file (`references/section.md`).
+4. **Answer.** In `report.py`: the brief (docstring) and `ANSWER`. `python run.py report`. Fix every `STOP:` and `check:` line.
+5. **Look at it.** `python run.py shot` saves a screenshot to read: charts drawn, nothing overlapping, plain words throughout.
+6. **Hand over.** The report path, the answer, anything assumed or unverified. Offer a cold read (`references/cold-read.md`); run it only if accepted.
 
-## The folder
+## Bullets
 
-```
-<yyyy-mm-name>/
-  README.md     brief, storyline, cold-read result            you write
-  config.py     title, question, sources, parameters, REPORT  you write
-  sections/     s1_<name>.py, s2_... (+ shared.py)            you write, one per piece of analysis
-  sql/          one .sql per query (if needed)                you write
-  inputs/       files handed over (if any)                    you add
-  page.html     report look: fonts, colours, layout           copied; edit only to restyle
-  run.py        the one command                               copied, never edit
-  _engine/      build code                                    copied, never edit, never read
-  data/         sources/ (saved query results), sections/ (each section's tables)   generated
-  commentary/   commentary files                              generated
-  output/       <folder>_<date>.html, exported CSVs           generated
-```
-
-## Steps
-
-In order. Gate = stop until it passes.
-
-**Phase 1: analysis. No HTML.**
-
-| # | Step | Gate | Read |
-| --- | --- | --- | --- |
-| 1 | Define the request | **Gate 1:** user approves the brief | `references/request.md` |
-| 2 | Create the folder, connect sources | | `references/sources.md` |
-| 3 | Analyse only what the brief asks or lists to test. Keep-worthy pieces: section files. `python run.py s2` prints results | | `references/sections.md` |
-| 4 | State the answer and the sections that prove it | **Gate 2:** user agrees it is the answer | `references/storyline.md` |
-
-**Phase 2: report. Only after gate 2.**
-
-| # | Step | Gate | Read |
-| --- | --- | --- | --- |
-| 5 | Chosen sections into `config.py` `REPORT`, add charts, `python run.py report` | | `references/charts.md` |
-| 6 | `python run.py commentary` | | `references/commentary.md` |
-| 7 | Cold read | **Gate 3:** a fresh reader's conclusion matches the brief | `references/cold-read.md` |
-| 8 | Hand over: report path, answer, what is assumed or unverified. Record in `README.md`, "Hand-over notes". Auto: the note in `references/auto.md`. A `findings.md` here or in a folder above: add the report's findings to it, each naming the plan item it bears on and citing its section file and table (the `findings` skill) | | |
-
-Other starting points:
-
-| Situation | Read |
-| --- | --- |
-| Existing folder | Its `README.md` first |
-| Rerun or change | `references/rerun.md` |
-| Convert an existing process (scripts, workbook, hand-built report) | `references/convert.md`. Subagents explore and rewrite; main conversation only holds the gates |
-
-## Do not read
-
-| File | Read only when |
-| --- | --- |
-| `_engine/engine.py` (large) | Both: (1) a `python run.py` command ended in a Python traceback, not a `STOP:` message; (2) the traceback's last lines are in `_engine/engine.py`, not `config.py` or a section file. Then only the function it names |
-| `page.html` | User asks for a different look. Then only its `:root` block |
-
-Commands: `python run.py --help`. A `STOP:` message says what to do.
-
-## Delegating
-
-Give the subagent the reference's path; tell it to read and follow it. Do not read it yourself.
-
-| Step handed over | Give the subagent | You read |
-| --- | --- | --- |
-| Connect sources, write SQL | `references/sources.md` | Nothing |
-| Write or change a section's figures | `references/sections.md` | Nothing |
-| Add charts to a section | `references/charts.md` | Nothing |
-| Run commentary, fix failures | `references/commentary.md` | Nothing |
-| Rerun with new dates or files | `references/rerun.md` | Nothing |
-| Cold read | The brief in `references/cold-read.md` | `references/cold-read.md` |
-
-- Always yours (you hold the gates): `references/request.md`, `references/storyline.md`.
-- Every brief also gives: the analysis folder, the files it may write, what to return (files written, summary table as printed).
+- You write them from the results and the project's findings. No commentary step.
+- Every figure is a placeholder pulling a metric: `{metric:.0%}`, `{section_name.metric:$short}`. Never type a result: a typed number is flagged, so make it a metric. Years, and thresholds that match `DEFAULTS` or `PARAMS`, may be typed.
+- A comparison word (normal, in line, flat, up) needs both sides as metrics on one basis.
+- Section title: the finding as a sentence. Up to 3 bullets, about 25 words each, point first.
+- The answer is a headline and `basis` (a chart note is not enough). Bullets and key figures are optional. A named size gets exactly that: one chart and three bullets means no more.
 
 ## Rules
 
-- Before gate 1: look only. Read the named files or tables, quick counts and totals in the session. Save nothing, create nothing.
-- No HTML before gate 2. `REPORT` stays empty until the user agrees the answer (auto: until the answer meets the brief's Success line). Report commands refuse to run while it is empty.
-- Auto skips the asking, never the steps. Brief, test list and storyline are still written down.
-- A section file is analysis, not a place in the report. Dead ends stay in `sections/`, out of `REPORT`, one line each under "Not included".
-- Open question ("why is X high?"): a list of things to test, agreed in the brief. Test only what is on it. Never check fields at random.
-- The report answers the question, nothing else. Every `REPORT` section proves one claim the answer needs. None "for context" or "for completeness".
-- A visual exists only to prove its section's claim. Claim reads the same without it: cut it.
-- Reader does not know the data: plain words; no column names, codes or unexplained abbreviations in titles, labels or notes. One plain name per source, used everywhere.
-- Sections ask for sources by name. No SQL, no file paths in section files.
-- No hand-written commentary or findings in the page. Numbers come from code; prose from the commentary step.
-- Never edit `_engine/`, `run.py`, or anything under `data/`, `commentary/`, `output/`. Old dated reports in `output/` may be deleted.
-- Different look (fonts, colours, logo, layout): that analysis's own `page.html`, only when the user asks. Never change the skill's `template/` for one analysis. `references/charts.md`, "Restyling".
-- Create no files beyond those listed above.
+- The report answers the question, nothing else. One to five sections, each proving one claim the answer needs. No overview or profiling section.
+- One chart per section, proving its claim. Reads the same without it: cut it.
+- Reader does not know the data: no column names, codes or unexplained abbreviations anywhere.
+- Nothing saved by default: sources and tables live in memory for each run. `KEEP` saves a slow source; a section's `export` writes a table as CSV.
+- Never read or edit `run.py`. `page.html` only for a restyle the user asks for, and then only its `:root` block.
+- No company names or logos.
+- User likes a visual, or says save it: launch `design-librarian` with the files; it saves them to the design library.
+
+## Existing report folder
+
+- Add or change a section: `python run.py list` (the registry), then `add-section` or the one file it names; reword the bullets; `python run.py report`; `python run.py shot`.
+- Open `report.py` only for the brief, the answer or the order. Open a section file only when you just added it or the user points at it.
+- Rerun: compare the new file's date range and row count with the old one and update `DEFAULTS` (or `PARAMS`, if only this report differs). `python run.py report`, then reread the headline, `basis`, titles and bullets; placeholders update, words do not. A section that changes the answer means rewriting `ANSWER`.
+- A deck or dashboard needs a section's numbers: `python run.py data NAME [TABLE] [--json] [--out FILE]`. No script needed.
+- New question: new folder.
+
+`python run.py --help` lists the commands. A `STOP:` line names the file and the fix.

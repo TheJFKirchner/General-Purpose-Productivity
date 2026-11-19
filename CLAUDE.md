@@ -31,3 +31,6 @@ Write good commit messages as you go: the automatic description is built from th
 ## Skills and agents live here
 
 `.claude/skills/` and `.claude/agents/` in this repo are the only copies of the factory-mode skill and the factory, security-review and git-shipper agents. On the desktop, the user-level folders are links to these, so edit them here and nowhere else.
+
+- The analysis toolbox skills, the `commentary-generator` and `design-librarian` agents, `design-library/` and `brain-intake/` are edited in those working locations, never in `Toolkit Update/`.
+- `Toolkit Update/` is a copy for installing elsewhere. After any such edit, refresh it with the commands in [its README](Toolkit%20Update/README.md).

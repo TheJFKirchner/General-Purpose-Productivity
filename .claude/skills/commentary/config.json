@@ -1,6 +1,0 @@
-{
-  "default_model": "sonnet",
-  "max_combinations": 50,
-  "parallel_calls": 4,
-  "writer_timeout_s": 300
-}

@@ -1,0 +1,10 @@
+{
+  "title": "Sales overview",
+  "audience": "Sales leadership",
+  "script": "example.py",
+  "output": "sales-overview",
+  "sections": ["s1_summary", "s2_revenue_trend"],
+  "filters": {
+    "region": { "value": "All", "options": ["All", "East", "North", "South", "West"] }
+  }
+}

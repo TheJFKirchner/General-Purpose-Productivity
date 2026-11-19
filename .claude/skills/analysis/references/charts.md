@@ -1,97 +1,59 @@
-# Visuals
-
-`charts(data)` returns a list. Each item is one card in the section.
-
-| Field | Required | What |
-| --- | --- | --- |
-| `title` | yes | What the reader should see in it, plain words |
-| `option` | one of | An ECharts option (dict). DataFrame columns can be passed directly as data |
-| `table` | one of | A DataFrame, shown as a sortable table. At most 500 rows |
-| `note` | no | One line under the visual: a definition or caveat the reader needs |
-| `width` | no | `"half"`: two cards side by side. Default full width |
-| `height` | no | Chart height, pixels. Default 360 |
-| `format` | no | Tables only: `{"column": ",.0f"}` (Python number formats; `".1%"` for percents) |
+# Charts beyond the shorthand, and restyling
 
 ## Pick the visual from the claim
 
 | The claim is about | Use |
 | --- | --- |
-| One or two headline figures | No chart: `[]`, or one small table. The commentary states them |
-| Size across a few categories | Bar, sorted largest first. Horizontal when labels are long |
-| Change over time | Line (bar for a handful of periods) |
-| Two sources or periods side by side | Grouped bar, or two lines |
-| Where a gap sits | Bar of the gap itself, not two near-equal bars |
-| A relationship between two measures | Scatter |
-| A spread, and who is outside it | Histogram (bar of counts per range) or scatter |
-| The specific records to act on | Table of the top rows, plus `EXPORT` for the full list |
+| One or two headline figures | No chart: `kpis` |
+| Size across a few categories | `bar` sorted, or `hbar` when labels are long |
+| Change over time | `line` (`bar` for six or fewer periods), `LAYOUT = "wide"` |
+| Two sources or periods side by side | `bar` with two `y` columns, or two lines |
+| Where a gap sits | A bar of the gap itself, not two near-equal bars |
+| Parts of a whole across groups | `stack` |
+| A relationship between two measures | `scatter` |
+| The records to act on | `table` with `top`, plus `export` for the full list |
 
-## Rules
+- One chart per section. The chart proves the section's claim; plot what the claim is about.
+- One value axis. At most 6 series; top N beats a crowded chart.
+- Plain words in captions, axis names and legends. No column names or codes.
+- No colours set in charts, except `highlight` (or `"@orange"`) for the one bar the claim is about.
+- A threshold the claim is judged against (target, materiality): draw it with `ref`, not in words only.
 
-- The visual proves the section's claim. Shows something else: change it or cut it.
-- Plot what the claim is about. Claim is a difference: plot the difference.
-- At most 3 visuals per section. Usually 1 or 2.
-- One y-axis. Never two scales on one chart.
-- At most 6 series. Fewer categories beat more: top N plus "All other".
-- Sort bars by value, unless the order means something (months, age bands).
-- Axis names: about 25 characters at most, with the unit ("Paid amount, $"). Name every axis that is not obvious. Longer explanations: `title` or `note`.
-- Plain words in titles, axis names, legend entries and table headings. Rename columns before charting (`df.rename(columns=...)`); never show `clm_amt_pd`.
-- Codes and abbreviations: spell out, or explain in `note`.
-- Tables: at most 6 columns (no sideways scroll). Only rows the reader will read: top 10 to 25; the rest in `EXPORT`.
-- Colours come from `page.html` (blue first). Set none in a chart, except one highlight colour for the single bar or line the claim is about.
+## A chart function
 
-## Patterns
+When the keys cannot draw it, `CHART` in the section file takes a function of the analytic's tables that returns an ECharts option:
 
 ```python
-# bar, largest first
-d = data["by_reason"].sort_values("claims", ascending=False)
-{"title": "Three reasons account for most differences",
- "option": {"xAxis": {"type": "category", "data": d["reason"]},
-            "yAxis": {"type": "value", "name": "Claims"},
-            "series": [{"type": "bar", "data": d["claims"]}]}}
+def _waterfall(t):
+    d = t["bridge"]
+    return {
+        "format": "$short",                         # value format, as in the shorthand
+        "caption": "From April to May",             # optional caption; "height": 360 optional
+        "xAxis": {"type": "category", "data": list(d["step"])},
+        "yAxis": {"type": "value", "name": "Paid amount"},
+        "series": [{"type": "bar", "stack": "w", "data": list(d["base"]),
+                    "itemStyle": {"color": "transparent"}},
+                   {"type": "bar", "stack": "w", "data": list(d["change"]),
+                    "label": {"show": True, "position": "top"}}],
+    }
 
-# horizontal bar (long labels): swap the axes; reverse so the largest is on top
-d = d.sort_values("claims")
-"option": {"yAxis": {"type": "category", "data": d["reason"]},
-           "xAxis": {"type": "value", "name": "Claims"},
-           "series": [{"type": "bar", "data": d["claims"]}]}
-
-# two lines over time
-"option": {"xAxis": {"type": "category", "data": d["month"]},
-           "yAxis": {"type": "value", "name": "Paid amount, $"},
-           "series": [{"type": "line", "name": "Source A", "data": d["paid_a"]},
-                      {"type": "line", "name": "Source B", "data": d["paid_b"]}]}
-
-# scatter
-"option": {"xAxis": {"type": "value", "name": "Billed, $"},
-           "yAxis": {"type": "value", "name": "Paid, $"},
-           "series": [{"type": "scatter", "symbolSize": 6, "data": d[["billed", "paid"]]}]}
-
-# highlight one bar
-"series": [{"type": "bar", "data": [
-    {"value": v, "itemStyle": {"color": "#eb6834"}} if name == "March" else v
-    for name, v in zip(d["month"], d["gap"])]}]
-
-# table of the rows to act on
-{"title": "Largest paid-amount differences",
- "table": data["differences"].head(20).rename(columns={"claim_id": "Claim", "gap": "Difference, $"}),
- "format": {"Difference, $": ",.2f"}}
+CHART = _waterfall          # in the same section file, below the function
 ```
 
-- Already applied by `page.html`: colours, fonts, tooltips, legend (more than one series), margins, axis styling.
-- Zoom on long time series: `"dataZoom": [{"type": "inside"}, {"type": "slider"}]`.
-- Number formats on axes or tooltips: a string starting `js:` becomes a JavaScript function, e.g. `"axisLabel": {"formatter": "js:function (v) { return '$' + v.toLocaleString(); }"}`.
+- DataFrame columns can be passed as data; `run.py` converts them.
+- `"@blue"`, `"@orange"` ... anywhere in the option become the page's colours.
+- Already applied by `page.html`: palette, font, axis styling, tooltip, legend for several series, margins, no animation, no hover state.
 
 ## Restyling
 
-Only when the user asks. Edit `page.html` in the analysis folder, then `python run.py build`.
+Only when asked. Edit that report's `page.html`, then `python run.py report`.
 
-| To change | Edit in `page.html` |
+| To change | Edit |
 | --- | --- |
-| Font | `--font` in the `:root` block (page and charts) |
-| Page colours | The other `:root` variables (`--navy` headings, `--accent` links, `--page` background ...) |
-| Chart series colours | `--s1` to `--s6`, in the order used |
-| Logo, header, footer, layout | The HTML and CSS below `:root` |
+| Colours, font | The `:root` block at the top (about 10 lines). Charts follow |
+| Series order | `PALETTE` in the script near the end |
+| Layout | The CSS below `:root` |
 
-- Fonts and colours: read only the `:root` block (about the first 20 lines).
 - Keep every `__TOKEN__`; the build stops if one is missing.
-- Applies to this analysis only. Same look for every new analysis: the user changes the skill's `template/page.html`.
+- No logo or company name. Same look for every new report: change the skill's `template/page.html`.
+- No internet where the report is read: put `echarts.min.js` beside `run.py` and rebuild; it is embedded.
