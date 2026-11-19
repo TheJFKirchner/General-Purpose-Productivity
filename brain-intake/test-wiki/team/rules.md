@@ -6,7 +6,7 @@ description: Writing rules for team pages.
 
 - Team pages hold facts the whole analytics team relies on. No personal opinions or hunches.
 - New team pages start from a template in `team/templates/`. Keep the template's section headings and their order.
-- Every fact is one bullet, one idea. Lead with the fact; reasons come after.
+- Write in the style the section already uses: prose stays prose, a table gets a row, a list gets an item.
 - Cite where each fact came from with `(src: <record or document>)` at the end of the bullet.
 - Use only tags listed in `team/tags.md`.
 - Wikilinks point to team pages only. Never link a team page to a personal page.

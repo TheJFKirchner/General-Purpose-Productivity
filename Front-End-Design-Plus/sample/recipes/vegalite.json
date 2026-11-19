@@ -1,0 +1,8 @@
+{
+  "id": "G1",
+  "parent": null,
+  "title": "Monthly revenue by channel",
+  "library": "vegalite",
+  "kind": "chart",
+  "code": "const PALETTE = ['#1F4E79', '#2E75B6', '#5B9BD5', '#9DC3E6', '#44546A', '#8497B0', '#A5A5A5', '#D6DCE5'];\nconst values = rows.map(r => ({\n  order_date: String(r.order_date).slice(0, 10),\n  channel: r.channel,\n  revenue: Number(r.revenue) || 0\n}));\nconst spec = {\n  width: 'container', height: 'container',\n  autosize: { type: 'fit', contains: 'padding' },\n  background: 'transparent',\n  title: { text: 'Monthly revenue by channel', anchor: 'start', offset: 12, fontSize: 14, color: '#1F4E79' },\n  data: { values },\n  mark: { type: 'bar' },\n  encoding: {\n    x: { field: 'order_date', timeUnit: 'utcyearmonth', type: 'ordinal', title: null, axis: { format: '%b %y', labelAngle: 0 } },\n    y: { aggregate: 'sum', field: 'revenue', type: 'quantitative', title: 'Revenue', axis: { format: '~s' } },\n    color: { field: 'channel', type: 'nominal', title: null, scale: { range: PALETTE } },\n    tooltip: [\n      { field: 'order_date', timeUnit: 'utcyearmonth', type: 'temporal', title: 'Month' },\n      { field: 'channel', type: 'nominal', title: 'Channel' },\n      { aggregate: 'sum', field: 'revenue', type: 'quantitative', title: 'Revenue', format: ',.0f' }\n    ]\n  },\n  config: {\n    font: 'Segoe UI, Arial, sans-serif',\n    axis: { labelColor: '#333F4F', titleColor: '#333F4F', gridColor: '#E5E9F0', domainColor: '#8497B0' },\n    legend: { orient: 'top', labelColor: '#333F4F', titleColor: '#333F4F' },\n    view: { stroke: null }\n  }\n};\nreturn lib(el, spec, { mode: 'vega-lite', actions: false, renderer: 'svg' });"
+}

@@ -5,6 +5,7 @@ Skills for Claude Code. Copy a skill folder into your skills folder (for example
 | Skill | What it does |
 |---|---|
 | [Smart-HTML-Editor](Smart-HTML-Editor/SKILL.md) | Opens any HTML file in an interactive editor: type over text in place, click any part to restyle it, recolor the theme, or ask a built-in assistant. Neither the assistant nor Claude Code ever sees the page's data. |
+| [Front-End-Design-Plus](Front-End-Design-Plus/SKILL.md) | Opens a local whiteboard page for designing charts and tables on real data: chat with an agent that sees only column names and a few sample rows, get several ID'd visuals drawn on the full table, iterate and save the ones you like, and Claude Code merges them into the deliverable. Works in ECharts, Plotly, Chart.js, Vega-Lite, D3 or plain HTML, offline. User-invoked only; needs the Claude Agent SDK and a signed-in Claude Code (an approved exception to the `agentlib` rule). Start with its [README](Front-End-Design-Plus/README.md). |
 | [james-themes](james-themes/SKILL.md) | Dashboard themes and ready-made components for building or restyling dashboards, report pages and charts. Four themes (Cigna Light/Dark, Evernorth Light/Dark) plus React + ECharts cards, charts, tables, controls and layout pieces, with working example pages and design rules. |
 
 ## Libraries

@@ -1,17 +1,18 @@
 # How to build findings.md
 
-Put this file wherever new projects are set up. It stands alone: everything needed to create and keep a project's `findings.md` is here.
+This goes in the new-project standup instructions. It stands alone: everything needed to create and keep a project's `findings.md` is here.
 
 ## What it is
 
 One file per project: what the work has established against the project plan, and where each result came from. A list, not a report. Nothing is ranked or judged in it.
 
 - A project has findings only if it has a project plan. The plan is the one linked in the project's `CLAUDE.md`. No plan linked: no `findings.md`.
-- Durable facts (methods, gotchas, definitions, reference numbers) are not findings. They go to the session facts file and on to the wiki.
+- Reference knowledge (methods, gotchas, definitions, reference numbers) is a fact, not a finding. Facts are recorded in the wiki's session facts file, as the main agent file says, never here.
 
 ## Where it goes
 
 - In the same folder as the project plan, named `findings.md`.
+- A `findings.md` already there, or in a folder above: use that one.
 - It is made the first time there is a finding to record. If it does not exist, create it.
 
 ## Starting content
@@ -49,6 +50,7 @@ Both must be true:
 | A result that bears on no plan item | Not a finding. Tell the user in one line |
 | A negative result the plan asked about ("no seasonality found") | A finding |
 | Something that blocks a plan item | A finding |
+| It is also a general lesson | Record the finding here with this project's result, and the lesson as a fact, worded to stand without the project |
 | Unsure | Leave it out and tell the user in one line |
 
 ## Adding a row
@@ -63,6 +65,7 @@ Both must be true:
 | Added | Today |
 
 - No source: do not add it. Nothing from memory.
+- Add a finding when the work produces it. Do not rank or filter, and do not ask for approval.
 - Already in the list: skip.
 - New data gives a new figure: add a new row with the new "As of". Never edit or delete old rows.
 - Append only. One writer: the main conversation. Sub-agents report findings back; they do not write the file.
@@ -86,3 +89,4 @@ The figures are invented.
 - Before writing a deck, report or summary: read `findings.md`.
 - Cite the row number where a finding is used (finding 12).
 - Check "As of". Older than the current data: re-read the source, or say the date with the finding.
+- Not in the list and no source: do not use it.

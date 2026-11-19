@@ -1,0 +1,8 @@
+{
+  "id": "G1",
+  "parent": null,
+  "title": "Revenue by region and channel",
+  "library": "plotly",
+  "kind": "chart",
+  "code": "const PALETTE = ['#1F4E79', '#2E75B6', '#5B9BD5', '#9DC3E6', '#44546A', '#8497B0', '#A5A5A5', '#D6DCE5'];\nconst regions = [...new Set(rows.map(r => r.region))].sort();\nconst channels = [...new Set(rows.map(r => r.channel))].sort();\nconst sums = {};\nfor (const r of rows) {\n  const key = r.channel + '|' + r.region;\n  sums[key] = (sums[key] || 0) + (Number(r.revenue) || 0);\n}\nconst traces = channels.map((ch, i) => ({\n  type: 'bar', name: ch, x: regions,\n  y: regions.map(reg => Math.round(sums[ch + '|' + reg] || 0)),\n  marker: { color: PALETTE[i % PALETTE.length] },\n  hovertemplate: '%{x}<br>' + ch + ': %{y:,.0f}<extra></extra>'\n}));\nconst layout = {\n  barmode: 'group', autosize: true,\n  title: {\n    text: 'Revenue by region and channel', x: 0, xref: 'paper', xanchor: 'left',\n    y: 1, yref: 'container', yanchor: 'top', pad: { t: 6 }, font: { size: 14, color: '#1F4E79' }\n  },\n  margin: { l: 64, r: 16, t: 72, b: 44 },\n  font: { family: 'Segoe UI, Arial, sans-serif', color: '#333F4F', size: 12 },\n  paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',\n  legend: { orientation: 'h', x: 0, y: 1, yanchor: 'bottom' },\n  xaxis: { linecolor: '#8497B0' },\n  yaxis: { title: { text: 'Revenue' }, gridcolor: '#E5E9F0', tickformat: '~s', zeroline: false }\n};\nreturn lib.newPlot(el, traces, layout, { responsive: true, displayModeBar: false });"
+}
