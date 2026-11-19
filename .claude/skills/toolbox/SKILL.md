@@ -34,11 +34,11 @@ One short talk, a map in `CLAUDE.md`, a plan. Skip any question the request alre
 | Folder or file | Holds |
 | --- | --- |
 | `inputs/` | `sales.csv` from finance, 2026-11-18. Replaced 2026-12-01: adds December |
-| `reports/review/` | Quarterly report. Refresh: `python run.py` in this folder |
+| `reports/review/` | Report: Quarterly review. Refresh: new input files go where `report.py` SOURCES points (same names), then `python run.py report` in this folder |
 ```
 
 - The map lists only what exists. Planned deliverables go in Making; each skill adds its own row when it makes the file or folder (Findings, Design library).
-- Map and plan use relative or shared paths only, never one person's computer.
+- Map and plan use relative or shared paths only, never one person's computer. One exception: a dashboard kept outside a synced project folder (`dashboard-new`).
 - Anything run again (a report, a dashboard): end its row with `Refresh: <one command or step>`.
 
 ```markdown

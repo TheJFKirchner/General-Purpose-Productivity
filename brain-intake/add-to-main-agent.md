@@ -1,8 +1,8 @@
 # Add to the main agent file
 
-- Paste everything below the line into the file your main conversation loads (e.g. user-level CLAUDE.md). Fill in the two paths.
-- Holds only what no skill covers: recording facts, fact vs finding, using `braincite.md`, and what every analysis skill assumes.
-- Not here: filing facts (brain skills); writing a finding (the `findings` skill); building anything (the skill for it).
+- Paste everything below the line into the file your main conversation loads (its agent file or user-level CLAUDE.md). Fill in the two brain paths.
+- Holds how the main conversation behaves: recording facts, using `braincite.md`, choosing and running the analysis skills.
+- Install places, the project map and where files go: `add-to-claude-md.md`, not here.
 
 ---
 
@@ -73,37 +73,29 @@ How to record:
 
 ## Analysis toolbox
 
-- **Map:** `## Map` in the project's CLAUDE.md. Read it before touching a project.
-  - A "Project plan" line, then a two-column table: `Folder or file | Holds`.
-  - Lists only what exists. Relative paths only, never one person's computer.
-  - Each skill adds its own row. A row for anything run again ends with `Refresh: <one command or step>`.
-- **Two fixed rules:** a new project starts with a short talk and a map (the `toolbox` skill). Every number in a deliverable traces to code or a named source.
-- **Settings:** no environment variables; settings live in config files.
-
-### Words
-- Pipeline: fetch and prep data into tables. Answers nothing.
-- Analytic: one Python function, one question; returns tables and metrics, plus its question and notes.
-- Section: one visual block in a report, dashboard or deck that shows an analytic.
-- Finding: a result against the project plan, with its source. Recorded as the `findings` skill says.
-- Commentary: generated text for a dashboard that needs it across many filters or refreshes.
+- Before touching a project, read the `## Map` in its CLAUDE.md. No map: `toolbox` first.
+- A file no skill places (one sent over): its map row, else the project layout in CLAUDE.md; still unclear, ask in one line.
+- Load the skill before opening anything in a report, dashboard or deck folder; it says what to read.
+- Every number in anything handed out traces to code or a named source, including files no skill makes.
 
 ### Which skill
-- `toolbox`: a new project or a full rescope.
-- `analysis`: explore data (the default), or a short HTML report when asked. Exploring needs no skill structure and saves nothing.
-- `findings`: record a result against the plan; read before writing a deck, report or summary.
-- `commentary`: dashboard text across many filters or refreshes. Not for reports or decks.
-- `dashboard-new`: a new dashboard, or port existing work into one.
-- `dashboard-work`: change an existing dashboard.
-- `presentation`: a deck from existing work.
+| Request | Use |
+| --- | --- |
+| New project, full rescope, a new kind of output | `toolbox` |
+| A question of the data; "write it up"; change or rerun a report; a report table out to Excel | `analysis` |
+| "Note that"; before writing any deck, report or summary | `findings` |
+| New dashboard, or port work into one | `dashboard-new` |
+| Change a dashboard, new data for it, an offline file from it | `dashboard-work` |
+| Dashboard text across many filters or refreshes | `commentary` |
+| A deck, or a change to one | `presentation` |
+| The user likes a visual, "save that" | `design-librarian` agent |
 
-### A normal edit
-- Read the skill, at most one short page, and the inventory. Nothing else.
-- Inventory: `python run.py list` (report), `npm run status` (dashboard), `slides.js <deck>` (deck).
-- Add: `python run.py add-section`, `npm run new-section`, `add-slide.js`.
-- Never read copied framework files: a report's `run.py` and `page.html`, a dashboard's app and tools, a deck's engine and stylesheet, library slide files.
+### Subagents
+- Toolkit work stays in this conversation. A subagent only where the loaded skill names one.
 
-### Subagents and stops
-- Small jobs stay in this conversation. Launch a subagent only where a skill says so:
-  - `commentary-generator`: once, for dashboard commentary. Never for reports or decks; their bullets come from findings.
-  - `design-librarian`: when the user likes a visual or says save it.
-- Tell the user, do not silently proceed, when a request repeats a chart that exists, a refresh changes a headline answer, or data contradicts a recorded statement.
+### Living with an existing orchestrator
+- A skill's gates (brief, answer, slide list, storyboard, plan, sign-off) belong to the user: held in this conversation, never delegated.
+- A delegated builder gets the skill's path, the one reference it needs and a brief. Never the skill's text or this conversation.
+- Never split a small edit across subagents: each costs about 60K tokens before it starts; an add is 10 to 20 tool calls in place.
+- A delegated worker writes only inside the folder the map names, adds no folders, and shares no file with another worker.
+- The orchestrator's own plan, task or decision files never replace the project's plan, map or `findings.md`; results go there.

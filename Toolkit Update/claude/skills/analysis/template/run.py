@@ -13,7 +13,8 @@ traceback (not a STOP: line) whose last lines are in this file.
                                  write sections/sN_NAME.py (a working section) and add it to SECTIONS
   python run.py shot [OUT.png]   screenshot the built report with Edge or Chrome
   python run.py data NAME [TABLE] [--json] [--out FILE]
-                                 one table of an analytic (or TABLE=metrics) as CSV or JSON
+                                 one table of an analytic (or TABLE=metrics) as CSV or JSON;
+                                 --out FILE.xlsx: a workbook, one sheet per table when TABLE is left out
   --refresh                      pull sources listed in KEEP again
 
 Sources and tables are held in memory for one run. Nothing is written except the report,
@@ -800,6 +801,22 @@ def export_data(runner: Runner, args: list, as_json: bool, out: str | None) -> i
                    "use: python run.py data NAME [TABLE] [--json] [--out FILE]")
     res = runner.run(args[0])
     name = args[1] if len(args) == 2 else None
+    if out and out.lower().endswith(".xlsx"):   # a real workbook: the named table, or one sheet per table
+        try:
+            import openpyxl  # noqa: F401
+        except ImportError:
+            raise Stop("an .xlsx file needs openpyxl: python -m pip install openpyxl (or use --out FILE.csv)")
+        import pandas as pd
+        sheets = {"metrics": pd.DataFrame([{"metric": k, "value": jsonable(v)} for k, v in res["metrics"].items()])} \
+            if name == "metrics" else {t: table_of(res, t, f"data {args[0]}") for t in ([name] if name else res["tables"])}
+        if not sheets:
+            raise Stop(f"{args[0]} returned no tables")
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        with pd.ExcelWriter(out, engine="openpyxl") as xl:
+            for t, df in sheets.items():
+                df.to_excel(xl, sheet_name=re.sub(r"[\[\]:*?/\\]", "_", t)[:31], index=False)
+        print(f"Wrote {out} (sheets: {', '.join(sheets)})", file=sys.stderr)
+        return 0
     if name == "metrics":
         body = json.dumps(jsonable(res["metrics"]), indent=1) if as_json else \
             "metric,value\n" + "".join(f"{k},{jsonable(v)}\n" for k, v in res["metrics"].items())

@@ -20,7 +20,7 @@ Everyday section changes are in `section.md`. This page is for settings, sources
 | `SOURCES` | `{"claims": "inputs/claims.csv"}`, relative to the report folder. `.csv .tsv .parquet .xlsx .sql`, or a function returning a DataFrame |
 | `PARAMS` | Only where this report differs from `DEFAULTS`. Sections read `params["x"]`; `.sql` files `{x}`; text `{params.x}` |
 | `KEEP` | Sources saved in `data/` and reused until `--refresh`. Slow queries only |
-| `run_query(sql)` | For `.sql` sources: returns a DataFrame. Credentials stay out of the folder |
+| `run_query(sql)` | For `.sql` sources: returns a DataFrame. Credentials stay out of the folder: ask the user how this machine connects; never write a password, token or connection string into the project, the map or a skill |
 | `ANSWER` | `headline` and `basis` (which date, compared with what, exclusions, data through when) are required; `bullets` (up to 3) and `kpis` (2 to 4) optional. Figures as `{section_name.metric}` |
 | `SECTIONS` | Section file ids in reading order: `["s1_hospital_stays", "s2_paid_by_month"]` |
 
@@ -46,5 +46,5 @@ Everyday section changes are in `section.md`. This page is for settings, sources
 | `python run.py report` | Builds `<name>.html` (rewritten each time) |
 | `python run.py shot [OUT.png]` | Screenshot of the built report with Edge or Chrome. Charts load from the internet |
 | `python run.py text` | The report as plain text (for a cold read) |
-| `python run.py data NAME [TABLE] [--json] [--out FILE]` | One table (or `metrics`) as CSV or JSON. Prints unless `--out` |
+| `python run.py data NAME [TABLE] [--json] [--out FILE]` | One table (or `metrics`) as CSV or JSON. Prints unless `--out`. `--out <file>.xlsx`: a workbook (needs openpyxl), one sheet per table when TABLE is left out; files handed out go in the project's `exports/` |
 | `--refresh` | Pull `KEEP` sources again |

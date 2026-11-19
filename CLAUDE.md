@@ -34,4 +34,5 @@ Write good commit messages as you go: the automatic description is built from th
 
 - The design library lives only in `Toolkit Update/design-library/` and is edited there (rebuild its index with `node build-index.js` in that folder).
 - The analysis toolbox skills, the `commentary-generator` and `design-librarian` agents and `brain-intake/` are edited in their working locations, never in `Toolkit Update/`, and copied into it.
-- Apart from the design library, `Toolkit Update/` is a copy for installing elsewhere. After any such edit, refresh it with the commands in [its README](Toolkit%20Update/README.md).
+- `Toolkit Update/add-to-claude-md.md` and `Toolkit Update/README.md` are also edited in place. `Toolkit Update/add-to-main-agent.md` is a copy of `brain-intake/add-to-main-agent.md`; edit that one.
+- Apart from the design library and those pages, `Toolkit Update/` is a copy for installing elsewhere. After any such edit, refresh it with the commands in [its README](Toolkit%20Update/README.md).

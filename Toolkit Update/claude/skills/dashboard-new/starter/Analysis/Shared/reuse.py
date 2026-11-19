@@ -4,7 +4,7 @@
 
     @section("s4_paid_by_month", tables=["claims"])     # the report's SOURCES names, loaded as they are
     def paid_by_month(t):
-        r = from_report("../claims-review", "s1_paid_by_month", t)   # report folder, section file (or function name)
+        r = from_report("../reports/claims-review","s1_paid_by_month", t)   # report folder, section file (or function name)
         return {"data": {"rows": r["tables"]["by_month"]}, "metrics": r["metrics"]}
 
 A report keeps one file per section: <report>/sections/sN_<name>.py with one fn(src, params), and DEFAULTS in

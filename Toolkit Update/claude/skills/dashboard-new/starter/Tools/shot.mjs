@@ -4,7 +4,7 @@
 // Uses the running npm run dev, or starts its own and stops it afterwards (no npm run stop needed). Finds Edge or
 // Chrome in the standard install places or on the path, waits until no section says Loading, crops to the page's
 // height, and prints the file's path.
-// Default file: Data/.shots/<tab>-<date-time>.png.
+// Default file: Data/.shots/<tab>-<date-time>.png; a bare out.png also lands in Data/.shots/. For looking, not kept.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -80,7 +80,8 @@ if (!page || !(await pageUp(page))) {
 
 const hash = new URLSearchParams({ ...(only ? { only } : {}), ...(tab ? { tab } : {}), ...filters }).toString();
 const url = `${page.replace(/\/$/, '/')}${hash ? `#${hash}` : ''}`;
-const file = path.resolve(out ?? path.join(SHOTS, `${target ?? 'page'}-${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}.png`));
+// a bare file name goes in Data/.shots/ too (git-ignored); a path with a folder is used as given
+const file = path.resolve(out ? (/[\\/]/.test(out) ? out : path.join(SHOTS, out)) : path.join(SHOTS,`${target ?? 'page'}-${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}.png`));
 fs.mkdirSync(path.dirname(file), { recursive: true });
 const base = ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--user-data-dir=${path.join(SHOTS, '.profile')}`];
 let budget = 15000;

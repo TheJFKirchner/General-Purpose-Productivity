@@ -25,7 +25,7 @@ Four skills that get facts into a markdown wiki and tell a project which wiki pa
 | Item | What it is |
 |---|---|
 | [scripts/wiki_index.py](scripts/wiki_index.py) | The only script. Lists every wiki page with its description and section headings, so a sub-agent does not have to open every page to learn what exists. It makes no decisions and changes no page |
-| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file. Only what no skill covers: where the wiki and this folder are, how to record facts during a session and tell them from findings, and how to use a `braincite.md`. Also holds the analysis toolbox block (map, rules, words, which skill) |
+| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file. Only what no skill covers: where the wiki and this folder are, how to record facts during a session and tell them from findings, and how to use a `braincite.md`. Also holds the analysis toolbox block: which skill for which request, reading the project map first, and working beside an existing orchestrator. Install places and project layout are in `Toolkit Update/add-to-claude-md.md` |
 | [how-to-build-findings.md](how-to-build-findings.md) | A pointer: findings are kept as the `findings` skill says |
 | [test-wiki/](test-wiki/) | A small sample wiki (team and personal pages from different templates, one data dictionary, waiting facts and documents, a sample project) for trying the skills |
 

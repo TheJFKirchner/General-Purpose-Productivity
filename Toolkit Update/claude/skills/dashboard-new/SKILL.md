@@ -27,7 +27,8 @@ One check per step. Build only what the plan lists. Edit files with the Edit too
 
 ### 1. Copy the starter
 1. Read the project's `CLAUDE.md` map. A `dashboard/` row: use that folder. None: propose `<project>/dashboard/` and ask.
-   Avoid OneDrive folders (installed packages sync badly).
+   Never in OneDrive or another synced folder. Project in one: `<workspace dashboards folder>/<project>/` (unnamed: ask);
+   the map row names it instead of `dashboard/`; `sources.py` reads `inputs/` by absolute path (the one exception).
 2. Run `python <this skill>/tools/setup.py <folder> --title "<title>"`. Missing Node, or Python 3.10+ with
    `fastapi uvicorn duckdb pyarrow pandas`: tell the user and stop.
 3. After step 4, add or replace the map's `dashboard/` row: `` | `dashboard/` | The <what> dashboard for <whom>.
@@ -48,7 +49,7 @@ Setup copies the starter in and writes `dashboard.config.json`. After that nothi
   as_of_from="service_month")` (the date column gives "Data as of"). Never copy files into `Data/Current`.
 - **Needs prep:** `Pipeline/<table>.py` ending in `write_dataset("<table>", df, grain=..., source=..., as_of=...)`.
 - **Reusing a report's analytics** (analysis skill): one function, both places. Load its sources in `sources.py`
-  (`write_source("claims", report="../<report>")`); a section calls `from_report("../<report>", "s2_<name>", t)`.
+  (`write_source("claims", report="../reports/<name>")`); a section calls `from_report("../reports/<name>", "s2_<x>", t)`.
   Filters act on it; unfiltered figures equal the report's. Never cache a report's finished tables.
 - `npm run pipeline` once (`-- --try <script>` tries one).
 - Fast filters go in `dashboard.config.json`: `"region": { "label": "Region", "column": "region" }`, plus `"tab"` or
@@ -61,8 +62,8 @@ Setup copies the starter in and writes `dashboard.config.json`. After that nothi
 2. Reword each note; headline KPI tiles first. Unusual ones: the same page, below STOP HERE.
 3. Many sections at once (about eight or more): up to 2 helpers, `dashboard-work` `references/helpers.md`.
 4. `npm run check`; `npm run status` lists every section in `PLAN.md`.
-5. Look: `npm run shot -- <tab> <out.png> [region=West]` (starts and stops its own server). `npm run dev` opens it live
-   (`npm run stop` ends it).
+5. Look: `npm run shot -- <tab> [region=West]` (own server; saved in git-ignored `Data/.shots/`, for looking, not kept).
+   `npm run dev` opens it live (`npm run stop` ends it).
 
 Later changes, reports and commentary go through **dashboard-work**.
 

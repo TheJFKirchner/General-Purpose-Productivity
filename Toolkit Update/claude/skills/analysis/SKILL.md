@@ -15,7 +15,7 @@ Explore by default. Build a report only when asked.
 
 - Test however suits the question: Python or SQL in the session, counts, cuts, comparisons. No required file format.
 - Results go in the conversation: a small table or a few figures, each with one line on what it shows.
-- Create no folders and save no files unless asked.
+- Create no folders and save no files unless asked. A table asked for as a file (Excel, CSV) goes in the project's `exports/`; new folder: add its map row.
 - Open question ("why is X high?"): name the few things you will test, likeliest first. Ask before chasing something off that list.
 - Data with more than one date (paid, service, received): check the answer on each. If they disagree, say so.
 - Say when a result looks worth a report. The person decides.
@@ -56,14 +56,14 @@ A caveat from exploring that changes the size or reading of the answer goes in t
 - Nothing saved by default: sources and tables live in memory for each run. `KEEP` saves a slow source; a section's `export` writes a table as CSV.
 - Never read or edit `run.py`. `page.html` only for a restyle the user asks for, and then only its `:root` block.
 - No company names or logos.
-- User likes a visual, or says save it: launch `design-librarian` with the files and the library folder (the map's `Design library:` line, else `design-library` beside `.claude`, else `Toolkit Update/design-library`); it saves them there.
+- User likes a visual, or says save it: launch `design-librarian` with the files and the library folder (the map's optional `Design library:` line, for a library kept elsewhere; else `design-library` beside `.claude`, else `Toolkit Update/design-library`); it saves them there.
 
 ## Existing report folder
 
 - Add or change a section: `python run.py list` (the registry), then `add-section` or the one file it names; reword the bullets; `python run.py report`; `python run.py shot`.
 - Open `report.py` only for the brief, the answer or the order. Open a section file only when you just added it or the user points at it.
 - Rerun: compare the new file's date range and row count with the old one and update `DEFAULTS` (or `PARAMS`, if only this report differs). `python run.py report`, then reread the headline, `basis`, titles and bullets; placeholders update, words do not. A section that changes the answer means rewriting `ANSWER`.
-- A deck or dashboard needs a section's numbers: `python run.py data NAME [TABLE] [--json] [--out FILE]`. No script needed.
+- A deck, dashboard or Excel file needs a section's numbers: `python run.py data NAME [TABLE] [--json] [--out FILE]` (`.xlsx` writes a workbook). No script needed.
 - New question: new folder.
 
 `python run.py --help` lists the commands. A `STOP:` line names the file and the fix.

@@ -186,8 +186,8 @@ def main() -> int:
         say(f"TO DO: {p}")
     say("Next:")
     say("  - data: one write_source line per input file in Pipeline/sources.py, then npm run pipeline")
-    say("  - sections: npm run new-section -- <name> --page <tab> --tables <table> --chart echarts|table|kpi|text")
-    say("  - look: npm run shot -- <tab> <out.png>  (or npm run dev; npm run stop)")
+    say("  - sections: npm run new-section -- <name> --page <tab> --tables <table> --chart bar|line|table|kpi --x <col> --y <col>")
+    say("  - look: npm run shot -- <tab>  (saved in Data/.shots/; or npm run dev; npm run stop)")
     return 0
 
 

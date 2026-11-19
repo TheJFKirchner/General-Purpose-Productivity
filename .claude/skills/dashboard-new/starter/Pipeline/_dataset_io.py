@@ -115,7 +115,7 @@ def write_source(name: str, path: str | Path | None = None, *, report: str | Pat
                  as_of_from: str | None = None, as_of: str | None = None, source: str | None = None) -> Path:
     """Save a source file as it is, as table <name> (.csv .tsv .parquet .xlsx; path from the dashboard folder).
     Every input file gets one line like this in Pipeline/sources.py. A report's source: write_source("claims",
-    report="../claims-review") takes the file its report.py SOURCES names, under the same name.
+    report="../reports/claims-review") takes the file its report.py SOURCES names, under the same name.
     as_of_from: a date column; "Data as of" becomes its latest date (a month start counts as that month's end),
     so it moves on by itself when new data arrives."""
     import pandas as pd
