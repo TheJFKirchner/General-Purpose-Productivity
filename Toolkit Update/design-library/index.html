@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design library</title>
+<style id="tokens">:root {
+  --blue: #0170BC;
+  --navy: #002D72;
+  --green: #56A944;
+  --teal: #00A9A5;
+  --orange: #F68621;
+  --ink: #1F2A37;
+  --muted: #5B6770;
+  --rule: #D9E2EA;
+  --wash: #F4F8FB;
+  --paper: #FFFFFF;
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
+  --series: --blue --green --navy --teal --orange --muted;
+}</style>
+<style>
+  body { margin: 0; display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
+  aside { position: sticky; top: 0; height: 100vh; overflow: auto; box-sizing: border-box; padding: 22px 18px; background: var(--paper); border-right: 1px solid var(--rule); }
+  h1 { font: var(--heading-weight) 22px var(--heading-font); color: var(--navy); margin: 0 0 4px; }
+  h2 { font: var(--heading-weight) 12px var(--body-font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .now { font-size: 13px; color: var(--muted); margin: 0; }
+  button { display: block; width: 100%; text-align: left; font: 14px var(--body-font); color: var(--ink); background: none; border: 1px solid transparent; border-left: 3px solid transparent; padding: 7px 10px; cursor: pointer; }
+  button:hover { background: var(--wash); }
+  button.on { border-left-color: var(--blue); background: var(--wash); color: var(--navy); font-weight: 600; }
+  button small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
+  main { padding: 22px 26px 60px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--paper); border: 1px solid var(--rule); }
+  .card:hover { border-color: var(--blue); }
+  .pv { position: relative; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
+  .pv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .name { display: block; padding: 10px 12px 2px; text-decoration: none; color: var(--navy); font-size: 14px; }
+  .name b { color: var(--blue); margin-right: 4px; }
+  .card p { margin: 0; padding: 0 12px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .count { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+</style></head><body>
+<aside>
+<h1>Design library</h1>
+<p class="now">Theme: <b id="now"></b></p>
+<h2>Themes</h2>
+<div id="themes"></div>
+<h2>Show</h2>
+<div id="types"></div>
+</aside>
+<main>
+<p class="count" id="count"></p>
+<div class="grid">
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/FR-01-title.html" title="FR-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/FR-01-title.html" target="_blank"><b>FR-01</b> title</a>
+<p>Large headline, kicker above, one line below, no visual; for opening with the answer or the subject, or telling the audience who is presenting and when.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/FR-02-section-divider.html" title="FR-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/FR-02-section-divider.html" target="_blank"><b>FR-02</b> section-divider</a>
+<p>Section name large, one line saying what the section will show; for marking a change of topic in a longer deck, or giving the audience a breath before a new line of argument.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/FR-03-agenda-rows.html" title="FR-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/FR-03-agenda-rows.html" target="_blank"><b>FR-03</b> agenda-rows</a>
+<p>Numbered rows: part name and one line each; for showing the route through a longer deck, or matching what is said to the sections in the bottom bar.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/FR-04-goal-three-cards.html" title="FR-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/FR-04-goal-three-cards.html" target="_blank"><b>FR-04</b> goal-three-cards</a>
+<p>Three cards side by side, the third tinted; for reminding the audience of the original goal, or laying out problem, action and measure of success in one view.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/FR-05-statement-quote.html" title="FR-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/FR-05-statement-quote.html" target="_blank"><b>FR-05</b> statement-quote</a>
+<p>One sentence or quote in large type, source line under it; for making the audience hear one message with nothing competing, or letting a customer or stakeholder say it in their own words.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/EX-01-steps-flow.html" title="EX-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/EX-01-steps-flow.html" target="_blank"><b>EX-01</b> steps-flow</a>
+<p>Three to five steps on a line, each with a title and one line; for showing a method or process in order, or showing a timeline or plan with the current point marked.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/EX-02-data-two-cards.html" title="EX-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/EX-02-data-two-cards.html" target="_blank"><b>EX-02</b> data-two-cards</a>
+<p>Two cards: what was used (rows) and how it was checked (bullets); for showing what the analysis rests on and why it can be trusted, or answering scope and data-quality questions before they are asked.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-01-stats-three.html" title="LV-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-01-stats-three.html" target="_blank"><b>LV-01</b> stats-three</a>
+<p>Three large figures in a row, each with a label and a comparison note, one sentence under them, no chart; for landing two or three results at once, or showing results against target or prior without a chart.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-02-hero-number-line.html" title="LV-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-02-hero-number-line.html" target="_blank"><b>LV-02</b> hero-number-line</a>
+<p>One very large figure with its meaning in plain words, a line chart beside it; for making one number the whole message, or showing the figure and the path that led to it.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-03-hero-number-quote.html" title="LV-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-03-hero-number-quote.html" target="_blank"><b>LV-03</b> hero-number-quote</a>
+<p>One very large figure beside a one-sentence statement; for closing on the one thing to remember, or pairing a figure with the sentence that explains it.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-04-stats-over-bars.html" title="LV-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-04-stats-over-bars.html" target="_blank"><b>LV-04</b> stats-over-bars</a>
+<p>Three figure cards across the top, a bar chart and two bullets under; for stating a position with its two inputs and the gap between them, or showing the headline figures and how one of them has moved.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-05-bars-highlight-commentary.html" title="LV-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-05-bars-highlight-commentary.html" target="_blank"><b>LV-05</b> bars-highlight-commentary</a>
+<p>Vertical bars with one highlighted, commentary bullets and a so-what line on the right; for showing which category stands out, or comparing a handful of groups on one measure and saying why one differs.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/LV-06-bars-ranked-commentary.html" title="LV-06" tabindex="-1"></iframe></div>
+<a class="name" href="slides/LV-06-bars-ranked-commentary.html" target="_blank"><b>LV-06</b> bars-ranked-commentary</a>
+<p>Sorted horizontal bars with the leader highlighted, fuller commentary on the right; for ranking items when the labels are long, or showing which item drives a result.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-01-line-fit-commentary.html" title="CH-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-01-line-fit-commentary.html" target="_blank"><b>CH-01</b> line-fit-commentary</a>
+<p>Actual line with a dashed fitted line, commentary and so-what on the right; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-02-line-event-callout.html" title="CH-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-02-line-event-callout.html" target="_blank"><b>CH-02</b> line-event-callout</a>
+<p>Callout with one figure and three bullets on the left; two lines with an event marked on the right; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-03-dots-two-fits.html" title="CH-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-03-dots-two-fits.html" target="_blank"><b>CH-03</b> dots-two-fits</a>
+<p>Commentary on the left; actual points with a longer and a shorter fitted line on the right; for asking whether a rate of change is speeding up or slowing, or comparing a long-run view with a recent view of the same measure.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-04-bars-outlier-callout.html" title="CH-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-04-bars-outlier-callout.html" target="_blank"><b>CH-04</b> bars-outlier-callout</a>
+<p>One callout sentence over full-width bars with one period highlighted; for calling out an unusual period and how it was treated, or a lean slide for a senior audience: one sentence, one picture.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-05-bars-before-after.html" title="CH-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-05-bars-before-after.html" target="_blank"><b>CH-05</b> bars-before-after</a>
+<p>Callout with the size of the change and two bullets; bars by period with the later periods highlighted; for showing a level shift after a change, or stating the size of an effect next to the evidence for it.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-06-two-charts-bullets.html" title="CH-06" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-06-two-charts-bullets.html" target="_blank"><b>CH-06</b> two-charts-bullets</a>
+<p>Two small line charts side by side, one muted and one highlighted, three bullets in a row under them; for splitting a result into two measures to show which one is moving, or showing that one thing is stable while another is not.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CH-07-change-cards-bars.html" title="CH-07" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CH-07-change-cards-bars.html" target="_blank"><b>CH-07</b> change-cards-bars</a>
+<p>Three stacked cards, each a change with its size and direction, beside a bar chart of the total at each review; for saying what is different since the audience last saw this, or listing a few changes with their sizes alongside the overall movement.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-01-paired-bars-commentary.html" title="CP-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-01-paired-bars-commentary.html" target="_blank"><b>CP-01</b> paired-bars-commentary</a>
+<p>Paired bars by category (two series), commentary and so-what on the right; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-02-bars-target-tick.html" title="CP-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-02-bars-target-tick.html" target="_blank"><b>CP-02</b> bars-target-tick</a>
+<p>Horizontal bars with a tick marking the target for each, the miss highlighted; commentary on the right; for showing performance against a target or plan for each item, or picking out the one item that missed.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-03-two-lines-fuller-commentary.html" title="CP-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-03-two-lines-fuller-commentary.html" target="_blank"><b>CP-03</b> two-lines-fuller-commentary</a>
+<p>Fuller commentary on the left, two lines over time on the right; for comparing our experience with a benchmark or peer, or a comparison meant to be read without a presenter.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-04-two-lines-choice-cards.html" title="CP-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-04-two-lines-choice-cards.html" target="_blank"><b>CP-04</b> two-lines-choice-cards</a>
+<p>Two lines over time, then one card per alternative with the chosen one tinted; for showing two approaches that give different answers and which was chosen, or explaining a judgement call between two views.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-05-dumbbell-callout.html" title="CP-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-05-dumbbell-callout.html" target="_blank"><b>CP-05</b> dumbbell-callout</a>
+<p>Full-width dumbbell chart (two points joined per category), one sentence under it; for showing movement between two points for several items at once, or showing which items moved most and in which direction.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-06-two-numbers-difference.html" title="CP-06" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-06-two-numbers-difference.html" target="_blank"><b>CP-06</b> two-numbers-difference</a>
+<p>Two large figures in cards with the difference stated between them, no chart; for a before and after, or an old and new, in one glance, or when the difference is the message and a chart would add nothing.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-07-table-key-row-commentary.html" title="CP-07" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-07-table-key-row-commentary.html" target="_blank"><b>CP-07</b> table-key-row-commentary</a>
+<p>Small table with one highlighted row, commentary and so-what beside it; for showing plan, actual and difference where exact figures will be read, or any small table where one row carries the point.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/CP-08-option-cards-recommendation.html" title="CP-08" tabindex="-1"></iframe></div>
+<a class="name" href="slides/CP-08-option-cards-recommendation.html" target="_blank"><b>CP-08</b> option-cards-recommendation</a>
+<p>Two cards comparing options on the same rows, then the recommendation, no chart; for putting two options side by side on cost, benefit and risk, or leading the audience to a recommendation they can see the basis for.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-01-waterfall-callout.html" title="BD-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-01-waterfall-callout.html" target="_blank"><b>BD-01</b> waterfall-callout</a>
+<p>Full-width vertical waterfall from one figure to another, one-sentence callout under it; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-02-waterfall-horizontal-commentary.html" title="BD-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-02-waterfall-horizontal-commentary.html" target="_blank"><b>BD-02</b> waterfall-horizontal-commentary</a>
+<p>Horizontal waterfall on the left, fuller commentary on the right; for building up a result from its components when labels are long, or a bridge that needs explaining step by step, readable without a presenter.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-03-number-small-waterfall.html" title="BD-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-03-number-small-waterfall.html" target="_blank"><b>BD-03</b> number-small-waterfall</a>
+<p>Callout with one large figure and two bullets on the left, a three-bar waterfall on the right; for stating the effect of one decision and showing where it lands, or a simple from, change, to story.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-04-rows-plus-bars.html" title="BD-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-04-rows-plus-bars.html" target="_blank"><b>BD-04</b> rows-plus-bars</a>
+<p>Three numbered rows on the left, the same three effects as bars on the right; for splitting a change into a few named effects, or giving each effect a sentence and showing their relative size.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-05-stacked-mix-shift.html" title="BD-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-05-stacked-mix-shift.html" target="_blank"><b>BD-05</b> stacked-mix-shift</a>
+<p>Two 100% stacked bars, bullets and a callout under them; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-06-stats-over-stacked-bars.html" title="BD-06" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-06-stats-over-stacked-bars.html" target="_blank"><b>BD-06</b> stats-over-stacked-bars</a>
+<p>Three figures across the top, stacked horizontal bars by category, commentary beside; for splitting a total into two factors across several categories, or showing the headline figures and which category is behind them.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-07-hero-number-donut.html" title="BD-07" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-07-hero-number-donut.html" target="_blank"><b>BD-07</b> hero-number-donut</a>
+<p>One very large figure in a callout with a two-part doughnut, no commentary; for showing that one part explains most of the whole, or a lean slide where a single share is the message.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BD-08-table-bars-sensitivity.html" title="BD-08" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BD-08-table-bars-sensitivity.html" target="_blank"><b>BD-08</b> table-bars-sensitivity</a>
+<p>Small table and two bullets on the left, bars for each scenario on the right; for showing what the result becomes under different assumptions, or giving exact figures and their shape together.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/UN-01-range-bar-commentary.html" title="UN-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/UN-01-range-bar-commentary.html" target="_blank"><b>UN-01</b> range-bar-commentary</a>
+<p>One low-to-high range bar with the central and held figures marked, commentary under it; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/UN-02-scenario-bars-caveats.html" title="UN-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/UN-02-scenario-bars-caveats.html" target="_blank"><b>UN-02</b> scenario-bars-caveats</a>
+<p>Scenario bars on the left, four caveats and a so-what line on the right; for telling the audience what could change the answer before they decide, or sizing a few scenarios against the central view.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-01-summary-stats-ask.html" title="DE-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-01-summary-stats-ask.html" target="_blank"><b>DE-01</b> summary-stats-ask</a>
+<p>Answer as the headline, three large figures, the ask in a strip along the bottom; for an executive summary on one slide, or giving the answer, its support and the ask together.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-02-numbered-findings.html" title="DE-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-02-numbered-findings.html" target="_blank"><b>DE-02</b> numbered-findings</a>
+<p>Numbered rows, each a finding with its figure on the right; for listing the takeaways with their sizes, or listing risks or issues ranked by size.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-03-audience-rows.html" title="DE-03" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-03-audience-rows.html" target="_blank"><b>DE-03</b> audience-rows</a>
+<p>One row per audience group: who, what it means for them, the one figure; for translating a result for each group in the room, or showing each team what changes for them.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-04-scorecard-status.html" title="DE-04" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-04-scorecard-status.html" target="_blank"><b>DE-04</b> scorecard-status</a>
+<p>Table with a status dot per row, one row highlighted, one line under it; for giving the status of several items at a glance, or showing which item needs attention.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-05-decision-two-paths.html" title="DE-05" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-05-decision-two-paths.html" target="_blank"><b>DE-05</b> decision-two-paths</a>
+<p>The decision in a callout, then one card for what happens if approved and one for if it waits; for asking for a decision and showing the consequence of each answer, or making the cost of delay explicit.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-06-ask-and-actions.html" title="DE-06" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-06-ask-and-actions.html" target="_blank"><b>DE-06</b> ask-and-actions</a>
+<p>The decision needed in a callout on the left, rows of action, timing and owner on the right; for closing with the ask and who does what by when, or any decision followed by a short action list.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/DE-07-ask-and-timeline.html" title="DE-07" tabindex="-1"></iframe></div>
+<a class="name" href="slides/DE-07-ask-and-timeline.html" target="_blank"><b>DE-07</b> ask-and-timeline</a>
+<p>A starting point in a callout over a five-step timeline with dates and owners; for showing the sequence of work that follows a decision, or a plan where order and dates matter more than detail.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BK-01-answer-with-bars.html" title="BK-01" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BK-01-answer-with-bars.html" target="_blank"><b>BK-01</b> answer-with-bars</a>
+<p>The answer as the headline; the question, a short answer and horizontal bars below; for answering a question the audience is likely to ask, or holding supporting evidence without lengthening the main story.</p></div>
+<div class="card" data-type="slide">
+<div class="pv"><iframe loading="lazy" src="slides/BK-02-heatmap-callout.html" title="BK-02" tabindex="-1"></iframe></div>
+<a class="name" href="slides/BK-02-heatmap-callout.html" target="_blank"><b>BK-02</b> heatmap-callout</a>
+<p>One callout sentence over a small heatmap grid with one diagonal highlighted; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-01-bar-highlight.html" title="CT-01" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-01-bar-highlight.html" target="_blank"><b>CT-01</b> bar-highlight</a>
+<p>Vertical bars, one highlighted in blue, the rest grey, values on top; for showing which category stands out, or comparing a handful of groups on one measure.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-02-bars-ranked.html" title="CT-02" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-02-bars-ranked.html" target="_blank"><b>CT-02</b> bars-ranked</a>
+<p>Horizontal bars sorted largest first, the leader in blue, values at the bar ends; for ranking items when the labels are long, or showing which item drives a result.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-03-line-event.html" title="CT-03" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-03-line-event.html" target="_blank"><b>CT-03</b> line-event</a>
+<p>Two lines over time, the one that matters in blue, both ends labelled, an event marked with a dashed line; for showing the effect of a change against a group that did not change, or tying a movement to the moment that caused it.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-04-line-fit.html" title="CT-04" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-04-line-fit.html" target="_blank"><b>CT-04</b> line-fit</a>
+<p>Actual line in blue with a dashed grey fitted line, both ends labelled; for showing a steady rate of change, or showing how closely actuals follow a fitted or expected path.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-05-paired-bars.html" title="CT-05" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-05-paired-bars.html" target="_blank"><b>CT-05</b> paired-bars</a>
+<p>Two bars per category (expected in light grey, actual darker), the category that matters in blue, legend at top left; for comparing actual with expected across a few groups, or showing where two measures agree and where they part.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-06-waterfall.html" title="CT-06" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-06-waterfall.html" target="_blank"><b>CT-06</b> waterfall</a>
+<p>Vertical bridge from a starting total to an ending total; totals dark grey, the step that matters blue, other steps light grey; for bridging from a starting figure to an ending figure by cause, or showing which driver accounts for most of a change.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-07-target-tick-bars.html" title="CT-07" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-07-target-tick-bars.html" target="_blank"><b>CT-07</b> target-tick-bars</a>
+<p>Horizontal bars with a dark tick marking each item's target, the miss in blue with its value inside the bar; for showing performance against a target or plan for each item, or picking out the one item that missed.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-08-dumbbell.html" title="CT-08" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-08-dumbbell.html" target="_blank"><b>CT-08</b> dumbbell</a>
+<p>Two dots per item joined by a short bar, the earlier point light grey, the later dark, the item that matters in blue; for showing movement between two points for several items at once, or showing which items moved most and in which direction.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-09-stacked-share.html" title="CT-09" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-09-stacked-share.html" target="_blank"><b>CT-09</b> stacked-share</a>
+<p>Two 100% stacked horizontal bars, the part that changed in blue with its label inside, the other parts grey; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-10-heatmap-grid.html" title="CT-10" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-10-heatmap-grid.html" target="_blank"><b>CT-10</b> heatmap-grid</a>
+<p>A small grid of figures on light grey cells, the cells that matter in blue with white text; for showing a pattern across two dimensions, such as period by age, or pointing at one part of a grid of figures.</p></div>
+<div class="card" data-type="chart">
+<div class="pv"><iframe loading="lazy" src="charts/CT-11-range-bar.html" title="CT-11" tabindex="-1"></iframe></div>
+<a class="name" href="charts/CT-11-range-bar.html" target="_blank"><b>CT-11</b> range-bar</a>
+<p>One low-to-high grey bar with the central figure as a dashed line and the chosen figure as a solid blue line; for showing where a chosen figure sits within a reasonable range, or making the size of the uncertainty visible.</p></div>
+<div class="card" data-type="theme">
+<div class="pv"><iframe loading="lazy" src="themes/TH-01-light.html" title="TH-01" tabindex="-1"></iframe></div>
+<a class="name" href="themes/TH-01-light.html" target="_blank"><b>TH-01</b> light</a>
+<p>The default look: white page, navy headings, one blue highlight against grey context, sharp corners.</p></div>
+<div class="card" data-type="theme">
+<div class="pv"><iframe loading="lazy" src="themes/TH-02-dark.html" title="TH-02" tabindex="-1"></iframe></div>
+<a class="name" href="themes/TH-02-dark.html" target="_blank"><b>TH-02</b> dark</a>
+<p>Example dark theme: light text on a deep slate page, for screens in a dim room.</p></div>
+<div class="card" data-type="theme">
+<div class="pv"><iframe loading="lazy" src="themes/TH-03-print-grey.html" title="TH-03" tabindex="-1"></iframe></div>
+<a class="name" href="themes/TH-03-print-grey.html" target="_blank"><b>TH-03</b> print-grey</a>
+<p>Example greyscale theme for print: black and greys only, serif headings, no colour needed.</p></div>
+</div>
+</main>
+<script>
+(function () {
+  var THEMES = [{"id":"TH-01","name":"light","purpose":"The default look: white page, navy headings, one blue highlight against grey context, sharp corners.","theme":{"css":{"--blue":"#0170BC","--navy":"#002D72","--green":"#56A944","--teal":"#00A9A5","--orange":"#F68621","--ink":"#1F2A37","--muted":"#5B6770","--rule":"#D9E2EA","--wash":"#F4F8FB","--paper":"#FFFFFF","--chart-muted":"#C3CDD6","--chart-grid":"#E8EDF2","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600"},"series":["--blue","--green","--navy","--teal","--orange","--muted"]}},{"id":"TH-02","name":"dark","purpose":"Example dark theme: light text on a deep slate page, for screens in a dim room.","theme":{"css":{"--blue":"#4DA3E0","--navy":"#F2F5F8","--green":"#7BC96A","--teal":"#38C6C1","--orange":"#F7A35C","--ink":"#DCE3EA","--muted":"#93A1AF","--rule":"#33414F","--wash":"#1B2632","--paper":"#111A23","--chart-muted":"#3F4E5E","--chart-grid":"#26323F","--heading-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--body-font":"\"Segoe UI\", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif","--heading-weight":"600"},"series":["--blue","--green","--teal","--orange","--muted"]}},{"id":"TH-03","name":"print-grey","purpose":"Example greyscale theme for print: black and greys only, serif headings, no colour needed.","theme":{"css":{"--blue":"#1A1A1A","--navy":"#000000","--green":"#6B6B6B","--teal":"#8C8C8C","--orange":"#404040","--ink":"#1A1A1A","--muted":"#5C5C5C","--rule":"#CFCFCF","--wash":"#F2F2F2","--paper":"#FFFFFF","--chart-muted":"#C2C2C2","--chart-grid":"#E6E6E6","--heading-font":"Georgia, \"Times New Roman\", serif","--body-font":"Arial, Helvetica, sans-serif","--heading-weight":"700"},"series":["--blue","--muted","--green","--teal","--orange"]}}];
+  var TYPES = ['all'].concat(["slide","chart","report section","dashboard section","theme"]);
+  function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function put(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* works without storage */ } }
+  var current = get('design-library-theme', THEMES[0].id), type = get('design-library-type', 'all');
+  var hash = (location.hash.match(/theme=([A-Z]{2}-[0-9]+)/) || [])[1]; if (hash) current = hash;
+  if (!THEMES.some(function (t) { return t.id === current; })) current = THEMES[0].id;
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.pv iframe'));
+  function theme() { return THEMES.filter(function (t) { return t.id === current; })[0]; }
+  function send(f) { try { f.contentWindow.postMessage({ theme: theme().theme }, '*'); } catch (e) { /* not loaded yet */ } }
+  function applyTheme() {
+    var t = theme(), r = document.documentElement;
+    Object.keys(t.theme.css).forEach(function (k) { r.style.setProperty(k, t.theme.css[k]); });
+    document.getElementById('now').textContent = t.id + ' ' + t.name;
+    frames.forEach(send);
+    draw();
+  }
+  function applyType() {
+    var n = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
+      var show = type === 'all' || c.getAttribute('data-type') === type;
+      c.style.display = show ? '' : 'none'; if (show) n++;
+    });
+    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's') + (type === 'all' ? '' : ' of type ' + type);
+    draw();
+  }
+  function button(label, sub, on, click) {
+    var b = document.createElement('button'); b.className = on ? 'on' : '';
+    b.textContent = label; if (sub) { var s = document.createElement('small'); s.textContent = sub; b.appendChild(s); }
+    b.onclick = click; return b;
+  }
+  function draw() {
+    var th = document.getElementById('themes'), ty = document.getElementById('types');
+    th.innerHTML = ''; ty.innerHTML = '';
+    THEMES.forEach(function (t) { th.appendChild(button(t.id + ' ' + t.name, t.purpose, t.id === current, function () { current = t.id; put('design-library-theme', current); applyTheme(); })); });
+    TYPES.forEach(function (t) { ty.appendChild(button(t, '', t === type, function () { type = t; put('design-library-type', type); applyType(); })); });
+  }
+  frames.forEach(function (f) { f.addEventListener('load', function () { send(f); }); });
+  applyTheme(); applyType();
+})();
+</script>
+</body></html>

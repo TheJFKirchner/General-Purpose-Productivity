@@ -25,8 +25,8 @@ Four skills that get facts into a markdown wiki and tell a project which wiki pa
 | Item | What it is |
 |---|---|
 | [scripts/wiki_index.py](scripts/wiki_index.py) | The only script. Lists every wiki page with its description and section headings, so a sub-agent does not have to open every page to learn what exists. It makes no decisions and changes no page |
-| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file. Only what no skill covers: where the wiki and this folder are, how to record facts during a session and tell them from findings, and how to use a `braincite.md` |
-| [how-to-build-findings.md](how-to-build-findings.md) | Goes in the new-project standup instructions: how to create and keep a project's `findings.md`. Matches the `findings` skill in this repo |
+| [add-to-main-agent.md](add-to-main-agent.md) | Text to paste into the main agent file. Only what no skill covers: where the wiki and this folder are, how to record facts during a session and tell them from findings, and how to use a `braincite.md`. Also holds the analysis toolbox block (map, rules, words, which skill) |
+| [how-to-build-findings.md](how-to-build-findings.md) | A pointer: findings are kept as the `findings` skill says |
 | [test-wiki/](test-wiki/) | A small sample wiki (team and personal pages from different templates, one data dictionary, waiting facts and documents, a sample project) for trying the skills |
 
 ## How the pieces fit
@@ -38,7 +38,7 @@ Four skills that get facts into a markdown wiki and tell a project which wiki pa
 
 ## Install
 
-1. Copy the four `skills/` folders to `~/.claude/skills/` and the four `agents/` files to `~/.claude/agents/`.
+1. Copy the four `skills/` folders to your `.claude/skills/` and the four `agents/` files to `.claude/agents/` (the workspace's `.claude`, or the user-level `~/.claude`).
 2. Paste `add-to-main-agent.md` into your main agent file (CLAUDE.md) and fill in its two paths: this folder and the wiki root. The skills read them from there.
 3. Check that Python runs: `python scripts/wiki_index.py "<wiki root>"` should print how many pages it listed.
 4. Try the skills first with the wiki root set to a copy of `test-wiki/`.
@@ -53,8 +53,8 @@ Every folder and file name below is an assumption written into the skills, agent
 |---|---|---|
 | Wiki root | An absolute path you type in | The `Wiki root:` line of the text pasted from `add-to-main-agent.md` |
 | This folder | An absolute path you type in | The `Brain folder:` line of the same text |
-| Where skills are installed | `~/.claude/skills/brain-cite`, `brain-file`, `brain-ingest`, `brain-promote` | Copy or link the four folders in `skills/` |
-| Where agents are installed | `~/.claude/agents/` | Copy or link the four files in `agents/` |
+| Where skills are installed | `.claude/skills/brain-cite`, `brain-file`, `brain-ingest`, `brain-promote` (workspace or user-level) | Copy or link the four folders in `skills/` |
+| Where agents are installed | `.claude/agents/` (workspace or user-level) | Copy or link the four files in `agents/` |
 | Project folder | The folder the session is open in; `braincite.md` sits directly in it | `skills/brain-cite`, `brain-file`, `brain-ingest` |
 
 ### Must already exist in the wiki

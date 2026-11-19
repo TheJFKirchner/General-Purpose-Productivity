@@ -43,6 +43,7 @@ Seven optional skills for analysis work. They share one vocabulary, one look, an
 | [dashboard-work](.claude/skills/dashboard-work/SKILL.md) | Adds or changes sections, reports and looks in an existing dashboard. Same needs as dashboard-new. |
 | [presentation](.claude/skills/presentation/SKILL.md) | Builds a reveal.js deck with ECharts charts: quick mode for short decks, full mode for real readouts. Needs Node.js, internet when a deck is opened, and Edge or Chrome for screenshots. Parts adapted from the MIT-licensed ryanbbrown/revealjs-skill. |
 | [design-library/](design-library/CLAUDE.md) | Shared slides, charts, report and dashboard sections and themes, one self-contained file each; `index.html` shows them all in any theme. Saved by the `design-librarian` agent. |
+| [Toolkit Update/](Toolkit%20Update/README.md) | A copy of the seven skills, their two agents, the design library and brain-intake, in one folder ready to add to another workspace, with one page for the main agent file. Not the working copy: refresh it after editing the originals. |
 
 ## Working from desktop and phone
 

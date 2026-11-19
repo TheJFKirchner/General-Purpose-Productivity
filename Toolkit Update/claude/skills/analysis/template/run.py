@@ -1,0 +1,1286 @@
+#!/usr/bin/env python3
+"""Run and build this report. Do not edit. Do not read unless a command ended in a Python
+traceback (not a STOP: line) whose last lines are in this file.
+
+  python run.py list             the registry: sections in order (file, title, chart, description),
+                                 then sources with their columns
+  python run.py                  run every section's analytic; print question, metrics, table columns
+  python run.py NAME [NAME ...]  run only those (a section name or file id) [--rows N]
+  python run.py report           build <folder>.html
+  python run.py text             print the report as plain text (for a cold read)
+  python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL]
+        [--agg sum|count|mean] [--by COL] [--where COL=VALUE] [--title "..."] [--desc "..."] [--bullets N] [--after N]
+                                 write sections/sN_NAME.py (a working section) and add it to SECTIONS
+  python run.py shot [OUT.png]   screenshot the built report with Edge or Chrome
+  python run.py data NAME [TABLE] [--json] [--out FILE]
+                                 one table of an analytic (or TABLE=metrics) as CSV or JSON
+  --refresh                      pull sources listed in KEEP again
+
+Sources and tables are held in memory for one run. Nothing is written except the report,
+CSV files a section exports, sources listed in KEEP (saved in data/), and a --out file.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import difflib
+import html
+import importlib.util
+import json
+import math
+import re
+import string
+import sys
+import traceback
+from pathlib import Path
+
+sys.dont_write_bytecode = True   # no __pycache__ folders in the report
+ROOT = Path(__file__).resolve().parent
+KEEP_DIR = ROOT / "data"
+ECHARTS_CDN = "https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"
+NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+NUM_RE = re.compile(r"(?<![\w.])\$?\d[\d,]*(?:\.\d+)?[%KMB]?(?![\w])")
+
+CHART_KEYS = {"type", "table", "x", "y", "axis", "x_axis", "format", "highlight", "sort", "top",
+              "names", "height", "title", "labels", "ref"}
+CHART_TYPES = ("bar", "hbar", "line", "stack", "scatter")
+TABLE_KEYS = {"table", "columns", "format", "top", "title"}
+TABLE_MAX_ROWS = 200
+
+
+class Stop(Exception):
+    """A problem the author must fix. Printed as one STOP: line, no traceback."""
+
+
+# ------------------------------------------------------------------ loading
+
+def _load(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load_report():
+    p = ROOT / "report.py"
+    if not p.exists():
+        raise Stop("report.py is missing")
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    r = _load(p, "report_settings")
+    for f in ("TITLE", "QUESTION"):
+        if not str(getattr(r, f, "") or "").strip():
+            raise Stop(f"report.py: {f} is missing or empty")
+        if "TODO" in str(getattr(r, f)):
+            raise Stop(f"report.py: {f} still says TODO")
+    r.SOURCES = getattr(r, "SOURCES", None) or {}
+    r.PARAMS = getattr(r, "PARAMS", None) or {}
+    r.KEEP = list(getattr(r, "KEEP", None) or [])
+    r.ANSWER = getattr(r, "ANSWER", None) or {}
+    r.SECTION_IDS = [str(s) for s in (getattr(r, "SECTIONS", None) or [])]
+    if not isinstance(r.SOURCES, dict):
+        raise Stop("report.py: SOURCES must be a dict of name -> file or function")
+    for name in list(r.SOURCES) + r.KEEP:
+        if not NAME_RE.match(str(name)):
+            raise Stop(f"report.py: source name '{name}' must be lower_snake_case")
+    for name in r.KEEP:
+        if name not in r.SOURCES:
+            raise Stop(f"report.py: KEEP names '{name}', which is not in SOURCES")
+    return r
+
+
+SECTIONS_DIR = ROOT / "sections"
+SECTION_FILE_RE = re.compile(r"^s(\d+)_([a-z][a-z0-9_]*)$")
+SECTION_ATTRS = {"TITLE": "title", "BULLETS": "bullets", "CHART": "chart", "TABLE": "table", "KPIS": "kpis",
+                 "LAYOUT": "layout", "NOTE": "note", "EXPORT": "export", "DESCRIPTION": "description"}
+
+
+def load_sections(rep) -> dict:
+    """Each sections/sN_<name>.py is one block: DESCRIPTION, <name>(src, params), TITLE, BULLETS, CHART ...
+    sections/_shared.py holds DEFAULTS and helpers. Returns name -> (function, file, DEFAULTS) and sets
+    rep.SECTIONS (dicts, in report order) and rep.UNUSED (section files not in the order)."""
+    if str(SECTIONS_DIR) not in sys.path:
+        sys.path.insert(0, str(SECTIONS_DIR))  # so a section can `from _shared import ...`
+    shared = SECTIONS_DIR / "_shared.py"
+    defaults = (getattr(_load(shared, "_shared"), "DEFAULTS", None) or {}) if shared.exists() else {}
+    if not isinstance(defaults, dict):
+        raise Stop("sections/_shared.py: DEFAULTS must be a dict")
+    found, secs = {}, {}
+    for p in sorted(SECTIONS_DIR.glob("s*.py"), key=lambda p: (len(p.stem), p.stem)):
+        m = SECTION_FILE_RE.match(p.stem)
+        if not m:
+            continue
+        name = m.group(2)
+        mod = _load(p, p.stem)
+        fn = getattr(mod, name, None)
+        if not callable(fn):
+            raise Stop(f"sections/{p.name} must define its analytic: def {name}(src, params)")
+        if name in found:
+            raise Stop(f"two section files are named '{name}' ({found[name][1]} and sections/{p.name})")
+        found[name] = (fn, f"sections/{p.name}", defaults)
+        sec = {"analytic": name, "file": p.name}
+        sec.update({k: getattr(mod, a) for a, k in SECTION_ATTRS.items() if hasattr(mod, a)})
+        secs[p.stem] = sec
+    missing = [s for s in rep.SECTION_IDS if s not in secs]
+    if missing:
+        raise Stop(f"report.py SECTIONS names {', '.join(missing)}, but sections/ has: {', '.join(secs) or 'nothing'}")
+    rep.SECTIONS = [secs[s] for s in rep.SECTION_IDS]
+    rep.UNUSED = [s for s in secs if s not in rep.SECTION_IDS]
+    return found
+
+
+# ------------------------------------------------------------------ sources
+
+class Sources:
+    """Analytics call src("name"). Each source is read once per run and held in memory."""
+
+    def __init__(self, rep, refresh: bool):
+        self.rep, self.refresh = rep, refresh
+        self.cache: dict = {}
+        self.used: dict = {}
+
+    def __call__(self, name: str):
+        import pandas as pd
+        if name in self.cache:
+            return self.cache[name].copy()
+        if name not in self.rep.SOURCES:
+            raise Stop(f"an analytic asked for source '{name}', but report.py SOURCES only has: "
+                       f"{', '.join(self.rep.SOURCES) or 'nothing'}")
+        spec = self.rep.SOURCES[name]
+        kept = KEEP_DIR / f"{name}.parquet"
+        note = ""
+        if name in self.rep.KEEP and kept.exists() and not self.refresh:
+            df = pd.read_parquet(kept)
+            note = "kept copy from " + dt.datetime.fromtimestamp(kept.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            print(f"  {name}: using the {note} (--refresh to pull again)", file=sys.stderr, flush=True)
+        else:
+            df = self._read(name, spec)
+            if name in self.rep.KEEP:
+                KEEP_DIR.mkdir(exist_ok=True)
+                df.to_parquet(kept, index=False)
+                note = "kept copy from " + now()
+        label = getattr(spec, "__name__", "function") + "()" if callable(spec) else Path(str(spec)).name
+        self.cache[name] = df
+        self.used[name] = {"from": label, "rows": int(len(df)), "note": note}
+        return df.copy()
+
+    def _read(self, name, spec):
+        import pandas as pd
+        if callable(spec):
+            df = spec()
+        else:
+            path = Path(str(spec))
+            path = path if path.is_absolute() else ROOT / path
+            if not path.exists():
+                raise Stop(f"source '{name}': file not found: {spec}")
+            ext = path.suffix.lower()
+            if ext == ".sql":
+                run_query = getattr(self.rep, "run_query", None)
+                if run_query is None:
+                    raise Stop(f"source '{name}' is a .sql file, but report.py has no run_query(sql) function")
+                sql = path.read_text(encoding="utf-8")
+                for k, v in self.rep.PARAMS.items():
+                    sql = sql.replace("{" + str(k) + "}", str(v))
+                print(f"  pulling {name} ...", file=sys.stderr, flush=True)
+                df = run_query(sql)
+            elif ext == ".csv":
+                df = pd.read_csv(path)
+            elif ext in (".tsv", ".txt"):
+                df = pd.read_csv(path, sep="\t")
+            elif ext == ".parquet":
+                df = pd.read_parquet(path)
+            elif ext in (".xlsx", ".xls"):
+                df = pd.read_excel(path)
+            else:
+                raise Stop(f"source '{name}': unsupported file type {ext} (.csv .tsv .parquet .xlsx .sql)")
+        if not isinstance(df, pd.DataFrame):
+            raise Stop(f"source '{name}' did not give a pandas DataFrame")
+        return df
+
+
+# ------------------------------------------------------------------ analytics
+
+def scalar(v):
+    if hasattr(v, "item") and not isinstance(v, (str, bytes)):
+        try:
+            v = v.item()
+        except (ValueError, TypeError):
+            pass
+    if hasattr(v, "isoformat") and not isinstance(v, (str, int, float)):
+        s = v.isoformat()
+        return s[:10] if s.endswith("T00:00:00") or len(s) == 10 else s
+    return v
+
+
+class Runner:
+    def __init__(self, rep, analytics: dict, refresh: bool):
+        self.rep, self.analytics = rep, analytics
+        self.src = Sources(rep, refresh)
+        self.results: dict = {}
+
+    def all_params(self) -> dict:
+        """Every analytics file's DEFAULTS, then the report's PARAMS on top."""
+        merged = {}
+        for _, _, d in self.analytics.values():
+            merged.update(d)
+        return {**merged, **self.rep.PARAMS}
+
+    def run(self, name: str) -> dict:
+        import pandas as pd
+        m = SECTION_FILE_RE.match(name.removesuffix(".py"))
+        name = m.group(2) if m and m.group(2) in self.analytics else name   # s2_paid_by_month -> paid_by_month
+        if name in self.results:
+            return self.results[name]
+        if name not in self.analytics:
+            raise Stop(f"no section or analytic named '{name}'. Sections: {', '.join(self.analytics) or 'none'}")
+        fn, where, defaults = self.analytics[name]
+        print(f"  running {name} ...", file=sys.stderr, flush=True)
+        try:
+            out = fn(self.src, {**defaults, **self.rep.PARAMS})
+        except Stop:
+            raise
+        except Exception:
+            traceback.print_exc()
+            raise Stop(f"{where}: {name}() failed (traceback above)")
+        if not isinstance(out, dict):
+            raise Stop(f"{where}: {name}() must return a dict with question, tables, metrics, notes")
+        extra = set(out) - {"question", "tables", "metrics", "notes"}
+        if extra:
+            raise Stop(f"{where}: {name}() returned unknown keys {sorted(extra)}; "
+                       "allowed: question, tables, metrics, notes")
+        q = str(out.get("question") or "").strip()
+        if not q or "TODO" in q:
+            raise Stop(f"{where}: {name}() needs a 'question' (one plain sentence)")
+        tables = out.get("tables") or {}
+        metrics = out.get("metrics") or {}
+        for t, df in tables.items():
+            if not NAME_RE.match(str(t)):
+                raise Stop(f"{where}: {name}() table name '{t}' must be lower_snake_case")
+            if isinstance(df, pd.Series):
+                df = tables[t] = df.reset_index()
+            if not isinstance(df, pd.DataFrame):
+                raise Stop(f"{where}: {name}() table '{t}' is not a DataFrame")
+        clean = {}
+        for m, v in metrics.items():
+            if not NAME_RE.match(str(m)):
+                raise Stop(f"{where}: {name}() metric name '{m}' must be lower_snake_case")
+            v = scalar(v)
+            if not (v is None or isinstance(v, (int, float, str, bool))):
+                raise Stop(f"{where}: {name}() metric '{m}' must be one value, not {type(v).__name__}")
+            clean[m] = v
+        res = {"name": name, "where": where, "question": q, "tables": tables, "metrics": clean,
+               "notes": str(out.get("notes") or "").strip()}
+        self.results[name] = res
+        return res
+
+
+# ------------------------------------------------------------------ figures in text
+
+def fmt_value(v, spec: str = "") -> str:
+    """Python format specs, plus a leading $, 'short' (4.1M, 820K) and 'abs' (drop the sign)."""
+    v = scalar(v)
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return ""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return format(str(v), spec) if spec and not spec.startswith("$") else str(v)
+    cur = spec.startswith("$")
+    spec = spec[1:] if cur else spec
+    if cur and "%" in spec:
+        raise Stop(f"format '${spec}' mixes $ and %. Use one: '$short' or '.0%'")
+    if "abs" in spec:
+        v, spec = abs(v), spec.replace("abs", "")
+    neg, a = v < 0, abs(v)
+    if "short" in spec:
+        unit = ""
+        for size, u in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+            if a >= size:
+                a, unit = a / size, u
+                break
+        s = f"{a:.1f}".removesuffix(".0") if a < 10 else f"{a:,.0f}"
+        s += unit
+    elif spec:
+        s = format(a, spec)
+    elif isinstance(v, int) and 1900 <= v <= 2099:
+        s = str(v)                                   # a year: no thousands comma
+    else:
+        s = f"{a:,.0f}" if isinstance(a, int) or (float(a).is_integer() and a >= 1000) else f"{a:,.2f}"
+    return ("-" if neg and s.strip("0.,%$KMB") else "") + ("$" if cur else "") + s
+
+
+class _NS:
+    def __init__(self, label: str, values: dict):
+        self._label, self._values = label, values
+
+    def get(self, key):
+        if key not in self._values:
+            raise Stop(f"{self._label} has no metric '{key}'. It has: {', '.join(self._values) or 'none'}")
+        return self._values[key]
+
+
+class Filler(string.Formatter):
+    """Fills {analytic.metric:spec}, {params.x} and, inside a section, {metric} of its own analytic."""
+
+    def __init__(self, runner: Runner):
+        super().__init__()
+        self.runner = runner
+        self.own: dict = {}
+        self.own_name = ""
+        nums = [v for v in runner.all_params().values() if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        self.param_nums = [float(v) for v in nums]
+
+    def get_field(self, field_name, args, kwargs):
+        parts = field_name.split(".")
+        if len(parts) == 1:
+            if parts[0] in self.own:
+                return self.own[parts[0]], field_name
+            if not self.own_name:  # in ANSWER: name the analytic that has this metric
+                names = [s.get("analytic") for s in self.runner.rep.SECTIONS if isinstance(s, dict)]
+                has = [n for n in dict.fromkeys(names) if n in self.runner.analytics
+                       and parts[0] in self.runner.run(n)["metrics"]]
+                if has:
+                    raise Stop(f"ANSWER needs the analytic name: write {{{has[0]}.{field_name}}}")
+            hint = f" ({self.own_name} has: {', '.join(self.own) or 'none'})" if self.own_name else ""
+            raise Stop(f"'{{{field_name}}}' is not a metric{hint}. Use {{analytic.metric}} for another analytic")
+        if len(parts) != 2:
+            raise Stop(f"'{{{field_name}}}': use {{analytic.metric}} or {{params.name}}")
+        head, key = parts
+        if head == "params":
+            return _NS("PARAMS or DEFAULTS", self.runner.all_params()).get(key), field_name
+        res = self.runner.run(head)
+        return _NS(f"analytic '{head}'", res["metrics"]).get(key), field_name
+
+    def format_field(self, value, format_spec):
+        return fmt_value(value, format_spec)
+
+    def fill(self, text: str, where: str, warns: list, check: bool = True) -> str:
+        text = str(text)
+        try:
+            out = self.format(text)
+        except Stop as e:
+            raise Stop(f"{where}: {e}")
+        except (ValueError, IndexError, KeyError) as e:
+            raise Stop(f"{where}: cannot fill '{text}': {e}")
+        if check:
+            bad = [t for t in NUM_RE.findall(re.sub(r"\{[^{}]*\}", " ", text)) if not self._allowed(t)]
+            if bad:
+                warns.append(f"{where}: typed {', '.join(bad)}. Pull results from a metric; "
+                             "a threshold must equal a PARAMS value")
+        return out
+
+    def _allowed(self, token: str) -> bool:
+        """Years 1900-2099, and numbers equal to a PARAMS value (5000 = $5,000, 0.25 = 25%)."""
+        t = token.replace("$", "").replace(",", "")
+        if re.fullmatch(r"(19|20)\d\d", t):
+            return True
+        mult = {"K": 1e3, "M": 1e6, "B": 1e9, "%": 0.01}.get(t[-1:], 1)
+        try:
+            v = float(t.rstrip("KMB%")) * mult
+        except ValueError:
+            return False
+        return any(math.isclose(v, p, rel_tol=1e-9, abs_tol=1e-12) for p in self.param_nums)
+
+    def refs(self, text: str) -> list[str]:
+        return [f for _, f, _, _ in string.Formatter().parse(str(text)) if f]
+
+
+def rich(text: str) -> str:
+    """Escape, then **bold** lead-ins."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html.escape(text))
+
+
+# ------------------------------------------------------------------ charts and tables
+
+def jsonable(o):
+    import numpy as np
+    import pandas as pd
+    if isinstance(o, dict):
+        return {str(k): jsonable(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [jsonable(v) for v in o]
+    if isinstance(o, (pd.Series, pd.Index, np.ndarray)):
+        return jsonable(o.tolist())
+    if isinstance(o, pd.DataFrame):
+        return jsonable(o.values.tolist())
+    o = scalar(o)
+    if isinstance(o, float) and (math.isnan(o) or math.isinf(o)):
+        return None
+    if o is None or isinstance(o, (str, bool, int, float)):
+        return o
+    try:
+        if pd.isna(o):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return str(o)
+
+
+def pretty(col: str) -> str:
+    s = str(col).replace("_", " ").strip()
+    return s[:1].upper() + s[1:]
+
+
+def chart_option(spec: dict, res: dict, where: str) -> dict:
+    """Shorthand chart -> ECharts option. Colours, fonts and axes are styled by page.html."""
+    bad = set(spec) - CHART_KEYS
+    if bad:
+        raise Stop(f"{where}: chart has unknown keys {sorted(bad)}; allowed: {', '.join(sorted(CHART_KEYS))}")
+    kind = spec.get("type", "bar")
+    if kind not in CHART_TYPES:
+        raise Stop(f"{where}: chart type '{kind}' is not one of {', '.join(CHART_TYPES)}. "
+                   "Anything else: a function returning an ECharts option (references/charts.md)")
+    df = table_of(res, spec.get("table"), where)
+    x = spec.get("x") or df.columns[0]
+    ys = spec.get("y") or [c for c in df.columns if c != x][:1]
+    ys = [c for c in df.columns if c != x] if ys == "*" else ([ys] if isinstance(ys, str) else list(ys))
+    for c in [x, *ys]:
+        if c not in df.columns:
+            raise Stop(f"{where}: column '{c}' is not in table '{spec.get('table')}'. "
+                       f"It has: {', '.join(map(str, df.columns))}")
+    names = spec.get("names") or {}
+    if spec.get("sort", kind == "hbar"):
+        df = df.sort_values(ys[0], ascending=False)
+    if spec.get("top"):
+        df = df.head(int(spec["top"]))
+    o: dict = {"format": spec.get("format", "")}
+    if o["format"].startswith("$") and "%" in o["format"]:
+        raise Stop(f"{where}: chart format '{o['format']}' mixes $ and %. Use one: '$short' or '.0%'")
+    if kind == "scatter":
+        o["xAxis"] = {"type": "value", "name": spec.get("x_axis", pretty(x)), "scale": True}
+        o["yAxis"] = {"type": "value", "name": spec.get("axis", pretty(ys[0])), "scale": True}
+        o["series"] = [{"type": "scatter", "name": names.get(y, pretty(y)), "symbolSize": 7,
+                        "data": jsonable(df[[x, y]])} for y in ys]
+        return o
+    cats = jsonable(df[x].astype(str))
+    hl = spec.get("highlight")
+    hl = [str(h) for h in ([hl] if isinstance(hl, (str, int)) else (hl or []))]
+    single = len(ys) == 1
+    labels = spec.get("labels", single and kind in ("bar", "hbar") and len(df) <= 15)
+    series = []
+    for y in ys:
+        vals = jsonable(df[y])
+        if single and hl and kind in ("bar", "hbar"):
+            vals = [{"value": v, "itemStyle": {"color": "@orange"}} if str(c) in hl else v
+                    for c, v in zip(cats, vals)]
+        s = {"type": "line" if kind == "line" else "bar", "name": names.get(y, pretty(y)), "data": vals}
+        if kind == "stack":
+            s["stack"] = "total"
+        if labels:
+            s["label"] = {"show": True, "position": "right" if kind == "hbar" else "top"}
+        series.append(s)
+    axis_key = "yAxis" if kind == "hbar" else "xAxis"
+    lines = []
+    hl = [h for h in hl if h in cats]
+    if hl and kind == "line":            # a wide pale line marks the category
+        lines += [{axis_key: h, "label": {"show": False},
+                   "lineStyle": {"color": "@orange", "type": "solid", "width": 14, "opacity": 0.18}} for h in hl]
+    elif hl and not single:              # stacks and several series: shade the band
+        series[0]["markArea"] = {"silent": True, "itemStyle": {"color": "@orange", "opacity": 0.13},
+                                 "data": [[{axis_key: h}, {axis_key: h}] for h in hl]}
+    ref = spec.get("ref")
+    if ref is not None:
+        val, lab = (ref, "") if isinstance(ref, (int, float)) else (ref[0], ref[1] if len(ref) > 1 else "")
+        text = (f"{lab} " if lab else "") + fmt_value(val, spec.get("format", ""))
+        lines.append({("xAxis" if kind == "hbar" else "yAxis"): val,
+                      "lineStyle": {"color": "@navy", "type": "dashed", "width": 1.5},
+                      "label": {"formatter": text, "color": "@navy",
+                                "position": "start" if kind == "hbar" else "insideEndTop"}})
+    if lines:
+        series[0]["markLine"] = {"silent": True, "symbol": "none", "data": lines}
+    value_axis = {"type": "value", "name": spec.get("axis", pretty(ys[0]) if single else "")}
+    cat_axis = {"type": "category", "data": cats}
+    if kind == "hbar":
+        cat_axis["inverse"] = True
+        o["xAxis"], o["yAxis"] = value_axis, cat_axis
+    else:
+        o["xAxis"], o["yAxis"] = cat_axis, value_axis
+    o["series"] = series
+    return o
+
+
+def table_of(res: dict, name, where: str):
+    tables = res["tables"]
+    if name is None:
+        if len(tables) != 1:
+            raise Stop(f"{where}: say which table ('table': one of {', '.join(tables) or 'none'})")
+        name = next(iter(tables))
+    if name not in tables:
+        raise Stop(f"{where}: analytic '{res['name']}' has no table '{name}'. It has: {', '.join(tables) or 'none'}")
+    return tables[name]
+
+
+def table_spec(spec, res: dict, where: str):
+    """-> (DataFrame with display headings, {heading: format})"""
+    if isinstance(spec, str):
+        spec = {"table": spec}
+    bad = set(spec) - TABLE_KEYS
+    if bad:
+        raise Stop(f"{where}: table has unknown keys {sorted(bad)}; allowed: {', '.join(sorted(TABLE_KEYS))}")
+    df = table_of(res, spec.get("table"), where)
+    cols = spec.get("columns") or {c: pretty(c) for c in df.columns}
+    if isinstance(cols, list):
+        cols = {c: pretty(c) for c in cols}
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        raise Stop(f"{where}: table columns {missing} not found. It has: {', '.join(map(str, df.columns))}")
+    df = df[list(cols)].rename(columns=cols)
+    if spec.get("top"):
+        df = df.head(int(spec["top"]))
+    if len(df) > TABLE_MAX_ROWS:
+        raise Stop(f"{where}: {len(df)} rows. Show the top rows ('top': 15) and export the full table")
+    fmts = {cols[c]: f for c, f in (spec.get("format") or {}).items() if c in cols}
+    return df, fmts
+
+
+def render_table(df, fmts: dict) -> str:
+    import pandas as pd
+    head, rows = [], []
+    for c in df.columns:
+        num = pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c])
+        head.append(f'<th{" class=num" if num else ""}>{html.escape(str(c))}</th>')
+    for row in df.itertuples(index=False, name=None):
+        tds = []
+        for c, v in zip(df.columns, row):
+            v = scalar(v)
+            num = isinstance(v, (int, float)) and not isinstance(v, bool)
+            text = fmt_value(v, fmts.get(c, "")) if num or fmts.get(c) else ("" if v is None else str(v))
+            raw = "" if v is None else html.escape(str(v), quote=True)
+            tds.append(f'<td{" class=num" if num else ""} data-v="{raw}">{html.escape(text)}</td>')
+        rows.append("<tr>" + "".join(tds) + "</tr>")
+    return (f'<div class="tablewrap"><table class="data"><thead><tr>{"".join(head)}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>')
+
+
+# ------------------------------------------------------------------ the report
+
+def kpis_html(kpis, filler: Filler, where: str, warns: list, text: list, values: list) -> str:
+    """values: figures already shown in the answer; a section repeating one gets a check: line."""
+    tiles = []
+    for i, k in enumerate(kpis or []):
+        if not isinstance(k, (list, tuple)) or len(k) not in (2, 3):
+            raise Stop(f"{where}: kpi {i + 1} must be (\"Label\", \"{{metric}}\") or (label, value, note)")
+        label = filler.fill(k[0], f"{where} kpi {i + 1}", warns, check=False)
+        value = filler.fill(k[1], f"{where} kpi {i + 1}", warns)
+        note = filler.fill(k[2], f"{where} kpi {i + 1}", warns) if len(k) == 3 and k[2] else ""
+        if where != "ANSWER" and value in values:
+            warns.append(f"{where} kpi {i + 1}: {value} repeats a figure in the answer")
+        values.append(value)
+        text.append(f"  [figure] {label}: {value}" + (f" ({note})" if note else ""))
+        tiles.append(f'<div class="kpi"><div class="kpi-value">{html.escape(value)}</div>'
+                     f'<div class="kpi-label">{html.escape(label)}</div>'
+                     + (f'<div class="kpi-note">{rich(note)}</div>' if note else "") + "</div>")
+    return f'<div class="kpis n{len(tiles)}">{"".join(tiles)}</div>' if tiles else ""
+
+
+def bullets_html(bullets, filler: Filler, where: str, warns: list, text: list, cls: str = "") -> str:
+    if isinstance(bullets, str):
+        bullets = [bullets]
+    lis = []
+    for i, b in enumerate(bullets or []):
+        t = filler.fill(b, f"{where} bullet {i + 1}", warns)
+        text.append(f"  - {t.replace('**', '')}")
+        lis.append(f"<li>{rich(t)}</li>")
+    return f'<ul class="bullets{cls}">{"".join(lis)}</ul>' if lis else ""
+
+
+def chart_summary(o: dict) -> list[str]:
+    lines = []
+    axes = [a for k in ("xAxis", "yAxis") for a in ([o.get(k)] if isinstance(o.get(k), dict) else (o.get(k) or []))]
+    cats = next((a.get("data") for a in axes if isinstance(a, dict) and a.get("data") is not None), None)
+    names = [str(a["name"]) for a in axes if isinstance(a, dict) and a.get("name")]
+    if names:
+        lines.append("    axes: " + ", ".join(names))
+    for s in (o.get("series") or []):
+        if not isinstance(s, dict):
+            continue
+        vals = [v.get("value") if isinstance(v, dict) else v for v in (s.get("data") or [])]
+        if cats and len(cats) == len(vals) and len(cats) <= 24:
+            pts = ", ".join(f"{c}: {fmt_value(v, o.get('format', ''))}" for c, v in zip(cats, vals))
+            lines.append(f"    {s.get('name') or 'values'}: {pts}")
+        else:
+            lines.append(f"    {s.get('name') or 'values'}: {len(vals)} points")
+    return lines
+
+
+def build(rep, runner: Runner, write: bool = True):
+    if not rep.SECTIONS:
+        raise Stop("report.py: SECTIONS is empty. Agree the answer, then add sections (python run.py add-section ...)")
+    warns: list = []
+    text: list = [rep.TITLE, rep.QUESTION, ""]
+    filler = Filler(runner)
+    options: dict = {}
+
+    # answer
+    ans = rep.ANSWER
+    bad = set(ans) - {"headline", "basis", "bullets", "kpis"}
+    if bad:
+        raise Stop(f"report.py ANSWER: unknown keys {sorted(bad)}; allowed: headline, basis, bullets, kpis")
+    if not str(ans.get("headline") or "").strip():
+        raise Stop("report.py ANSWER: write the headline (one sentence) before building")
+    if not str(ans.get("basis") or "").strip():
+        raise Stop("report.py ANSWER: 'basis' is empty. One line: which date, compared with what, "
+                   "what is excluded, data through when")
+    headline = filler.fill(ans["headline"], "ANSWER headline", warns)
+    basis = filler.fill(ans["basis"], "ANSWER basis", warns)
+    text += ["THE ANSWER", f"  {headline}", f"  basis: {basis}"]
+    shown: list = []
+    a_bul = bullets_html(ans.get("bullets"), filler, "ANSWER", warns, text)
+    a_kpi = kpis_html(ans.get("kpis"), filler, "ANSWER", warns, text, shown)
+    answer = ('<section class="answer"><div class="label">The answer</div>'
+              f'<p class="headline">{rich(headline)}</p><p class="basis">{rich(basis)}</p>'
+              f'{a_bul}{a_kpi}</section>')
+
+    # sections
+    secs_html, contents, method = [], [], []
+    exported = []
+    for i, sec in enumerate(rep.SECTIONS, 1):
+        res = runner.run(sec["analytic"])
+        where = f"sections/{sec['file']}"
+        if not str(sec.get("description") or "").strip():
+            warns.append(f"{where}: no DESCRIPTION (8 to 10 words, shown by `python run.py list`)")
+        filler.own, filler.own_name = res["metrics"], f"analytic '{res['name']}'"
+        title = filler.fill(sec.get("title") or "", f"{where} TITLE", warns)
+        if not title:
+            raise Stop(f"{where}: needs a TITLE (the finding, as a sentence)")
+        text += ["", f"SECTION {i}: {title}", f"  question: {res['question']}"]
+        kpi = kpis_html(sec.get("kpis"), filler, where, warns, text, shown)
+        layout = sec.get("layout", "side")
+        if layout not in ("side", "wide"):
+            raise Stop(f"{where}: layout must be 'side' (chart beside bullets) or 'wide' (chart above)")
+        has_chart = sec.get("chart") is not None
+        bul = bullets_html(sec.get("bullets"), filler, where, warns, text,
+                           " cols" if layout == "wide" and has_chart else "")
+        fig = ""
+        if has_chart:
+            ch = sec["chart"]
+            if callable(ch):
+                try:
+                    opt = ch(res["tables"])
+                except Exception:
+                    traceback.print_exc()
+                    raise Stop(f"{where}: the chart function failed (traceback above)")
+                if not isinstance(opt, dict):
+                    raise Stop(f"{where}: a chart function must return an ECharts option dict")
+                opt = dict(opt)
+                cap, h = str(opt.pop("caption", "") or ""), int(opt.pop("height", 0) or 0)
+            elif isinstance(ch, dict):
+                if isinstance(ch.get("highlight"), str) and "{" in ch["highlight"]:
+                    ch = {**ch, "highlight": filler.fill(ch["highlight"], f"{where} highlight", warns, check=False)}
+                opt = chart_option(ch, res, where)
+                cap, h = ch.get("title", ""), int(ch.get("height", 0) or 0)
+            else:
+                raise Stop(f"{where}: 'chart' must be a dict (shorthand) or a function of the tables")
+            cid = f"c{i}"
+            options[cid] = jsonable(opt)
+            if not h and isinstance(ch, dict) and ch.get("type") == "hbar":
+                n = len((opt.get("yAxis") or {}).get("data") or [])
+                h = max(170, min(460, 70 + 44 * n))  # height follows the number of bars
+            h = h or (340 if layout == "wide" else 300)
+            cap = filler.fill(cap, f"{where} chart title", warns, check=False) if cap else ""
+            text.append(f"  [chart] {cap or 'untitled'}")
+            text += chart_summary(options[cid])
+            note = filler.fill(sec["note"], f"{where} note", warns) if sec.get("note") else ""
+            if note:
+                text.append(f"    note: {note}")
+            fig = ('<figure class="chart-card">' + (f"<figcaption>{html.escape(cap)}</figcaption>" if cap else "")
+                   + f'<div class="chart" data-chart="{cid}" style="height:{h}px"></div>'
+                   + (f'<p class="note">{rich(note)}</p>' if note else "") + "</figure>")
+        tbl = ""
+        if sec.get("table") is not None:
+            tspec = sec["table"]
+            df, fmts = table_spec(tspec, res, where)
+            cap = tspec.get("title", "") if isinstance(tspec, dict) else ""
+            cap = filler.fill(cap, f"{where} table title", warns, check=False) if cap else ""
+            tbl = ('<figure class="table-card">' + (f"<figcaption>{html.escape(cap)}</figcaption>" if cap else "")
+                   + render_table(df, fmts) + "</figure>")
+            text.append(f"  [table] {cap or 'untitled'}")
+            text.append("    " + " | ".join(map(str, df.columns)))
+            for row in df.head(15).itertuples(index=False, name=None):
+                text.append("    " + " | ".join(fmt_value(v, fmts.get(c, "")) for c, v in zip(df.columns, row)))
+            if not has_chart and sec.get("note"):
+                note = filler.fill(sec["note"], f"{where} note", warns)
+                tbl += f'<p class="note">{rich(note)}</p>'
+        links = []
+        for t in sec.get("export") or []:
+            if t not in res["tables"]:
+                raise Stop(f"{where}: export names '{t}', which {res['name']}() did not return")
+            fn = f"{ROOT.name}_{t}.csv"
+            if write:
+                res["tables"][t].to_csv(ROOT / fn, index=False)
+            exported.append(fn)
+            links.append(f'<a href="{html.escape(fn)}">{html.escape(fn)}</a> '
+                         f'({len(res["tables"][t]):,} rows)')
+            text.append(f"  [file] {fn}")
+        exp = f'<p class="export">Full list, saved beside this report: {"; ".join(links)}</p>' if links else ""
+        if not (bul or fig or tbl or kpi):
+            raise Stop(f"{where}: add bullets, a chart or a table")
+        body_cls = "side" if (layout == "side" and fig and bul) else "stack"
+        first, second = (bul, fig) if body_cls == "side" else (fig, bul)
+        secs_html.append(
+            f'<section class="sec" id="s{i}"><div class="sec-head"><span class="num">{i:02d}</span>'
+            f'<h2>{rich(title)}</h2></div>'
+            f'{kpi}<div class="body {body_cls}">{first}{second}</div>{tbl}{exp}</section>')
+        contents.append(f'<a href="#s{i}"><span class="num">{i:02d}</span>{html.escape(title)}</a>')
+        m = f"<li><b>{i:02d}</b> <code>{html.escape(res['name'])}</code> in {html.escape(res['where'])}: "
+        m += html.escape(res["question"]) + (f" <i>{html.escape(res['notes'])}</i>" if res["notes"] else "")
+        method.append(m + "</li>")
+    filler.own, filler.own_name = {}, ""
+
+    # footer
+    srcs = "".join(f"<li><b>{html.escape(n)}</b>: {html.escape(u['from'])}, {u['rows']:,} rows"
+                   + (f", {html.escape(u['note'])}" if u["note"] else "") + "</li>"
+                   for n, u in runner.src.used.items()) or "<li>none read</li>"
+    params = "; ".join(f"{k} = {v}" for k, v in runner.all_params().items()) or "none"
+    footer = ('<h3>How this was made</h3><div class="foot-grid">'
+              f'<div><h4>Sources</h4><ul>{srcs}</ul><h4>Parameters</h4><p>{html.escape(params)}</p></div>'
+              f'<div><h4>Analytics behind each section</h4><ul>{"".join(method)}</ul></div></div>'
+              f'<p class="foot-line">Every figure in the text is pulled from these analytics when the report '
+              f'is built ({now()}). Rerun: <code>python run.py report</code> in this folder.</p>')
+
+    if not write:
+        return "\n".join(text), warns
+    page_file = ROOT / "page.html"
+    if not page_file.exists():
+        raise Stop("page.html is missing. Copy it from the analysis skill's template/")
+    page = page_file.read_text(encoding="utf-8")
+    lost = [t for t in ("__ANSWER__", "__SECTIONS__", "__CHARTS__", "__ECHARTS__") if t not in page]
+    if lost:
+        raise Stop(f"page.html has lost {', '.join(lost)}. Put them back; the build fills them in")
+    lib = ROOT / "echarts.min.js"
+    echarts = ("<script>" + lib.read_text(encoding="utf-8").replace("</script", "<\\/script") + "</script>"
+               if lib.exists() else f'<script src="{ECHARTS_CDN}"></script>')
+    toc = (f'<nav class="contents"><div class="label">In this report</div>{"".join(contents)}</nav>'
+           if len(contents) >= 3 else "")
+    today = dt.date.today()
+    date = f"{today.day} {today:%B %Y}"
+    reader = str(getattr(rep, "FOR", "") or "").strip()
+    norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower())  # noqa: E731
+    same = difflib.SequenceMatcher(None, norm(rep.TITLE), norm(rep.QUESTION)).ratio() >= 0.7
+    for token, value in {
+        "__TITLE__": html.escape(rep.TITLE), "__EYEBROW__": html.escape(f"For {reader} · {date}" if reader else date),
+        "__SUBTITLE__": "" if same else f'<p class="question">{html.escape(rep.QUESTION)}</p>',
+        "__QUESTION__": html.escape(rep.QUESTION),
+        "__DATE__": date, "__ANSWER__": answer, "__CONTENTS__": toc,
+        "__SECTIONS__": "\n".join(secs_html), "__FOOTER__": footer,
+        "__CHARTS__": json.dumps(options).replace("</", "<\\/"), "__ECHARTS__": echarts,
+    }.items():
+        page = page.replace(token, value)
+    out = ROOT / f"{ROOT.name}.html"
+    out.write_text(page, encoding="utf-8")
+    return out, warns
+
+
+def now() -> str:
+    return dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+# ------------------------------------------------------------------ explore and main
+
+def print_result(res: dict, rows: int = 3):
+    import pandas as pd
+    print(f"\n{res['name']}  ({res['where']})\n  {res['question']}")
+    print("  metrics: " + (", ".join(f"{m}={(f'{v:,.0f}' if abs(v) >= 1000 else f'{v:.4g}') if isinstance(v, float) else v}"
+                                     for m, v in res["metrics"].items()) or "none"))
+    for t, df in res["tables"].items():
+        print(f"  table {t} ({len(df):,} rows): {', '.join(map(str, df.columns))}")
+        if rows:
+            with pd.option_context("display.width", 160, "display.max_columns", 12):
+                print("\n".join("    " + line for line in df.head(rows).to_string(index=False).splitlines()))
+    if res["notes"]:
+        print(f"  notes: {res['notes']}")
+
+
+def export_data(runner: Runner, args: list, as_json: bool, out: str | None) -> int:
+    """data NAME [TABLE]: one table (or 'metrics') as CSV or JSON, to stdout or --out. Nothing else saved."""
+    m = SECTION_FILE_RE.match(args[0].removesuffix(".py")) if args else None
+    known = args and (args[0] in runner.analytics or (m and m.group(2) in runner.analytics))
+    if not known or len(args) > 2:
+        print("Analytics and their tables (python run.py data NAME TABLE [--json] [--out FILE]):")
+        print("\n".join(_analytic_line(runner, n, _live(runner.rep)) for n in runner.analytics))
+        raise Stop(f"no analytic named '{args[0]}'" if args and not known else
+                   "use: python run.py data NAME [TABLE] [--json] [--out FILE]")
+    res = runner.run(args[0])
+    name = args[1] if len(args) == 2 else None
+    if name == "metrics":
+        body = json.dumps(jsonable(res["metrics"]), indent=1) if as_json else \
+            "metric,value\n" + "".join(f"{k},{jsonable(v)}\n" for k, v in res["metrics"].items())
+    else:
+        if name is None and len(res["tables"]) != 1:
+            raise Stop(f"{args[0]} has tables: {', '.join(res['tables']) or 'none'} (and metrics). Name one")
+        df = table_of(res, name, f"data {args[0]}")
+        body = df.to_json(orient="records", date_format="iso", indent=1) if as_json else df.to_csv(index=False)
+    if out:
+        Path(out).write_text(body, encoding="utf-8", newline="")
+        print(f"Wrote {out}", file=sys.stderr)
+    else:
+        sys.stdout.write(body)
+    return 0
+
+
+# ------------------------------------------------------------------ list and add-section
+
+MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})")
+MONEY_RE = re.compile(r"paid|amount|cost|price|spend|revenue|charge|premium|dollar", re.I)
+
+
+def time_kind(s) -> str:
+    """'date', 'month' or '' for a column."""
+    import pandas as pd
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return "date"
+    if not (s.dtype == object or pd.api.types.is_string_dtype(s)):
+        return ""
+    v = s.dropna().astype(str).head(200)
+    if not len(v):
+        return ""
+    return "month" if v.str.match(MONTH_RE).all() else ("date" if v.str.match(DATE_RE).all() else "")
+
+
+def describe_column(name, s) -> str:
+    import pandas as pd
+    kind, v = time_kind(s), s.dropna()
+    if kind:
+        d = pd.to_datetime(v, errors="coerce").dropna()
+        f = "%Y-%m-%d" if kind == "date" else "%Y-%m"
+        info = f"{d.min():{f}} to {d.max():{f}}" if len(d) else "no dates"
+    elif pd.api.types.is_bool_dtype(s):
+        kind, info = "yes/no", f"{int(v.sum()):,} yes"
+    elif pd.api.types.is_numeric_dtype(s):
+        kind = "number"
+        info = f"{fmt_value(v.min(), 'short')} to {fmt_value(v.max(), 'short')}" if len(v) else "empty"
+    else:
+        kind, n = "text", v.nunique()
+        eg = [str(x) for x in v.drop_duplicates().head(3)]
+        info = f"all different, e.g. {eg[0]}" if n == len(v) and n > 20 else \
+            f"{n:,} values: {', '.join(eg)}" + (" ..." if n > 3 else "")
+    return f"    {str(name):<18} {kind:<7} {info}"
+
+
+def _short(items, n=8) -> str:
+    items = list(items)
+    return ", ".join(map(str, items[:n])) + (f" (+{len(items) - n} more)" if len(items) > n else "") or "none"
+
+
+def _live(rep) -> list:
+    """Sources that need a live query (no file, no kept copy)."""
+    return [n for n, s in rep.SOURCES.items() if (callable(s) or str(s).lower().endswith(".sql"))
+            and not (n in rep.KEEP and (KEEP_DIR / f"{n}.parquet").exists())]
+
+
+def _analytic_line(runner, name, live) -> str:
+    """One line: the analytic's tables with their columns, and its metric names."""
+    import contextlib
+    import io
+    if live:
+        return f"     {name}(): not run here (a source is a live query); `python run.py {name}` shows it"
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            r = runner.run(name)
+    except Stop as e:
+        return f"     {name}(): fails: {e}"
+    tabs = "; ".join(f"table {t} [{_short(df.columns, 10)}]" for t, df in r["tables"].items()) or "no tables"
+    return f"     {name}(): {tabs}; metrics {_short(r['metrics'], 10)}"
+
+
+def inventory(rep, runner) -> int:
+    """list: the registry. One line per section in order, then sources with their columns."""
+    import contextlib
+    import io
+    page = ROOT / f"{ROOT.name}.html"
+    built = dt.datetime.fromtimestamp(page.stat().st_mtime).strftime("%Y-%m-%d %H:%M") if page.exists() else "not built"
+    basis = str(rep.ANSWER.get("basis") or "(not written)")
+    out = [f"{rep.TITLE}  ({page.name}: {built})",
+           "basis: " + (basis[:140] + " ..." if len(basis) > 140 else basis),
+           f"DEFAULTS (sections/_shared.py): {_short(f'{k}={v}' for k, v in runner.all_params().items() if k not in rep.PARAMS)}"
+           f" | PARAMS: {_short(f'{k}={v}' for k, v in rep.PARAMS.items())}",
+           ""]
+    live = _live(rep)
+    out.append(f"Sections ({len(rep.SECTIONS)}), in order"
+               + ("" if live else "; tables and metrics come from running each analytic once") + ":")
+    for i, s in enumerate(rep.SECTIONS, 1):
+        ch, title = s.get("chart"), str(s.get("title") or "(no title)")
+        kind = ch.get("type", "bar") if isinstance(ch, dict) else \
+            ("custom" if callable(ch) else ("table" if s.get("table") is not None else "text"))
+        desc = str(s.get("description") or "(no description)")
+        out.append(f"  {i}. {s['file']:<28} {kind:<6} {title[:50] + '...' if len(title) > 50 else title}  | {desc}")
+        out.append(_analytic_line(runner, s["analytic"], live))
+    for sid in rep.UNUSED:
+        out.append(f"  -  {sid}.py (not in the report)")
+        out.append(_analytic_line(runner, SECTION_FILE_RE.match(sid).group(2), live))
+    out.append("Sources:")
+    for n in rep.SOURCES:
+        if n in live:
+            out.append(f"  {n}: live query, not read here")
+            continue
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                df = runner.src(n)
+        except Stop as e:
+            out.append(f"  {n}: {e}")
+            continue
+        out.append(f"  {n}: {runner.src.used[n]['from']}, {len(df):,} rows")
+        out += [describe_column(c, df[c]) for c in df.columns[:15]]
+        if len(df.columns) > 15:
+            out.append(f"    ... {len(df.columns) - 15} more columns")
+    out.append("\nAdd one: python run.py add-section NAME --source SRC --chart bar --x COL [--y COL] [--where COL=VALUE] --bullets 2 "
+               "--desc \"8 to 10 words\"")
+    print("\n".join(out))
+    return 0
+
+
+def check_section(rep, runner, name) -> int:
+    """_check NAME: fill the texts of the sections that show NAME, as a reader would see them."""
+    warns, filler = [], Filler(runner)
+    for i, sec in enumerate(rep.SECTIONS, 1):
+        if not isinstance(sec, dict) or sec.get("analytic") != name:
+            continue
+        res, where = runner.run(name), f"section {i} ({name})"
+        filler.own, filler.own_name = res["metrics"], f"analytic '{name}'"
+        print(f"  section {i}: {filler.fill(sec.get('title') or '', where + ' title', warns)}")
+        for j, b in enumerate(sec.get("bullets") or []):
+            print(f"    - {filler.fill(b, f'{where} bullet {j + 1}', warns).replace('**', '')}")
+        if isinstance(sec.get("chart"), dict):
+            chart_option(sec["chart"], res, where)
+        if sec.get("table") is not None:
+            table_spec(sec["table"], res, where)
+    for w in warns:
+        print(f"  check: {w}")
+    return 0
+
+
+WHERE_RE = re.compile(r"^\s*([^<>=]+?)\s*(>=|<=|=)\s*(.+?)\s*$")
+WHERE_WORDS = {"=": "is", ">=": "is at least", "<=": "is at most"}
+
+
+def where_text(wheres) -> str:
+    return " and ".join(f"{pretty(c).lower()} {WHERE_WORDS[op]} {v}" for c, op, v, _ in wheres)
+
+
+def _analytic_code(name, src, x, y, agg, by, timed, chart, wheres=(), sig="") -> tuple[str, str, str, list]:
+    """-> (code, table name, value column, metric names)."""
+    xcol = "month" if timed else x
+    ycol = y if agg != "count" else src
+    tname = "by_month" if timed else f"by_{x}"
+    ylab = {"sum": pretty(ycol).lower(), "count": f"the number of {pretty(src).lower()}",
+            "mean": f"the average {pretty(ycol).lower()}"}[agg]
+    xlab = f"month of {pretty(x).lower()}" if timed == "date" else pretty(x).lower()
+    q = f"How does {ylab} vary by {xlab}" + (f", split by {pretty(by).lower()}" if by else "") \
+        + (f", where {where_text(wheres)}?" if wheres else "?")
+    keys = [xcol] + ([by] if by else [])
+    L = [f"def {name}(src, params):",
+         f'    """Added by add-section: {sig}. Edit freely."""',
+         "    import pandas as pd",
+         f'    df = src("{src}")']
+    for c, op, v, numeric in wheres:      # --where filters
+        op = "==" if op == "=" else op
+        L.append(f'    df = df[df["{c}"] {op} {v!r}]' if numeric else
+                 f'    df = df[df["{c}"].astype(str) {op} {json.dumps(str(v))}]')
+    if timed:
+        L += [f'    df["month"] = pd.to_datetime(df["{x}"], errors="coerce").dt.to_period("M")',
+              '    df = df.dropna(subset=["month"])']
+    L.append(f"    g = df.groupby({keys!r}).size()" if agg == "count" else f'    g = df.groupby({keys!r})["{y}"].{agg}()')
+    if by:
+        L += ["    t = g.unstack(fill_value=0)",
+              "    t = t[t.sum().sort_values(ascending=False).index]",
+              "    if t.shape[1] > 6:   # the five largest groups, the rest summed",
+              '        t = pd.concat([t.iloc[:, :5], t.iloc[:, 5:].sum(axis=1).rename("All other")], axis=1)',
+              "    t.columns = [str(c) for c in t.columns]",
+              "    t = t.reset_index()"]
+    else:
+        L.append(f'    t = g.rename("{ycol}").reset_index()')
+        if not timed and chart != "line":
+            L.append(f'    t = t.sort_values("{ycol}", ascending=False)')
+    if timed:
+        L += ['    t = t.sort_values("month")', '    t["month"] = t["month"].dt.strftime("%b %Y")']
+    L.append(f'    labels = t["{xcol}"].astype(str).reset_index(drop=True)')
+    if by:
+        L += [f'    groups = t.drop(columns=["{xcol}"])',
+              f'    vals = groups.{"mean" if agg == "mean" else "sum"}(axis=1).reset_index(drop=True)']
+    else:
+        L.append(f'    vals = t["{ycol}"].reset_index(drop=True)')
+    names = ["overall" if agg == "mean" else "total", "largest", "largest_label", "smallest", "smallest_label",
+             "groups"] + (["latest", "latest_label"] if timed else []) + (["top_group", "top_group_total"] if by else [])
+    L.append(f"    m = dict.fromkeys({names!r})   # empty input: every metric stays None")
+    if wheres:
+        names = names + ["where"]
+        L.append(f'    m["where"] = {json.dumps(where_text(wheres))}   # the filter, in words, for the note')
+    L += ["    if len(t):",
+          "        m.update(largest=vals.max(), largest_label=labels[vals.idxmax()], smallest=vals.min(),",
+          "                 smallest_label=labels[vals.idxmin()], groups=len(t))",
+          f'        m["overall"] = df["{y}"].mean()' if agg == "mean" else '        m["total"] = vals.sum()']
+    if timed:
+        L.append("        m.update(latest=vals.iloc[-1], latest_label=labels.iloc[-1])")
+    if by:
+        L.append("        m.update(top_group=groups.sum().idxmax(), top_group_total=groups.sum().max())")
+    L.append('    # another figure: add a key to the metrics dict m, e.g. m["share"] = ..., then use it as {share}')
+    notes = (f"Months come from {pretty(x).lower()}. " if timed == "date" else "") \
+        + (f"Only {pretty(src).lower()} where {where_text(wheres)}." if wheres else "")
+    L += ["    return {", f"        \"question\": {json.dumps(q)},", f'        "tables": {{"{tname}": t}},',
+          '        "metrics": m,', f"        \"notes\": {json.dumps(notes)},", "    }"]
+    return "\n".join(L) + "\n", tname, ycol, names
+
+
+def _section_file(sid, name, src, x, y, agg, by, timed, chart, title, n_bullets, desc, code, tname, ycol,
+                  wheres=()) -> str:
+    """The text of sections/<sid>.py: everything for one visual block."""
+    xcol = "month" if timed else x
+    money = agg != "count" and bool(MONEY_RE.search(y or ""))
+    f = "$short" if money else ("," if agg == "count" else (",.1f" if agg == "mean" else ",.0f"))
+    ylab = pretty(ycol) if agg != "mean" else f"Average {pretty(ycol).lower()}"
+    xlab = f"month of {pretty(x).lower()}" if timed == "date" else pretty(x).lower()
+    if not desc:
+        what = {"sum": f"Total {pretty(ycol).lower()}", "count": f"Number of {pretty(src).lower()}",
+                "mean": f"Average {pretty(ycol).lower()}"}[agg]
+        desc = f"{what} by {xlab}" + (f" and {pretty(by).lower()}" if by else "") \
+            + (f", where {where_text(wheres)}" if wheres else f", {chart} chart")
+    if not title:
+        title = f"{ylab} by {'month' if timed else xlab}: highest {{largest:{f}}}, in {{largest_label}}"
+    total = f"**Average:** {{overall:{f}}}." if agg == "mean" else \
+        f"**Total:** {{total:{f}}} over {{groups}} {'months' if timed else 'groups'}."
+    pool = [f"**Highest:** {{largest_label}}, {{largest:{f}}}.",
+            (f"**Largest {pretty(by).lower()}:** {{top_group}}, {{top_group_total:{f}}} in total." if by else
+             f"**Latest:** {{latest_label}}, {{latest:{f}}}." if timed else
+             f"**Lowest:** {{smallest_label}}, {{smallest:{f}}}."), total]
+    q = lambda s: json.dumps(s, ensure_ascii=False)  # noqa: E731
+    L = [f'"""Section {sid}: one block of the report. Everything for it is in this file."""', "",
+         f"DESCRIPTION = {q(desc)}", "", "", code.rstrip("\n"), "", "",
+         f"TITLE = {q(title)}   # reword: the finding, as a sentence"]
+    if n_bullets:
+        L += ["BULLETS = [   # reword each: what the figure means; keep the {placeholders}"]
+        L += [f"    {q(b)}," for b in pool[:n_bullets]] + ["]"]
+    if chart == "table":
+        fmt = f', "format": {{"{ycol}": "$,.0f"}}' if money and not by else ""
+        L.append(f'TABLE = {{"table": "{tname}", "top": 15{fmt}}}')
+    else:
+        L.append(f'CHART = {{"type": "{chart}", "table": "{tname}", "x": "{xcol}", "y": "{"*" if by else ycol}",')
+        L.append(f'         "axis": "{ylab}", "format": "{f}"}}')
+        if timed:
+            L.append('LAYOUT = "wide"')
+    if wheres:
+        L.append(f"NOTE = {q(f'Only {pretty(src).lower()} where ' + '{where}.')}")
+    return "\n".join(L) + "\n"
+
+
+def _insert_section(src: str, item: str, pos: int) -> str:
+    """Put one string item into the SECTIONS list of report.py at position pos."""
+    import ast
+    node = next((n for n in ast.parse(src).body if isinstance(n, ast.Assign)
+                 and any(getattr(t, "id", "") == "SECTIONS" for t in n.targets)), None)
+    if node is None or not isinstance(node.value, ast.List):
+        raise Stop("report.py: SECTIONS is not a plain list; add the section id to it by hand")
+    b = src.encode("utf-8")
+    starts = [0]
+    for line in b.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    off = lambda ln, col: starts[ln - 1] + col  # noqa: E731
+    elts, it = node.value.elts, item.encode("utf-8")
+    if not elts:
+        lst = node.value
+        new = b"[\n    " + it + b",\n]"
+        return (b[:off(lst.lineno, lst.col_offset)] + new + b[off(lst.end_lineno, lst.end_col_offset):]).decode("utf-8")
+    if pos < len(elts):
+        at = off(elts[pos].lineno, elts[pos].col_offset)
+        return (b[:at] + it + b",\n" + b" " * elts[pos].col_offset + b[at:]).decode("utf-8")
+    at = off(elts[-1].end_lineno, elts[-1].end_col_offset)
+    return (b[:at] + b",\n" + b" " * elts[0].col_offset + it + b[at:]).decode("utf-8")
+
+
+def add_section(rep, runner, rest, a) -> int:
+    """add-section NAME ...: one new sections/sN_NAME.py and one line in SECTIONS. Mechanical only."""
+    import pandas as pd
+    import subprocess
+    if len(rest) != 1 or not NAME_RE.match(rest[0]):
+        raise Stop("use: python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL] "
+                   "(NAME in lower_snake_case)")
+    name, chart = rest[0], (a.chart or "bar")
+    if name in runner.analytics:
+        raise Stop(f"a section named '{name}' already exists ({runner.analytics[name][1]}). Pick another NAME")
+    if chart not in ("bar", "line", "table"):
+        raise Stop("--chart is bar, line or table. Anything else: edit the new file by hand (references/build.md)")
+    if a.agg not in (None, "sum", "count", "mean"):
+        raise Stop("--agg is sum, count or mean. Anything else: edit the new file by hand (references/section.md)")
+    if not a.source or not a.x:
+        raise Stop(f"--source and --x are needed. Sources: {', '.join(rep.SOURCES) or 'none'}")
+    if a.agg in ("sum", "mean") and not a.y:
+        raise Stop(f"--agg {a.agg} needs --y (the number column)")
+    if not 0 <= a.bullets <= 3:
+        raise Stop("--bullets is 0 to 3")
+    pos = len(rep.SECTIONS) if a.after is None else a.after
+    if not 0 <= pos <= len(rep.SECTIONS):
+        raise Stop(f"--after is 0 to {len(rep.SECTIONS)}")
+    df = runner.src(a.source)
+    for flag, c in (("--x", a.x), ("--y", a.y), ("--by", a.by)):
+        if c and c not in df.columns:
+            raise Stop(f"{flag} {c}: '{a.source}' has no such column. It has: {', '.join(map(str, df.columns))}")
+    numeric = bool(a.y) and pd.api.types.is_numeric_dtype(df[a.y])
+    agg = a.agg or ("sum" if numeric else "count")      # no --y, or a text --y: count rows
+    if agg != "count" and not numeric:
+        raise Stop(f"--y {a.y} is not a number column, so it cannot be {'summed' if agg == 'sum' else 'averaged'}. "
+                   "Leave out --agg to count rows")
+    wheres, rows = [], df
+    for w in a.where or []:                                  # --where col=value, col>=value, col<=value
+        mt = WHERE_RE.match(w)
+        if not mt or mt.group(1) not in df.columns:
+            raise Stop(f"--where {w}: use col=value, col>=value or col<=value with a column of '{a.source}': "
+                       f"{', '.join(map(str, df.columns))}")
+        c, op, v = mt.groups()
+        num = pd.api.types.is_numeric_dtype(df[c])
+        if num:
+            try:
+                v = int(v) if re.fullmatch(r"-?\d+", v) else float(v)
+            except ValueError:
+                raise Stop(f"--where {w}: '{c}' holds numbers, so the value must be a number")
+        keep = {"=": rows[c] == v if num else rows[c].astype(str) == v,
+                ">=": rows[c] >= v if num else rows[c].astype(str) >= v,
+                "<=": rows[c] <= v if num else rows[c].astype(str) <= v}[op]
+        if not keep.any():
+            vals = sorted(map(str, rows[c].dropna().unique()))
+            raise Stop(f"--where {w} matches no rows. '{c}' has: {', '.join(vals[:15])}"
+                       + (f" ... ({len(vals)} values)" if len(vals) > 15 else ""))
+        rows = rows[keep]
+        wheres.append((c, op, v, num))
+    sig = f"{a.source} | x={a.x} | {agg} of {a.y if agg != 'count' else 'rows'}" \
+        + (f" | by {a.by}" if a.by else "") + (f" | where {where_text(wheres)}" if wheres else "")
+    for p in sorted(SECTIONS_DIR.glob("s*.py")):          # a repeat: the same generated signature
+        if f"Added by add-section: {sig}." in p.read_text(encoding="utf-8"):
+            print(f"note: sections/{p.name} already shows this ({sig}); adding anyway")
+    timed = time_kind(df[a.x])   # "date", "month" or ""
+    code, tname, ycol, metrics = _analytic_code(name, a.source, a.x, a.y, agg, a.by, timed, chart, wheres, sig)
+    used = [int(m.group(1)) for p in SECTIONS_DIR.glob("s*.py") if (m := SECTION_FILE_RE.match(p.stem))]
+    sid = f"s{max(used, default=0) + 1}_{name}"
+    sfile, rfile = SECTIONS_DIR / f"{sid}.py", ROOT / "report.py"
+    old_r = rfile.read_text(encoding="utf-8")
+    new_r = _insert_section(old_r, json.dumps(sid), pos)
+    SECTIONS_DIR.mkdir(exist_ok=True)
+    sfile.write_text(_section_file(sid, name, a.source, a.x, a.y, agg, a.by, timed, chart, a.title, a.bullets,
+                                   a.desc, code, tname, ycol, wheres), encoding="utf-8")
+    rfile.write_text(new_r, encoding="utf-8")
+    chk = subprocess.run([sys.executable, str(ROOT / "run.py"), "_check", name], capture_output=True,
+                         text=True, encoding="utf-8", cwd=ROOT)
+    if chk.returncode != 0 or "check:" in chk.stdout or "STOP" in chk.stdout:
+        sfile.unlink()
+        rfile.write_text(old_r, encoding="utf-8")
+        print(chk.stdout + chk.stderr[-2000:])
+        raise Stop("the new section did not fill cleanly (above), so nothing was changed. Add it by hand")
+    did = {"sum": f"summed {a.y}", "mean": f"averaged {a.y}", "count": "counted rows"}[agg]
+    print(f"Added sections/{sid}.py as section {pos + 1} of {len(rep.SECTIONS) + 1}: {did} by "
+          f"{'month of ' + a.x if timed == 'date' else a.x}" + (f" and {a.by}" if a.by else "")
+          + f", {chart}. It reads now:")
+    print(chk.stdout.rstrip())
+    lines = sfile.read_text(encoding="utf-8").splitlines()
+    rew = [str(i) for i, l in enumerate(lines, 1) if l.startswith("TITLE = ")]
+    if a.bullets:
+        start = next(i for i, l in enumerate(lines, 1) if l.startswith("BULLETS"))
+        rew += [str(start + k) for k in range(1, a.bullets + 1)]
+    print(f"Left to do, all in sections/{sid}.py:\n  1. Reword lines {', '.join(rew)}: the title and bullets are "
+          f"neutral placeholders. Keep the {{placeholders}}; they pull: {', '.join(metrics)}.")
+    print("  2. Say the question (in the function) and DESCRIPTION plainly.")
+    print("  3. python run.py report, then python run.py shot")
+    return 0
+
+
+BROWSERS = [
+    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "~/AppData/Local/Google/Chrome/Application/chrome.exe",
+    "~/AppData/Local/Microsoft/Edge/Application/msedge.exe",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+]
+BROWSER_NAMES = ["msedge", "microsoft-edge", "microsoft-edge-stable", "google-chrome", "google-chrome-stable",
+                 "chrome", "chromium", "chromium-browser"]
+
+
+def screenshot(rep, args: list) -> int:
+    """shot [OUT.png]: the built report as a PNG, via headless Edge or Chrome."""
+    import shutil
+    import subprocess
+    import tempfile
+    page = ROOT / f"{ROOT.name}.html"
+    if not page.exists():
+        raise Stop(f"{page.name} is not built yet. Run `python run.py report` first")
+    found = [p for p in (Path(b).expanduser() for b in BROWSERS) if p.is_file()]
+    found += [Path(w) for w in (shutil.which(n) for n in BROWSER_NAMES) if w]
+    if not found:
+        raise Stop("no Edge or Chrome found (looked in the standard Windows, macOS and Linux install "
+                   f"folders and on the path for {', '.join(BROWSER_NAMES)}). Open {page.name} by hand")
+    given = args[0] if args else ""
+    if sys.platform == "win32":
+        given = re.sub(r"^/([a-zA-Z])/", r"\1:/", given)          # /c/... from Git Bash
+    out = Path(given) if given else ROOT / f"{ROOT.name}_shot.png"
+    out = out.resolve()
+    out.unlink(missing_ok=True)
+    tables = sum(1 for s in rep.SECTIONS if isinstance(s, dict) and s.get("table") is not None)
+    height = 750 + 600 * len(rep.SECTIONS) + 450 * tables     # rough page height; spare space is blank
+    profile = tempfile.mkdtemp(prefix="report-shot-")
+    try:
+        subprocess.run([str(found[0]), "--headless=new", "--disable-gpu", "--hide-scrollbars",
+                        "--no-first-run", f"--user-data-dir={profile}", f"--window-size=1280,{height}",
+                        "--virtual-time-budget=8000", f"--screenshot={out}", page.as_uri()],
+                       capture_output=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop(f"{found[0].name} did not finish the screenshot: {e}")
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+    if not out.exists():
+        raise Stop(f"{found[0].name} ran but wrote no screenshot to {out}")
+    print(f"Screenshot: {out}")
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("what", nargs="*", help="nothing, analytic names, report, text, or data NAME [TABLE]")
+    ap.add_argument("--refresh", action="store_true", help="pull sources listed in KEEP again")
+    ap.add_argument("--json", action="store_true", help="with data: JSON instead of CSV")
+    ap.add_argument("--out", help="with data: write to this file instead of printing")
+    ap.add_argument("--rows", type=int, default=3, help="with NAME: table rows to print")
+    for opt in ("--source", "--chart", "--x", "--y", "--agg", "--by", "--title", "--desc"):
+        ap.add_argument(opt, help="with add-section")
+    ap.add_argument("--where", action="append", help="with add-section: col=value, col>=value or col<=value")
+    ap.add_argument("--bullets", type=int, default=2, help="with add-section: 0 to 3")
+    ap.add_argument("--after", type=int, help="with add-section: put it after section N (default last)")
+    args = ap.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+    try:
+        rep = load_report()
+        runner = Runner(rep, load_sections(rep), args.refresh)
+        what = args.what
+        if what == ["list"]:
+            return inventory(rep, runner)
+        if what[:1] == ["_check"] and len(what) == 2:
+            return check_section(rep, runner, what[1])
+        if what[:1] == ["add-section"]:
+            return add_section(rep, runner, what[1:], args)
+        if what[:1] == ["shot"]:
+            return screenshot(rep, what[1:])
+        if what[:1] == ["data"]:
+            return export_data(runner, what[1:], args.json, args.out)
+        if what in (["report"], ["text"]):
+            out, warns = build(rep, runner, write=what == ["report"])
+            if what == ["text"]:
+                print(out)
+            else:
+                print(f"Report: {out}")
+            for w in warns:
+                print(f"  check: {w}")
+            return 0
+        names = what or list(runner.analytics)
+        for n in names:
+            print_result(runner.run(n), args.rows)
+        print("\nNothing saved. The report is `python run.py report`.")
+        return 0
+    except Stop as e:
+        print(f"STOP: {e}")
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
