@@ -56,6 +56,7 @@ A caveat from exploring that changes the size or reading of the answer goes in t
 - Nothing saved by default: sources and tables live in memory for each run. `KEEP` saves a slow source; a section's `export` writes a table as CSV.
 - Never read or edit `run.py`. `page.html` only for a restyle the user asks for, and then only its `:root` block.
 - No company names or logos.
+- User likes a visual, or says save it: launch `design-librarian` with the files; it saves them to the design library.
 
 ## Existing report folder
 

@@ -124,6 +124,18 @@ The owner's rule: what matters is how much gets read on a normal edit, not how m
 
 Round 3 results (fresh subagents, strict log of every file opened): the add case passed on all three in 11 to 19 tool calls with no framework file opened, and creating a new report, dashboard and deck passed with no copied framework file read.
 
+### Design library and its subagent (2026-11-19)
+
+- **Saving is done by a subagent, `design-librarian`** (`.claude/agents/design-librarian.md`), on Haiku because it is a copy job. When the user likes a visual, the analysis, dashboard-work or presentation skill launches it with the files. A script (`design-library/save-item.js`) does the copying; the agent writes the one-sentence purpose and runs the check. It never edits the project it copies from.
+- **One item, one file.** Every item is one HTML file that renders by itself (ECharts from its CDN is the only outside file), with a header: `id`, `type`, `name`, a one-sentence `purpose`, and the skill it came from. Sample data is inline, 4 to 6 made-up round values.
+- **Ids.** Two capitals, a hyphen, two digits; never changed and never reused. Slides keep their group codes; `CT` chart, `RS` report section, `DS` dashboard section, `TH` theme.
+- **A saved section is a pattern, not the project's analysis.** A report or dashboard section is saved as a generic definition of its shape with `DATA`, `GROUP` and `VALUE` placeholders, starting with the add command that recreates it. The project's own calculation is not copied. Rejected: copying the section file as it is, which carried project dates, categories and thresholds into the library.
+- **Checks.** `build-index.js` fails on a bad or duplicate id, a missing purpose, an outside file, a hard-coded colour or font, a date literal, more than six sample points, or a project word (the source's table, column and category names, stored as hashes). The original hand-made samples are exempt from the date, size and project-word checks.
+- **Themes and the index.** A theme is an item holding the CSS tokens and the chart series order. Items use token names only, so `index.html` can show every item in any theme: a side bar of themes, a main grid of items, a filter by type. Three themes ship: the default light blue-led look, and a dark and a greyscale one marked as examples. This restyles the library and its index only; reports, dashboards and decks keep their own look.
+- **`design-library/CLAUDE.md`** holds the rules, how to use and how to save, in 24 lines. It replaces the library's README and its new-component guide.
+
+Tested cold on Haiku: four visuals (two report sections, a dashboard section, a slide) saved in 21 tool calls with no project value surviving, after one fix round.
+
 Tested: 32 runs over two rounds (build, together, pick-up), each by a fresh subagent, with manager reviews after each round. All seven skills were judged "roll out after must-fixes" in round 2. Those must-fixes were applied and checked by the builders, not by a further cold run.
 
 Not tested: interviews and approval gates with a real person, presentation full mode, porting existing work into a dashboard, hosting, real data volumes, and any engine other than Claude.

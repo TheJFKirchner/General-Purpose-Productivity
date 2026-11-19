@@ -264,20 +264,32 @@ function body() {
   return `${I(8)}<blockquote>\n${I(10)}<p>WORD: the one sentence the room should hear.</p>\n${I(10)}<cite>WORD: who said it, or where it is from</cite>\n${I(8)}</blockquote>`;
 }
 
+/* The design library: the project map's "Design library:" line, else the one in this repo. */
+function library() {
+  for (let d = path.dirname(path.resolve(file)), i = 0; i < 6; i++, d = path.dirname(d)) {
+    const map = path.join(d, 'CLAUDE.md');
+    if (!fs.existsSync(map)) continue;
+    const m = fs.readFileSync(map, 'utf8').match(/Design library:\s*\[?[^\]\n(]*\]?\(?([^)\s]+)\)?/);
+    if (m && fs.existsSync(path.resolve(d, m[1].replace(/`/g, '')))) return path.resolve(d, m[1].replace(/`/g, ''));
+    break;
+  }
+  return path.join(SKILL, '..', '..', '..', 'design-library');
+}
+
 function fromPattern(code) {
-  const lib = path.join(SKILL, '..', '..', '..', 'design-library', 'slides');
-  if (!fs.existsSync(lib)) stop('no design library next to this skill; use --layout');
-  for (const g of fs.readdirSync(lib)) {
-    const f = path.join(lib, g, 'slides.html');
-    if (!fs.existsSync(f)) continue;
-    const h = fs.readFileSync(f, 'utf8');
+  const lib = path.join(library(), 'slides');
+  if (!fs.existsSync(lib)) stop('no design library found (map line or this repo); use --layout');
+  const f = fs.readdirSync(lib).find(x => x.startsWith(code + '-') && x.endsWith('.html'));
+  if (f) {
+    const h = fs.readFileSync(path.join(lib, f), 'utf8');
     const at = h.indexOf(`data-component="${code}"`);
-    if (at === -1) continue;
+    if (at === -1) stop(`${f} has no slide marked ${code}`);
     const open = h.lastIndexOf('<section', at), close = h.indexOf('</section>', at) + '</section>'.length;
+    const keep = (h.slice(open, h.indexOf('>', open)).match(/\s(?:class|data-state|data-bar)="[^"]*"/g) || []).join('');
     let s = h.slice(open, close)
-      .replace(/<section\b[^>]*>/, `<section id="${id}" data-section="${esc(section)}" data-layout="${code}"${descAttr}>`)
+      .replace(/<section\b[^>]*>/, `<section id="${id}" data-section="${esc(section)}" data-layout="${code}"${descAttr}${keep}>`)
       .replace(/<p class="kicker">[\s\S]*?<\/p>/, `<p class="kicker">${esc(section)}</p>`)
-      .replace(/<h2>[\s\S]*?<\/h2>/, `<h2>${headline}</h2>`);
+      .replace(/<h([12])>[\s\S]*?<\/h\1>/, (all, n) => `<h${n}>${headline}</h${n}>`);
     todo.push(`every word and number in the body: they are the ${code} sample's`);
     return s;
   }

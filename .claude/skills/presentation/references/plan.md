@@ -47,7 +47,7 @@ One block per slide, in `plan.md`. Every line is required; a slide that cannot f
 ### 4. Churn fell from 5.1% to 3.1% after launch
 
 - Section: Results
-- Pattern: CH-02 `<library>/slides/change/slides.html#/line-event-callout` (no library: a layout name, such as `chart-commentary`)
+- Pattern: CH-02 (a design library id; `add-slide.js --pattern CH-02`) (no library: a layout name, such as `chart-commentary`)
 - Showing: monthly early churn for customers on the new and old onboarding, April to October
 - Purpose: the main proof that the change worked. Serves takeaway 1
 - On the page: line chart, new onboarding highlighted, launch marked; the October figure called out; 3 commentary bullets (when the drop started, that it held, what the old group did)

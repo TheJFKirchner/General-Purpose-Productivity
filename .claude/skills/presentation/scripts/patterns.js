@@ -1,37 +1,37 @@
 #!/usr/bin/env node
 
 /**
- * Prints the named sample slides from the design library, each whole and nothing else,
+ * Prints the reusable part of the named design-library items (between ITEM:START and ITEM:END),
  * so every pattern a deck needs comes back in one call. No dependencies.
  *
- * Usage: node patterns.js <design-library folder> <name> [<name> ...]
- *   names are slide ids from index.md, such as paired-bars-commentary
+ * Usage: node patterns.js <design-library folder> <id or name> [<id or name> ...]
+ *   ids such as LV-05 or CT-03, from index.md; a slide's name (bars-highlight-commentary) works too
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const [lib, ...names] = process.argv.slice(2);
-if (!lib || !names.length) {
-  console.error('Usage: node patterns.js <design-library folder> <name> [<name> ...]');
+const [lib, ...want] = process.argv.slice(2);
+if (!lib || !want.length) {
+  console.error('Usage: node patterns.js <design-library folder> <id or name> [<id or name> ...]');
   process.exit(1);
 }
-const dir = path.join(lib, 'slides');
-if (!fs.existsSync(dir)) { console.error(`STOP: no slides folder in ${lib}`); process.exit(1); }
+if (!fs.existsSync(lib)) { console.error(`STOP: no folder ${lib}`); process.exit(1); }
 
 const found = {};
-fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(d => {
-  const file = path.join(dir, d.name, 'slides.html');
-  if (!fs.existsSync(file)) return;
-  const html = fs.readFileSync(file, 'utf8');
-  names.forEach(name => {
-    const at = html.indexOf(`<section id="${name}"`);
-    if (at === -1 || found[name]) return;
-    const end = html.indexOf('</section>', at);
-    found[name] = `<!-- ${d.name}/slides.html#/${name} -->\n` + html.slice(at, end + '</section>'.length)
+fs.readdirSync(lib, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(d => {
+  fs.readdirSync(path.join(lib, d.name)).filter(f => f.endsWith('.html')).forEach(f => {
+    const text = fs.readFileSync(path.join(lib, d.name, f), 'utf8');
+    const id = (text.match(/^id:\s*(\S+)/m) || [])[1];
+    const name = (text.match(/^name:\s*(\S+)/m) || [])[1];
+    const key = want.find(w => w === id || w === name);
+    if (!key || found[key]) return;
+    const a = text.indexOf('<!-- ITEM:START -->'), b = text.indexOf('<!-- ITEM:END -->');
+    const part = a !== -1 && b !== -1 ? text.slice(a + '<!-- ITEM:START -->'.length, b).trim() : null;
+    found[key] = `<!-- ${id} ${name} (${d.name}/${f}) -->\n` + (part || '(no ITEM:START/END block: open the file)')
       .replace(/ data-component="[^"]*"/, '');
   });
 });
 
-names.forEach(name => console.log(found[name] ? found[name] + '\n' : `<!-- NOT FOUND: ${name} -->\n`));
-if (names.some(n => !found[n])) process.exit(1);
+want.forEach(w => console.log(found[w] ? found[w] + '\n' : `<!-- NOT FOUND: ${w}; see index.md -->\n`));
+if (want.some(w => !found[w])) process.exit(1);

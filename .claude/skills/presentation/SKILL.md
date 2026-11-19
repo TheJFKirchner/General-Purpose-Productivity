@@ -60,6 +60,7 @@ Open `references/full-mode.md` and follow it: facts, interview 1, storyboard, ha
 - The user's picks (a visual, a cut, wording) stand. Raise a concern once, only when it cannot work as asked.
 - Changing a chart's period or series: update its heading, its footnote period and any bullet citing what was removed, in the same pass.
 - A new deck in one Edit; later changes one slide per Edit, by id. Never rewrite `presentation.html` whole; never read below `<!-- SLIDES:END -->`.
+- User likes a visual, or says save it: launch `design-librarian` with the files; it saves them to the design library.
 
 ## Scripts
 
@@ -69,7 +70,7 @@ All in `scripts/`, run with Node. Mechanical only.
 | --- | --- |
 | `create-presentation.js --title "<t>" -o <deck>/presentation.html` | Scaffold plus `styles.css`. `--plan-only` writes `plan.md` (full mode). `--refresh <file>` updates an old deck's engine |
 | `screenshot.js <html> <temp-dir> [slide-id ...]` | One image per slide plus `sheet.png`, a contact sheet of them all (Edge or Chrome; `--browser <path>` if not found) |
-| `patterns.js <library> <name> ...` | Prints the named library slides, whole, in one call |
+| `patterns.js <library> <id> ...` | Prints the reusable part of each named library item, in one call |
 | `slides.js`, `add-slide.js` | Inventory, show, sync, remove, move, describe; insert a working slide (see "Existing deck") |
 | `check-charts.js <html>` | Chart JSON, limits, one item highlighted, no controls |
 | `check-overflow.js <html>`, `edit-html.js <html>` | Overflow measure (needs `puppeteer`); browser editor for wording |

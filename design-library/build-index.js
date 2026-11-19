@@ -1,190 +1,217 @@
 #!/usr/bin/env node
 
 /**
- * Rebuilds index.md (for planning) and index.html (for browsing) from the items themselves.
- * The item files are the only source; never edit the two index files by hand. No dependencies.
+ * Keeps every item's shared blocks in step, checks every item, and writes index.md and index.html.
+ * No dependencies. Usage: node build-index.js
  *
- *   Slides: COMPONENT comments in slides/<group>/slides.html
- *   Other types: an item header in each file of charts/, dashboard-sections/, report-blocks/, themes/
- *     "# CT-01 · name" (Markdown heading) or "ITEM: TH-01 · name" (inside a code comment),
- *     then "Looks like: ...", "Good for: a; b", and optionally "Related: ..." and "Files: ...".
+ * Shared blocks, rewritten from one source each: the tokens (from the default theme item, or a
+ * theme item's own tokens), the deck stylesheet in slides (from the presentation skill's
+ * base-styles.css) and the item engine (from save-item.js).
  *
- * Usage: node build-index.js
+ * Fails on: a missing or duplicate id or name, an id in the wrong scheme or a retired one, a missing
+ * purpose, anything loaded from outside the file except the ECharts CDN, and a colour or font
+ * written outside the tokens. Items saved by the librarian (all but original-samples.txt) also fail
+ * on a date, on more than 6 data points, and on any word denylist.json recorded from their source. Not checked for colours: the tokens block, a theme's JSON block,
+ * an embedded SOURCE block (the code to copy) and HTML comments. No other exceptions.
  */
 
 const fs = require('fs');
 const path = require('path');
+const S = require('./save-item.js');
 
-const ROOT = __dirname;
-const SLIDE_ORDER = ['FR', 'EX', 'LV', 'CH', 'CP', 'BD', 'UN', 'DE', 'BK'];
-const TYPES = [
-  { folder: 'charts', title: 'Charts', prefix: 'CT', blurb: 'ECharts option recipes on the theme tokens. Copy the option and replace the data.' },
-  { folder: 'dashboard-sections', title: 'Dashboard sections', prefix: 'DS', blurb: 'Reusable sections for a dashboard page.' },
-  { folder: 'report-blocks', title: 'Report blocks', prefix: 'RB', blurb: 'Reusable blocks for a written analysis report.' },
-  { folder: 'themes', title: 'Themes', prefix: 'TH', blurb: 'The shared look. Every template carries the same tokens.' },
-];
+const problems = [];
+const say = (it, msg) => problems.push(`${it.rel}: ${msg}`);
 
-const GROUP_RE = /<!-- GROUP: (\w+) · (.*?) · (.*?) -->/;
-const COMPONENT_RE = /<!-- COMPONENT: ([A-Z]+-\d+) · ([\w-]+)\s+Looks like: (.*?)\s+Good for: (.*?)\s+Related: (.*?) -->\s*<section\b([^>]*)>/gs;
-const ITEM_RE = /^(?:\s*#+\s*|.*?ITEM:\s*)([A-Z]{2}-\d+) · ([\w-]+)\s*$/m;
+/* ---------- sync the shared blocks ---------- */
+const def = S.themeOf(S.DEFAULT_THEME);
+const css = S.deckCss(def);
+let synced = 0;
+S.items().forEach(it => {
+  let t = it.text;
+  const own = it.h.type === 'theme' ? JSON.parse((t.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/) || [, '{}'])[1]) : def;
+  if (own.css) t = t.replace(/<style id="tokens">[\s\S]*?<\/style>/, () => S.tokensBlock(own));
+  t = t.replace(/<script id="item-engine">[\s\S]*?<\/script>/, () => `<script id="item-engine">\n${S.ENGINE}\n</script>`);
+  if (it.h.type === 'slide') t = t.replace(/<style id="deck-css">[\s\S]*?<\/style>/, () => `<style id="deck-css">\n${css}\n</style>`);
+  if (t !== it.text) { fs.writeFileSync(it.file, t); synced++; }
+});
 
+/* ---------- check ---------- */
+const all = S.items();
+const retired = fs.existsSync(path.join(S.LIB, 'retired-ids.txt')) ? fs.readFileSync(path.join(S.LIB, 'retired-ids.txt'), 'utf8').split(/\s+/).filter(Boolean) : [];
+const seen = {};
+const names = {};
+const list = f => (fs.existsSync(path.join(S.LIB, f)) ? fs.readFileSync(path.join(S.LIB, f), 'utf8').split('\n').filter(l => !l.startsWith('#')).join(' ').split(/\s+/).filter(Boolean) : []);
+const originals = list('original-samples.txt');
+const deny = fs.existsSync(path.join(S.LIB, 'denylist.json')) ? JSON.parse(fs.readFileSync(path.join(S.LIB, 'denylist.json'), 'utf8')) : {};
+const NAMED = /(?:color|background|fill|stroke|border[a-z-]*)\s*["']?\s*:\s*["']?(white|black|red|green|blue|gr[ae]y|navy|orange|teal|silver|yellow|purple)\b/i;
+all.forEach(it => {
+  const h = it.h;
+  if (!h.id) return say(it, 'no ITEM header with an id');
+  if (!/^[A-Z]{2}-\d{2,}$/.test(h.id)) say(it, `id "${h.id}" is not two letters, a hyphen and two digits`);
+  if (seen[h.id]) say(it, `id ${h.id} also used by ${seen[h.id]}`);
+  seen[h.id] = it.rel;
+  if (retired.includes(h.id)) say(it, `id ${h.id} is retired; ids are never reused`);
+  if (!S.TYPES[h.type]) say(it, `type "${h.type}" is not one of ${Object.keys(S.TYPES).join(', ')}`);
+  else if (it.rel.split('/')[0] !== S.TYPES[h.type]) say(it, `a ${h.type} belongs in ${S.TYPES[h.type]}/`);
+  const prefix = h.id.split('-')[0];
+  if (h.type === 'slide' ? !S.GROUPS.includes(prefix) : S.PREFIX[h.type] !== prefix) say(it, `id prefix ${prefix} does not fit type ${h.type}`);
+  if (!path.basename(it.file).startsWith(h.id + '-')) say(it, 'file name must start with the id');
+  if (!h.name) say(it, 'no name');
+  else if (names[h.name]) say(it, `name "${h.name}" also used by ${names[h.name]}`);
+  names[h.name] = it.rel;
+  if (!h.purpose || /^WRITE/i.test(h.purpose)) say(it, 'no purpose sentence');
+  if (!h.from) say(it, 'no "from" (the skill it came from)');
+  if (h.type === 'slide' && !new RegExp(`<section id="${h.name}" data-component="${h.id}"`).test(it.text)) say(it, 'the slide\'s section needs id="<name>" data-component="<id>"');
+  // nothing from outside the file but ECharts
+  const refs = [...it.text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"|url\(([^)]*)\)|@import|<link\b/gi)];
+  refs.forEach(m => { const v = m[1] || m[2] || m[0]; if (v !== S.ECHARTS && !/^#/.test(v)) say(it, `loads "${v}" from outside the item; only the ECharts CDN is allowed`); });
+  // colours and fonts only through tokens
+  const body = it.text
+    .replace(/<style id="tokens">[\s\S]*?<\/style>/, '')
+    .replace(/<script type="application\/json" id="theme">[\s\S]*?<\/script>/, '')
+    .replace(/<!-- SOURCE[\s\S]*?<!-- SOURCE END -->/, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const hex = body.match(/#[0-9a-fA-F]{3,8}\b/);
+  if (hex) say(it, `hard-coded colour ${hex[0]}; use a token such as var(--blue)`);
+  if (/\b(?:rgba?|hsla?)\(/.test(body)) say(it, 'hard-coded rgb()/hsl() colour; use a token');
+  const named = body.match(NAMED);
+  if (named) say(it, `hard-coded colour "${named[1]}"; use a token`);
+  const font = body.match(/font-family\s*:\s*([^;}"]*)/i) || body.match(/"fontFamily"\s*:\s*"([^"]*)"/);
+  if (font && !/var\(--/.test(font[1])) say(it, `hard-coded font "${font[1].trim()}"; use var(--body-font) or var(--heading-font)`);
+  const short = [...body.matchAll(/[{;\s]font\s*:\s*([^;}]*)/g)].find(m => !/var\(--[a-z-]*font\)/.test(m[1]));
+  if (short) say(it, `font shorthand without a font token: "${short[1].trim()}"`);
+
+  // Saved items (not the hand-made originals): no dates, at most 6 points, no word from the project copied
+  if (originals.includes(h.id)) return;
+  const all = it.text.replace(/<style id="(tokens|deck-css)">[\s\S]*?<\/style>/g, '').replace(/<script id="item-engine">[\s\S]*?<\/script>/, '').replace(S.ECHARTS, '');
+  const date = all.match(/\b(?:19|20)\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+'?\d{2}\b/i);
+  if (date) say(it, `date "${date[0]}": a saved item carries no dates; use plain month names or "Group A"`);
+  for (const m of it.text.matchAll(/<script type="application\/json">([\s\S]*?)<\/script>/g)) {
+    let o; try { o = JSON.parse(m[1]); } catch (e) { say(it, 'chart JSON does not parse'); continue; }
+    const cats = [].concat(o.xAxis || [], o.yAxis || []).filter(a => a && Array.isArray(a.data)).map(a => a.data.length);
+    const pts = [].concat(o.series || []).filter(s => s.type !== 'heatmap').map(s => (s.data || []).length);
+    const most = Math.max(0, ...cats, ...pts);
+    if (most > 6) say(it, `${most} points; sample data is 4 to 6 points`);
+  }
+  const words = deny[h.id] || [];
+  if (words.length) {
+    const toks = new Set();
+    for (const m of all.matchAll(/(["'`])((?:(?!\1)[^\\\n]){2,40})\1/g)) toks.add(m[2].trim());
+    const plain = all.replace(/<[^>]+>/g, ' ').match(/[A-Za-z][\w-]*/g) || [];
+    plain.forEach((w, i) => { toks.add(w); toks.add(`${w} ${plain[i + 1] || ''}`); toks.add(`${w} ${plain[i + 1] || ''} ${plain[i + 2] || ''}`); });
+    const hit = [...toks].find(t => words.includes(S.hash(t)));
+    if (hit) say(it, `"${hit}" comes from the project it was copied from; replace it with neutral wording`);
+  }
+});
+
+/* ---------- index.md ---------- */
+const order = Object.keys(S.TYPES);
+const rank = id => { const g = S.GROUPS.indexOf(id.split('-')[0]); return (g === -1 ? 99 : g) * 1000 + Number(id.split('-')[1]); };
+const byType = t => all.filter(i => i.h.type === t).sort((a, b) => rank(a.h.id) - rank(b.h.id) || a.h.id.localeCompare(b.h.id));
+const md = ['# Design library index', '',
+  'One line per item: id, type, name, purpose. An item is the file `<type folder>/<id>-<name>.html`; open only the one you need.', ''];
+order.forEach(t => {
+  const list = byType(t);
+  md.push(`## ${t.charAt(0).toUpperCase() + t.slice(1)}s (\`${S.TYPES[t]}/\`)`, '');
+  if (!list.length) { md.push('None yet. Saved by the design-librarian agent.', ''); return; }
+  list.forEach(i => md.push(`- ${i.h.id} | ${i.h.type} | ${i.h.name} | ${i.h.purpose}`));
+  md.push('');
+});
+fs.writeFileSync(path.join(S.LIB, 'index.md'), md.join('\n'));
+
+/* ---------- index.html ---------- */
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const splitRelated = text => !text || text.trim() === 'none' ? [] : text.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
-const field = (text, name) => { const m = text.match(new RegExp('^[\\s*/#-]*' + name + ':\\s*(.+?)\\s*(?:-->|\\*/)?\\s*$', 'm')); return m ? m[1].trim() : ''; };
-
-function readSlides(problems) {
-  const dir = path.join(ROOT, 'slides');
-  const groups = [];
-  if (!fs.existsSync(dir)) return groups;
-  fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(d => {
-    const file = path.join(dir, d.name, 'slides.html');
-    if (!fs.existsSync(file)) return;
-    const html = fs.readFileSync(file, 'utf8');
-    const slides = html.slice(html.indexOf('<!-- SLIDES:START -->'), html.indexOf('<!-- SLIDES:END -->'));
-    const g = slides.match(GROUP_RE);
-    if (!g) { problems.push(`slides/${d.name}: no <!-- GROUP: ... --> comment`); return; }
-    const group = { folder: d.name, prefix: g[1], title: g[2], blurb: g[3], items: [] };
-    for (const m of slides.matchAll(COMPONENT_RE)) {
-      const [, code, name, look, good, related, attrs] = m;
-      const id = (attrs.match(/\bid="([^"]+)"/) || [])[1];
-      const attrCode = (attrs.match(/data-component="([^"]+)"/) || [])[1];
-      if (id !== name) problems.push(`${code}: comment names "${name}" but the section id is "${id}"`);
-      if (attrCode !== code) problems.push(`${code}: data-component is "${attrCode}"`);
-      if (!code.startsWith(group.prefix + '-')) problems.push(`${code}: prefix does not match its group (${group.prefix})`);
-      group.items.push({ code, name, look: look.trim(), goodFor: good.split(';').map(s => s.trim()).filter(Boolean),
-        related: splitRelated(related), link: `slides/${d.name}/slides.html#/${name}` });
-    }
-    const sections = (slides.match(/<section\b/g) || []).length;
-    if (sections !== group.items.length) problems.push(`slides/${d.name}: ${sections} slides but ${group.items.length} COMPONENT comments`);
-    groups.push(group);
-  });
-  groups.sort((a, b) => (SLIDE_ORDER.indexOf(a.prefix) + 99) % 99 - (SLIDE_ORDER.indexOf(b.prefix) + 99) % 99 || a.prefix.localeCompare(b.prefix));
-  return groups;
-}
-
-function readType(type, problems) {
-  const dir = path.join(ROOT, type.folder);
-  const items = [];
-  if (!fs.existsSync(dir)) return items;
-  fs.readdirSync(dir).filter(f => f.toLowerCase() !== 'readme.md').sort().forEach(f => {
-    const full = path.join(dir, f);
-    if (!fs.statSync(full).isFile()) return;
-    const text = fs.readFileSync(full, 'utf8');
-    const m = text.match(ITEM_RE);
-    if (!m) return; // a supporting file (data, a second theme file), named under its item's "Files:"
-    const [, code, name] = m;
-    if (!code.startsWith(type.prefix + '-')) problems.push(`${type.folder}/${f}: code ${code} should start ${type.prefix}-`);
-    const look = field(text, 'Looks like');
-    const goodFor = field(text, 'Good for').split(';').map(s => s.trim()).filter(Boolean);
-    if (!look) problems.push(`${code}: no "Looks like:" line`);
-    const files = field(text, 'Files');
-    items.push({ code, name, look, goodFor, related: splitRelated(field(text, 'Related')),
-      link: `${type.folder}/${f}`, files: files ? files.split(',').map(s => s.trim()) : [] });
-  });
-  items.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));
-  return items;
-}
-
-function main() {
-  const problems = [];
-  const groups = readSlides(problems);
-  const types = TYPES.map(t => ({ ...t, items: readType(t, problems) }));
-
-  const all = [...groups.flatMap(g => g.items), ...types.flatMap(t => t.items)];
-  const byCode = {};
-  const names = {};
-  all.forEach(c => {
-    if (byCode[c.code]) problems.push(`${c.code}: used twice`);
-    byCode[c.code] = c;
-    if (c.goodFor.length < 2 || c.goodFor.length > 3) problems.push(`${c.code}: "Good for" needs 2 or 3 items, has ${c.goodFor.length}`);
-  });
-  groups.flatMap(g => g.items).forEach(c => {
-    if (names[c.name]) problems.push(`"${c.name}": slide name used by ${names[c.name]} and ${c.code}`);
-    names[c.name] = c.code;
-  });
-  all.forEach(c => c.related.forEach(r => { if (!byCode[r]) problems.push(`${c.code}: related item ${r} does not exist`); }));
-
-  // One stylesheet: the sample slides and the presentation skill's base theme must stay identical
-  const skillCss = path.join(ROOT, '..', '.claude', 'skills', 'presentation', 'references', 'base-styles.css');
-  const libCss = path.join(ROOT, 'slides', 'styles.css');
-  if (fs.existsSync(skillCss) && fs.existsSync(libCss) && fs.readFileSync(skillCss, 'utf8') !== fs.readFileSync(libCss, 'utf8'))
-    problems.push('slides/styles.css differs from references/base-styles.css in the presentation skill; copy the skill file over it');
-
-  const row = c => `| ${c.code} | \`${c.name}\` | ${c.look} | ${c.goodFor.map(x => '• ' + x).join('<br>')} |`;
-  const head = ['| Code | Name | Looks like | Good for |', '| --- | --- | --- | --- |'];
-  const empty = t => `None yet. To add one: [README.md](README.md), "Adding an item". Codes start \`${t.prefix}-\`.`;
-
-  // index.md
-  const md = ['# Design library index', '',
-    'Reusable design items by type. Descriptions only: plan from this page, and let the builder or design subagent open only the items it names.', '',
-    '- Pick by "Good for", not by subject. Sample subject matter is placeholder.',
-    '- Path to a slide: its group folder plus its name: `CP-01 slides/compare/slides.html#/paired-bars-commentary`. Other items: `<folder>/<name>.md` (themes: `themes/look.css`).',
-    '- Browse: open `index.html`. Add an item: `README.md`.',
-    '- Generated by `build-index.js` from the item files. Do not edit by hand.', '',
-    '## Slides', '', 'One sample slide per component, grouped by what the slide has to do. Look: `slides/styles.css`.', ''];
-  groups.forEach(g => {
-    md.push(`### ${g.title}`, '', `${g.blurb} Folder: \`slides/${g.folder}\``, '', ...head);
-    g.items.forEach(c => md.push(row(c)));
-    md.push('');
-  });
-  types.forEach(t => {
-    md.push(`## ${t.title}`, '', t.items.length ? t.blurb : empty(t), '');
-    if (t.items.length) { md.push(...head); t.items.forEach(c => md.push(row(c))); md.push(''); }
-  });
-  fs.writeFileSync(path.join(ROOT, 'index.md'), md.join('\n'));
-
-  // index.html
-  const card = c => {
-    const related = c.related.filter(r => byCode[r]).map(r => `<a href="#${esc(byCode[r].code)}">${esc(r)}</a>`).join(' ');
-    return `<div class="item" id="${esc(c.code)}"><a class="open" href="${esc(c.link)}"><span class="code">${esc(c.code)}</span><h3>${esc(c.name)}</h3></a>` +
-      `<p class="look">${esc(c.look)}</p><ul>${c.goodFor.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` +
-      (related ? `<p class="related">Related: ${related}</p>` : '') + '</div>';
-  };
-  const slideHtml = groups.map(g => `<h3 class="group" id="${esc(g.folder)}">${esc(g.title)}</h3><p class="blurb">${esc(g.blurb)}</p><div class="grid">${g.items.map(card).join('\n')}</div>`).join('\n');
-  const typeHtml = types.map(t => `<h2 id="${esc(t.folder)}">${esc(t.title)}</h2>` +
-    (t.items.length ? `<p class="blurb">${esc(t.blurb)}</p><div class="grid">${t.items.map(card).join('\n')}</div>`
-      : `<p class="blurb">None yet. To add one, see README.md, "Adding an item".</p>`)).join('\n');
-  const nav = ['<a href="#slides"><b>Slides</b></a>', ...groups.map(g => `<a href="#${esc(g.folder)}">${esc(g.title)}</a>`),
-    ...types.map(t => `<a href="#${esc(t.folder)}"><b>${esc(t.title)}</b></a>`)].join('');
-  fs.writeFileSync(path.join(ROOT, 'index.html'), `<!doctype html>
+const themes = byType('theme').map(i => ({ id: i.h.id, name: i.h.name, purpose: i.h.purpose,
+  theme: JSON.parse(i.text.match(/<script type="application\/json" id="theme">([\s\S]*?)<\/script>/)[1]) }));
+const cards = order.flatMap(byType).map(i => `<div class="card" data-type="${esc(i.h.type)}">
+<div class="pv"><iframe loading="lazy" src="${esc(i.rel)}" title="${esc(i.h.id)}" tabindex="-1"></iframe></div>
+<a class="name" href="${esc(i.rel)}" target="_blank"><b>${esc(i.h.id)}</b> ${esc(i.h.name)}</a>
+<p>${esc(i.h.purpose)}</p></div>`).join('\n');
+fs.writeFileSync(path.join(S.LIB, 'index.html'), `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Design library</title>
+${S.tokensBlock(def)}
 <style>
-  :root { --blue: #0170BC; --navy: #002D72; --ink: #1F2A37; --muted: #5B6770; --rule: #D9E2EA; --wash: #F4F8FB; --paper: #FFFFFF; }
-  html { scroll-behavior: smooth; scroll-padding-top: 70px; }
-  body { font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--wash); margin: 0; }
-  nav { position: sticky; top: 0; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 12px 28px; display: flex; flex-wrap: wrap; gap: 6px 18px; z-index: 2; }
-  nav a { font-size: 13px; color: var(--muted); text-decoration: none; } nav a b { color: var(--navy); font-weight: 600; } nav a:hover { color: var(--blue); }
-  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 80px; }
-  h1 { font-size: 30px; margin: 0 0 6px; color: var(--navy); } .intro { color: var(--muted); margin: 0 0 8px; max-width: 780px; }
-  h2 { font-size: 22px; margin: 48px 0 2px; padding-top: 22px; border-top: 2px solid var(--navy); color: var(--navy); }
-  h3.group { font-size: 17px; margin: 30px 0 2px; color: var(--navy); } .blurb { color: var(--muted); margin: 0 0 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
-  .item { background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 18px 20px; transition: border-color 0.15s ease; }
-  .item:hover { border-color: var(--blue); } .item:target { border-color: var(--blue); box-shadow: inset 4px 0 0 var(--blue); }
-  .open { display: flex; align-items: baseline; gap: 10px; text-decoration: none; } .open:hover h3 { text-decoration: underline; }
-  .code { font: 600 12px Consolas, monospace; color: var(--paper); background: var(--blue); padding: 3px 8px; border-radius: 2px; white-space: nowrap; }
-  .item h3 { font-size: 15px; margin: 0 0 8px; color: var(--navy); font-weight: 600; }
-  .look { font-size: 14px; margin: 0 0 10px; } ul { margin: 0; padding-left: 18px; } li { font-size: 14px; margin-bottom: 4px; }
-  .related { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; } .related a { font-family: Consolas, monospace; color: var(--blue); text-decoration: none; margin-left: 4px; }
+  body { margin: 0; display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; font-family: var(--body-font); color: var(--ink); background: var(--wash); }
+  aside { position: sticky; top: 0; height: 100vh; overflow: auto; box-sizing: border-box; padding: 22px 18px; background: var(--paper); border-right: 1px solid var(--rule); }
+  h1 { font: var(--heading-weight) 22px var(--heading-font); color: var(--navy); margin: 0 0 4px; }
+  h2 { font: var(--heading-weight) 12px var(--body-font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .now { font-size: 13px; color: var(--muted); margin: 0; }
+  button { display: block; width: 100%; text-align: left; font: 14px var(--body-font); color: var(--ink); background: none; border: 1px solid transparent; border-left: 3px solid transparent; padding: 7px 10px; cursor: pointer; }
+  button:hover { background: var(--wash); }
+  button.on { border-left-color: var(--blue); background: var(--wash); color: var(--navy); font-weight: 600; }
+  button small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
+  main { padding: 22px 26px 60px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--paper); border: 1px solid var(--rule); }
+  .card:hover { border-color: var(--blue); }
+  .pv { position: relative; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--rule); overflow: hidden; }
+  .pv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .name { display: block; padding: 10px 12px 2px; text-decoration: none; color: var(--navy); font-size: 14px; }
+  .name b { color: var(--blue); margin-right: 4px; }
+  .card p { margin: 0; padding: 0 12px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .count { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
 </style></head><body>
-<nav>${nav}</nav>
-<main>
+<aside>
 <h1>Design library</h1>
-<p class="intro">${all.length} reusable design items by type. Click a name to open it; on a sample slide, "Library index" brings you back here. Subject matter in the samples is placeholder; the pattern is what gets reused.</p>
-<h2 id="slides">Slides</h2>
-${slideHtml}
-${typeHtml}
-</main></body></html>
+<p class="now">Theme: <b id="now"></b></p>
+<h2>Themes</h2>
+<div id="themes"></div>
+<h2>Show</h2>
+<div id="types"></div>
+</aside>
+<main>
+<p class="count" id="count"></p>
+<div class="grid">
+${cards}
+</div>
+</main>
+<script>
+(function () {
+  var THEMES = ${JSON.stringify(themes)};
+  var TYPES = ['all'].concat(${JSON.stringify(order)});
+  function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function put(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* works without storage */ } }
+  var current = get('design-library-theme', THEMES[0].id), type = get('design-library-type', 'all');
+  var hash = (location.hash.match(/theme=([A-Z]{2}-[0-9]+)/) || [])[1]; if (hash) current = hash;
+  if (!THEMES.some(function (t) { return t.id === current; })) current = THEMES[0].id;
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.pv iframe'));
+  function theme() { return THEMES.filter(function (t) { return t.id === current; })[0]; }
+  function send(f) { try { f.contentWindow.postMessage({ theme: theme().theme }, '*'); } catch (e) { /* not loaded yet */ } }
+  function applyTheme() {
+    var t = theme(), r = document.documentElement;
+    Object.keys(t.theme.css).forEach(function (k) { r.style.setProperty(k, t.theme.css[k]); });
+    document.getElementById('now').textContent = t.id + ' ' + t.name;
+    frames.forEach(send);
+    draw();
+  }
+  function applyType() {
+    var n = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
+      var show = type === 'all' || c.getAttribute('data-type') === type;
+      c.style.display = show ? '' : 'none'; if (show) n++;
+    });
+    document.getElementById('count').textContent = n + ' item' + (n === 1 ? '' : 's') + (type === 'all' ? '' : ' of type ' + type);
+    draw();
+  }
+  function button(label, sub, on, click) {
+    var b = document.createElement('button'); b.className = on ? 'on' : '';
+    b.textContent = label; if (sub) { var s = document.createElement('small'); s.textContent = sub; b.appendChild(s); }
+    b.onclick = click; return b;
+  }
+  function draw() {
+    var th = document.getElementById('themes'), ty = document.getElementById('types');
+    th.innerHTML = ''; ty.innerHTML = '';
+    THEMES.forEach(function (t) { th.appendChild(button(t.id + ' ' + t.name, t.purpose, t.id === current, function () { current = t.id; put('design-library-theme', current); applyTheme(); })); });
+    TYPES.forEach(function (t) { ty.appendChild(button(t, '', t === type, function () { type = t; put('design-library-type', type); applyType(); })); });
+  }
+  frames.forEach(function (f) { f.addEventListener('load', function () { send(f); }); });
+  applyTheme(); applyType();
+})();
+</script>
+</body></html>
 `);
 
-  const counts = [`${groups.reduce((n, g) => n + g.items.length, 0)} slides in ${groups.length} groups`, ...types.map(t => `${t.items.length} ${t.title.toLowerCase()}`)];
-  console.log(`${counts.join(', ')}. Wrote index.md and index.html.`);
-  if (problems.length) {
-    console.log(`\n${problems.length} to fix:`);
-    problems.forEach(p => console.log('  - ' + p));
-    process.exit(1);
-  }
-}
-
-main();
+const counts = order.map(t => `${byType(t).length} ${t}`).join(', ');
+console.log(`${all.length} items (${counts}).${synced ? ` Shared blocks brought in step in ${synced}.` : ''} Wrote index.md and index.html.`);
+if (problems.length) { console.log(`\n${problems.length} to fix:`); problems.forEach(p => console.log('  - ' + p)); process.exit(1); }

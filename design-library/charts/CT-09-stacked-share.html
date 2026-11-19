@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- ITEM
+id: CT-09
+type: chart
+name: stacked-share
+purpose: Two 100% stacked horizontal bars, the part that changed in blue with its label inside, the other parts grey; for showing how the make-up of a total shifted between two points, or showing that a result changed because the mix changed.
+from: presentation
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CT-09 stacked-share</title>
+<style id="tokens">:root {
+  --blue: #0170BC;
+  --navy: #002D72;
+  --green: #56A944;
+  --teal: #00A9A5;
+  --orange: #F68621;
+  --ink: #1F2A37;
+  --muted: #5B6770;
+  --rule: #D9E2EA;
+  --wash: #F4F8FB;
+  --paper: #FFFFFF;
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
+  --series: --blue --green --navy --teal --orange --muted;
+}</style>
+<style id="frame">
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--body-font); }
+.fit { width: 960px; height: 540px; transform-origin: 0 0; box-sizing: border-box; padding: 28px 36px; display: flex; flex-direction: column; gap: 10px; }
+.fit h2 { margin: 0; font: var(--heading-weight) 24px var(--heading-font); color: var(--navy); }
+.fit p { margin: 0; font-size: 15px; color: var(--muted); }
+.chart { position: relative; flex: 1; min-height: 0; }
+.source { display: none; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+<div class="fit">
+<h2>Heading: what is measured, the period</h2>
+<!-- ITEM:START -->
+<div class="chart" data-echart>
+<script type="application/json">
+{
+  "grid": { "left": 8, "right": 8, "top": 4, "bottom": 4, "containLabel": true },
+  "xAxis": { "type": "value", "show": false, "max": 100 },
+  "yAxis": { "type": "category", "inverse": true, "data": ["2021", "2025"], "axisLabel": { "fontSize": 18, "fontWeight": 600 } },
+  "series": [
+    { "type": "bar", "stack": "total", "name": "Online", "barWidth": "62%", "data": [18, 27],
+      "itemStyle": { "color": "var(--blue)", "borderColor": "var(--paper)", "borderWidth": 2 },
+      "label": { "show": true, "position": "inside", "formatter": "{a}\n{c}%", "color": "var(--paper)", "fontWeight": 600, "fontSize": 16, "lineHeight": 22 } },
+    { "type": "bar", "stack": "total", "name": "Stores", "data": [46, 38],
+      "itemStyle": { "color": "var(--chart-muted)", "borderColor": "var(--paper)", "borderWidth": 2 },
+      "label": { "show": true, "position": "inside", "formatter": "{a}\n{c}%", "fontSize": 15, "lineHeight": 22 } },
+    { "type": "bar", "stack": "total", "name": "Phone", "data": [24, 23],
+      "itemStyle": { "color": "var(--chart-muted)", "borderColor": "var(--paper)", "borderWidth": 2 },
+      "label": { "show": true, "position": "inside", "formatter": "{a}\n{c}%", "fontSize": 15, "lineHeight": 22 } },
+    { "type": "bar", "stack": "total", "name": "Other", "data": [12, 12],
+      "itemStyle": { "color": "var(--chart-muted)", "borderColor": "var(--paper)", "borderWidth": 2 },
+      "label": { "show": true, "position": "inside", "formatter": "{a}\n{c}%", "fontSize": 15, "lineHeight": 22 } }
+  ]
+}
+</script>
+</div>
+<!-- ITEM:END -->
+<!-- NOTES
+- The white borders separate the parts; labels sit inside, so no legend is needed.
+- Keep to five parts or fewer; group the rest as "Other".
+-->
+</div>
+<script id="item-engine">
+(function () {
+  var root = document.documentElement;
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
+  function resolve(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (typeof v === 'string' && v.indexOf('var(--') === 0) o[k] = css(v.slice(4, -1)) || v;
+      else if (v && typeof v === 'object') resolve(v);
+    });
+  }
+  function theme() {
+    var axis = { axisLine: { lineStyle: { color: css('--rule') } }, axisTick: { show: false }, axisLabel: { color: css('--muted'), fontSize: 15 } };
+    return {
+      color: series(), textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
+      legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+      bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+      markLine: { label: { fontSize: 14, color: css('--muted') } },
+      pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+    };
+  }
+  var drawn = 0;
+  function draw() {
+    if (!window.echarts) return;
+    var name = 'item' + (++drawn);
+    echarts.registerTheme(name, theme());
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
+      var src = box.querySelector('script[type="application/json"]');
+      if (!src) return;
+      var o = JSON.parse(src.textContent);
+      resolve(o);
+      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+      [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; });
+      o.animation = false;
+      if (box._chart) box._chart.dispose();
+      if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
+      box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
+      box._chart.setOption(o);
+    });
+  }
+  function fit() {
+    var f = document.querySelector('.fit');
+    if (!f) return;
+    var s = Math.min(window.innerWidth / f.offsetWidth, window.innerHeight / f.offsetHeight);
+    f.style.transform = 'scale(' + s + ')';
+  }
+  /* A theme from the index: {theme: {css: {...}, series: [...]}}. Items keep their own look when opened alone. */
+  window.addEventListener('message', function (e) {
+    var t = e.data && e.data.theme;
+    if (!t || document.body.hasAttribute('data-own-theme')) return;
+    Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
+    if (t.series) root.style.setProperty('--series', t.series.join(' '));
+    draw();
+  });
+  window.addEventListener('resize', function () { fit(); draw(); });
+  fit(); draw();
+})();
+</script>
+</body>
+</html>

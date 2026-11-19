@@ -4,7 +4,7 @@
  * slide, the bottom section bar and the charts read the variables below.
  * Slides never carry colours of their own.
  *
- * The colour tokens are the toolbox Look. Canonical copy: design-library/themes/look.css.
+ * The colour tokens are the toolbox Look. The library theme TH-01 (design-library/themes/) holds the same values.
  * Font sizes use pt on the fixed 1280 x 720 slide.
  * Adapted from github.com/ryanbbrown/revealjs-skill (MIT).
  */
@@ -36,6 +36,7 @@
   /* Typography - ALWAYS pt for font sizes */
   --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
   --base-font-size: 32px;   /* Only px value - sets the reveal.js base */
   --text-size: 16pt;
   --h1-size: 46pt;
@@ -81,7 +82,7 @@
   font-family: var(--heading-font);
   text-transform: none;
   color: var(--navy);
-  font-weight: 600;
+  font-weight: var(--heading-weight);
   line-height: 1.16;
   letter-spacing: -0.01em;
   margin: 0;

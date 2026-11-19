@@ -150,7 +150,7 @@ Each of these would have changed a slide in a real test deck.
 
 ## Library patterns
 
-With a design library, each slide names a pattern: a code and a path, such as `CP-01 <library>/slides/compare/slides.html#/paired-bars-commentary`.
+With a design library, each slide names a pattern by its id, such as CP-01 (the library's `index.md` lists them).
 
 - Fetch every pattern the deck uses in one call: `node <skill>/scripts/patterns.js <library> <name> <name> ...` prints each named slide whole. Copy each structure and replace every word and number; the sample's subject matter is placeholder.
 - Do not copy the `data-component` attribute or the COMPONENT comment.
