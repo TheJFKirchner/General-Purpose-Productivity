@@ -1,10 +1,11 @@
-/* Base reveal.js styles
+/* Deck theme
  *
- * Copied as styles.css for each new presentation. This file is the whole
- * look of the deck: change the variables below and every slide, the bottom
- * section bar and the charts follow. Slides never carry colours of their own.
+ * Copied as styles.css into each new deck. This file is the whole look: every
+ * slide, the bottom section bar and the charts read the variables below.
+ * Slides never carry colours of their own.
  *
- * All font sizes use pt for predictable sizing on the fixed 1280 x 720 slide.
+ * The colour tokens are the toolbox Look. Canonical copy: design-library/themes/look.css.
+ * Font sizes use pt on the fixed 1280 x 720 slide.
  * Adapted from github.com/ryanbbrown/revealjs-skill (MIT).
  */
 
@@ -12,40 +13,38 @@
    THEME VARIABLES - change these to restyle
    =========================================== */
 :root {
-  /* Backgrounds */
-  --background-color: #ffffff;      /* Main slide background */
-  --section-divider-bg: #ffffff;    /* Title and divider slides (set to var(--navy) for dark dividers) */
-  --divider-text: #14233a;          /* Text on title and divider slides (light if the background is dark) */
+  /* Look tokens. Same names and values in every toolbox template */
+  --blue: #0170BC;     /* Primary, first series, the highlighted item */
+  --navy: #002D72;     /* Headings, emphasis */
+  --green: #56A944;    /* Accent, second series, positive */
+  --teal: #00A9A5;     /* Third series */
+  --orange: #F68621;   /* Highlight, used sparingly; also "needs action" */
+  --ink: #1F2A37;      /* Body text */
+  --muted: #5B6770;    /* Notes, axes, sources */
+  --rule: #D9E2EA;     /* Lines, borders */
+  --wash: #F4F8FB;     /* Panels, alternating rows */
+  --paper: #FFFFFF;    /* Page */
 
-  /* Typography - ALWAYS use pt for font sizes */
+  /* Chart greys, derived from --rule (use as "var(--chart-muted)" in chart JSON) */
+  --chart-muted: #C3CDD6;  /* Bars and lines that are context, not the point */
+  --chart-grid: #E8EDF2;   /* Gridlines */
+
+  /* Title and divider slides (set --section-divider-bg to var(--navy) and --divider-text to var(--paper) for dark ones) */
+  --section-divider-bg: var(--paper);
+  --divider-text: var(--navy);
+
+  /* Typography - ALWAYS pt for font sizes */
   --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
-  --base-font-size: 32px;   /* Only px value - sets reveal.js base */
-  --text-size: 16pt;        /* Base body text */
+  --base-font-size: 32px;   /* Only px value - sets the reveal.js base */
+  --text-size: 16pt;
   --h1-size: 46pt;
-  --h2-size: 29pt;
+  --h2-size: 28pt;
   --h3-size: 18pt;
   --footnote-size: 10pt;
 
-  /* Colours */
-  --primary-color: #1c5cab;    /* The one emphasis colour: highlights, the bar, the key chart item */
-  --secondary-color: #eb6834;  /* Second series in a chart; use sparingly */
-  --navy: #0d366b;
-  --text-color: #14233a;       /* Headlines and main text */
-  --body-color: #44546a;       /* Paragraphs and bullets */
-  --muted-color: #6b7a8f;      /* Labels, sources, the bar */
-  --line-color: #dfe6ef;       /* Hairlines and borders */
-  --good-color: #1a7f4b;
-  --bad-color: #b3261e;
-
-  /* Boxes */
-  --box-bg: #f5f8fc;           /* Cards and panels */
-  --tint-bg: #e8f0fb;          /* Soft accent fill */
-  --box-radius: 12px;          /* Set to 0 for sharp corners */
-
-  /* Charts (read by the deck's chart defaults; use as "var(--chart-muted)" in chart JSON) */
-  --chart-muted: #c5d0de;      /* Bars and lines that are context, not the point */
-  --chart-grid: #e3e9f1;
+  /* Shape: sharp corners */
+  --box-radius: 2px;
 
   /* Layout */
   --slide-padding: 72px;
@@ -55,7 +54,7 @@
 }
 
 /* ===========================================
-   BASE STYLES - Override reveal.js defaults
+   BASE STYLES - override reveal.js defaults
    =========================================== */
 
 .reveal {
@@ -66,12 +65,10 @@
 .reveal strong,
 .reveal b {
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--navy);
 }
 
-.reveal-viewport {
-  background-color: var(--background-color);
-}
+.reveal-viewport { background-color: var(--paper); }
 
 .reveal-viewport.is-section-divider .slide-background.present {
   background-color: var(--section-divider-bg) !important;
@@ -83,15 +80,15 @@
 .reveal h4 {
   font-family: var(--heading-font);
   text-transform: none;
-  color: var(--text-color);
+  color: var(--navy);
   font-weight: 600;
   line-height: 1.16;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .reveal h1 { font-size: var(--h1-size); }
-.reveal h2 { font-size: var(--h2-size); max-width: 1020px; }
+.reveal h2 { font-size: var(--h2-size); max-width: 1060px; }
 .reveal h3 { font-size: var(--h3-size); letter-spacing: 0; }
 
 .reveal p,
@@ -100,7 +97,7 @@
 .reveal th,
 .reveal blockquote {
   font-size: var(--text-size);
-  color: var(--body-color);
+  color: var(--ink);
   line-height: 1.45;
   margin: 0;
 }
@@ -109,18 +106,15 @@
    LISTS
    =========================================== */
 
-.reveal ul {
-  list-style: none;
-  padding-left: 0;
-  margin: 0;
-}
+.reveal ul { list-style: none; padding-left: 0; margin: 0; }
 
 .reveal ul li {
   position: relative;
-  padding-left: 24px;
+  padding-left: 22px;
   margin-bottom: 12px;
 }
 
+/* Square bullet: sharp, small */
 .reveal ul li::before {
   content: '';
   position: absolute;
@@ -128,8 +122,7 @@
   top: 0.62em;
   width: 7px;
   height: 7px;
-  background: var(--primary-color);
-  border-radius: 50%;
+  background: var(--blue);
 }
 
 .reveal ol { margin: 0; padding-left: 1.2em; }
@@ -150,9 +143,7 @@
   text-align: left;
 }
 
-.reveal .slides section.stack {
-  padding: 0 !important;
-}
+.reveal .slides section.stack { padding: 0 !important; }
 
 /* Content area - fills the space below the headline */
 .reveal .slides section > .content {
@@ -175,12 +166,12 @@
   left: var(--slide-padding);
   right: var(--slide-padding);
   font-size: var(--footnote-size);
-  color: var(--muted-color);
+  color: var(--muted);
 }
 
 /* ===========================================
    TITLE AND SECTION DIVIDER SLIDES
-   Left-aligned, vertically centred, large type.
+   Left-aligned, vertically centred, a short blue rule above the title.
    =========================================== */
 
 .reveal .slides section.section-divider {
@@ -190,21 +181,36 @@
 }
 
 .reveal .slides section.section-divider h1 {
-  font-size: 50pt;
+  font-size: 48pt;
   max-width: 1000px;
   color: var(--divider-text);
+}
+
+.reveal .slides section.section-divider h1::before {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 5px;
+  background: var(--blue);
+  margin-bottom: 30px;
 }
 
 .reveal .slides section.section-divider p {
   font-size: 19pt;
   margin-top: 18px;
   max-width: 880px;
-  color: var(--muted-color);
+  color: var(--muted);
+}
+
+.reveal .slides section.section-divider p.kicker {
+  font-size: 12pt;
+  margin: 0 0 18px;
+  color: var(--blue);
 }
 
 /* ===========================================
    TEXT UTILITIES
-   Base text is 16pt - scale UP when a slide has less content.
+   Base text is 16pt - scale UP when a slide has less on it.
    =========================================== */
 
 .text-lg { font-size: 18pt !important; }
@@ -213,10 +219,10 @@
 .text-3xl { font-size: 28pt !important; }
 .text-4xl { font-size: 32pt !important; }
 
-.text-muted { color: var(--muted-color) !important; }
-.text-primary { color: var(--primary-color) !important; }
-.text-good { color: var(--good-color) !important; }
-.text-bad { color: var(--bad-color) !important; }
+.text-muted { color: var(--muted) !important; }
+.text-primary { color: var(--blue) !important; }
+.text-good { color: var(--green) !important; }
+.text-bad { color: var(--orange) !important; }
 .text-center { text-align: center !important; }
 
 /* ===========================================
@@ -227,9 +233,9 @@
 .reveal p.kicker {
   font-size: 10.5pt;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--primary-color);
+  color: var(--blue);
   margin-bottom: 10px;
 }
 
@@ -238,23 +244,30 @@
   font-size: 17pt;
   margin-top: 12px;
   max-width: 940px;
+  color: var(--muted);
 }
 
-/* Card and tinted callout */
+/* Card: white with a hairline. Callout: wash panel with a blue edge */
 .card,
 .callout {
-  background: var(--box-bg);
-  border: 1px solid var(--line-color);
+  background: var(--paper);
+  border: 1px solid var(--rule);
   border-radius: var(--box-radius);
   padding: 22px 26px;
 }
 
 .callout {
-  background: var(--tint-bg);
-  border-color: transparent;
+  background: var(--wash);
+  border-color: var(--wash);
+  border-left: 4px solid var(--blue);
 }
 
-.reveal .callout p { color: var(--text-color); }
+.reveal .callout p { color: var(--navy); }
+.card.is-key { border-left: 4px solid var(--blue); }
+
+/* A figure with a rule on its left; .is-key makes the rule blue */
+.stat.edge { border-left: 4px solid var(--rule); padding-left: 24px; }
+.stat.edge.is-key { border-left-color: var(--blue); }
 
 /* Big number with its label and what it compares to */
 .reveal .stat p.stat-value {
@@ -262,12 +275,12 @@
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: var(--primary-color);
+  color: var(--blue);
 }
 
-.reveal .stat p.stat-value.plain { color: var(--text-color); }
-.reveal .stat p.stat-label { font-size: 15pt; color: var(--text-color); font-weight: 600; margin-top: 12px; }
-.reveal .stat p.stat-note { font-size: 12.5pt; color: var(--muted-color); margin-top: 4px; }
+.reveal .stat p.stat-value.plain { color: var(--navy); }
+.reveal .stat p.stat-label { font-size: 15pt; color: var(--navy); font-weight: 600; margin-top: 12px; }
+.reveal .stat p.stat-note { font-size: 12.5pt; color: var(--muted); margin-top: 4px; }
 
 /* Rows split by hairlines: takeaways, agenda, actions */
 .rows > div {
@@ -276,11 +289,21 @@
   gap: 28px;
   align-items: center;
   padding: 18px 0;
-  border-top: 1px solid var(--line-color);
+  border-top: 1px solid var(--rule);
 }
 
-.rows > div:last-child { border-bottom: 1px solid var(--line-color); }
-.reveal .rows p.row-key { font-size: 30pt; font-weight: 600; line-height: 1; color: var(--primary-color); }
+.rows > div:last-child { border-bottom: 1px solid var(--rule); }
+
+/* Rows and figures fill the slide, never a centred block between empty bands */
+.content > .rows, .rows.fill { flex: 1; display: grid; grid-auto-rows: 1fr; }
+.reveal .content > .rows p:not(.row-key) { font-size: 18pt; }
+.figures { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 28px; min-height: 0; }
+.figures > .stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 30px; }
+.figures .stat.edge { display: flex; flex-direction: column; justify-content: center; }
+.reveal .figures .stat p.stat-value { font-size: 72pt; }
+.reveal .figures .stat p.stat-label { font-size: 18pt; }
+.reveal .figures .stat p.stat-note { font-size: 14pt; }
+.reveal .rows p.row-key { font-size: 30pt; font-weight: 600; line-height: 1; color: var(--blue); }
 .reveal .rows p.row-key.small { font-size: 12pt; letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* Method flow: numbered steps joined by a line */
@@ -294,7 +317,7 @@
 .steps > div {
   position: relative;
   padding-top: 26px;
-  border-top: 3px solid var(--line-color);
+  border-top: 3px solid var(--rule);
 }
 
 .steps > div::before {
@@ -304,15 +327,14 @@
   left: 0;
   width: 15px;
   height: 15px;
-  border-radius: 50%;
-  background: var(--background-color);
-  border: 3px solid var(--primary-color);
+  background: var(--paper);
+  border: 3px solid var(--blue);
   box-sizing: border-box;
 }
 
-.steps > div.is-current { border-top-color: var(--primary-color); }
-.steps > div.is-current::before { background: var(--primary-color); }
-.reveal .steps p.step-when { font-size: 11pt; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-color); margin-bottom: 6px; }
+.steps > div.is-current { border-top-color: var(--blue); }
+.steps > div.is-current::before { background: var(--blue); }
+.reveal .steps p.step-when { font-size: 11pt; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .reveal .steps p.step-detail { font-size: 13pt; margin-top: 6px; }
 
 /* Small table: thin rules, right-aligned numbers, one highlighted row */
@@ -326,7 +348,7 @@
 .reveal table.data td {
   padding: 13px 16px;
   border: 0;
-  border-bottom: 1px solid var(--line-color);
+  border-bottom: 1px solid var(--rule);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -336,23 +358,24 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--muted-color);
-  border-bottom: 2px solid var(--line-color);
+  color: var(--muted);
+  border-bottom: 2px solid var(--navy);
 }
 
 .reveal table.data th:first-child,
 .reveal table.data td:first-child { text-align: left; }
-.reveal table.data tr.is-key td { background: var(--tint-bg); color: var(--text-color); font-weight: 600; }
+.reveal table.data tr.is-key td { background: var(--wash); color: var(--navy); font-weight: 600; }
+.reveal table.data tr.is-key td:first-child { box-shadow: inset 4px 0 0 var(--blue); }
 
 /* Blockquote: a verbatim line that carries a slide */
 .reveal blockquote {
-  border-left: 4px solid var(--primary-color);
+  border-left: 4px solid var(--blue);
   padding: 4px 0 4px 28px;
   margin: 0;
   font-style: normal;
   font-size: 26pt;
   line-height: 1.3;
-  color: var(--text-color);
+  color: var(--navy);
   background: none;
   box-shadow: none;
   width: 100%;
@@ -364,7 +387,7 @@
   margin-top: 16px;
   font-size: 13pt;
   font-style: normal;
-  color: var(--muted-color);
+  color: var(--muted);
 }
 
 /* ===========================================
@@ -386,22 +409,22 @@
   gap: calc(28px * var(--deck-scale, 1));
   font-family: var(--body-font);
   font-size: calc(12.5px * var(--deck-scale, 1));
-  color: var(--muted-color);
-  background: var(--background-color);
-  border-top: 1px solid var(--line-color);
+  color: var(--muted);
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
   transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .section-bar.is-hidden { opacity: 0; transform: translateY(100%); pointer-events: none; }
-.section-bar .bar-title { font-weight: 600; color: var(--body-color); white-space: nowrap; max-width: 22%; overflow: hidden; text-overflow: ellipsis; }
+.section-bar .bar-title { font-weight: 600; color: var(--navy); white-space: nowrap; max-width: 22%; overflow: hidden; text-overflow: ellipsis; }
 .section-bar .bar-list { flex: 1; display: flex; gap: calc(10px * var(--deck-scale, 1)); min-width: 0; }
 .section-bar .bar-item { flex: 1; min-width: 0; cursor: pointer; }
-.section-bar .bar-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: calc(5px * var(--deck-scale, 1)); transition: color 0.3s ease; }
-.section-bar .bar-track { display: block; height: calc(3px * var(--deck-scale, 1)); border-radius: 3px; background: var(--line-color); overflow: hidden; }
-.section-bar .bar-track i { display: block; height: 100%; width: 0; background: var(--primary-color); transition: width 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
-.section-bar .bar-item.is-current .bar-name { color: var(--text-color); font-weight: 600; }
-.section-bar .bar-item.is-done .bar-name { color: var(--body-color); }
-.section-bar .bar-item:hover .bar-name { color: var(--primary-color); }
+.section-bar .bar-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: calc(5px * var(--deck-scale, 1)); transition: color 0.2s ease; }
+.section-bar .bar-track { display: block; height: calc(3px * var(--deck-scale, 1)); background: var(--rule); overflow: hidden; }
+.section-bar .bar-track i { display: block; height: 100%; width: 0; background: var(--blue); transition: width 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.section-bar .bar-item.is-current .bar-name { color: var(--navy); font-weight: 600; }
+.section-bar .bar-item.is-done .bar-name { color: var(--ink); }
+.section-bar .bar-item:hover .bar-name { color: var(--blue); }
 .section-bar .bar-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 html.print-pdf .section-bar,
@@ -416,65 +439,53 @@ html.is-export .chart { pointer-events: none; }
 
 /* Commentary: bullets that talk the audience through the visual beside them */
 .commentary { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-.reveal .commentary h3 { font-size: 11pt; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-color); margin-bottom: 14px; }
+.reveal .commentary h3 { font-size: 11pt; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
 .reveal .commentary li { font-size: 14.5pt; line-height: 1.4; margin-bottom: 14px; }
 .reveal .commentary li:last-child { margin-bottom: 0; }
-.reveal .commentary p.so-what { font-size: 14.5pt; color: var(--text-color); font-weight: 600; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-color); }
+.reveal .commentary p.so-what { font-size: 14.5pt; color: var(--navy); font-weight: 600; margin-top: 18px; padding-top: 16px; border-top: 2px solid var(--blue); }
 
 /* Number sizes: hero for the one figure that carries a slide, compact inside small cards */
-.reveal .stat p.stat-value.hero { font-size: 100pt; }
+.reveal .stat p.stat-value.hero { font-size: 100pt; line-height: 1.1; }
+.reveal .stat p.stat-value.hero + p.stat-label { margin-top: 16px; }
 .reveal .stat p.stat-value.compact { font-size: 36pt; }
 
 /* Small title above a chart when a slide holds two */
-.reveal h3.chart-title { font-size: 12pt; font-weight: 600; color: var(--muted-color); margin-bottom: 8px; }
+.reveal h3.chart-title { font-size: 12pt; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
 
 /* Table extras: a total row, and a left-aligned text column */
-.reveal table.data tr.is-total td { border-top: 2px solid var(--line-color); font-weight: 600; color: var(--text-color); }
+.reveal table.data tr.is-total td { border-top: 2px solid var(--navy); font-weight: 600; color: var(--navy); }
 .reveal table.data td.text, .reveal table.data th.text { text-align: left; }
 
-/* Status dot for scorecards: <span class="status-dot good"></span> inside a <td> or <p> */
+/* Status dot for scorecards: <span class="status-dot good"></span> inside a <td> or <p> (plain = watch) */
 .status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; background: var(--chart-muted); vertical-align: baseline; }
-.status-dot.good { background: var(--good-color); }
-.status-dot.bad { background: var(--bad-color); }
+.status-dot.good { background: var(--green); }
+.status-dot.bad { background: var(--orange); }
 
 /* Compact variants for use inside a card or as a one-line strip under a chart */
 .rows.compact > div { padding: 10px 0; gap: 18px; }
 .card.compact, .callout.compact { padding: 12px 20px; }
-.reveal .rows p.row-key.muted { color: var(--muted-color); }
+.reveal .rows p.row-key.muted { color: var(--muted); }
 
 /* ?export in the URL (screenshots, PDF): no bar animation, so it is never caught mid-fade */
 html.is-export .section-bar,
 html.is-export .section-bar * { transition: none !important; }
 
 /* ===========================================
-   LIGHT HOVER - a small response under the pointer, nothing more.
+   LIGHT HOVER - a colour change under the pointer, nothing that moves.
    Charts show a one-line tooltip (set by the deck). Off for export.
    =========================================== */
-.card,
-.callout { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+.card { transition: border-color 0.15s ease; }
+.card:hover { border-color: var(--blue); }
 
-.card:hover,
-.callout:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--navy) 10%, transparent);
-}
+.rows > div,
+.reveal table.data tbody td { transition: background-color 0.15s ease; }
+.rows > div:hover,
+.reveal table.data tbody tr:hover td { background-color: var(--wash); }
 
-.card:hover { border-color: color-mix(in srgb, var(--primary-color) 45%, var(--line-color)); }
-
-.rows > div { transition: background-color 0.18s ease; }
-.rows > div:hover { background-color: color-mix(in srgb, var(--tint-bg) 55%, transparent); }
-
-.reveal table.data tbody td { transition: background-color 0.18s ease; }
-.reveal table.data tbody tr:hover td { background-color: color-mix(in srgb, var(--tint-bg) 55%, transparent); }
-.reveal table.data tbody tr.is-key:hover td { background-color: var(--tint-bg); }
-
-.steps > div { transition: border-top-color 0.18s ease; }
-.steps > div:hover { border-top-color: var(--primary-color); }
-
-.reveal .stat p.stat-value { transition: transform 0.18s ease; transform-origin: left bottom; }
-.stat:hover p.stat-value { transform: scale(1.03); }
+.steps > div { transition: border-top-color 0.15s ease; }
+.steps > div:hover { border-top-color: var(--blue); }
 
 html.is-export .card,
-html.is-export .callout,
 html.is-export .rows > div,
-html.is-export .stat p.stat-value { transition: none !important; transform: none !important; box-shadow: none !important; }
+html.is-export .reveal table.data tbody td,
+html.is-export .steps > div { transition: none !important; }

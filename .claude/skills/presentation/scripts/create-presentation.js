@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Creates a reveal.js presentation scaffold: presentation.html, styles.css and plan.md.
+ * Creates a reveal.js presentation scaffold: presentation.html and styles.css
+ * (plan.md only with --plan-only, for full mode). --refresh rewrites the engine
+ * of an existing deck or library file and keeps its slides.
  * Usage: node create-presentation.js [options]
  *
  * Adapted from github.com/ryanbbrown/revealjs-skill (MIT). Added: plan.md, the bottom
@@ -34,12 +36,16 @@ function parseArgs(args) {
       options.output = args[++i];
     } else if (arg === '--title') {
       options.title = args[++i];
+      options.titleSet = true;
     } else if (arg === '--styles') {
       options.stylesFile = args[++i];
+      options.stylesSet = true;
     } else if (arg === '--back') {
       options.back = args[++i];
     } else if (arg === '--plan-only') {
       options.planOnly = true;
+    } else if (arg === '--refresh') {
+      options.refresh = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -56,7 +62,8 @@ create-presentation.js - Generate a reveal.js presentation scaffold
 Usage: node create-presentation.js [options]
 
 Options:
-  --slides, -s <num>    Number of horizontal slides (simple mode)
+  (neither --slides nor --structure: the BRIEF and one line to replace with every slide in one Edit)
+  --slides, -s <num>    Number of placeholder slides
   --structure <list>    Mixed layout: comma-separated values (e.g., "1,1,d,3,1,d,1")
                         - Number 1 = single horizontal slide
                         - Number >1 = vertical stack of that many slides
@@ -65,16 +72,18 @@ Options:
   --output, -o <file>   Output HTML path (default: presentation.html). Its folder is created.
   --title <text>        Presentation title (default: Presentation)
   --styles <file>       Custom CSS filename (default: styles.css)
-  --plan-only           Create only the folder and plan.md (before the storyboard is approved)
-  --back <href>         Add a small link back to an index page (the slide library uses this)
+  --plan-only           Full mode: create only the folder and plan.md (from plan-template.md)
+  --back <href>         Add a small link back to an index page (the design library uses this)
+  --refresh <file>      Rewrite the engine (everything outside SLIDES:START/END) of an existing
+                        deck or library file, keeping its slides, title, styles link and back link
   --help, -h            Show this help message
 
-Also writes styles.css (from base-styles.css) and plan.md (from plan-template.md)
-next to the HTML file, unless they already exist.
+Also writes styles.css (from base-styles.css) next to the HTML file, unless it already exists.
 
 Examples:
-  node create-presentation.js --slides 10 -o presentations/2026-11-churn/presentation.html
-  node create-presentation.js --structure 1,1,d,1,1,1,d,1 --title "Q4 Review" -o deck/presentation.html
+  node create-presentation.js --slides 5 --title "Churn update" -o deck/2026-11-churn/presentation.html
+  node create-presentation.js --structure 1,1,d,1,1,1,d,1 --title "Q4 Review" -o deck/2026-11-q4/presentation.html
+  node create-presentation.js --refresh design-library/slides/level/slides.html
 `);
 }
 
@@ -134,9 +143,20 @@ function generateSlides(structure) {
 }
 
 function generateHTML(options) {
-  const slidesContent = generateSlides(options.structure);
+  const brief = `
+      <!-- BRIEF
+      Audience:
+      Want from them:
+      Minutes:
+      Answer:
+      Basis: (date basis, comparison period)
+      Sources:
+      Slides: (one "id: headline" per line)
+      -->
+`;
+  const slidesContent = options.slidesHtml != null ? options.slidesHtml : brief + (options.structure ? generateSlides(options.structure) : '\n      <!-- NEW SLIDES: replace this line with every slide in one Edit -->\n') + '\n';
   const backLink = options.back
-    ? `    <a class="library-back" href="${escapeHtml(options.back)}" onclick="this.href='${escapeHtml(options.back)}#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--primary-color);background:var(--tint-bg);padding:6px 14px;border-radius:99px;text-decoration:none;">&larr; Library index</a>\n`
+    ? `    <a class="library-back" href="${escapeHtml(options.back)}" onclick="this.href='${escapeHtml(options.back)}#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--blue);background:var(--wash);border:1px solid var(--rule);padding:6px 14px;border-radius:2px;text-decoration:none;">&larr; Library index</a>\n`
     : '';
 
   return `<!doctype html>
@@ -159,9 +179,7 @@ function generateHTML(options) {
 <body>
   <div class="reveal">
     <div class="slides">
-<!-- SLIDES:START -->
-${slidesContent}
-<!-- SLIDES:END -->
+<!-- SLIDES:START -->${slidesContent}<!-- SLIDES:END -->
     </div>
 ${backLink}    <div class="section-bar is-hidden" aria-label="Progress"></div>
   </div>
@@ -189,23 +207,24 @@ ${backLink}    <div class="section-bar is-hidden" aria-label="Progress"></div>
       }
       function chartTheme() {
         var axis = {
-          axisLine: { lineStyle: { color: css('--line-color') } },
+          axisLine: { lineStyle: { color: css('--rule') } },
           axisTick: { show: false },
-          axisLabel: { color: css('--muted-color'), fontSize: 15 },
-          nameTextStyle: { color: css('--muted-color'), fontSize: 14 },
+          axisLabel: { color: css('--muted'), fontSize: 15 },
+          nameTextStyle: { color: css('--muted'), fontSize: 14 },
           splitLine: { lineStyle: { color: css('--chart-grid') } }
         };
         return {
-          color: [css('--primary-color'), css('--chart-muted'), css('--secondary-color'), css('--navy')],
-          textStyle: { fontFamily: css('--body-font'), color: css('--body-color') },
+          /* Series order from the Look: blue, green, navy, teal, orange, muted */
+          color: [css('--blue'), css('--green'), css('--navy'), css('--teal'), css('--orange'), css('--muted')],
+          textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
           categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
           valueAxis: Object.assign({}, axis, { axisLine: { show: false } }),
-          legend: { bottom: 0, icon: 'roundRect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--body-color'), fontSize: 15 } },
-          bar: { itemStyle: { borderRadius: 4 }, barMaxWidth: 110, label: { color: css('--body-color'), fontSize: 16, fontWeight: 600 } },
-          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--body-color'), fontSize: 15 }, endLabel: { fontSize: 15 } },
-          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--body-color'), fontSize: 15 } },
-          markLine: { label: { fontSize: 14, color: css('--muted-color') } },
-          pie: { label: { color: css('--body-color'), fontSize: 15 }, itemStyle: { borderColor: css('--background-color'), borderWidth: 2 } }
+          legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+          bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+          markLine: { label: { fontSize: 14, color: css('--muted') } },
+          pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
         };
       }
       function drawChart(box) {
@@ -245,10 +264,10 @@ ${backLink}    <div class="section-bar is-hidden" aria-label="Progress"></div>
           option.xAxis && !Array.isArray(option.xAxis) && option.xAxis.type === 'category';
         option.tooltip = isExport ? { show: false } : {
           trigger: byAxis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
-          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted-color'), width: 1, type: 'solid' }, label: { show: false } },
-          backgroundColor: css('--text-color'), borderWidth: 0, padding: [7, 12],
-          textStyle: { color: css('--background-color'), fontSize: 14, fontFamily: css('--body-font') },
-          extraCssText: 'pointer-events:none;border-radius:8px;box-shadow:none;',
+          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } },
+          backgroundColor: css('--navy'), borderWidth: 0, padding: [7, 12],
+          textStyle: { color: css('--paper'), fontSize: 14, fontFamily: css('--body-font') },
+          extraCssText: 'pointer-events:none;border-radius:2px;box-shadow:none;',
           formatter: function (p) {
             if (Array.isArray(p)) {
               var rows = p.filter(function (q) { return valueText(q) != null; }).map(function (q) {
@@ -382,9 +401,31 @@ function copyIfMissing(from, to, label, transform) {
   console.log(`Copied ${label} to ${to}`);
 }
 
+function refresh(options) {
+  const file = options.refresh;
+  if (!fs.existsSync(file)) { console.error(`Error: ${file} not found.`); process.exit(1); }
+  const html = fs.readFileSync(file, 'utf8');
+  const start = html.indexOf('<!-- SLIDES:START -->');
+  const end = html.indexOf('<!-- SLIDES:END -->');
+  if (start === -1 || end === -1) { console.error('Error: no SLIDES:START / SLIDES:END markers; not a deck made by this script.'); process.exit(1); }
+  const unescape = t => t.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const title = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
+  const styles = (html.match(/<link rel="stylesheet" href="(?!https?:)([^"]+)">/) || [])[1];
+  const back = (html.match(/class="library-back" href="([^"]+)"/) || [])[1];
+  const opts = Object.assign({}, options, {
+    title: options.titleSet ? options.title : (title ? unescape(title) : options.title),
+    stylesFile: options.stylesSet ? options.stylesFile : (styles ? unescape(styles) : options.stylesFile),
+    back: options.back !== undefined ? options.back : (back ? unescape(back) : undefined),
+    slidesHtml: html.slice(start + '<!-- SLIDES:START -->'.length, end),
+  });
+  fs.writeFileSync(file, generateHTML(opts));
+  console.log(`Refreshed the engine of ${file}; slides kept.`);
+}
+
 function main() {
   const args = process.argv.slice(2);
   const options = parseArgs(args);
+  if (options.refresh) { refresh(options); return; }
 
   if (options.slides !== null && options.structure !== null) {
     console.error('Error: Cannot use both --slides and --structure. Choose one.');
@@ -392,7 +433,7 @@ function main() {
   }
 
   if (options.slides === null && options.structure === null) {
-    options.structure = [1, 1, 1, 1, 1];
+    options.structure = null;
   } else if (options.slides !== null) {
     if (options.slides < 1 || isNaN(options.slides)) {
       console.error('Error: Slide count must be at least 1.');
@@ -406,18 +447,16 @@ function main() {
     }
   }
 
-  const totalSlides = options.structure.reduce((a, b) => a + (b === 'd' ? 1 : b), 0);
+  const totalSlides = options.structure ? options.structure.reduce((a, b) => a + (b === 'd' ? 1 : b), 0) : 0;
   const outputDir = path.dirname(options.output);
 
   if (outputDir && outputDir !== '.') {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const writePlan = () => copyIfMissing(PLAN_TEMPLATE_PATH, path.join(outputDir, 'plan.md'), 'plan-template.md', text =>
-    text.replace('{{TITLE}}', options.title).replace('{{DATE}}', new Date().toISOString().slice(0, 10)));
-
   if (options.planOnly) {
-    writePlan();
+    copyIfMissing(PLAN_TEMPLATE_PATH, path.join(outputDir, 'plan.md'), 'plan-template.md', text =>
+      text.replace('{{TITLE}}', options.title).replace('{{DATE}}', new Date().toISOString().slice(0, 10)));
     console.log('Plan only. Run again without --plan-only after the storyboard is approved.');
     return;
   }
@@ -431,10 +470,10 @@ function main() {
   console.log(`Created ${options.output}`);
 
   copyIfMissing(BASE_STYLES_PATH, path.join(outputDir, options.stylesFile), 'base-styles.css');
-  writePlan();
 
-  console.log(`\nPresentation created with ${totalSlides} slides (structure: ${options.structure.join(',')}).`);
-  console.log(`The look is in ${path.join(outputDir, options.stylesFile)}. Fill slides with Edit, one at a time.`);
+  console.log(options.structure ? `\nPresentation created with ${totalSlides} slides (structure: ${options.structure.join(',')}).`
+    : '\nPresentation created. Read it down to SLIDES:END, then fill the BRIEF and every slide in one Edit.');
+  console.log(`The look is in ${path.join(outputDir, options.stylesFile)}.`);
 }
 
 main();

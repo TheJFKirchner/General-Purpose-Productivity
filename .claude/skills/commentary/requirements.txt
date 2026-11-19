@@ -1,4 +1,0 @@
-pandas>=2.0
-pyarrow>=14
-python-pptx>=1.0
-pytest>=8

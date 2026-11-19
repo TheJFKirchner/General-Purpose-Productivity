@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide library</title>
+
+  <!-- Reveal.js core -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- Custom styles: the whole look of the deck lives in this file -->
+  <link rel="stylesheet" href="../styles.css">
+
+  <!-- ECharts for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+<!-- SLIDES:START -->
+      <!-- GROUP: EX · Explain how the work was done · Give the audience enough method to trust the result. -->
+
+      <!-- COMPONENT: EX-01 · steps-flow
+           Looks like: Three to five steps on a line, each with a title and one line.
+           Good for: Showing a method or process in order; Showing a timeline or plan with the current point marked; Giving a non-technical audience the approach in ten seconds
+           Related: DE-06 ask-and-actions, DE-07 ask-and-timeline -->
+      <section id="steps-flow" data-section="Explain how the work was done" data-component="EX-01">
+        <p class="kicker">Approach</p>
+        <h2>We compared matched groups of customers on the old and new setup</h2>
+        <div class="content middle">
+          <div class="steps">
+            <div><p class="step-when">Step 1</p><h3>Define the group</h3><p class="step-detail">Customers who joined April to October.</p></div>
+            <div><p class="step-when">Step 2</p><h3>Match old and new</h3><p class="step-detail">Same plan, region and company size.</p></div>
+            <div><p class="step-when">Step 3</p><h3>Compare churn</h3><p class="step-detail">Cancelled within 90 days of joining.</p></div>
+            <div><p class="step-when">Step 4</p><h3>Check the reasons</h3><p class="step-detail">Exit survey answers from those who left.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPONENT: EX-02 · data-two-cards
+           Looks like: Two cards: what was used (rows) and how it was checked (bullets).
+           Good for: Showing what the analysis rests on and why it can be trusted; Answering scope and data-quality questions before they are asked
+           Related: FR-04 goal-three-cards -->
+      <section id="data-two-cards" data-section="Explain how the work was done" data-component="EX-02">
+        <p class="kicker">Data and validation</p>
+        <h2>Two sources cover every customer who joined from April to October</h2>
+        <div class="content">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 26px; flex: 1; min-height: 0;">
+            <div class="card">
+              <h3>What we used</h3>
+              <div class="rows" style="--rows-cols: 150px 1fr; margin-top: 14px;">
+                <div><p class="row-key small">Accounts</p><p>18,420 new customers, with join and cancel dates</p></div>
+                <div><p class="row-key small">Exit survey</p><p>1,112 answers from customers who cancelled</p></div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>How we checked it</h3>
+              <ul style="margin-top: 16px;">
+                <li>Customer counts match the finance report to within 0.2%</li>
+                <li>312 duplicate accounts removed</li>
+                <li>Trial accounts left out, because they cannot cancel</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Sources: customer accounts data and exit survey, April to October 2026.</div>
+      </section>
+
+<!-- SLIDES:END -->
+    </div>
+    <a class="library-back" href="../../index.html" onclick="this.href='../../index.html#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--blue);background:var(--wash);border:1px solid var(--rule);padding:6px 14px;border-radius:2px;text-decoration:none;">&larr; Library index</a>
+    <div class="section-bar is-hidden" aria-label="Progress"></div>
+  </div>
+
+  <!-- ENGINE: do not edit per deck. Slides are above; the look is in the CSS file. -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    (function () {
+      var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+      var isExport = window.location.search.includes('export');
+      if (isExport) document.documentElement.classList.add('is-export');
+
+      /* Charts: <div class="chart" data-echart> holding an ECharts option as JSON.
+         Fonts and colours come from the theme; "var(--name)" in the JSON resolves to the theme value. */
+      function resolveVars(node, depth) {
+        if (!node || typeof node !== 'object' || depth > 8) return;
+        Object.keys(node).forEach(function (key) {
+          var v = node[key];
+          if (typeof v === 'string') {
+            if (v.indexOf('var(--') === 0 && v.charAt(v.length - 1) === ')') node[key] = css(v.slice(4, -1)) || v;
+          } else if (v && typeof v === 'object') {
+            resolveVars(v, depth + 1);
+          }
+        });
+      }
+      function chartTheme() {
+        var axis = {
+          axisLine: { lineStyle: { color: css('--rule') } },
+          axisTick: { show: false },
+          axisLabel: { color: css('--muted'), fontSize: 15 },
+          nameTextStyle: { color: css('--muted'), fontSize: 14 },
+          splitLine: { lineStyle: { color: css('--chart-grid') } }
+        };
+        return {
+          /* Series order from the Look: blue, green, navy, teal, orange, muted */
+          color: [css('--blue'), css('--green'), css('--navy'), css('--teal'), css('--orange'), css('--muted')],
+          textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+          categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+          valueAxis: Object.assign({}, axis, { axisLine: { show: false } }),
+          legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+          bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+          markLine: { label: { fontSize: 14, color: css('--muted') } },
+          pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+        };
+      }
+      function drawChart(box) {
+        var src = box.querySelector('script[type="application/json"]');
+        if (!window.echarts || !src) return;
+        var option;
+        try { option = JSON.parse(src.textContent); }
+        catch (e) { box.insertAdjacentText('beforeend', 'Chart data is not valid JSON: ' + e.message); return; }
+        resolveVars(option, 0);
+        var yName = option.yAxis && !Array.isArray(option.yAxis) && option.yAxis.name && option.yAxis.show !== false;
+        if (!option.grid) option.grid = { left: yName ? 46 : 8, right: 28, top: 30, bottom: option.legend ? 44 : 8, containLabel: true };
+        /* Light hover: one small tooltip naming the item and its value. Nothing else reacts, so nothing
+           flickers: the marks keep their look (no emphasis state) and the tooltip never takes the pointer. */
+        var seriesList = [].concat(option.series || []);
+        var valueAxis = [option.yAxis, option.xAxis].filter(function (a) { return a && !Array.isArray(a) && a.type === 'value'; })[0];
+        var axisFormat = valueAxis && valueAxis.axisLabel && typeof valueAxis.axisLabel.formatter === 'string' ? valueAxis.axisLabel.formatter : null;
+        function fill(template, p, v) {
+          return template.split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name).split('{a}').join(p.seriesName || '').split('{@[0]}').join(v);
+        }
+        seriesList.forEach(function (s) {
+          s.emphasis = { disabled: true };
+          if (s.itemStyle && s.itemStyle.opacity === 0) s.silent = true;   /* hidden waterfall base */
+          else delete s.silent;
+        });
+        function valueText(p) {
+          var v = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value;
+          if (v == null || v === '-') return null;
+          var s = seriesList[p.seriesIndex] || {};
+          var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+          var shared = s.label && typeof s.label.formatter === 'string' ? s.label.formatter : null;
+          return own ? fill(own, p, v) : shared ? fill(shared, p, v) : axisFormat ? fill(axisFormat, p, v) : String(v);
+        }
+        function strong(text) { return '<span style="font-weight:600">' + text + '</span>'; }
+        function isNamed(p) { return p.seriesName && p.seriesName.indexOf('series') !== 0; }
+        /* Lines are read along the time axis (their points are usually hidden); everything else by item. */
+        var byAxis = seriesList.length > 0 && seriesList.every(function (s) { return s.type === 'line'; }) &&
+          option.xAxis && !Array.isArray(option.xAxis) && option.xAxis.type === 'category';
+        option.tooltip = isExport ? { show: false } : {
+          trigger: byAxis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } },
+          backgroundColor: css('--navy'), borderWidth: 0, padding: [7, 12],
+          textStyle: { color: css('--paper'), fontSize: 14, fontFamily: css('--body-font') },
+          extraCssText: 'pointer-events:none;border-radius:2px;box-shadow:none;',
+          formatter: function (p) {
+            if (Array.isArray(p)) {
+              var rows = p.filter(function (q) { return valueText(q) != null; }).map(function (q) {
+                return (isNamed(q) ? q.seriesName + ': ' : '') + strong(valueText(q));
+              });
+              return rows.length ? p[0].name + '<br>' + rows.join('<br>') : '';
+            }
+            if (p.componentType !== 'series' || valueText(p) == null) return '';
+            var named = isNamed(p) && seriesList.length > 1 ? p.seriesName + ' · ' : '';
+            return named + (p.name ? p.name + ': ' : '') + strong(valueText(p));
+          }
+        };
+        if (isExport) { option.animation = false; seriesList.forEach(function (s) { s.silent = true; }); }
+        if (!box._chart) {
+          var holder = document.createElement('div');
+          holder.style.cssText = 'position:absolute;inset:0;';
+          box.appendChild(holder);
+          /* Canvas when live (hover never rebuilds the marks under the pointer); crisp SVG for export. */
+          box._chart = echarts.init(holder, 'deck', isExport
+            ? { renderer: 'svg', width: box.clientWidth, height: box.clientHeight }
+            : { renderer: 'canvas', devicePixelRatio: Math.max(2, (window.devicePixelRatio || 1) * 2), width: box.clientWidth, height: box.clientHeight });
+        } else {
+          box._chart.clear();
+          box._chart.resize({ width: box.clientWidth, height: box.clientHeight });
+        }
+        box._chart.setOption(option);
+      }
+      function drawCharts(slide) {
+        if (!slide) return;
+        Array.prototype.forEach.call(slide.querySelectorAll('.chart[data-echart]'), drawChart);
+      }
+      if (window.echarts) echarts.registerTheme('deck', chartTheme());
+
+      Reveal.initialize({
+        width: 1280,
+        height: 720,
+        margin: 0,
+        controls: false,
+        progress: false,
+        slideNumber: false,
+        hash: true,
+        transition: isExport ? 'none' : 'slide',
+        transitionSpeed: 'default',
+        backgroundTransition: 'fade',
+        center: false
+      });
+
+      /* Bottom section bar: built from data-section on the slides. A slide with no
+         data-section continues the previous one; data-section="" ends the sections. */
+      var bar = document.querySelector('.section-bar');
+      var slides = [], sections = [], count;
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+      function buildBar() {
+        slides = Reveal.getSlides();
+        sections = [];
+        var last = '';
+        slides.forEach(function (s) {
+          if (s.dataset.section !== undefined) last = s.dataset.section;
+          s._sec = -1;
+          if (!last) return;
+          var top = sections[sections.length - 1];
+          if (!top || top.name !== last) { top = { name: last, first: s, count: 0 }; sections.push(top); }
+          top.count++; s._sec = sections.length - 1; s._pos = top.count;
+        });
+        bar.innerHTML = '';
+        bar.appendChild(el('div', 'bar-title', document.title));
+        var list = el('div', 'bar-list');
+        sections.forEach(function (sec) {
+          var li = el('div', 'bar-item'); li.title = sec.name;
+          li.appendChild(el('span', 'bar-name', sec.name));
+          var track = el('span', 'bar-track'); sec.fill = el('i'); track.appendChild(sec.fill); li.appendChild(track);
+          li.addEventListener('click', function () { var i = Reveal.getIndices(sec.first); Reveal.slide(i.h, i.v); });
+          list.appendChild(li); sec.li = li;
+        });
+        bar.appendChild(list);
+        count = el('div', 'bar-count');
+        bar.appendChild(count);
+      }
+
+      function updateBar() {
+        var cur = Reveal.getCurrentSlide();
+        if (!cur || !count) return;
+        sections.forEach(function (sec, k) {
+          var pct = k < cur._sec ? 100 : k === cur._sec ? Math.round(100 * cur._pos / sec.count) : 0;
+          sec.fill.style.width = pct + '%';
+          sec.li.classList.toggle('is-current', k === cur._sec);
+          sec.li.classList.toggle('is-done', cur._sec > k);
+        });
+        count.textContent = (slides.indexOf(cur) + 1) + ' / ' + slides.length;
+        bar.classList.toggle('is-hidden', cur._sec === -1 || cur.dataset.bar === 'hide' || !sections.length);
+      }
+
+      /* Keep the bar on the bottom edge of the slide, whatever the window shape. */
+      function placeBar() {
+        var s = Reveal.getScale(), box = document.querySelector('.reveal');
+        bar.style.setProperty('--deck-scale', s);
+        bar.style.width = (1280 * s) + 'px';
+        bar.style.left = Math.max(0, (box.offsetWidth - 1280 * s) / 2) + 'px';
+        bar.style.bottom = Math.max(0, (box.offsetHeight - 720 * s) / 2) + 'px';
+      }
+
+      Reveal.on('ready', function () {
+        placeBar(); buildBar(); updateBar();
+        if (document.documentElement.classList.contains('print-pdf') || document.documentElement.classList.contains('reveal-print')) {
+          Reveal.getSlides().forEach(drawCharts);
+        } else {
+          drawCharts(Reveal.getCurrentSlide());
+        }
+      });
+      Reveal.on('slidechanged', function (e) { updateBar(); drawCharts(e.currentSlide); });
+      Reveal.on('resize', placeBar);
+    })();
+  </script>
+</body>
+</html>

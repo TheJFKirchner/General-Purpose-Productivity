@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide library</title>
+
+  <!-- Reveal.js core -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- Custom styles: the whole look of the deck lives in this file -->
+  <link rel="stylesheet" href="../styles.css">
+
+  <!-- ECharts for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+<!-- SLIDES:START -->
+      <!-- GROUP: UN · Show range and risk · How sure we are, and what could move the answer. -->
+
+      <!-- COMPONENT: UN-01 · range-bar-commentary
+           Looks like: One low-to-high range bar with the central and held figures marked, commentary under it.
+           Good for: Showing where a chosen figure sits within a reasonable range; Making the size of the uncertainty visible
+           Related: UN-02 scenario-bars-caveats, BD-08 table-bars-sensitivity -->
+      <section id="range-bar-commentary" data-section="Show range and risk" data-component="UN-01">
+        <p class="kicker">Reserve position</p>
+        <h2>The carried reserve sits in the upper half of the range of reasonable estimates</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-rows: 5fr 4fr; gap: 16px; min-height: 0; min-width: 0;">
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "grid": { "left": 20, "right": 20, "top": 34, "bottom": 34, "containLabel": false },
+                "xAxis": { "type": "value", "min": 1040, "max": 1420, "show": false },
+                "yAxis": { "type": "category", "data": ["Range"], "show": false },
+                "series": [
+                  { "type": "bar", "stack": "range", "data": [1130], "itemStyle": { "color": "var(--paper)" },
+                    "label": { "show": true, "position": "insideRight", "formatter": "Low  $1,130m", "color": "var(--muted)", "fontSize": 16 } },
+                  { "type": "bar", "stack": "range", "data": [200], "barWidth": 46,
+                    "itemStyle": { "color": "var(--chart-muted)" },
+                    "label": { "show": true, "position": "right", "formatter": "High  $1,330m", "color": "var(--muted)", "fontSize": 16 },
+                    "markLine": { "symbol": "none", "silent": true, "data": [
+                      { "xAxis": 1212, "lineStyle": { "color": "var(--muted)", "type": "dashed", "width": 2 },
+                        "label": { "position": "start", "formatter": "Central estimate  $1,212m", "color": "var(--muted)", "fontSize": 16 } },
+                      { "xAxis": 1248, "lineStyle": { "color": "var(--blue)", "type": "solid", "width": 4 },
+                        "label": { "position": "end", "formatter": "Carried  $1,248m", "color": "var(--blue)", "fontWeight": 600, "fontSize": 17 } }
+                    ] } }
+                ]
+              }
+              </script>
+            </div>
+            <div class="commentary">
+              <ul>
+                <li>The range runs from 7% below the central estimate to 10% above it.</li>
+                <li>It is wider on the high side because liability claims can keep growing for years after they are reported.</li>
+                <li>The carried reserve is $82m below the high end and $118m above the low end.</li>
+              </ul>
+              <p class="so-what">If the central estimate rises by more than $36m, the margin becomes a shortfall.</p>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Range of reasonable estimates: the span of results from actuarial methods and assumptions we consider reasonable. $ millions, net of reinsurance, at 30 September 2026.</div>
+      </section>
+
+      <!-- COMPONENT: UN-02 · scenario-bars-caveats
+           Looks like: Scenario bars on the left, four caveats and a so-what line on the right.
+           Good for: Telling the audience what could change the answer before they decide; Sizing a few scenarios against the central view
+           Related: UN-01 range-bar-commentary, BD-08 table-bars-sensitivity -->
+      <section id="scenario-bars-caveats" data-section="Show range and risk" data-component="UN-02">
+        <p class="kicker">Risks and caveats</p>
+        <h2>The shortfall could be $32M or $64M, and every scenario needs an increase</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 11fr 9fr; gap: 40px; min-height: 0; min-width: 0;">
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "value", "show": false, "max": 75 },
+                "yAxis": { "type": "category", "inverse": true, "data": ["Large claims settle lower", "Central estimate", "Auto costs grow 11%", "11% and slower courts"] },
+                "series": [{
+                  "type": "bar",
+                  "barWidth": "56%",
+                  "itemStyle": { "color": "var(--chart-muted)" },
+                  "label": { "show": true, "position": "right", "formatter": "${c}M" },
+                  "data": [32, { "value": 42, "itemStyle": { "color": "var(--blue)" }, "label": { "fontWeight": 600, "color": "var(--blue)" } }, 56, 64]
+                }]
+              }
+              </script>
+            </div>
+            <div class="commentary">
+              <h3>What could move the number</h3>
+              <ul>
+                <li>Twelve large auto claims are under a year old. If they settle at typical values, the gap is $32M.</li>
+                <li>We assume auto claim costs keep rising 9% a year. At 11%, the gap is $56M.</li>
+                <li>A further 3 months of court delay in general liability adds $8M, which gives $64M.</li>
+                <li>Two years of data support the 9% trend, so we will test it again each quarter.</li>
+              </ul>
+              <p class="so-what">Approving $42M now is the middle of the range, not the cautious end.</p>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Reserve shortfall under four scenarios, in millions of dollars. Central estimate: the outcome we judge equally likely to be too high or too low. Q3 2026 reserve review.</div>
+      </section>
+
+<!-- SLIDES:END -->
+    </div>
+    <a class="library-back" href="../../index.html" onclick="this.href='../../index.html#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--blue);background:var(--wash);border:1px solid var(--rule);padding:6px 14px;border-radius:2px;text-decoration:none;">&larr; Library index</a>
+    <div class="section-bar is-hidden" aria-label="Progress"></div>
+  </div>
+
+  <!-- ENGINE: do not edit per deck. Slides are above; the look is in the CSS file. -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    (function () {
+      var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+      var isExport = window.location.search.includes('export');
+      if (isExport) document.documentElement.classList.add('is-export');
+
+      /* Charts: <div class="chart" data-echart> holding an ECharts option as JSON.
+         Fonts and colours come from the theme; "var(--name)" in the JSON resolves to the theme value. */
+      function resolveVars(node, depth) {
+        if (!node || typeof node !== 'object' || depth > 8) return;
+        Object.keys(node).forEach(function (key) {
+          var v = node[key];
+          if (typeof v === 'string') {
+            if (v.indexOf('var(--') === 0 && v.charAt(v.length - 1) === ')') node[key] = css(v.slice(4, -1)) || v;
+          } else if (v && typeof v === 'object') {
+            resolveVars(v, depth + 1);
+          }
+        });
+      }
+      function chartTheme() {
+        var axis = {
+          axisLine: { lineStyle: { color: css('--rule') } },
+          axisTick: { show: false },
+          axisLabel: { color: css('--muted'), fontSize: 15 },
+          nameTextStyle: { color: css('--muted'), fontSize: 14 },
+          splitLine: { lineStyle: { color: css('--chart-grid') } }
+        };
+        return {
+          /* Series order from the Look: blue, green, navy, teal, orange, muted */
+          color: [css('--blue'), css('--green'), css('--navy'), css('--teal'), css('--orange'), css('--muted')],
+          textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+          categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+          valueAxis: Object.assign({}, axis, { axisLine: { show: false } }),
+          legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+          bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+          markLine: { label: { fontSize: 14, color: css('--muted') } },
+          pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+        };
+      }
+      function drawChart(box) {
+        var src = box.querySelector('script[type="application/json"]');
+        if (!window.echarts || !src) return;
+        var option;
+        try { option = JSON.parse(src.textContent); }
+        catch (e) { box.insertAdjacentText('beforeend', 'Chart data is not valid JSON: ' + e.message); return; }
+        resolveVars(option, 0);
+        var yName = option.yAxis && !Array.isArray(option.yAxis) && option.yAxis.name && option.yAxis.show !== false;
+        if (!option.grid) option.grid = { left: yName ? 46 : 8, right: 28, top: 30, bottom: option.legend ? 44 : 8, containLabel: true };
+        /* Light hover: one small tooltip naming the item and its value. Nothing else reacts, so nothing
+           flickers: the marks keep their look (no emphasis state) and the tooltip never takes the pointer. */
+        var seriesList = [].concat(option.series || []);
+        var valueAxis = [option.yAxis, option.xAxis].filter(function (a) { return a && !Array.isArray(a) && a.type === 'value'; })[0];
+        var axisFormat = valueAxis && valueAxis.axisLabel && typeof valueAxis.axisLabel.formatter === 'string' ? valueAxis.axisLabel.formatter : null;
+        function fill(template, p, v) {
+          return template.split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name).split('{a}').join(p.seriesName || '').split('{@[0]}').join(v);
+        }
+        seriesList.forEach(function (s) {
+          s.emphasis = { disabled: true };
+          if (s.itemStyle && s.itemStyle.opacity === 0) s.silent = true;   /* hidden waterfall base */
+          else delete s.silent;
+        });
+        function valueText(p) {
+          var v = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value;
+          if (v == null || v === '-') return null;
+          var s = seriesList[p.seriesIndex] || {};
+          var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+          var shared = s.label && typeof s.label.formatter === 'string' ? s.label.formatter : null;
+          return own ? fill(own, p, v) : shared ? fill(shared, p, v) : axisFormat ? fill(axisFormat, p, v) : String(v);
+        }
+        function strong(text) { return '<span style="font-weight:600">' + text + '</span>'; }
+        function isNamed(p) { return p.seriesName && p.seriesName.indexOf('series') !== 0; }
+        /* Lines are read along the time axis (their points are usually hidden); everything else by item. */
+        var byAxis = seriesList.length > 0 && seriesList.every(function (s) { return s.type === 'line'; }) &&
+          option.xAxis && !Array.isArray(option.xAxis) && option.xAxis.type === 'category';
+        option.tooltip = isExport ? { show: false } : {
+          trigger: byAxis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } },
+          backgroundColor: css('--navy'), borderWidth: 0, padding: [7, 12],
+          textStyle: { color: css('--paper'), fontSize: 14, fontFamily: css('--body-font') },
+          extraCssText: 'pointer-events:none;border-radius:2px;box-shadow:none;',
+          formatter: function (p) {
+            if (Array.isArray(p)) {
+              var rows = p.filter(function (q) { return valueText(q) != null; }).map(function (q) {
+                return (isNamed(q) ? q.seriesName + ': ' : '') + strong(valueText(q));
+              });
+              return rows.length ? p[0].name + '<br>' + rows.join('<br>') : '';
+            }
+            if (p.componentType !== 'series' || valueText(p) == null) return '';
+            var named = isNamed(p) && seriesList.length > 1 ? p.seriesName + ' · ' : '';
+            return named + (p.name ? p.name + ': ' : '') + strong(valueText(p));
+          }
+        };
+        if (isExport) { option.animation = false; seriesList.forEach(function (s) { s.silent = true; }); }
+        if (!box._chart) {
+          var holder = document.createElement('div');
+          holder.style.cssText = 'position:absolute;inset:0;';
+          box.appendChild(holder);
+          /* Canvas when live (hover never rebuilds the marks under the pointer); crisp SVG for export. */
+          box._chart = echarts.init(holder, 'deck', isExport
+            ? { renderer: 'svg', width: box.clientWidth, height: box.clientHeight }
+            : { renderer: 'canvas', devicePixelRatio: Math.max(2, (window.devicePixelRatio || 1) * 2), width: box.clientWidth, height: box.clientHeight });
+        } else {
+          box._chart.clear();
+          box._chart.resize({ width: box.clientWidth, height: box.clientHeight });
+        }
+        box._chart.setOption(option);
+      }
+      function drawCharts(slide) {
+        if (!slide) return;
+        Array.prototype.forEach.call(slide.querySelectorAll('.chart[data-echart]'), drawChart);
+      }
+      if (window.echarts) echarts.registerTheme('deck', chartTheme());
+
+      Reveal.initialize({
+        width: 1280,
+        height: 720,
+        margin: 0,
+        controls: false,
+        progress: false,
+        slideNumber: false,
+        hash: true,
+        transition: isExport ? 'none' : 'slide',
+        transitionSpeed: 'default',
+        backgroundTransition: 'fade',
+        center: false
+      });
+
+      /* Bottom section bar: built from data-section on the slides. A slide with no
+         data-section continues the previous one; data-section="" ends the sections. */
+      var bar = document.querySelector('.section-bar');
+      var slides = [], sections = [], count;
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+      function buildBar() {
+        slides = Reveal.getSlides();
+        sections = [];
+        var last = '';
+        slides.forEach(function (s) {
+          if (s.dataset.section !== undefined) last = s.dataset.section;
+          s._sec = -1;
+          if (!last) return;
+          var top = sections[sections.length - 1];
+          if (!top || top.name !== last) { top = { name: last, first: s, count: 0 }; sections.push(top); }
+          top.count++; s._sec = sections.length - 1; s._pos = top.count;
+        });
+        bar.innerHTML = '';
+        bar.appendChild(el('div', 'bar-title', document.title));
+        var list = el('div', 'bar-list');
+        sections.forEach(function (sec) {
+          var li = el('div', 'bar-item'); li.title = sec.name;
+          li.appendChild(el('span', 'bar-name', sec.name));
+          var track = el('span', 'bar-track'); sec.fill = el('i'); track.appendChild(sec.fill); li.appendChild(track);
+          li.addEventListener('click', function () { var i = Reveal.getIndices(sec.first); Reveal.slide(i.h, i.v); });
+          list.appendChild(li); sec.li = li;
+        });
+        bar.appendChild(list);
+        count = el('div', 'bar-count');
+        bar.appendChild(count);
+      }
+
+      function updateBar() {
+        var cur = Reveal.getCurrentSlide();
+        if (!cur || !count) return;
+        sections.forEach(function (sec, k) {
+          var pct = k < cur._sec ? 100 : k === cur._sec ? Math.round(100 * cur._pos / sec.count) : 0;
+          sec.fill.style.width = pct + '%';
+          sec.li.classList.toggle('is-current', k === cur._sec);
+          sec.li.classList.toggle('is-done', cur._sec > k);
+        });
+        count.textContent = (slides.indexOf(cur) + 1) + ' / ' + slides.length;
+        bar.classList.toggle('is-hidden', cur._sec === -1 || cur.dataset.bar === 'hide' || !sections.length);
+      }
+
+      /* Keep the bar on the bottom edge of the slide, whatever the window shape. */
+      function placeBar() {
+        var s = Reveal.getScale(), box = document.querySelector('.reveal');
+        bar.style.setProperty('--deck-scale', s);
+        bar.style.width = (1280 * s) + 'px';
+        bar.style.left = Math.max(0, (box.offsetWidth - 1280 * s) / 2) + 'px';
+        bar.style.bottom = Math.max(0, (box.offsetHeight - 720 * s) / 2) + 'px';
+      }
+
+      Reveal.on('ready', function () {
+        placeBar(); buildBar(); updateBar();
+        if (document.documentElement.classList.contains('print-pdf') || document.documentElement.classList.contains('reveal-print')) {
+          Reveal.getSlides().forEach(drawCharts);
+        } else {
+          drawCharts(Reveal.getCurrentSlide());
+        }
+      });
+      Reveal.on('slidechanged', function (e) { updateBar(); drawCharts(e.currentSlide); });
+      Reveal.on('resize', placeBar);
+    })();
+  </script>
+</body>
+</html>

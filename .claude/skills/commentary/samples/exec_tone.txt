@@ -1,7 +1,0 @@
-Example of the tone we want (illustrative only, not real figures):
-
-- Spend rose faster than membership this month, so the increase is per-member cost, not growth.
-- Most of the change sits in two areas; everything else moved within normal month-to-month noise.
-- The rise is concentrated in a few high-cost cases rather than a broad shift, which makes it less likely to persist.
-
-Lead with the answer. One idea per bullet. Name the driver, give the size, stop. No adjectives like "significant" or "notable" unless a number backs them. Avoid jargon the committee would not use themselves.

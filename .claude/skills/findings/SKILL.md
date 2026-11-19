@@ -7,24 +7,13 @@ description: Use when work on a project that has a plan produces a result or ans
 
 One file, `findings.md`: what the work has established against the project plan, and where each came from. A list, not a report. Nothing is ranked or judged here; the user decides later what gets used.
 
-## Finding or fact
+## What counts
 
-| | Finding: a result against the plan | Fact: reference knowledge |
-| --- | --- | --- |
-| Test | Did the work establish it (computed, checked or settled), and does it answer, confirm, rule out, block or change an item in the plan? | Would someone starting other work here want to know it beforehand? |
-| Typical | The answer to a plan question, with its figure; a check that passed or failed; a negative result the plan asked about; something that blocks or changes a plan item | How data and systems behave, gotchas, methodology, metric definitions, reference numbers (headline metrics, agreed assumptions, contract terms), standing requirements |
-| Goes in | `findings.md` (this skill) | The session facts file, then the wiki (`brain-intake`, `add-to-main-agent.md`) |
-
-| Case | Rule |
-| --- | --- |
-| No project plan (the plan is the one linked in the project's CLAUDE.md) | No findings. Facts are still recorded as facts |
-| Given, not established by the work | Reference knowledge that outlives the project (a contract term, another team's assumption, last year's result): a fact, not a finding. Specific to this project and bearing on a plan item (the pilot's roster): a finding, with the document or person as its source |
-| A working choice (a basis, filter, threshold or assumption), or an edit to the plan itself | Not a finding; it belongs in the plan |
-| A plan item settled by the person who owns it | A finding. Source = who decided, and the date. An opinion or intention that settles nothing: not a finding |
-| A caveat on a finding | Put it in the finding's sentence. Learned later: add a new row naming the row it qualifies. A finding computed on data with a known problem says so |
-| A result that bears on no plan item | Not a finding. Tell the user in one line |
-| It is both | Record it in both places. The finding carries this project's result; the fact carries the general lesson |
-| Unsure it is a finding | Leave it out and tell the user in one line |
+- A finding: a result the work established, or a plan item settled by a person, that bears on a plan item.
+- No project plan (the "Project plan" line in the map in the project's CLAUDE.md): no findings.
+- Working choices (basis, filter, threshold, assumption) go in the plan, not here.
+- Reference knowledge that outlives the project (definitions, gotchas, contract terms) is not a finding. Tell the user in one line.
+- Bears on no plan item, or unsure: leave it out and say so in one line.
 
 ## The file
 
@@ -33,32 +22,35 @@ One file, `findings.md`: what the work has established against the project plan,
 
 | # | Finding | Plan item | Source | As of | Added |
 | --- | --- | --- | --- | --- | --- |
-| 1 | May 2026 paid claims were $6.22M, 3.9 times a normal month. | Goal 1: explain the May rise | `analyses/may-rise/sections/s1_monthly.py`, table `s1_summary`, May row, columns paid and times_normal | Jan to Jun 2026 | 2026-11-16 |
-| 2 | The rise is one batch of late-paid claims, not a change in volume. | Goal 1: explain the May rise | `analyses/may-rise/sections/s3_batch.py`, table `s3_by_batch` | Jan to Jun 2026 | 2026-11-16 |
+| 1 | May 2026 paid claims were $6.22M, 3.9 times a normal month (months are when claims were paid). | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py monthly`, metrics `may`, `times_normal` | Claims paid to Jun 2026 | 2026-11-16 |
+| 2 | The May rise is a one-off. | Goal 1: explain the May rise | Finance lead, relayed by the user, 2026-11-16 (chat); not checked against data. See 3. | | 2026-11-16 |
+| 3 | Checks finding 2: 80% of the May rise is one batch of late-paid claims for March care. | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py by_batch`, table `by_batch`, top row, column `share` | Claims paid to Jun 2026 | 2026-11-17 |
+| 4 | Rerun on the July extract: findings 1 to 3 unchanged. | Goal 1: explain the May rise | `outputs/may-rise/`: `python run.py` | Claims paid to Jul 2026 | 2026-11-20 |
 ```
 
-- Where: beside the project plan. A `findings.md` already here or in a folder above: use that one.
+- Where: the "Findings" line in the map in the project's CLAUDE.md. No line: put it beside the plan and add `- Findings: [findings.md](findings.md)` under the map's "Project plan" line.
 - No file yet: create it with the heading and the header row.
 
 ## Adding a finding
 
 | Part | Rule |
 | --- | --- |
-| Finding | One sentence, plain words, with its figure. One finding per row |
-| Plan item | The goal, question or step in the plan it bears on, in the plan's own words or id. Bears on nothing in the plan: it is not a finding (tell the user in one line if it looks important) |
-| Source | The file that produced it (script, section file, query) and where the figure sits (table, row, column). A document: its name and date. A person: who, and the date. Enough for someone to find it in a minute |
-| As of | The data period or date the finding is true for. Blank when it does not depend on data |
+| Finding | One sentence, plain words. One claim per row, with the figures that support it, its basis and a caveat if any. The period it describes goes here |
+| Plan item | The goal or question it bears on, in the plan's own words or id |
+| Source | Computed: the folder to run in, the command, and the metric or table name (with row and column for a table). A document: its name and date. A person: who and their role, who relayed it if not said to you, the date, where (chat, email, meeting), and "not checked against data" until a later row checks it |
+| As of | The data the figure was computed on: the extract window or cut-off (claims paid to Jul 2026). Blank when it does not depend on data |
 | Added | Today |
 
-- No source: do not add it. Nothing from memory.
+- No source: do not add it. Nothing from memory. A report claim with no metric behind it is not a finding.
 - Add when the work produces something worth quoting later, or when the user says to. Do not rank or filter; do not ask for approval.
 - Already in the list: skip.
-- New data gives a new figure: add a new row with the new "As of". Never edit or delete old rows.
-- Append only. Numbers continue from the last row.
+- When the work's data bears on an existing row (supports it, narrows it or contradicts it, including a person's statement), add a row that starts `Checks finding N:` with the figure, add `See M.` to row N's Source, and tell the user in one line. That pointer is the only edit an old row ever gets.
+- Rerun on new data: one `Rerun on <data>:` row, with the new As of, listing only the figures that changed (old to new), or "findings N to M unchanged". Add `See M.` to every row it touches.
+- Append only. Numbers continue from the last row. Never edit or delete old rows, except to add `See M.` when a later row checks or reruns them.
 
 ## Using findings
 
-- Before writing a deck, report or summary: read `findings.md`.
+- For reports and decks, write the bullets from findings; the commentary skill is only for dashboard text across many filters.
 - Cite the row number where a finding is used (finding 12).
-- Check "As of". Older than the current data: re-read the source, or say the date with the finding.
+- Check As of. Older than the current data: rerun the source, or say the date with the finding.
 - Not in the list and no source: not used.

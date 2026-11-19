@@ -1,6 +1,6 @@
 # Writing slide text
 
-Slides should read the way the presenter talks. Apply at step 6 (build) and again before gate 3.
+Full mode. Slides should read the way the presenter talks. Apply at step 6 (build) and again before gate 3. Quick mode uses the short list in `references/slides.md`, "Text".
 
 Order of authority: the user's tone document, then this page.
 

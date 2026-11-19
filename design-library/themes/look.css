@@ -1,0 +1,32 @@
+/* ITEM: TH-01 · look
+   Looks like: Light, blue-led readout look: white page, navy headings, ink text, one blue highlight, grey context, sharp corners.
+   Good for: Starting any new deck, dashboard or report template; Restyling a template back to the shared look
+   Files: look.css, echarts-theme.json
+
+   The canonical copy of the toolbox Look tokens. Every template (deck styles.css,
+   dashboard theme, report template) carries these names and values unchanged.
+   Series order: blue, green, navy, teal, orange, muted. The same palette, axis and
+   gridline settings for ECharts are in echarts-theme.json.
+   No company is named in any theme, and no logo is used. */
+
+:root {
+  /* Look tokens */
+  --blue: #0170BC;     /* Primary, first series, the highlighted item */
+  --navy: #002D72;     /* Headings, emphasis */
+  --green: #56A944;    /* Accent, second series, positive */
+  --teal: #00A9A5;     /* Third series */
+  --orange: #F68621;   /* Highlight, used sparingly */
+  --ink: #1F2A37;      /* Body text */
+  --muted: #5B6770;    /* Notes, axes */
+  --rule: #D9E2EA;     /* Lines, borders */
+  --wash: #F4F8FB;     /* Panels, alternating rows */
+  --paper: #FFFFFF;    /* Page */
+
+  /* Derived for charts (not tokens): context marks and gridlines */
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+
+  /* Shape and type */
+  --box-radius: 2px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+}

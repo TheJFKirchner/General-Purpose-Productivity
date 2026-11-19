@@ -26,8 +26,23 @@ Skills for Claude Code. Copy a skill folder into your skills folder (for example
 
 The repo's [.claude](.claude) folder holds skills and agents that load automatically in Claude Code sessions opened on this repo, including cloud and mobile sessions.
 
-- **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it), grilling (stress-test a plan with pointed questions), findings (keeps `findings.md`, a plain running list of what the work has established against the project plan, each row naming the plan item it bears on and the script, table or document it came from, so later decks and reports can quote them; a finding with no source is not added, and durable facts such as methods and gotchas go to the wiki through `brain-intake` instead), analysis (one-off data analysis delivered as one HTML report that answers one question: define the request, agree a storyline, build one small Python file per section, then add commentary and have a cold reader check it; needs Python with `pandas`), commentary (free-form AI commentary for dashboards, decks, reports and analysis folders, written from small summary tables by a separate writer, with every number checked against the data; needs Python, the packages in its `requirements.txt`, and the `claude` CLI signed in; worked examples and offline tests are inside the skill folder), and presentation (build a slide deck from an existing analysis or dashboard: interview with the grilling skill, agree a brief and storyboard, then build reveal.js slides with ECharts charts from a library of 47 sample slides; needs Node.js, and internet when a deck is opened; parts adapted from the MIT-licensed ryanbbrown/revealjs-skill).
-- **Agents** ([.claude/agents](.claude/agents)): factory-builder, factory-reader, factory-ui-reviewer, security-review and git-shipper, the helpers that factory-mode and git work hand tasks to.
+- **Skills** ([.claude/skills](.claude/skills)): factory-mode (plan a feature, then have agents build it) and grilling (stress-test a plan with pointed questions), plus the analysis toolbox below.
+- **Agents** ([.claude/agents](.claude/agents)): factory-builder, factory-reader, factory-ui-reviewer, security-review and git-shipper, the helpers that factory-mode and git work hand tasks to, and commentary-generator, used by the commentary skill.
+
+### Analysis toolbox
+
+Seven optional skills for analysis work. They share one vocabulary, one look, and one way to find files: the "## Map" in each project's `CLAUDE.md`.
+
+| Skill or folder | What it does |
+|---|---|
+| [toolbox](.claude/skills/toolbox/SKILL.md) | Starts a new project: asks what is being made, agrees the fewest folders, writes the map and a project plan. |
+| [analysis](.claude/skills/analysis/SKILL.md) | Explore data in the conversation, or build a short HTML report when asked. Needs Python with `pandas`. |
+| [findings](.claude/skills/findings/SKILL.md) | Keeps `findings.md`, cited results against the plan. Reports and decks take their bullets from it. |
+| [commentary](.claude/skills/commentary/SKILL.md) | Writes `commentary.json` for dashboards that need text across many filters or refreshes. |
+| [dashboard-new](.claude/skills/dashboard-new/SKILL.md) | Starts a dashboard in the project from a copied-in starter (ECharts). Settings live in `dashboard.config.json`. Needs Node.js and Python 3.10+ with fastapi, uvicorn, duckdb, pyarrow, pandas. |
+| [dashboard-work](.claude/skills/dashboard-work/SKILL.md) | Adds or changes sections, reports and looks in an existing dashboard. Same needs as dashboard-new. |
+| [presentation](.claude/skills/presentation/SKILL.md) | Builds a reveal.js deck with ECharts charts: quick mode for short decks, full mode for real readouts. Needs Node.js, internet when a deck is opened, and Edge or Chrome for screenshots. Parts adapted from the MIT-licensed ryanbbrown/revealjs-skill. |
+| [design-library/](design-library/) | Optional shared slides, charts, dashboard sections, report blocks and themes, with one index by type. |
 
 ## Working from desktop and phone
 

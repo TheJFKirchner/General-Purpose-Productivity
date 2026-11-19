@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide library</title>
+
+  <!-- Reveal.js core -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+  <!-- Custom styles: the whole look of the deck lives in this file -->
+  <link rel="stylesheet" href="../styles.css">
+
+  <!-- ECharts for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+<!-- SLIDES:START -->
+      <!-- GROUP: CH · Show change over time · How something moved, and whether the movement is real. -->
+
+      <!-- COMPONENT: CH-01 · line-fit-commentary
+           Looks like: Actual line with a dashed fitted line, commentary and so-what on the right.
+           Good for: Showing a steady rate of change; Showing how closely actuals follow a fitted or expected path
+           Related: CH-02 line-event-callout, CH-03 dots-two-fits -->
+      <section id="line-fit-commentary" data-section="Show change over time" data-component="CH-01">
+        <p class="kicker">Loss cost trend</p>
+        <h2>Loss cost per car has risen 6.0% a year for three years with no sign of slowing</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 36px; min-height: 0; min-width: 0;">
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "boundaryGap": false, "data": ["Mar 23", "Jun 23", "Sep 23", "Dec 23", "Mar 24", "Jun 24", "Sep 24", "Dec 24", "Mar 25", "Jun 25", "Sep 25", "Dec 25"] },
+                "yAxis": { "type": "value", "min": 690, "max": 840, "interval": 30, "axisLabel": { "formatter": "${value}" } },
+                "grid": { "left": 8, "right": 120, "top": 30, "bottom": 8, "containLabel": true },
+                "series": [
+                  { "type": "line", "name": "Fitted", "data": [706, 717, 727, 738, 749, 760, 771, 782, 793, 805, 817, 829],
+                    "itemStyle": { "color": "var(--muted)" }, "lineStyle": { "type": "dashed", "width": 2 }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "Fitted +6.0%", "color": "var(--muted)", "offset": [0, 16] } },
+                  { "type": "line", "name": "Actual", "data": [709, 713, 731, 740, 745, 763, 768, 786, 790, 808, 814, 832],
+                    "itemStyle": { "color": "var(--blue)" }, "lineStyle": { "width": 4 }, "symbolSize": 7,
+                    "endLabel": { "show": true, "formatter": "Actual ${c}", "color": "var(--blue)", "fontWeight": 600, "offset": [0, -12] } }
+                ]
+              }
+              </script>
+            </div>
+            <div class="commentary">
+              <h3>Loss cost per car, 2023 to 2025</h3>
+              <ul>
+                <li>Loss cost follows a 6.0% yearly trend. No quarter sits more than 1% away from it.</li>
+                <li>At $832 per car, the latest year is 17% above the year to March 2023.</li>
+              </ul>
+              <p class="so-what">Rates set on a 4.0% trend fall further behind each quarter.</p>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Loss cost (pure premium): incurred losses divided by insured car-years, all coverages, rolling 12 months to each quarter end. Fitted trend is an exponential fit to the 12 points. Personal auto claims data as of December 2025.</div>
+      </section>
+
+      <!-- COMPONENT: CH-02 · line-event-callout
+           Looks like: Callout with one figure and three bullets on the left; two lines with an event marked on the right.
+           Good for: Showing the effect of a change against a group that did not change; Tying a movement to the moment that caused it
+           Related: CH-01 line-fit-commentary, CH-03 dots-two-fits, CP-03 two-lines-fuller-commentary -->
+      <section id="line-event-callout" data-section="Show change over time" data-component="CH-02">
+        <p class="kicker">Results</p>
+        <h2>Churn fell in the first month after launch and stayed down</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 30px; min-height: 0; min-width: 0;">
+            <div class="callout" style="display: flex; flex-direction: column; justify-content: center;">
+              <div class="stat">
+                <p class="stat-value">3.1%</p>
+                <p class="stat-label">monthly early churn in October</p>
+                <p class="stat-note">Share of new customers cancelling in their first 90 days.</p>
+              </div>
+              <ul style="margin-top: 22px;">
+                <li>The drop began in July, the first full month after launch.</li>
+                <li>It has held for four months.</li>
+                <li>Customers still on the old checklist stayed at 5.2%.</li>
+              </ul>
+            </div>
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "boundaryGap": false, "data": ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"] },
+                "yAxis": { "type": "value", "min": 2, "max": 6, "interval": 1, "axisLabel": { "formatter": "{value}%" } },
+                "grid": { "left": 8, "right": 150, "top": 30, "bottom": 8, "containLabel": true },
+                "series": [
+                  { "type": "line", "name": "Old checklist", "data": [5.1, 5.0, 5.2, 5.0, 5.3, 5.1, 5.2],
+                    "itemStyle": { "color": "var(--chart-muted)" }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "{a}  {c}%", "color": "var(--muted)" } },
+                  { "type": "line", "name": "Guided setup", "data": [5.1, 5.0, 5.2, 4.1, 3.4, 3.2, 3.1],
+                    "itemStyle": { "color": "var(--blue)" }, "lineStyle": { "width": 5 }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "{a}  {c}%", "color": "var(--blue)", "fontWeight": 600 },
+                    "markLine": { "symbol": "none", "silent": true, "lineStyle": { "color": "var(--muted)", "type": "dashed", "width": 1.5 },
+                                  "label": { "formatter": "Launch", "color": "var(--muted)" }, "data": [{ "xAxis": "Jun" }] } }
+                ]
+              }
+              </script>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Share of new customers who cancel in their first 90 days, by month joined, April to October 2026. Customer accounts data.</div>
+      </section>
+
+      <!-- COMPONENT: CH-03 · dots-two-fits
+           Looks like: Commentary on the left; actual points with a longer and a shorter fitted line on the right.
+           Good for: Asking whether a rate of change is speeding up or slowing; Comparing a long-run view with a recent view of the same measure
+           Related: CH-01 line-fit-commentary, CH-02 line-event-callout -->
+      <section id="dots-two-fits" data-section="Show change over time" data-component="CH-03">
+        <p class="kicker">Fitting period</p>
+        <h2>Collision repair costs now grow 4.4% a year, down from 8.5% over the full five years</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 36px; min-height: 0; min-width: 0;">
+            <div class="commentary">
+              <h3>Is the trend slowing?</h3>
+              <ul>
+                <li>The dots are the average collision claim. It climbed fastest in 2021 and 2022.</li>
+                <li>A fit to all five years gives 8.5% a year. A fit to the last two gives 4.4%.</li>
+                <li>Used car and parts prices stopped rising in 2024, so the recent pace is the better guide.</li>
+              </ul>
+              <p class="so-what">We select 5.5%, above the two-year fit, because repair labour rates are still rising.</p>
+            </div>
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "boundaryGap": false, "data": ["Jun 21", "Dec 21", "Jun 22", "Dec 22", "Jun 23", "Dec 23", "Jun 24", "Dec 24", "Jun 25", "Dec 25"] },
+                "yAxis": { "type": "value", "min": 4500, "max": 7500, "axisLabel": { "formatter": "${value}" } },
+                "grid": { "left": 8, "right": 170, "top": 30, "bottom": 8, "containLabel": true },
+                "series": [
+                  { "type": "line", "name": "5-year fit", "data": [4938, 5144, 5359, 5583, 5816, 6059, 6312, 6576, 6850, 7136],
+                    "itemStyle": { "color": "var(--chart-muted)" }, "lineStyle": { "type": "dashed", "width": 3 }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "5-year fit +8.5%", "color": "var(--muted)" } },
+                  { "type": "line", "name": "Actual", "data": [4650, 5020, 5480, 5790, 6060, 6270, 6420, 6560, 6700, 6850],
+                    "itemStyle": { "color": "var(--muted)" }, "lineStyle": { "width": 0 }, "symbol": "circle", "symbolSize": 10 },
+                  { "type": "line", "name": "2-year fit", "data": [null, null, null, null, null, null, 6419, 6559, 6702, 6848],
+                    "itemStyle": { "color": "var(--blue)" }, "lineStyle": { "width": 5 }, "showSymbol": false,
+                    "endLabel": { "show": true, "formatter": "2-year fit +4.4%", "color": "var(--blue)", "fontWeight": 600 } }
+                ]
+              }
+              </script>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Average incurred cost per collision claim, rolling 12 months to each half-year end, June 2021 to December 2025. Lines are exponential fits to all ten points and to the last four. Personal auto claims data as of December 2025.</div>
+      </section>
+
+      <!-- COMPONENT: CH-04 · bars-outlier-callout
+           Looks like: One callout sentence over full-width bars with one period highlighted.
+           Good for: Calling out an unusual period and how it was treated; A lean slide for a senior audience: one sentence, one picture
+           Related: LV-05 bars-highlight-commentary, LV-06 bars-ranked-commentary, CH-05 bars-before-after -->
+      <section id="bars-outlier-callout" data-section="Show change over time" data-component="CH-04">
+        <p class="kicker">Excluded period</p>
+        <h2>Leaving out 2020 turns a rising frequency trend into a falling one</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-rows: auto 1fr; gap: 20px; min-height: 0; min-width: 0;">
+            <div class="callout" style="display: flex; align-items: center;">
+              <p>Lockdowns cut driving in 2020 and claims fell by a quarter. With 2020 in the fit, frequency appears to rise 0.9% a year. Without it, frequency falls 1.0% a year.</p>
+            </div>
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "data": ["2019", "2020", "2021", "2022", "2023", "2024", "2025"] },
+                "yAxis": { "type": "value", "show": false, "max": 14.9 },
+                "grid": { "left": 8, "right": 150, "top": 34, "bottom": 8, "containLabel": true },
+                "series": [{
+                  "type": "bar",
+                  "barWidth": "58%",
+                  "markLine": { "symbol": "none", "silent": true, "lineStyle": { "color": "var(--navy)", "type": "dashed", "width": 1.5 },
+                                "label": { "position": "end", "formatter": "Normal year 14.4", "color": "var(--navy)" }, "data": [{ "yAxis": 14.4 }] },
+                  "itemStyle": { "color": "var(--chart-muted)" },
+                  "label": { "show": true, "position": "insideTop", "distance": 14, "color": "var(--navy)" },
+                  "data": [14.9,
+                    { "value": 11.3, "itemStyle": { "color": "var(--blue)" },
+                      "label": { "position": "top", "formatter": "11.3, left out of the fit", "color": "var(--blue)", "fontWeight": 600 } },
+                    14.6, 14.4, 14.3, 14.2, { "value": 14.0, "label": { "formatter": "14.0" } }]
+                }]
+              }
+              </script>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Claims per 100 insured car-years, accident years 2019 to 2025. Normal year: the average without 2020. Exponential trend fits. Personal auto claims, December 2025.</div>
+      </section>
+
+      <!-- COMPONENT: CH-05 · bars-before-after
+           Looks like: Callout with the size of the change and two bullets; bars by period with the later periods highlighted.
+           Good for: Showing a level shift after a change; Stating the size of an effect next to the evidence for it
+           Related: LV-05 bars-highlight-commentary, LV-06 bars-ranked-commentary, CH-04 bars-outlier-callout -->
+      <section id="bars-before-after" data-section="Show change over time" data-component="CH-05">
+        <p class="kicker">Before and after</p>
+        <h2>Claims close 11 days faster since the new triage rules started in July</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 30px; min-height: 0; min-width: 0;">
+            <div class="callout" style="display: flex; flex-direction: column; justify-content: center;">
+              <div class="stat">
+                <p class="stat-value">11 days</p>
+                <p class="stat-label">faster in December than in June</p>
+                <p class="stat-note">Median time to close fell from 38 days to 27.</p>
+              </div>
+              <ul style="margin-top: 22px;">
+                <li>The drop took three months, then held at 26 to 27 days.</li>
+                <li>Reopened claims stayed at 4%, so claims are not being closed too early.</li>
+              </ul>
+            </div>
+            <div class="chart" data-echart>
+              <script type="application/json">
+              {
+                "xAxis": { "type": "category", "data": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] },
+                "yAxis": { "type": "value", "show": false, "min": 0, "max": 46 },
+                "grid": { "left": 8, "right": 8, "top": 30, "bottom": 8, "containLabel": true },
+                "series": [{
+                  "type": "bar",
+                  "itemStyle": { "color": "var(--chart-muted)" },
+                  "label": { "show": true, "position": "top" },
+                  "data": [38, 39, 37, 38, 40, 38,
+                    { "value": 33, "itemStyle": { "color": "var(--blue)" } },
+                    { "value": 29, "itemStyle": { "color": "var(--blue)" } },
+                    { "value": 27, "itemStyle": { "color": "var(--blue)" } },
+                    { "value": 27, "itemStyle": { "color": "var(--blue)" } },
+                    { "value": 26, "itemStyle": { "color": "var(--blue)" } },
+                    { "value": 27, "itemStyle": { "color": "var(--blue)" } }]
+                }]
+              }
+              </script>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Median days from a claim being reported to being closed, homeowners claims, by month closed, 2025. Triage: sorting new claims by size and difficulty on day one. Claims system.</div>
+      </section>
+
+      <!-- COMPONENT: CH-06 · two-charts-bullets
+           Looks like: Two small line charts side by side, one muted and one highlighted, three bullets in a row under them.
+           Good for: Splitting a result into two measures to show which one is moving; Showing that one thing is stable while another is not
+           Related: CP-04 two-lines-choice-cards -->
+      <section id="two-charts-bullets" data-section="Show change over time" data-component="CH-06">
+        <p class="kicker">Frequency and severity</p>
+        <h2>Cost per claim rose 7.1% a year while frequency fell 1.0%</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto; gap: 18px 40px; min-height: 0; min-width: 0;">
+            <div style="display: flex; flex-direction: column; min-height: 0; min-width: 0;">
+              <h3>Frequency: claims per 100 cars</h3>
+              <div class="chart" data-echart>
+                <script type="application/json">
+                {
+                  "xAxis": { "type": "category", "boundaryGap": false, "data": ["2021", "2022", "2023", "2024", "2025"] },
+                  "yAxis": { "type": "value", "min": 9.5, "max": 20.4, "show": false },
+                  "grid": { "left": 30, "right": 40, "top": 30, "bottom": 8, "containLabel": true },
+                  "series": [
+                    { "type": "line", "data": [14.6, 14.4, 14.3, 14.2, { "value": 14.0, "label": { "formatter": "14.0" } }],
+                      "itemStyle": { "color": "var(--chart-muted)" }, "lineStyle": { "width": 4 }, "symbolSize": 9,
+                      "label": { "show": true, "position": "top", "color": "var(--muted)" } }
+                  ]
+                }
+                </script>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; min-height: 0; min-width: 0;">
+              <h3>Severity: average cost per claim</h3>
+              <div class="chart" data-echart>
+                <script type="application/json">
+                {
+                  "xAxis": { "type": "category", "boundaryGap": false, "data": ["2021", "2022", "2023", "2024", "2025"] },
+                  "yAxis": { "type": "value", "min": 2930, "max": 6310, "show": false },
+                  "grid": { "left": 30, "right": 40, "top": 30, "bottom": 8, "containLabel": true },
+                  "series": [
+                    { "type": "line", "data": [
+                        { "value": 4510, "label": { "formatter": "$4,510" } },
+                        { "value": 4850, "label": { "formatter": "$4,850" } },
+                        { "value": 5180, "label": { "formatter": "$5,180" } },
+                        { "value": 5540, "label": { "formatter": "$5,540" } },
+                        { "value": 5940, "itemStyle": { "color": "var(--blue)" }, "label": { "formatter": "$5,940" } }],
+                      "itemStyle": { "color": "var(--blue)" }, "lineStyle": { "width": 5 }, "symbolSize": 9,
+                      "label": { "show": true, "position": "top", "formatter": "${c}", "color": "var(--blue)", "fontWeight": 600 } }
+                  ]
+                }
+                </script>
+              </div>
+            </div>
+            <div class="commentary" style="grid-column: 1 / -1;">
+              <ul style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;">
+                <li>Frequency drifted down from 14.6 to 14.0 claims per 100 cars over four years.</li>
+                <li>Severity rose every year, from $4,510 to $5,940 per claim.</li>
+                <li>Together they give the 6.0% loss cost trend. All of the increase comes from severity.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Frequency: reported claims per 100 insured car-years. Severity: incurred loss per claim. All coverages, accident years 2021 to 2025. Both charts are drawn to the same relative scale. Personal auto claims data as of December 2025.</div>
+      </section>
+
+      <!-- COMPONENT: CH-07 · change-cards-bars
+           Looks like: Three stacked cards, each a change with its size and direction, beside a bar chart of the total at each review.
+           Good for: Saying what is different since the audience last saw this; Listing a few changes with their sizes alongside the overall movement
+           Related: CH-05 bars-before-after -->
+      <section id="change-cards-bars" data-section="Show change over time" data-component="CH-07">
+        <p class="kicker">Since last review</p>
+        <h2>The shortfall grew from $15M to $42M since June, almost all from commercial auto</h2>
+        <div class="content">
+          <div style="flex: 1; display: grid; grid-template-columns: 6fr 5fr; gap: 40px; min-height: 0; min-width: 0;">
+            <div style="display: grid; grid-template-rows: repeat(3, 1fr); gap: 14px; min-height: 0;">
+              <div class="callout" style="display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: center; padding: 14px 24px;">
+                <p class="text-4xl"><strong class="text-primary">+$24M</strong></p>
+                <div>
+                  <h3>Commercial auto, up</h3>
+                  <p style="margin-top: 4px;">Twelve large injury claims opened this year, and smaller claims cost more too.</p>
+                </div>
+              </div>
+              <div class="card" style="display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: center; padding: 14px 24px;">
+                <p class="text-4xl"><strong>+$9M</strong></p>
+                <div>
+                  <h3>General liability, up</h3>
+                  <p style="margin-top: 4px;">Court delays pushed 2023 settlements out by a further 2 months.</p>
+                </div>
+              </div>
+              <div class="card" style="display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: center; padding: 14px 24px;">
+                <p class="text-4xl"><strong class="text-good">&minus;$6M</strong></p>
+                <div>
+                  <h3>Property, down</h3>
+                  <p style="margin-top: 4px;">The 2025 storm claims closed for less than we reserved.</p>
+                </div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-rows: auto 1fr; gap: 6px; min-height: 0; min-width: 0;">
+              <div class="commentary"><h3 style="margin-bottom: 0;">Shortfall at each quarterly review</h3></div>
+              <div class="chart" data-echart>
+                <script type="application/json">
+                {
+                  "xAxis": { "type": "category", "data": ["Dec 2025", "Mar 2026", "Jun 2026", "Sep 2026"] },
+                  "yAxis": { "type": "value", "show": false, "max": 42 },
+                  "grid": { "left": 8, "right": 8, "top": 34, "bottom": 8, "containLabel": true },
+                  "series": [{
+                    "type": "bar",
+                    "barWidth": "52%",
+                    "itemStyle": { "color": "var(--chart-muted)" },
+                    "label": { "show": true, "position": "top", "formatter": "${c}M" },
+                    "data": [
+                      { "value": -2, "label": { "position": "bottom", "formatter": "$2M spare" } },
+                      6,
+                      15,
+                      { "value": 42, "itemStyle": { "color": "var(--blue)" }, "label": { "fontWeight": 600, "color": "var(--blue)" } }
+                    ]
+                  }]
+                }
+                </script>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="footnote">Shortfall: our central estimate of unpaid claims less the reserves held. Changes are June 2026 to September 2026 and sum to $27M. Quarterly reserve reviews.</div>
+      </section>
+
+<!-- SLIDES:END -->
+    </div>
+    <a class="library-back" href="../../index.html" onclick="this.href='../../index.html#'+Reveal.getCurrentSlide().id" style="position:absolute;top:14px;right:18px;z-index:30;font:600 13px 'Segoe UI',system-ui,sans-serif;color:var(--blue);background:var(--wash);border:1px solid var(--rule);padding:6px 14px;border-radius:2px;text-decoration:none;">&larr; Library index</a>
+    <div class="section-bar is-hidden" aria-label="Progress"></div>
+  </div>
+
+  <!-- ENGINE: do not edit per deck. Slides are above; the look is in the CSS file. -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    (function () {
+      var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+      var isExport = window.location.search.includes('export');
+      if (isExport) document.documentElement.classList.add('is-export');
+
+      /* Charts: <div class="chart" data-echart> holding an ECharts option as JSON.
+         Fonts and colours come from the theme; "var(--name)" in the JSON resolves to the theme value. */
+      function resolveVars(node, depth) {
+        if (!node || typeof node !== 'object' || depth > 8) return;
+        Object.keys(node).forEach(function (key) {
+          var v = node[key];
+          if (typeof v === 'string') {
+            if (v.indexOf('var(--') === 0 && v.charAt(v.length - 1) === ')') node[key] = css(v.slice(4, -1)) || v;
+          } else if (v && typeof v === 'object') {
+            resolveVars(v, depth + 1);
+          }
+        });
+      }
+      function chartTheme() {
+        var axis = {
+          axisLine: { lineStyle: { color: css('--rule') } },
+          axisTick: { show: false },
+          axisLabel: { color: css('--muted'), fontSize: 15 },
+          nameTextStyle: { color: css('--muted'), fontSize: 14 },
+          splitLine: { lineStyle: { color: css('--chart-grid') } }
+        };
+        return {
+          /* Series order from the Look: blue, green, navy, teal, orange, muted */
+          color: [css('--blue'), css('--green'), css('--navy'), css('--teal'), css('--orange'), css('--muted')],
+          textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+          categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+          valueAxis: Object.assign({}, axis, { axisLine: { show: false } }),
+          legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+          bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+          line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+          scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+          markLine: { label: { fontSize: 14, color: css('--muted') } },
+          pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+        };
+      }
+      function drawChart(box) {
+        var src = box.querySelector('script[type="application/json"]');
+        if (!window.echarts || !src) return;
+        var option;
+        try { option = JSON.parse(src.textContent); }
+        catch (e) { box.insertAdjacentText('beforeend', 'Chart data is not valid JSON: ' + e.message); return; }
+        resolveVars(option, 0);
+        var yName = option.yAxis && !Array.isArray(option.yAxis) && option.yAxis.name && option.yAxis.show !== false;
+        if (!option.grid) option.grid = { left: yName ? 46 : 8, right: 28, top: 30, bottom: option.legend ? 44 : 8, containLabel: true };
+        /* Light hover: one small tooltip naming the item and its value. Nothing else reacts, so nothing
+           flickers: the marks keep their look (no emphasis state) and the tooltip never takes the pointer. */
+        var seriesList = [].concat(option.series || []);
+        var valueAxis = [option.yAxis, option.xAxis].filter(function (a) { return a && !Array.isArray(a) && a.type === 'value'; })[0];
+        var axisFormat = valueAxis && valueAxis.axisLabel && typeof valueAxis.axisLabel.formatter === 'string' ? valueAxis.axisLabel.formatter : null;
+        function fill(template, p, v) {
+          return template.split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name).split('{a}').join(p.seriesName || '').split('{@[0]}').join(v);
+        }
+        seriesList.forEach(function (s) {
+          s.emphasis = { disabled: true };
+          if (s.itemStyle && s.itemStyle.opacity === 0) s.silent = true;   /* hidden waterfall base */
+          else delete s.silent;
+        });
+        function valueText(p) {
+          var v = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value;
+          if (v == null || v === '-') return null;
+          var s = seriesList[p.seriesIndex] || {};
+          var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+          var shared = s.label && typeof s.label.formatter === 'string' ? s.label.formatter : null;
+          return own ? fill(own, p, v) : shared ? fill(shared, p, v) : axisFormat ? fill(axisFormat, p, v) : String(v);
+        }
+        function strong(text) { return '<span style="font-weight:600">' + text + '</span>'; }
+        function isNamed(p) { return p.seriesName && p.seriesName.indexOf('series') !== 0; }
+        /* Lines are read along the time axis (their points are usually hidden); everything else by item. */
+        var byAxis = seriesList.length > 0 && seriesList.every(function (s) { return s.type === 'line'; }) &&
+          option.xAxis && !Array.isArray(option.xAxis) && option.xAxis.type === 'category';
+        option.tooltip = isExport ? { show: false } : {
+          trigger: byAxis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+          axisPointer: { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } },
+          backgroundColor: css('--navy'), borderWidth: 0, padding: [7, 12],
+          textStyle: { color: css('--paper'), fontSize: 14, fontFamily: css('--body-font') },
+          extraCssText: 'pointer-events:none;border-radius:2px;box-shadow:none;',
+          formatter: function (p) {
+            if (Array.isArray(p)) {
+              var rows = p.filter(function (q) { return valueText(q) != null; }).map(function (q) {
+                return (isNamed(q) ? q.seriesName + ': ' : '') + strong(valueText(q));
+              });
+              return rows.length ? p[0].name + '<br>' + rows.join('<br>') : '';
+            }
+            if (p.componentType !== 'series' || valueText(p) == null) return '';
+            var named = isNamed(p) && seriesList.length > 1 ? p.seriesName + ' · ' : '';
+            return named + (p.name ? p.name + ': ' : '') + strong(valueText(p));
+          }
+        };
+        if (isExport) { option.animation = false; seriesList.forEach(function (s) { s.silent = true; }); }
+        if (!box._chart) {
+          var holder = document.createElement('div');
+          holder.style.cssText = 'position:absolute;inset:0;';
+          box.appendChild(holder);
+          /* Canvas when live (hover never rebuilds the marks under the pointer); crisp SVG for export. */
+          box._chart = echarts.init(holder, 'deck', isExport
+            ? { renderer: 'svg', width: box.clientWidth, height: box.clientHeight }
+            : { renderer: 'canvas', devicePixelRatio: Math.max(2, (window.devicePixelRatio || 1) * 2), width: box.clientWidth, height: box.clientHeight });
+        } else {
+          box._chart.clear();
+          box._chart.resize({ width: box.clientWidth, height: box.clientHeight });
+        }
+        box._chart.setOption(option);
+      }
+      function drawCharts(slide) {
+        if (!slide) return;
+        Array.prototype.forEach.call(slide.querySelectorAll('.chart[data-echart]'), drawChart);
+      }
+      if (window.echarts) echarts.registerTheme('deck', chartTheme());
+
+      Reveal.initialize({
+        width: 1280,
+        height: 720,
+        margin: 0,
+        controls: false,
+        progress: false,
+        slideNumber: false,
+        hash: true,
+        transition: isExport ? 'none' : 'slide',
+        transitionSpeed: 'default',
+        backgroundTransition: 'fade',
+        center: false
+      });
+
+      /* Bottom section bar: built from data-section on the slides. A slide with no
+         data-section continues the previous one; data-section="" ends the sections. */
+      var bar = document.querySelector('.section-bar');
+      var slides = [], sections = [], count;
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+      function buildBar() {
+        slides = Reveal.getSlides();
+        sections = [];
+        var last = '';
+        slides.forEach(function (s) {
+          if (s.dataset.section !== undefined) last = s.dataset.section;
+          s._sec = -1;
+          if (!last) return;
+          var top = sections[sections.length - 1];
+          if (!top || top.name !== last) { top = { name: last, first: s, count: 0 }; sections.push(top); }
+          top.count++; s._sec = sections.length - 1; s._pos = top.count;
+        });
+        bar.innerHTML = '';
+        bar.appendChild(el('div', 'bar-title', document.title));
+        var list = el('div', 'bar-list');
+        sections.forEach(function (sec) {
+          var li = el('div', 'bar-item'); li.title = sec.name;
+          li.appendChild(el('span', 'bar-name', sec.name));
+          var track = el('span', 'bar-track'); sec.fill = el('i'); track.appendChild(sec.fill); li.appendChild(track);
+          li.addEventListener('click', function () { var i = Reveal.getIndices(sec.first); Reveal.slide(i.h, i.v); });
+          list.appendChild(li); sec.li = li;
+        });
+        bar.appendChild(list);
+        count = el('div', 'bar-count');
+        bar.appendChild(count);
+      }
+
+      function updateBar() {
+        var cur = Reveal.getCurrentSlide();
+        if (!cur || !count) return;
+        sections.forEach(function (sec, k) {
+          var pct = k < cur._sec ? 100 : k === cur._sec ? Math.round(100 * cur._pos / sec.count) : 0;
+          sec.fill.style.width = pct + '%';
+          sec.li.classList.toggle('is-current', k === cur._sec);
+          sec.li.classList.toggle('is-done', cur._sec > k);
+        });
+        count.textContent = (slides.indexOf(cur) + 1) + ' / ' + slides.length;
+        bar.classList.toggle('is-hidden', cur._sec === -1 || cur.dataset.bar === 'hide' || !sections.length);
+      }
+
+      /* Keep the bar on the bottom edge of the slide, whatever the window shape. */
+      function placeBar() {
+        var s = Reveal.getScale(), box = document.querySelector('.reveal');
+        bar.style.setProperty('--deck-scale', s);
+        bar.style.width = (1280 * s) + 'px';
+        bar.style.left = Math.max(0, (box.offsetWidth - 1280 * s) / 2) + 'px';
+        bar.style.bottom = Math.max(0, (box.offsetHeight - 720 * s) / 2) + 'px';
+      }
+
+      Reveal.on('ready', function () {
+        placeBar(); buildBar(); updateBar();
+        if (document.documentElement.classList.contains('print-pdf') || document.documentElement.classList.contains('reveal-print')) {
+          Reveal.getSlides().forEach(drawCharts);
+        } else {
+          drawCharts(Reveal.getCurrentSlide());
+        }
+      });
+      Reveal.on('slidechanged', function (e) { updateBar(); drawCharts(e.currentSlide); });
+      Reveal.on('resize', placeBar);
+    })();
+  </script>
+</body>
+</html>

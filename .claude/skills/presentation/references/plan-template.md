@@ -55,7 +55,7 @@ One block per slide.
 ### 1. <headline: the slide's point as a sentence>
 
 - Section:
-- Pattern: <code and link from library/index.md>
+- Pattern: <code and link from the design library index, or a layout name>
 - Showing: what the audience sees
 - Purpose: what this slide does for the story, and which takeaway it serves
 - On the page: visual (kind, metric, highlighted item), commentary bullets (how many, about what), numbers called out

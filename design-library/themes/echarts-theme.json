@@ -1,0 +1,132 @@
+{
+  "color": [
+    "#0170BC",
+    "#56A944",
+    "#002D72",
+    "#00A9A5",
+    "#F68621",
+    "#5B6770"
+  ],
+  "backgroundColor": "transparent",
+  "textStyle": {
+    "fontFamily": "Segoe UI, system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif",
+    "color": "#1F2A37"
+  },
+  "title": {
+    "textStyle": {
+      "color": "#002D72",
+      "fontWeight": 600
+    },
+    "subtextStyle": {
+      "color": "#5B6770"
+    }
+  },
+  "categoryAxis": {
+    "axisLine": {
+      "lineStyle": {
+        "color": "#D9E2EA"
+      }
+    },
+    "axisTick": {
+      "show": false
+    },
+    "axisLabel": {
+      "color": "#5B6770"
+    },
+    "splitLine": {
+      "show": false
+    }
+  },
+  "valueAxis": {
+    "axisLine": {
+      "show": false
+    },
+    "axisTick": {
+      "show": false
+    },
+    "axisLabel": {
+      "color": "#5B6770"
+    },
+    "splitLine": {
+      "lineStyle": {
+        "color": "#E8EDF2"
+      }
+    }
+  },
+  "legend": {
+    "icon": "rect",
+    "itemWidth": 14,
+    "itemHeight": 14,
+    "textStyle": {
+      "color": "#1F2A37"
+    }
+  },
+  "tooltip": {
+    "backgroundColor": "#002D72",
+    "borderWidth": 0,
+    "padding": [
+      7,
+      12
+    ],
+    "textStyle": {
+      "color": "#FFFFFF"
+    },
+    "extraCssText": "pointer-events:none;border-radius:2px;box-shadow:none;",
+    "transitionDuration": 0,
+    "axisPointer": {
+      "type": "line",
+      "animation": false,
+      "lineStyle": {
+        "color": "#5B6770",
+        "width": 1
+      }
+    }
+  },
+  "bar": {
+    "itemStyle": {
+      "borderRadius": 0
+    },
+    "label": {
+      "color": "#1F2A37",
+      "fontWeight": 600
+    },
+    "emphasis": {
+      "disabled": true
+    }
+  },
+  "line": {
+    "lineStyle": {
+      "width": 3
+    },
+    "symbol": "circle",
+    "symbolSize": 7,
+    "emphasis": {
+      "disabled": true
+    }
+  },
+  "pie": {
+    "itemStyle": {
+      "borderColor": "#FFFFFF",
+      "borderWidth": 2
+    },
+    "emphasis": {
+      "disabled": true
+    }
+  },
+  "markLine": {
+    "label": {
+      "color": "#5B6770"
+    }
+  },
+  "scatter": {
+    "symbolSize": 16,
+    "emphasis": {
+      "disabled": true
+    }
+  },
+  "heatmap": {
+    "emphasis": {
+      "disabled": true
+    }
+  }
+}

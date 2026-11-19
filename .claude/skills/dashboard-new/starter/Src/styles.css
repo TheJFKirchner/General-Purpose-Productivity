@@ -1,0 +1,147 @@
+/* Layout and the plain readout look. Colors and fonts come from the theme's tokens.json as CSS variables
+   (Src/Lib/theme.js): --blue --navy --green --teal --orange --ink --muted --rule --wash --paper, plus the
+   semantic ones (--text, --text-muted, --background, --surface, --border, --accent, --heading, --good, --bad).
+   Everything here sits in the "base" cascade layer, so Src/custom.css (unlayered) always wins. */
+@layer base {
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper, #fff);
+  color: var(--text, #1f2a37);
+  font-family: var(--font-family, system-ui, sans-serif);
+  font-size: var(--font-size, 13px);
+  line-height: 1.5;
+}
+
+.page { max-width: 1200px; margin: 0 auto; padding: 28px 20px 40px; }
+.loading { color: var(--text-muted); }
+
+h1, h2 { color: var(--heading, var(--text)); font-family: var(--font-heading, inherit); }
+.report-header { border-bottom: 2px solid var(--heading); padding-bottom: 10px; }
+.report-header h1 { margin: 0 0 2px; font-size: 1.7em; font-weight: 600; letter-spacing: -0.01em; }
+.report-header .audience { font-size: 1.05em; }
+.report-header .meta-line { color: var(--text-muted); margin-top: 2px; }
+.stale-banner {
+  margin-top: 12px; padding: 8px 12px; border-radius: 2px;
+  border: 1px solid var(--warning); color: var(--text); background: var(--background);
+}
+
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center;
+  margin: 14px 0 6px; padding: 6px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 2px;
+  position: sticky; top: 0; z-index: 5;
+}
+.control { display: flex; align-items: center; gap: 6px; }
+.filter-bar.tab-level { position: static; margin-top: 12px; }
+.section-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; font-size: 0.9em; }
+.control-label { font-size: 0.85em; color: var(--text-muted); }
+select {
+  font: inherit; color: var(--text); background: var(--background);
+  border: 1px solid var(--border); border-radius: 2px; padding: 3px 6px; min-width: 140px;
+}
+select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.section {
+  grid-column: span 2; min-width: 0;
+  background: var(--background); border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  border-radius: 2px; padding: 14px 18px 16px;
+}
+.section.half { grid-column: span 1; }
+@media (max-width: 800px) { .section.half { grid-column: span 2; } }
+
+.section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.section-head h2 { margin: 0; font-size: 1.15em; font-weight: 600; }
+.scope-tag { font-size: 0.8em; color: var(--text-muted); border: 1px solid var(--border); padding: 0 6px; white-space: nowrap; }
+
+.note { max-width: 85ch; margin-bottom: 8px; }
+.note p { margin: 0 0 8px; }
+.note ul { margin: 0 0 8px; padding-left: 20px; }
+mark.missing { background: var(--wash); color: var(--orange); padding: 0 3px; font-family: monospace; }
+
+.commentary { margin: 12px 0 0; padding: 8px 12px; background: var(--surface); border-left: 3px solid var(--heading); }
+.commentary ul { margin: 0; padding-left: 18px; }
+.commentary li { margin: 2px 0; }
+.commentary-source { margin-top: 4px; color: var(--text-muted); font-size: 0.85em; }
+.commentary-source summary { cursor: pointer; width: max-content; }
+.commentary-none { margin-top: 10px; color: var(--text-muted); font-size: 0.85em; }
+
+.chart { width: 100%; }
+
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+.segmented button {
+  font: inherit; font-size: 0.9em; padding: 4px 10px; border: 0; cursor: pointer;
+  background: var(--background); color: var(--text-muted);
+}
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button.on { background: var(--accent); color: var(--background); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 8px; }
+.kpi { background: var(--surface); border-radius: 2px; padding: 12px 14px; }
+.kpi-label { color: var(--text-muted); font-size: 0.85em; }
+.kpi-value { font-size: 1.6em; font-weight: 600; color: var(--heading); font-variant-numeric: tabular-nums; }
+.kpi-change { font-size: 0.85em; font-weight: 600; color: var(--text-muted); }
+.kpi-change span { font-weight: 400; color: var(--text-muted); }
+.kpi-change.good, td.good { color: var(--good); }
+.kpi-change.bad, td.bad { color: var(--bad); }
+
+table.data { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+table.data .num { text-align: right; }
+.basis { margin: 6px 0 0; color: var(--text-muted); font-size: 0.85em; }
+table.data th { color: var(--heading); font-weight: 600; font-size: 0.9em; border-bottom: 2px solid var(--heading); }
+table.data tbody tr:nth-child(even) { background: var(--surface); }
+
+.tab-bar { display: flex; gap: 2px; margin-top: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.tab-bar button {
+  font: inherit; font-weight: 600; padding: 8px 16px; border: 0; background: none; cursor: pointer;
+  color: var(--text-muted); border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.tab-bar button:hover { color: var(--text); }
+.tab-bar button.on { color: var(--heading); border-bottom-color: var(--accent); }
+
+.cell-bar { position: relative; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.cell-bar span { position: absolute; left: 0; top: 50%; height: 6px; transform: translateY(-50%); max-width: 60%; background: var(--accent-soft); }
+
+.section-error { padding: 10px 12px; border-left: 3px solid var(--orange); background: var(--surface); color: var(--text); }
+.section-loading { min-height: 120px; display: grid; place-items: center; color: var(--text-muted); }
+.section-note { padding: 10px 12px; background: var(--surface); color: var(--text-muted); }
+.section.refreshing > :not(.section-head) { opacity: 0.55; transition: opacity 0.15s; }
+
+.report-footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.9em; }
+
+@media print {
+  .filter-bar { position: static; }
+  .section { break-inside: avoid; }
+  .segmented { display: none; }
+}
+
+/* "About this data" (reports with "inspect": true) */
+.about-btn { margin-left: auto; font: inherit; font-size: 0.8em; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.about-btn:hover, .about-btn.on { color: var(--accent); border-color: var(--accent); }
+.data-origin { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); font-size: 0.9em; display: grid; gap: 8px; }
+.data-origin-name { font-weight: 600; }
+.data-origin dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 4px 0 0; }
+.data-origin dt { color: var(--text-muted); }
+.data-origin dd { margin: 0; }
+.data-origin-filters { color: var(--text-muted); }
+.data-origin-filters b { color: var(--text); font-weight: 600; }
+
+/* report settings (exports only): notice line, text tabs */
+.report-notice { margin: 12px 0 4px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface); color: var(--text); font-weight: 600; }
+.report-text { grid-column: 1 / -1; line-height: 1.6; }
+.report-text p, .report-text ul { margin: 0 0 10px; }
+
+/* slow filters and the pipeline banner */
+.filter-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+.slow-mark { opacity: 0.6; font-size: 0.9em; }
+.pipeline-banner { margin: 0 0 12px; padding: 10px 14px; border-radius: 2px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  background: var(--surface); border-left: 3px solid var(--accent); }
+.pipeline-banner.failed { border-left-color: var(--orange); }
+.pipeline-banner .grow { flex: 1; }
+.pipeline-banner code { font-size: 0.85em; opacity: 0.8; }
+.pipeline-banner button { font: inherit; padding: 4px 12px; border-radius: 2px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
+.pipeline-banner button.primary { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+} /* @layer base */

@@ -10,7 +10,8 @@
 
 const fs = require('fs');
 
-const MAX_POINTS = 12;
+const MAX_POINTS = 12;      // categories
+const MAX_TIME_POINTS = 24; // a time axis keeps the source's period
 const MAX_SERIES = 4;
 const MAX_SLICES = 5;
 
@@ -28,10 +29,19 @@ function hasOwnColour(item) {
   return item && typeof item === 'object' && !Array.isArray(item) && item.itemStyle && item.itemStyle.color;
 }
 
+// Period labels: Jan, Jan 25, Nov 2025, 2025-11, Q3 25, 2025 Q3, 2025
+const PERIOD = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(\s*'?\d{2,4})?$|^\d{4}[-\/]\d{1,2}$|^q[1-4]\s*'?\d{2,4}$|^\d{4}\s*q[1-4]$|^\d{4}$/i;
+
+function isTimeAxis(option) {
+  return [].concat(option.xAxis || [], option.yAxis || []).some(a => a && a.type === 'category' && Array.isArray(a.data) && a.data.length &&
+    a.data.filter(d => PERIOD.test(String(d && d.value !== undefined ? d.value : d).trim())).length >= a.data.length / 2);
+}
+
 function checkChart(option) {
   const errors = [];
   const warnings = [];
   const series = Array.isArray(option.series) ? option.series : option.series ? [option.series] : [];
+  const timeAxis = isTimeAxis(option);
 
   if (series.length === 0) {
     errors.push("no 'series'");
@@ -48,9 +58,11 @@ function checkChart(option) {
       return;
     }
     if (s.type === 'heatmap') return; // cells, not points
-    const limit = s.type === 'pie' ? MAX_SLICES : MAX_POINTS;
+    const limit = s.type === 'pie' ? MAX_SLICES : timeAxis ? MAX_TIME_POINTS : MAX_POINTS;
     if (s.data.length > limit) {
-      warnings.push(`${name} has ${s.data.length} points; keep to ${limit} or fewer and show only what proves the claim`);
+      warnings.push(timeAxis
+        ? `${name} has ${s.data.length} periods; up to ${limit} fit a full-width chart. Over that, use a coarser period (quarters); never cut the window`
+        : `${name} has ${s.data.length} points; keep to ${limit} or fewer and group the rest as "Other"`);
     }
   });
 
@@ -63,9 +75,9 @@ function checkChart(option) {
   const singleNeedsPick = single && ['bar', 'pie', 'scatter'].includes(single.type) && Array.isArray(single.data) && single.data.length > 1;
   const multiNeedsPick = series.length > 1;
   if (!itemHighlight && !seriesColoured && !usesVisualMap && (singleNeedsPick || multiNeedsPick)) {
-    warnings.push('nothing is highlighted; give the item the headline is about the primary colour (ignore on the muted half of a two-chart comparison)');
+    warnings.push('nothing is highlighted; give the item the headline is about var(--blue) (ignore on the muted half of a two-chart comparison)');
   }
-  const isPrimary = item => hasOwnColour(item) && String(item.itemStyle.color).includes('--primary-color');
+  const isPrimary = item => hasOwnColour(item) && /--(blue|primary-color)/.test(String(item.itemStyle.color));
   series.forEach((s, i) => {
     const n = Array.isArray(s.data) ? s.data.filter(isPrimary).length : 0;
     if (n > 1 && n > s.data.length / 2) {
