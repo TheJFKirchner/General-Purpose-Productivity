@@ -1,0 +1,386 @@
+<!doctype html>
+<!-- ITEM
+id: CT-29
+type: chart
+name: rate-buildup-bridge
+purpose: Use to walk a renewal from experience to the required premium and set it against the current premium and the proposed rate action; draws a PMPM bridge through trend, plan changes, the credibility blend with manual, administration and margin, with the current and proposed premiums as reference lines.
+from: design-library
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CT-29 rate-buildup-bridge</title>
+<style id="tokens">:root {
+  --blue: #0170BC;
+  --navy: #002D72;
+  --green: #56A944;
+  --teal: #00A9A5;
+  --orange: #F68621;
+  --ink: #1F2A37;
+  --muted: #5B6770;
+  --rule: #D9E2EA;
+  --wash: #F4F8FB;
+  --paper: #FFFFFF;
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
+  --good: #2E7D32;
+  --bad: #B45309;
+  --neutral: #8A96A0;
+  --track: #E8EDF2;
+  --tint: #EAF3FA;
+  --shadow: #C9D4DE;
+  --band: #002D72;
+  --on-band: #FFFFFF;
+  --menu: #FFFFFF;
+  --on-menu: #002D72;
+  --radius: 2px;
+  --series: --blue --navy --green --teal --muted;
+}</style>
+<style id="frame">
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--body-font); }
+.fit { width: 960px; height: 540px; transform-origin: 0 0; box-sizing: border-box; padding: 28px 36px; display: flex; flex-direction: column; gap: 10px; }
+.fit h2 { margin: 0; font: var(--heading-weight) 24px var(--heading-font); color: var(--navy); }
+.fit p { margin: 0; font-size: 15px; color: var(--muted); }
+.chart { position: relative; flex: 1; min-height: 0; }
+.source { display: none; }
+</style>
+<style id="item-css">
+.fit p.basis { font-size: 13px; line-height: 1.4; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body>
+<div class="fit">
+<h2>Heading: what is measured, the period</h2>
+<!-- ITEM:START -->
+<div class="chart" data-echart>
+<script type="application/json">
+{
+  "grid": { "left": 8, "right": 200, "top": 40, "bottom": 8, "containLabel": true },
+  "xAxis": {
+    "type": "category",
+    "axisLabel": { "interval": 0, "lineHeight": 18, "fontSize": 14 },
+    "data": [
+      "Experience\nclaims", "Trend\n8.0%", "Plan\nchanges", "Credibility\n70% / 30%", "Projected\nclaims",
+      "Admin-\nistration", "Margin", "Required\npremium"
+    ]
+  },
+  "yAxis": {
+    "type": "value",
+    "min": 300,
+    "max": 540,
+    "interval": 40,
+    "axisLabel": { "formatter": "${value}" },
+    "name": "PMPM, renewal year ($); axis starts at $300",
+    "nameLocation": "end",
+    "nameGap": 16,
+    "nameTextStyle": { "color": "var(--muted)", "fontSize": 13, "align": "left" }
+  },
+  "series": [
+    {
+      "type": "bar",
+      "stack": "r",
+      "silent": true,
+      "itemStyle": { "opacity": 0 },
+      "data": [0, 400, 426, 426, 0, 433, 488, 0]
+    },
+    {
+      "type": "bar",
+      "stack": "r",
+      "barWidth": "58%",
+      "itemStyle": { "color": "var(--chart-muted)" },
+      "label": { "show": true, "position": "top", "fontSize": 15 },
+      "data": [
+        {
+          "value": 400,
+          "itemStyle": { "color": "var(--muted)" },
+          "label": { "formatter": "$400", "color": "var(--ink)" }
+        },
+        { "value": 32, "label": { "position": "inside", "formatter": "+$32" } },
+        { "value": 6, "label": { "formatter": "−$6" } },
+        { "value": 7, "label": { "formatter": "+$7" } },
+        {
+          "value": 433,
+          "itemStyle": { "color": "var(--muted)" },
+          "label": { "formatter": "$433", "color": "var(--ink)" }
+        },
+        { "value": 55, "label": { "position": "inside", "formatter": "+$55" } },
+        { "value": 15, "label": { "formatter": "+$15" } },
+        {
+          "value": 503,
+          "itemStyle": { "color": "var(--blue)" },
+          "label": { "formatter": "$503", "color": "var(--blue)" }
+        }
+      ],
+      "markLine": {
+        "silent": true,
+        "symbol": "none",
+        "data": [
+          {
+            "yAxis": 470,
+            "lineStyle": { "color": "var(--muted)", "type": "dashed", "width": 1.5 },
+            "label": { "position": "end", "formatter": "Current premium $470", "color": "var(--muted)" }
+          },
+          {
+            "yAxis": 496,
+            "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
+            "label": {
+              "position": "end",
+              "formatter": "Proposed +5.5%  $496\nRequired +7.0%  $503",
+              "color": "var(--navy)",
+              "fontWeight": 600,
+              "lineHeight": 18
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+</script>
+</div>
+<p class="basis">2025 incurred claims, paid through Oct 2026, projected 18 months at 8.0% a year; 70% credibility on the group's own experience, 30% on the manual rate ($450). Proposed action +5.5% leaves a shortfall of $7 PMPM against required. Sample values.</p>
+<!-- ITEM:END -->
+<!-- NOTES
+- A bridge: an invisible base lifts each step; totals (experience, projected claims) start from the axis floor in grey, the required premium in blue.
+- The credibility step is the move from the group's projected experience to the blend with manual; state the weights in its label and the manual rate in the basis.
+- Current and proposed premiums are `markLine`s, labelled at the right with the rate change, so the gap to required reads at once. The axis starts above zero; say so in its title.
+-->
+</div>
+<script id="item-engine">
+(function () {
+  var root = document.documentElement, body = document.body;
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
+  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
+     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
+     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
+  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
+  function moves(box) { return (forced || !still) && marked(box); }
+  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
+  function resolve(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (typeof v === 'string' && v.indexOf('var(--') === 0) o[k] = css(v.slice(4, -1)) || v;
+      else if (v && typeof v === 'object') resolve(v);
+    });
+  }
+  function theme() {
+    var axis = { axisLine: { lineStyle: { color: css('--rule') } }, axisTick: { show: false }, axisLabel: { color: css('--muted'), fontSize: 15 } };
+    return {
+      color: series(), textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
+      legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+      bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+      markLine: { label: { fontSize: 14, color: css('--muted') } },
+      pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+    };
+  }
+  /* Hover: a one-line tooltip and a light emphasis on the hovered mark. Nothing moves, fades or redraws on hover.
+     Off for one chart with data-hover="off" (or the item's body), or "tooltip": {"show": false} in its JSON;
+     an item may supply its own tooltip.formatter. Off when exported (html.is-export) and never during a play. */
+  function hoverOff(box) { return root.classList.contains('is-export') || body.getAttribute('data-hover') === 'off' || box.getAttribute('data-hover') === 'off'; }
+  function fmt(t, p, v) {
+    return String(t).split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/{@[(d+)]}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function hover(o) {
+    var list = [].concat(o.series || []);
+    var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
+    var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a && a.axisLabel && typeof a.axisLabel.formatter === 'string' ? a.axisLabel.formatter : null; };
+    var lines = list.some(function (x) { return x.type === 'line'; });
+    var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
+    function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
+    function value(p) {
+      var x = list[p.seriesIndex] || {}, v = p.value;
+      if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
+      if (v == null || v === '-') return null;
+      var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+      var shared = x.label && typeof x.label.formatter === 'string' ? x.label.formatter : null;
+      var t = own || shared || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : (typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v));
+    }
+    /* the series name goes in front once, never when the value text (its own label formatter) already carries it */
+    function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
+    var tip = {
+      show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+      backgroundColor: css('--paper'), borderColor: css('--rule'), borderWidth: 1, padding: [6, 10],
+      textStyle: { color: css('--ink'), fontFamily: css('--body-font'), fontSize: 13 },
+      extraCssText: 'box-shadow:none;border-radius:' + (css('--radius') || '2px') + ';pointer-events:none;',
+      axisPointer: lines
+        ? { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } }
+        : { type: 'shadow', animation: false, shadowStyle: { color: css('--chart-grid'), opacity: 0.7 }, label: { show: false } },
+      formatter: function (p) {
+        if (Array.isArray(p)) {
+          var rows = p.filter(function (q) { return !hidden(list[q.seriesIndex]) && value(q) != null; })
+            .map(function (q) { return (named(q) ? q.seriesName + ': ' : '') + '<b>' + value(q) + '</b>'; });
+          return rows.length ? (p[0].name ? p[0].name + (rows.length > 1 ? '<br>' : ' ') : '') + rows.join(rows.length > 1 ? '<br>' : '') : '';
+        }
+        if (p.componentType !== 'series' || hidden(list[p.seriesIndex]) || value(p) == null) return '';
+        return (named(p) ? p.seriesName + ' · ' : '') + (p.name ? p.name + ': ' : '') + '<b>' + value(p) + '</b>';
+      }
+    };
+    o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
+    list.forEach(function (x) {
+      if (x.emphasis && !x.emphasis.disabled) return;   /* the item's own emphasis stands */
+      var w = x.lineStyle && x.lineStyle.width || 3;
+      x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
+        : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
+      if (hidden(x)) x.emphasis = { disabled: true };
+    });
+  }
+  /* Tables: a native tooltip on each cell (row, column: value) and a subtle highlight (kit CSS). */
+  function tableTips() {
+    Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
+      var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
+      var row = tr.cells[0] ? tr.cells[0].innerText.trim() : '';
+      Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
+    });
+  }
+  var drawn = 0;
+  function draw(play) {
+    if (!window.echarts) return;
+    var name = 'item' + (++drawn);
+    echarts.registerTheme(name, theme());
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
+      var src = box.querySelector('script[type="application/json"]');
+      if (!src) return;
+      var o = JSON.parse(src.textContent);
+      resolve(o);
+      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+      var anim = play && moves(box);
+      var off = hoverOff(box) || (o.tooltip && o.tooltip.show === false);
+      if (off) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+      else hover(o);
+      o.animation = !!anim;
+      if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
+      if (box._chart) box._chart.dispose();
+      if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
+      box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
+      box._chart.setOption(o);
+      /* no hover while it plays: the pointer is ignored until the draw-in is over */
+      if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
+    });
+    window.dispatchEvent(new Event('item:draw'));
+  }
+  /* Count-up: <span data-tick-up="1240" data-prefix="$" data-suffix="K" data-decimals="0">$1,240K</span>.
+     The written text is the final value, so the item reads right with motion off. */
+  function show(el, v) {
+    var d = +(el.getAttribute('data-decimals') || 0);
+    el.textContent = (el.getAttribute('data-prefix') || '') + v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + (el.getAttribute('data-suffix') || '');
+  }
+  function tickUp() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tick-up]'), function (el) {
+      var to = +el.getAttribute('data-tick-up'), from = to * 0.9, t0 = null, ms = 800;
+      if (!moves(el.closest('[data-animate]'))) { show(el, to); return; }
+      function step(ts) { if (t0 === null) t0 = ts; var k = Math.min(1, (ts - t0) / ms), e = 1 - Math.pow(1 - k, 3); show(el, k < 1 ? from + (to - from) * e : to); if (k < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    });
+  }
+  /* A theme may embed its typeface as @font-face rules with data: URIs, held only in the theme item (style#theme-fonts).
+     They travel with its tokens (index message or #theme= link) into style#theme-fonts-live. Charts and Replay wait
+     until the faces have loaded, so ECharts measures its labels in that font. A theme without fonts removes them. */
+  var fontWait = null;
+  function facesLoaded(style) {
+    if (!style || !style.sheet || !document.fonts || !document.fonts.load) return Promise.resolve();
+    var asks = Array.prototype.filter.call(style.sheet.cssRules, function (r) { return r.type === 5; }).map(function (r) {
+      return document.fonts.load((r.style.getPropertyValue('font-weight') || '400') + ' 16px ' + r.style.getPropertyValue('font-family')).catch(function () {});
+    });
+    return Promise.all(asks).then(function () { return document.fonts.ready; });
+  }
+  function waitFor(style) { var w = fontWait = facesLoaded(style).then(function () { if (fontWait === w) fontWait = null; }); return w; }
+  function faces(text) {
+    var s = document.getElementById('theme-fonts-live');
+    if (!text) { if (s) s.parentNode.removeChild(s); return null; }
+    if (!s) { s = document.createElement('style'); s.id = 'theme-fonts-live'; document.head.appendChild(s); }
+    if (s.textContent !== text) s.textContent = text;
+    return waitFor(s);
+  }
+  if (document.getElementById('theme-fonts')) waitFor(document.getElementById('theme-fonts'));   /* a theme item showing its own font */
+  /* Replay: charts draw in again, numbers count up again, CSS motion under html.play runs again. Never loops. */
+  function replay(explicit) {
+    if (fontWait) { fontWait.then(function () { fit(); replay(explicit); }); return; }   /* draw once the theme's font is in */
+    forced = !!explicit; root.classList.toggle('forced', forced);
+    draw(true); tickUp();
+    if (moves(document.querySelector('[data-animate]'))) { root.classList.remove('play'); void root.offsetWidth; root.classList.add('play'); }
+    window.dispatchEvent(new CustomEvent('item:replay', { detail: { explicit: forced } }));
+  }
+  /* phones: lay the item out at the device width (items carry no viewport tag of their own) */
+  if (!document.querySelector('meta[name="viewport"]')) { var vp = document.createElement('meta'); vp.name = 'viewport'; vp.content = 'width=device-width, initial-scale=1'; document.head.appendChild(vp); }
+  var texty = !!document.querySelector('.lib-table, .lib-cards');
+  function fit() {
+    var f = document.querySelector('.fit');
+    if (!f) return;
+    /* reflow at readable size only when opened by itself on a narrow screen; inside a frame (index grid, popup) always scale */
+    var narrow = texty && window.self === window.top && window.innerWidth < 720;
+    root.classList.toggle('narrow', narrow);
+    Array.prototype.forEach.call(document.querySelectorAll('.lib-table'), function (t) { t.parentElement.classList.toggle('lib-scroll', narrow); });
+    if (narrow) { f.style.transform = 'none'; return; }
+    var s = Math.min(window.innerWidth / f.offsetWidth, (window.innerHeight - strip) / f.offsetHeight);
+    f.style.transform = 'scale(' + s + ')';
+  }
+  /* From the index: {theme} restyles; {replay: true} replays (scroll into view: autoplay rules); {replay: true, explicit: true}
+     plays whatever the motion setting (the popup was opened). Alone, an item keeps its own look. */
+  /* Escape inside an item opened in the index popup closes the popup; an item that handles Escape itself calls preventDefault */
+  if (window.parent !== window) window.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !e.defaultPrevented) window.parent.postMessage({ escape: true }, '*'); });
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.replay) return replay(!!e.data.explicit);
+    var t = e.data && e.data.theme;
+    if (!t || body.hasAttribute('data-own-theme')) return;
+    Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
+    if (t.series) root.style.setProperty('--series', t.series.join(' '));
+    var w = faces(t.fonts);
+    if (w) w.then(function () { fit(); draw(false); }); else draw(false);
+  });
+  /* Any item that opts into motion (body or one element marked data-animate) gets the Replay control, in a strip
+     of its own above the content (never on it). In the index grid (#grid) the strip is left out: cards are clicked. */
+  var strip = 0, grid = /(^|[#&])grid(&|$)/.test(location.hash);
+  var linked = (location.hash.match(/(?:^#|&)theme=([^&]+)/) || [])[1];
+  if (linked && !body.hasAttribute('data-own-theme')) {
+    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); faces(lt.fonts); } catch (e) { /* a theme id, not tokens: keep the default */ }
+  }
+  if (document.querySelector('[data-animate]') && !grid) {
+    strip = 40;
+    var bar = document.createElement('div');
+    bar.className = 'item-strip';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;height:40px;z-index:9;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 10px;background:var(--paper);border-bottom:1px solid var(--rule);';
+    if (still) {
+      var n = document.createElement('span');
+      n.className = 'item-motion-note'; n.textContent = 'Motion is reduced on this device. Press Replay to play.';
+      n.style.cssText = 'font:12px var(--body-font);color:var(--muted);';
+      bar.appendChild(n);
+    }
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'item-replay'; b.textContent = 'Replay';
+    b.style.cssText = 'font:600 13px var(--body-font);padding:5px 12px;border:1.5px solid var(--navy);border-radius:var(--radius);background:var(--paper);color:var(--navy);cursor:pointer;';
+    b.addEventListener('click', function () { replay(true); });
+    bar.appendChild(b);
+    body.appendChild(bar);
+    body.style.paddingTop = strip + 'px'; body.style.boxSizing = 'border-box';
+  }
+  /* The public hook for an item's own script (AUTHORING.md): the chart instance holding an element, and a redraw.
+     Events on window: item:draw after every redraw (theme, resize), item:replay after every replay (load, Replay, index). */
+  window.ItemEngine = {
+    motion: function () { return forced || !still; },   /* may motion run now: true unless reduced and no explicit action */
+    play: function () { replay(true); },                 /* an item's own Play control: a full explicit replay */
+    force: function () { force(); },                     /* an item's own step or switch control: let its motion run */
+    chart: function (el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; },
+    redraw: function () { draw(false); }
+  };
+  window.itemRedraw = window.ItemEngine.redraw;
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+  window.addEventListener('resize', function () { fit(); draw(false); });
+  tableTips(); fit(); replay();
+})();
+</script>
+</body>
+</html>

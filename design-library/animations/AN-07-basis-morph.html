@@ -1,0 +1,421 @@
+<!doctype html>
+<!-- ITEM
+id: AN-07
+type: animation
+name: basis-morph
+purpose: Monthly claims by incurred month that start as paid to date, where recent months look low, then the IBNR estimate rises on top of each month to the completed view, so the reader sees the dip is unpaid claims, not lower cost; use when explaining paid against incurred and IBNR.
+from: james-themes
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AN-07 basis-morph</title>
+<style id="tokens">:root {
+  --blue: #0170BC;
+  --navy: #002D72;
+  --green: #56A944;
+  --teal: #00A9A5;
+  --orange: #F68621;
+  --ink: #1F2A37;
+  --muted: #5B6770;
+  --rule: #D9E2EA;
+  --wash: #F4F8FB;
+  --paper: #FFFFFF;
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
+  --good: #2E7D32;
+  --bad: #B45309;
+  --neutral: #8A96A0;
+  --track: #E8EDF2;
+  --tint: #EAF3FA;
+  --shadow: #C9D4DE;
+  --band: #002D72;
+  --on-band: #FFFFFF;
+  --menu: #FFFFFF;
+  --on-menu: #002D72;
+  --radius: 2px;
+  --series: --blue --navy --green --teal --muted;
+}</style>
+<style id="kit-css">
+.fit { font-family: var(--body-font); color: var(--ink); }
+.lib-lab { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lib-card { background: var(--paper); color: var(--ink); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px 20px; min-width: 0; transition: box-shadow .15s; }
+.lib-card:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-card.good { border-top-color: var(--good); } .lib-card.bad { border-top-color: var(--bad); } .lib-card.neutral { border-top-color: var(--neutral); }
+.lib-card.lead { background: var(--tint); border-color: var(--tint); }
+.lib-big { font: var(--heading-weight) 52px/1 var(--heading-font); color: var(--navy); font-variant-numeric: tabular-nums; margin: 8px 0; }
+.lib-sub { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-said { font-size: 15px; color: var(--muted); margin: 8px 0 14px; }
+.lib-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-top: 12px; color: var(--muted); }
+.lib-delta { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-delta.good, .lib-good { color: var(--good); } .lib-delta.bad, .lib-bad { color: var(--bad); } .lib-delta.neutral { color: var(--neutral); }
+.lib-meter { display: inline-block; vertical-align: middle; width: 130px; height: 12px; background: var(--track); margin-right: 10px; }
+.lib-meter b { display: block; height: 12px; background: var(--blue); } .lib-meter b.bad { background: var(--bad); } .lib-meter b.good { background: var(--good); }
+.lib-tick { position: relative; height: 18px; background: var(--track); }
+.lib-tick .a { position: absolute; left: 0; top: 4px; height: 10px; background: var(--good); } .lib-tick .a.bad { background: var(--bad); }
+.lib-tick .p { position: absolute; top: -4px; width: 3px; height: 26px; background: var(--navy); }
+.lib-tick .l { position: absolute; top: 4px; width: 2px; height: 10px; background: var(--chart-muted); }
+.lib-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.lib-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lib-table th { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 2px solid var(--navy); text-align: right; }
+.lib-table td { font-size: 15px; padding: 12px; border-bottom: 1px solid var(--rule); text-align: right; }
+.lib-table .left { text-align: left; }
+.lib-table tbody tr { transition: background .12s; }
+.lib-table tbody tr:hover, .lib-table tr.on { background: var(--tint); }
+.lib-table tr.on td:first-child { box-shadow: inset 4px 0 0 var(--blue); }
+.lib-table tbody td:hover { box-shadow: inset 0 0 0 1.5px var(--navy); }
+@media print { .lib-table tbody td:hover { box-shadow: none; } }
+.lib-table tfoot td { font-weight: 700; border-top: 2px solid var(--navy); border-bottom: none; background: var(--tint); }
+.lib-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.lib-btn { font: inherit; font-size: 14px; font-weight: 600; min-height: 44px; padding: 8px 18px; border-radius: var(--radius); border: 1.5px solid; cursor: pointer; transition: background .12s, color .12s; }
+.lib-btn.pri { background: var(--blue); color: var(--paper); border-color: var(--blue); } .lib-btn.pri:hover { background: var(--navy); border-color: var(--navy); }
+.lib-btn.sec { background: var(--paper); color: var(--blue); border-color: var(--blue); } .lib-btn.sec:hover { background: var(--tint); }
+.lib-btn.solid { background: var(--on-band); color: var(--band); border-color: var(--on-band); } .lib-btn.solid:hover { background: var(--tint); border-color: var(--tint); }
+.lib-btn.line { background: transparent; color: var(--on-band); border-color: var(--on-band); } .lib-btn.line:hover { background: var(--tint); color: var(--navy); }
+.lib-mini { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 4px 10px; border-radius: var(--radius); border: 1.5px solid var(--blue); background: var(--paper); color: var(--blue); cursor: pointer; }
+.lib-mini:hover { background: var(--tint); }
+.lib-seg { display: inline-flex; flex-wrap: wrap; } .lib-seg button { font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; padding: 6px 14px; cursor: pointer; background: var(--paper); color: var(--navy); border: 1.5px solid var(--navy); }
+.lib-seg button + button { margin-left: -1.5px; } .lib-seg button[aria-pressed="true"] { background: var(--navy); color: var(--paper); }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lib-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px 0 14px; border: 1.5px solid currentColor; border-radius: var(--radius); font-size: 14px; font-weight: 600; }
+.lib-chip button { font: inherit; font-size: 16px; width: 32px; height: 32px; border: none; background: transparent; color: inherit; cursor: pointer; border-radius: var(--radius); } .lib-chip button:hover { background: var(--tint); color: var(--navy); }
+.lib-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.lib-gate label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; color: var(--navy); }
+.lib-gate input[type="range"] { width: 150px; accent-color: var(--blue); } .lib-gate output { min-width: 52px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+.lib-panel { min-width: 0; background: var(--paper); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px; transition: box-shadow .15s; }
+.lib-panel:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-panel h2 { margin: 0; font: var(--heading-weight) 18px var(--heading-font); color: var(--navy); } .lib-panel .cap { margin: 3px 0 10px; font-size: 14px; color: var(--muted); }
+.lib-panelhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.lib-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.lib-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 13px; line-height: 1.45; color: var(--muted); }
+.lib-source { margin: 8px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lib-band { background: var(--band); color: var(--on-band); padding: 26px 28px; }
+.lib-band h1 { margin: 6px 0 0; font: var(--heading-weight) 28px/1.15 var(--heading-font); color: var(--on-band); } .lib-band .lib-lab { color: var(--on-band); }
+.lib-rail { background: var(--menu); color: var(--on-menu); border-right: 1.5px solid var(--on-menu); padding: 26px 14px; display: flex; flex-direction: column; gap: 6px; }
+.lib-rail .brand { font: var(--heading-weight) 20px var(--heading-font); padding: 0 12px 16px; }
+.lib-rail a { display: block; min-height: 40px; padding: 10px 12px; border-radius: var(--radius); font-size: 15px; font-weight: 600; text-decoration: none; color: var(--on-menu); transition: background .15s, padding-left .15s; }
+.lib-rail a[aria-current="page"] { background: var(--on-menu); color: var(--menu); } .lib-rail a:not([aria-current]):hover { background: var(--tint); color: var(--navy); padding-left: 20px; }
+.lib-btnrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.lib-band :focus-visible { outline-color: var(--on-band); }
+html.narrow, html.narrow body { height: auto; overflow: auto; }
+html.narrow .fit { width: auto; height: auto; padding: 16px; }
+.lib-scroll { overflow-x: auto; } .lib-scroll .lib-table { min-width: 560px; }
+@media (prefers-reduced-motion: reduce) { html:not(.forced) * { transition: none !important; animation: none !important; } }
+</style>
+<style id="frame">
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wash); }
+.fit { width: 960px; height: 540px; transform-origin: 0 0; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; }
+.chart { position: relative; flex: 1; min-height: 0; }
+.source { display: none; }
+</style>
+<style id="item-css">
+/* The bars move through an ECharts update (700ms, eased) run by item-js; no CSS motion. */
+.stage { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.stage .chart { flex: 1; min-height: 0; }
+.ctl { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.key { display: flex; gap: 16px; font-size: 13px; color: var(--muted); align-items: center; }
+.key i { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; background: var(--blue); }
+.key i.est { background: var(--tint); border: 1.5px dashed var(--blue); box-sizing: border-box; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+<body data-animate>
+<div class="fit">
+<!-- ITEM:START -->
+<div class="lib-panel stage">
+<h2>Recent months look low only because they are not yet paid</h2>
+<p class="cap" id="basis-cap">Claims $M by incurred month &middot; paid through Jun, completed with the IBNR estimate from completion factors</p>
+<div class="ctl">
+<div class="lib-seg" role="group" aria-label="Basis"><button type="button" aria-pressed="false" data-view="todate">Paid to date</button><button type="button" aria-pressed="true" data-view="completed">Completed</button></div>
+<div class="key"><span><i></i>Paid</span><span><i class="est"></i>Estimate not yet paid (IBNR)</span></div>
+</div>
+<div class="chart" data-echart>
+<script type="application/json">
+{"xAxis":{"type":"category","data":["Jan","Feb","Mar","Apr","May","Jun"]},
+"yAxis":{"type":"value","min":0,"max":5,"interval":1,"axisLabel":{"formatter":"${value}M"}},
+"grid":{"left":8,"right":8,"top":30,"bottom":8,"containLabel":true},
+"series":[
+{"type":"bar","name":"Paid","stack":"c","barWidth":"56%","itemStyle":{"color":"var(--blue)"},"data":[4.2,4.1,4.3,4.0,3.4,2.1]},
+{"type":"bar","name":"Paid plus estimate","stack":"c","itemStyle":{"color":"var(--tint)","borderColor":"var(--blue)","borderWidth":1.5,"borderType":"dashed"},"label":{"show":true,"position":"top"},
+ "data":[{"value":0,"itemStyle":{"borderWidth":0},"label":{"formatter":"$4.2M"}},{"value":0.1,"label":{"formatter":"$4.2M"}},{"value":0.1,"label":{"formatter":"$4.4M"}},{"value":0.3,"label":{"formatter":"$4.3M"}},{"value":0.9,"label":{"formatter":"$4.3M"}},{"value":2.3,"label":{"formatter":"$4.4M"}}]}
+]}
+</script>
+</div>
+<p class="lib-source" id="basis-src">Sample values &middot; label is paid plus estimate</p>
+</div>
+<!-- ITEM:END -->
+</div>
+
+<script id="item-engine">
+(function () {
+  var root = document.documentElement, body = document.body;
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
+  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
+     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
+     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
+  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
+  function moves(box) { return (forced || !still) && marked(box); }
+  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
+  function resolve(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (typeof v === 'string' && v.indexOf('var(--') === 0) o[k] = css(v.slice(4, -1)) || v;
+      else if (v && typeof v === 'object') resolve(v);
+    });
+  }
+  function theme() {
+    var axis = { axisLine: { lineStyle: { color: css('--rule') } }, axisTick: { show: false }, axisLabel: { color: css('--muted'), fontSize: 15 } };
+    return {
+      color: series(), textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
+      legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+      bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+      markLine: { label: { fontSize: 14, color: css('--muted') } },
+      pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+    };
+  }
+  /* Hover: a one-line tooltip and a light emphasis on the hovered mark. Nothing moves, fades or redraws on hover.
+     Off for one chart with data-hover="off" (or the item's body), or "tooltip": {"show": false} in its JSON;
+     an item may supply its own tooltip.formatter. Off when exported (html.is-export) and never during a play. */
+  function hoverOff(box) { return root.classList.contains('is-export') || body.getAttribute('data-hover') === 'off' || box.getAttribute('data-hover') === 'off'; }
+  function fmt(t, p, v) {
+    return String(t).split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/{@[(d+)]}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function hover(o) {
+    var list = [].concat(o.series || []);
+    var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
+    var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a && a.axisLabel && typeof a.axisLabel.formatter === 'string' ? a.axisLabel.formatter : null; };
+    var lines = list.some(function (x) { return x.type === 'line'; });
+    var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
+    function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
+    function value(p) {
+      var x = list[p.seriesIndex] || {}, v = p.value;
+      if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
+      if (v == null || v === '-') return null;
+      var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
+      var shared = x.label && typeof x.label.formatter === 'string' ? x.label.formatter : null;
+      var t = own || shared || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : (typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v));
+    }
+    /* the series name goes in front once, never when the value text (its own label formatter) already carries it */
+    function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
+    var tip = {
+      show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+      backgroundColor: css('--paper'), borderColor: css('--rule'), borderWidth: 1, padding: [6, 10],
+      textStyle: { color: css('--ink'), fontFamily: css('--body-font'), fontSize: 13 },
+      extraCssText: 'box-shadow:none;border-radius:' + (css('--radius') || '2px') + ';pointer-events:none;',
+      axisPointer: lines
+        ? { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } }
+        : { type: 'shadow', animation: false, shadowStyle: { color: css('--chart-grid'), opacity: 0.7 }, label: { show: false } },
+      formatter: function (p) {
+        if (Array.isArray(p)) {
+          var rows = p.filter(function (q) { return !hidden(list[q.seriesIndex]) && value(q) != null; })
+            .map(function (q) { return (named(q) ? q.seriesName + ': ' : '') + '<b>' + value(q) + '</b>'; });
+          return rows.length ? (p[0].name ? p[0].name + (rows.length > 1 ? '<br>' : ' ') : '') + rows.join(rows.length > 1 ? '<br>' : '') : '';
+        }
+        if (p.componentType !== 'series' || hidden(list[p.seriesIndex]) || value(p) == null) return '';
+        return (named(p) ? p.seriesName + ' · ' : '') + (p.name ? p.name + ': ' : '') + '<b>' + value(p) + '</b>';
+      }
+    };
+    o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
+    list.forEach(function (x) {
+      if (x.emphasis && !x.emphasis.disabled) return;   /* the item's own emphasis stands */
+      var w = x.lineStyle && x.lineStyle.width || 3;
+      x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
+        : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
+      if (hidden(x)) x.emphasis = { disabled: true };
+    });
+  }
+  /* Tables: a native tooltip on each cell (row, column: value) and a subtle highlight (kit CSS). */
+  function tableTips() {
+    Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
+      var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
+      var row = tr.cells[0] ? tr.cells[0].innerText.trim() : '';
+      Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
+    });
+  }
+  var drawn = 0;
+  function draw(play) {
+    if (!window.echarts) return;
+    var name = 'item' + (++drawn);
+    echarts.registerTheme(name, theme());
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
+      var src = box.querySelector('script[type="application/json"]');
+      if (!src) return;
+      var o = JSON.parse(src.textContent);
+      resolve(o);
+      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+      var anim = play && moves(box);
+      var off = hoverOff(box) || (o.tooltip && o.tooltip.show === false);
+      if (off) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+      else hover(o);
+      o.animation = !!anim;
+      if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
+      if (box._chart) box._chart.dispose();
+      if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
+      box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
+      box._chart.setOption(o);
+      /* no hover while it plays: the pointer is ignored until the draw-in is over */
+      if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
+    });
+    window.dispatchEvent(new Event('item:draw'));
+  }
+  /* Count-up: <span data-tick-up="1240" data-prefix="$" data-suffix="K" data-decimals="0">$1,240K</span>.
+     The written text is the final value, so the item reads right with motion off. */
+  function show(el, v) {
+    var d = +(el.getAttribute('data-decimals') || 0);
+    el.textContent = (el.getAttribute('data-prefix') || '') + v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + (el.getAttribute('data-suffix') || '');
+  }
+  function tickUp() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tick-up]'), function (el) {
+      var to = +el.getAttribute('data-tick-up'), from = to * 0.9, t0 = null, ms = 800;
+      if (!moves(el.closest('[data-animate]'))) { show(el, to); return; }
+      function step(ts) { if (t0 === null) t0 = ts; var k = Math.min(1, (ts - t0) / ms), e = 1 - Math.pow(1 - k, 3); show(el, k < 1 ? from + (to - from) * e : to); if (k < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    });
+  }
+  /* A theme may embed its typeface as @font-face rules with data: URIs, held only in the theme item (style#theme-fonts).
+     They travel with its tokens (index message or #theme= link) into style#theme-fonts-live. Charts and Replay wait
+     until the faces have loaded, so ECharts measures its labels in that font. A theme without fonts removes them. */
+  var fontWait = null;
+  function facesLoaded(style) {
+    if (!style || !style.sheet || !document.fonts || !document.fonts.load) return Promise.resolve();
+    var asks = Array.prototype.filter.call(style.sheet.cssRules, function (r) { return r.type === 5; }).map(function (r) {
+      return document.fonts.load((r.style.getPropertyValue('font-weight') || '400') + ' 16px ' + r.style.getPropertyValue('font-family')).catch(function () {});
+    });
+    return Promise.all(asks).then(function () { return document.fonts.ready; });
+  }
+  function waitFor(style) { var w = fontWait = facesLoaded(style).then(function () { if (fontWait === w) fontWait = null; }); return w; }
+  function faces(text) {
+    var s = document.getElementById('theme-fonts-live');
+    if (!text) { if (s) s.parentNode.removeChild(s); return null; }
+    if (!s) { s = document.createElement('style'); s.id = 'theme-fonts-live'; document.head.appendChild(s); }
+    if (s.textContent !== text) s.textContent = text;
+    return waitFor(s);
+  }
+  if (document.getElementById('theme-fonts')) waitFor(document.getElementById('theme-fonts'));   /* a theme item showing its own font */
+  /* Replay: charts draw in again, numbers count up again, CSS motion under html.play runs again. Never loops. */
+  function replay(explicit) {
+    if (fontWait) { fontWait.then(function () { fit(); replay(explicit); }); return; }   /* draw once the theme's font is in */
+    forced = !!explicit; root.classList.toggle('forced', forced);
+    draw(true); tickUp();
+    if (moves(document.querySelector('[data-animate]'))) { root.classList.remove('play'); void root.offsetWidth; root.classList.add('play'); }
+    window.dispatchEvent(new CustomEvent('item:replay', { detail: { explicit: forced } }));
+  }
+  /* phones: lay the item out at the device width (items carry no viewport tag of their own) */
+  if (!document.querySelector('meta[name="viewport"]')) { var vp = document.createElement('meta'); vp.name = 'viewport'; vp.content = 'width=device-width, initial-scale=1'; document.head.appendChild(vp); }
+  var texty = !!document.querySelector('.lib-table, .lib-cards');
+  function fit() {
+    var f = document.querySelector('.fit');
+    if (!f) return;
+    /* reflow at readable size only when opened by itself on a narrow screen; inside a frame (index grid, popup) always scale */
+    var narrow = texty && window.self === window.top && window.innerWidth < 720;
+    root.classList.toggle('narrow', narrow);
+    Array.prototype.forEach.call(document.querySelectorAll('.lib-table'), function (t) { t.parentElement.classList.toggle('lib-scroll', narrow); });
+    if (narrow) { f.style.transform = 'none'; return; }
+    var s = Math.min(window.innerWidth / f.offsetWidth, (window.innerHeight - strip) / f.offsetHeight);
+    f.style.transform = 'scale(' + s + ')';
+  }
+  /* From the index: {theme} restyles; {replay: true} replays (scroll into view: autoplay rules); {replay: true, explicit: true}
+     plays whatever the motion setting (the popup was opened). Alone, an item keeps its own look. */
+  /* Escape inside an item opened in the index popup closes the popup; an item that handles Escape itself calls preventDefault */
+  if (window.parent !== window) window.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !e.defaultPrevented) window.parent.postMessage({ escape: true }, '*'); });
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.replay) return replay(!!e.data.explicit);
+    var t = e.data && e.data.theme;
+    if (!t || body.hasAttribute('data-own-theme')) return;
+    Object.keys(t.css || {}).forEach(function (k) { root.style.setProperty(k, t.css[k]); });
+    if (t.series) root.style.setProperty('--series', t.series.join(' '));
+    var w = faces(t.fonts);
+    if (w) w.then(function () { fit(); draw(false); }); else draw(false);
+  });
+  /* Any item that opts into motion (body or one element marked data-animate) gets the Replay control, in a strip
+     of its own above the content (never on it). In the index grid (#grid) the strip is left out: cards are clicked. */
+  var strip = 0, grid = /(^|[#&])grid(&|$)/.test(location.hash);
+  var linked = (location.hash.match(/(?:^#|&)theme=([^&]+)/) || [])[1];
+  if (linked && !body.hasAttribute('data-own-theme')) {
+    try { var lt = JSON.parse(decodeURIComponent(linked)); Object.keys(lt.css || {}).forEach(function (k) { root.style.setProperty(k, lt.css[k]); }); if (lt.series) root.style.setProperty('--series', lt.series.join(' ')); faces(lt.fonts); } catch (e) { /* a theme id, not tokens: keep the default */ }
+  }
+  if (document.querySelector('[data-animate]') && !grid) {
+    strip = 40;
+    var bar = document.createElement('div');
+    bar.className = 'item-strip';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;height:40px;z-index:9;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 10px;background:var(--paper);border-bottom:1px solid var(--rule);';
+    if (still) {
+      var n = document.createElement('span');
+      n.className = 'item-motion-note'; n.textContent = 'Motion is reduced on this device. Press Replay to play.';
+      n.style.cssText = 'font:12px var(--body-font);color:var(--muted);';
+      bar.appendChild(n);
+    }
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'item-replay'; b.textContent = 'Replay';
+    b.style.cssText = 'font:600 13px var(--body-font);padding:5px 12px;border:1.5px solid var(--navy);border-radius:var(--radius);background:var(--paper);color:var(--navy);cursor:pointer;';
+    b.addEventListener('click', function () { replay(true); });
+    bar.appendChild(b);
+    body.appendChild(bar);
+    body.style.paddingTop = strip + 'px'; body.style.boxSizing = 'border-box';
+  }
+  /* The public hook for an item's own script (AUTHORING.md): the chart instance holding an element, and a redraw.
+     Events on window: item:draw after every redraw (theme, resize), item:replay after every replay (load, Replay, index). */
+  window.ItemEngine = {
+    motion: function () { return forced || !still; },   /* may motion run now: true unless reduced and no explicit action */
+    play: function () { replay(true); },                 /* an item's own Play control: a full explicit replay */
+    force: function () { force(); },                     /* an item's own step or switch control: let its motion run */
+    chart: function (el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; },
+    redraw: function () { draw(false); }
+  };
+  window.itemRedraw = window.ItemEngine.redraw;
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+  window.addEventListener('resize', function () { fit(); draw(false); });
+  tableTips(); fit(); replay();
+})();
+</script>
+<script id="item-js">
+/* Paid to date, then completed: plays "paid to date" (recent months look low), then after 1100ms the IBNR estimate rises
+   on top of each month (700ms) to the completed view. The buttons switch by hand. The chart JSON is the completed view. */
+(function () {
+  var paid = [4.2, 4.1, 4.3, 4.0, 3.4, 2.1], ibnr = [0, 0.1, 0.1, 0.3, 0.9, 2.3];
+  var views = {
+    todate:    { est: [0, 0, 0, 0, 0, 0], cap: 'Claims $M by incurred month \u00b7 paid to date, through Jun', src: 'Sample values \u00b7 label is paid to date' },
+    completed: { est: ibnr, cap: 'Claims $M by incurred month \u00b7 paid through Jun, completed with the IBNR estimate from completion factors', src: 'Sample values \u00b7 label is paid plus estimate' }
+  };
+  var cur = 'completed', timer, box = document.querySelector('.chart');
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.lib-seg button'));
+
+  function show(name, move) {
+    var v = views[name];
+    cur = name;
+    if (ItemEngine.chart(box)) ItemEngine.chart(box).setOption({
+      animation: move, animationDurationUpdate: 700, animationEasingUpdate: 'cubicInOut',
+      series: [{ data: paid }, { data: v.est.map(function (e, i) { return { value: e, itemStyle: { borderWidth: e ? 1.5 : 0 }, label: { formatter: '$' + (paid[i] + e).toFixed(1) + 'M' } }; }) }]
+    });
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-view') === name)); });
+    document.getElementById('basis-cap').textContent = v.cap;
+    document.getElementById('basis-src').textContent = v.src;
+  }
+  function play() {
+    clearTimeout(timer);
+    if (!ItemEngine.motion()) return show('completed', false);   /* reduced motion: no autoplay */
+    show('todate', false);
+    timer = setTimeout(function () { show('completed', true); }, 1100);
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { clearTimeout(timer); ItemEngine.force(); show(b.getAttribute('data-view'), true); }); });   /* explicit: always moves */
+  addEventListener('item:replay', play);   /* the engine's public hook: load, Replay button, index */
+  addEventListener('item:draw', function () { show(cur, false); });   /* a theme or resize redraws from the JSON: put the chosen state back */
+  play();
+})();
+</script>
+</body>
+</html>

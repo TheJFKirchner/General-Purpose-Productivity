@@ -5,7 +5,7 @@
  * so every pattern a deck needs comes back in one call. No dependencies.
  *
  * Usage: node patterns.js <design-library folder> <id or name> [<id or name> ...]
- *   ids such as LV-05 or CT-03, from index.md; a slide's name (bars-highlight-commentary) works too
+ *   ids such as LV-05 or CT-20, from index.md; a slide's name (bars-highlight-commentary) works too
  */
 
 const fs = require('fs');

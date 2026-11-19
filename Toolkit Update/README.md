@@ -23,7 +23,7 @@ The analysis toolbox and brain in one folder, ready to add to a Claude Code work
 | `claude\agents\commentary-generator.md` | Writes `commentary.json` for the commentary skill |
 | `claude\agents\design-librarian.md` | Saves visuals the user likes into the design library |
 | `claude\agents\brain-*.md` (4) | Do the reading and writing for the brain skills |
-| `design-library\` | Shared slides, charts, sections and themes; `index.html` shows them all |
+| `design-library\` | Shared slides, charts, tables, hero cards, animations, layout pieces and themes; `index.html` shows them all |
 | `brain\scripts\wiki_index.py` | Lists every wiki page for the brain agents |
 | `add-to-main-agent.md` | One page to paste into the main agent file |
 
