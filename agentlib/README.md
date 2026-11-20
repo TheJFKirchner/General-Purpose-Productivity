@@ -35,7 +35,7 @@ updates never overwrite it. No file = the ordinary Claude Code login.
 - `agentlib/fake/` is test-only and self-contained: the core never imports it
 
 ## Install
-- From another project: `pip install -e <path to this folder>` (for example `pip install -e ../General-Purpose-Productivity/agentlib` when the repo is cloned beside your project; editable, so library edits apply immediately)
+- From another project: `pip install -e <path to this folder>` (for example `pip install -e ../<repo folder>/agentlib` when the repo holding it is cloned beside your project; editable, so library edits apply immediately)
 - Working on the library itself (from this folder): `pip install -e .[dev]` then `python -m pytest`
 - Needs Python 3.11+ (`requires-python = ">=3.11"`), Claude Code installed and signed in for real (non-fake) runs
 - Auth: set per person in `setup/local.toml` (see "Before the library will work"); apps do nothing.

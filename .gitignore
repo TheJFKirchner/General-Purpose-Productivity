@@ -24,9 +24,6 @@ env/
 .DS_Store
 Thumbs.db
 
-# Launchpad ships its built frontend so coworkers need Python only
-!Launchpad/frontend/dist/
-
 # Node
 node_modules/
 

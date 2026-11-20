@@ -1,8 +1,0 @@
-/* Plan view styles (class names from the vanilla page; sizes from the theme.css tokens). */
-#visOpen .nbadge{display:inline-flex;align-items:center;justify-content:center;min-width:var(--count-h);height:var(--count-h);padding:0 var(--sp-1-5);border-radius:var(--r-pill);background:var(--card);color:var(--indigo-ink);font-size:var(--fs-2xs);font-weight:700}
-#visOpen .nbadge.warn{background:var(--coral);color:var(--on-accent)}
-#viewPlan .chat-head>div:first-child{flex:1;min-width:0}
-#modeLine{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* the planner picker under the composer (PlannerPicker.tsx); the picker's own styles are in theme.css (.pk-*) */
-#viewPlan .composer{margin-bottom:var(--sp-1)}

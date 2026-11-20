@@ -1,9 +1,0 @@
-# Run from the Launchpad folder: pip install -r app/requirements.txt
-# Shared agent library (General-Purpose-Productivity/agentlib), editable install
--e ../agentlib
-fastapi>=0.110
-uvicorn>=0.30
-pywebview>=5
-pyyaml>=6
-# tests (fake engine, zero tokens): python -m pytest
-pytest>=8

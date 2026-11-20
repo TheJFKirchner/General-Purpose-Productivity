@@ -37,3 +37,9 @@ Write good commit messages as you go: the automatic description is built from th
 - The analysis toolbox skills, the `commentary-generator`, `design-librarian` and `graphic-designer` agents and `brain-intake/` are edited in their working locations, never in `Toolkit Update/`, and copied into it.
 - `Toolkit Update/add-to-claude-md.md` and `Toolkit Update/README.md` are also edited in place. `Toolkit Update/add-to-main-agent.md` is a copy of `brain-intake/add-to-main-agent.md`; edit that one.
 - Apart from the design library and those pages, `Toolkit Update/` is a copy for installing elsewhere. After any such edit, refresh it with the commands in [its README](Toolkit%20Update/README.md).
+
+## `agentlib` here is a copy
+
+- The master copy of `agentlib` lives in the private Launchpad-Harness repo (moved there, with Launchpad, in November 2026). Edit the library there, never in this repo's `agentlib/` folder.
+- This repo keeps a copy because the wiki app runs on it. After a library change is committed in Launchpad-Harness, replace this folder's tracked files with that repo's, run the wiki app's three test suites, and commit here.
+- This repo is public and Launchpad is private: never copy Launchpad, or parts of it, back into this repo.
