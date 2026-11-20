@@ -236,7 +236,7 @@ export function validateProject(p) {
     if (!fs.existsSync(sectionPath(meta.id))) err(`file Src/Sections/${meta.id}.jsx not found (file name must equal id)`);
     if (!meta.title) err('meta.title missing');
     if (!meta.description) warnings.push(`${where}: no meta.description (8 to 10 words on what it shows; npm run status lists it)`);
-    // recommended: echarts; any other library is allowed (the dashboard skill, references/sections.md)
+    // recommended: echarts; any other library is allowed (the dashboard skill, references/make-your-own-section.md)
     if (!/^[a-z][a-z0-9_-]*$/.test(meta.library ?? '')) err(`meta.library must name the chart library (e.g. ${LIBRARIES.join(', ')})`);
     if (tabIds.size && !tabIds.has(meta.tab)) err(`meta.tab must be one of ${[...tabIds].join(', ')} (tabs are defined in Src/Sections/index.js)`);
     if (!tabIds.size && meta.tab) err('meta.tab set but Src/Sections/index.js exports no tabs');
@@ -267,10 +267,18 @@ export function validateProject(p) {
       err(`Analysis failed with every filter at All: ${card.error}`);
       continue;
     }
+    for (const [slot, v] of Object.entries(mod.slots ?? {})) if (v === null) warnings.push(`${where}: MANUAL: slot ${slot} not filled yet (it shows the item's sample data); set it in Src/Sections/${meta.id}.jsx`);
+    for (const [c, spec] of Object.entries(mod.format ?? {})) {
+      const top = card.ranges?.[c];
+      if (top === undefined || top === null) continue;
+      if (spec === 'pct' && top > 1000) warnings.push(`${where}: format ${c} is "pct" (12%) but its values reach ${Math.round(top).toLocaleString('en-US')}: a percent label on amounts; use $short, short or comma`);
+      if (/^\$?\.\d%$/.test(spec) && top > 10) warnings.push(`${where}: format ${c} is "${spec}" (a fraction shown as %) but its values reach ${Math.round(top).toLocaleString('en-US')}; use pct for values already in %, or $short for amounts`);
+      if (/^\$/.test(spec) && top <= 1.5 && top > 0) warnings.push(`${where}: format ${c} is "${spec}" (dollars) but its values stay under 1.5, like fractions; use .1% or comma`);
+    }
     if (mod.slots && card.columns) {
       for (const [slot, v] of Object.entries(mod.slots)) {
         for (const c of [].concat(v)) {
-          if (typeof c === 'string' && c !== '*' && !/^-?\d+(\.\d+)?$/.test(c) && !card.columns.includes(c)) err(`slots.${slot}: "${c}" is not a column of its data (columns: ${card.columns.join(', ')})`);
+          if (typeof c === 'string' && c !== '*' && !/^-?\d+(\.\d+)?$/.test(c) && !card.columns.includes(c)) err(`slots.${slot}: "${c}" is not a column of its data (columns: ${card.columns.join(', ')}). Fix: in Src/Sections/${meta.id}.jsx put one of those columns in slots.${slot}, or write ${slot}: null to show the item's sample data until it is wired`);
         }
       }
     }
@@ -292,7 +300,8 @@ export function validateProject(p) {
     else if (f.tab && !tabIds.has(f.tab)) errors.push(`${where}: tab "${f.tab}" doesn't exist (tabs: ${[...tabIds].join(', ') || 'none, this dashboard has one page'})`);
     else if (f.section && !ids.has(f.section)) errors.push(`${where}: section "${f.section}" doesn't exist`);
     else if (!a.error && ids.size && !Object.values(p.cards).some((c) => c.filters?.includes(name))) {
-      errors.push(`${where} (${levelText(f)}) applies to no section: none of the sections it reaches reads a table with column "${f.column}"`);
+      const ignoring = Object.entries(p.cards).filter(([, c]) => c.ignore?.includes(name)).map(([cid]) => cid);
+      warnings.push(`${where} (${levelText(f)}) narrows no section: ${ignoring.length ? `${ignoring.join(', ')} ${ignoring.length > 1 ? 'list' : 'lists'} it under ignore in meta (they compare its values)` : `no section it reaches reads a table with column "${f.column}"`}. Fine if meant; to let a section follow it, delete "${name}" from that section's meta ignore, or delete the filter`);
     }
   }
   for (const [id, c] of Object.entries(p.cards)) {
@@ -434,7 +443,7 @@ export function validateReport(name, report, p) {
   if (report.output !== undefined && (typeof report.output !== 'string' || !/^[A-Za-z0-9][\w.-]{0,80}$/.test(report.output))) E('"output" must be a file name stem (letters, numbers, - _ .)');
   if (report.script !== undefined && (typeof report.script !== 'string' || !/^[\w.-]+\.py$/.test(report.script))) E('"script" must be the report\'s Python file name in Reports/, e.g. "finance.py"');
   else if (report.script && !name.startsWith('_') && !fs.existsSync(path.join(ROOT, 'Reports', report.script))) W(`script Reports/${report.script} not found`);
-  if (report.script === undefined && !name.startsWith('_')) W('no "script": a report runs as python Reports/<name>.py (see the dashboard skill, references/exports.md)');
+  if (report.script === undefined && !name.startsWith('_')) W('no "script": a report runs as python Reports/<name>.py (see the dashboard skill, references/export-an-offline-report.md)');
   if (report.tabs !== undefined && !Array.isArray(report.tabs)) E('"tabs" must be a list of tab ids');
   if (report.reportTabs !== undefined) {
     if (report.tabs || report.sections) E('use "reportTabs" or "tabs" / "sections", not both');

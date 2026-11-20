@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Components · Cosmo</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="cosmo.css">
+<!--
+  COMPONENT REFERENCE. Every component the site uses, shown once.
+  The markup inside each <div class="demo-live"> block is the exact markup to copy
+  (the grey code box under it shows the same markup, filled in by the script at the end).
+  The header and footer demos show this page's own header and footer.
+  The styles in the <style> below are for this reference page only; do not copy them.
+-->
+<style>
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 56px; padding: 0; list-style: none; }
+  .toc li { margin: 0; }
+  .toc a { display: inline-block; padding: 6px 12px; font-size: .9rem; text-decoration: none; border: 1px solid var(--rule); border-radius: var(--radius); }
+  .toc a:hover { border-color: var(--blue); background: var(--tint); }
+  .demo { margin: 0 0 80px; }
+  .demo-head { max-width: 50rem; margin-bottom: 18px; }
+  .demo-head h2 { margin-bottom: .3em; font-size: 1.6rem; }
+  .demo-head p { margin: 0; color: var(--muted); }
+  .demo-live { padding: clamp(18px, 4vw, 36px); background: var(--paper); border: 1px solid var(--rule); border-bottom: 0; }
+  .demo-live.bleed { padding: 0; overflow: hidden; }
+  .demo-live.wash { background: var(--wash); }
+  .demo-live > :last-child { margin-bottom: 0; }
+  .demo-live > :first-child { margin-top: 0; }
+  .demo-code { max-height: 340px; margin: 0; font-size: 12.5px; border-radius: 0; }
+  .demo-note { margin: 10px 0 0; font-size: .9rem; color: var(--muted); }
+  .icon-row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .icon-row figure { margin: 0; display: grid; justify-items: center; gap: 8px; width: 96px; font-size: .78rem; color: var(--muted); }
+  .icon-row .card-icon { margin: 0; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="index.html" aria-label="Cosmo home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><ellipse class="mark-ring" cx="16" cy="16" rx="14" ry="6.5" transform="rotate(-25 16 16)"/><circle class="mark-core" cx="16" cy="16" r="6"/><circle class="mark-dot" cx="24" cy="7.7" r="2.6"/></svg>
+      <span>Cosmo</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="index.html">Home</a>
+      <a href="deliverables.html">Deliverables</a>
+      <a href="brain.html">Brain</a>
+      <a href="orchestration.html">Orchestration</a>
+      <span class="nav-gap" aria-hidden="true"></span>
+      <span class="soon" title="Coming soon">Skills</span>
+      <span class="soon" title="Coming soon">Setup</span>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero slim">
+  <div class="wrap hero-in">
+    <div>
+      <p class="hero-kicker">For page builders</p>
+      <h1 class="hero-title">Components</h1>
+      <p class="hero-lead">Every piece the site is built from, each shown once with the markup to copy. All of it is styled by cosmo.css; no page needs its own styles.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+
+    <ul class="toc">
+      <li><a href="#c-header">Header and nav</a></li>
+      <li><a href="#c-hero">Hero</a></li>
+      <li><a href="#c-slim">Page title band</a></li>
+      <li><a href="#c-section">Section</a></li>
+      <li><a href="#c-buttons">Buttons</a></li>
+      <li><a href="#c-cards">Feature cards</a></li>
+      <li><a href="#c-steps">Steps</a></li>
+      <li><a href="#c-compare">Before and after</a></li>
+      <li><a href="#c-stats">Figures</a></li>
+      <li><a href="#c-define">Definition box</a></li>
+      <li><a href="#c-callout">Callout</a></li>
+      <li><a href="#c-split">Two-column strip</a></li>
+      <li><a href="#c-flow">Flow diagram</a></li>
+      <li><a href="#c-ph">Placeholder card</a></li>
+      <li><a href="#c-tags">Tags and code</a></li>
+      <li><a href="#c-icons">Icons</a></li>
+      <li><a href="#c-footer">Footer</a></li>
+    </ul>
+
+    <!-- ===== HEADER ===== -->
+    <section class="demo" id="c-header" data-from="header.top">
+      <div class="demo-head">
+        <h2>Page header and nav</h2>
+        <p>The bar at the top of this page. Copy it as is onto every page and put <code>aria-current="page"</code> on that page's own link. Greyed entries are <code>&lt;span class="soon"&gt;</code>; when the page exists, turn the span into an <code>&lt;a href&gt;</code> and move it before <code>.nav-gap</code>. Classes: <code>.top</code> <code>.top-in</code> <code>.brand</code> <code>.nav</code> <code>.nav-gap</code> <code>.soon</code>.</p>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== HERO ===== -->
+    <section class="demo" id="c-hero">
+      <div class="demo-head">
+        <h2>Hero</h2>
+        <p>The big opening band, for the home page only. The name sits in <code>.hero-name</code>; the long form is the empty <code>.expansion</code> span, filled from one line at the top of cosmo.css. The orbit picture hides at phone width. Classes: <code>.hero</code> <code>.hero-in</code> <code>.hero-kicker</code> <code>.hero-name</code> <code>.expansion</code> <code>.hero-lead</code> <code>.hero-actions</code> <code>.hero-art</code>.</p>
+      </div>
+      <div class="demo-live bleed">
+<section class="hero">
+  <div class="wrap hero-in">
+    <div>
+      <p class="hero-kicker">An overview for colleagues</p>
+      <h1 class="hero-name">Cosmo</h1>
+      <span class="expansion"></span>
+      <p class="hero-lead">One or two plain sentences on what this is.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#">Main action <span class="arr" aria-hidden="true">&rarr;</span></a>
+        <a class="btn ghost" href="#">Second action</a>
+      </div>
+    </div>
+    <svg class="hero-art orbit" viewBox="0 0 460 460" role="img" aria-label="Describe the picture here">
+      <circle class="ring" cx="230" cy="230" r="78"/>
+      <circle class="ring dash" cx="230" cy="230" r="136"/>
+      <circle class="ring" cx="230" cy="230" r="196"/>
+      <g class="spin fast"><circle class="moon-a" cx="308" cy="230" r="5"/></g>
+      <g class="spin slow"><circle class="moon-b" cx="94" cy="230" r="5"/></g>
+      <g class="spin"><circle class="moon-c" cx="230" cy="426" r="5"/></g>
+      <circle class="core" cx="230" cy="230" r="50"/>
+      <text class="core-text" x="230" y="235">Centre</text>
+      <circle class="planet" cx="290" cy="280" r="8"/>
+      <text class="tag-text" x="306" y="285">Label one</text>
+      <circle class="planet" cx="102" cy="277" r="8"/>
+      <text class="tag-text" x="102" y="308" text-anchor="middle">Label two</text>
+      <circle class="planet" cx="132" cy="60" r="8"/>
+      <text class="tag-text" x="148" y="65">Label three</text>
+    </svg>
+  </div>
+</section>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== SLIM HERO ===== -->
+    <section class="demo" id="c-slim">
+      <div class="demo-head">
+        <h2>Page title band</h2>
+        <p>The opening band for content pages (Deliverables, Brain, Orchestration): a kicker, the page title and one lead sentence. Classes: <code>.hero.slim</code> <code>.hero-title</code> plus the hero classes above.</p>
+      </div>
+      <div class="demo-live bleed">
+<section class="hero slim">
+  <div class="wrap hero-in">
+    <div>
+      <p class="hero-kicker">Idea 2 of 3</p>
+      <h1 class="hero-title">The brain</h1>
+      <p class="hero-lead">One sentence that says what this page explains, in plain words.</p>
+    </div>
+  </div>
+</section>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== SECTION ===== -->
+    <section class="demo" id="c-section">
+      <div class="demo-head">
+        <h2>Section with heading and lead</h2>
+        <p>One <code>&lt;section class="sec"&gt;</code> per topic, each with a <code>.wrap</code> inside. Alternate plain and <code>.sec.alt</code> (pale background) down the page. <code>.sec-head</code> holds a small blue <code>.eyebrow</code>, the <code>h2</code> and one <code>.lead</code> sentence. For running text use <code>.prose</code> (keeps lines readable).</p>
+      </div>
+      <div class="demo-live bleed">
+<section class="sec alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Short label</p>
+      <h2>A heading that says the point</h2>
+      <p class="lead">One sentence that sets up what follows. Keep it short and plain.</p>
+    </div>
+    <div class="prose">
+      <p>Body text goes here, in short paragraphs. Use <strong>bold</strong> for a term the first time it appears.</p>
+    </div>
+  </div>
+</section>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== BUTTONS ===== -->
+    <section class="demo" id="c-buttons">
+      <div class="demo-head">
+        <h2>Buttons</h2>
+        <p>Links styled as buttons. <code>.btn</code> is the main one, <code>.btn.ghost</code> the quieter one. The arrow in <code>.arr</code> nudges on hover.</p>
+      </div>
+      <div class="demo-live">
+<div class="hero-actions">
+  <a class="btn" href="#">Main action <span class="arr" aria-hidden="true">&rarr;</span></a>
+  <a class="btn ghost" href="#">Second action</a>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== CARDS ===== -->
+    <section class="demo" id="c-cards">
+      <div class="demo-head">
+        <h2>Feature card grid</h2>
+        <p><code>.cards</code> is a grid that fills the row and wraps on small screens; add <code>.three</code> for exactly three across on wide screens, or <code>.two</code> for wider cards. A <code>&lt;div class="card"&gt;</code> is plain; an <code>&lt;a class="card"&gt;</code> is a link card that lifts on hover and ends with <code>.card-more</code>. Optional parts: <code>.card-icon</code> (an icon from the Icons section) and <code>.card-num</code>.</p>
+      </div>
+      <div class="demo-live wash">
+<div class="cards three">
+  <a class="card" href="#">
+    <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><path d="M17 13v8M13 17h8"/></svg></span>
+    <p class="card-num">01</p>
+    <h3>A link card</h3>
+    <p>Two or three short sentences. The whole card is the link.</p>
+    <span class="card-more">Read more <span class="arr" aria-hidden="true">&rarr;</span></span>
+  </a>
+  <div class="card">
+    <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
+    <h3>A plain card</h3>
+    <p>No link, no number. Use for a feature or a point.</p>
+  </div>
+  <div class="card">
+    <h3>Text only</h3>
+    <p>Icons and numbers are optional.</p>
+    <p>A second paragraph is fine.</p>
+  </div>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== STEPS ===== -->
+    <section class="demo" id="c-steps">
+      <div class="demo-head">
+        <h2>How it works: numbered steps</h2>
+        <p>An <code>&lt;ol class="steps"&gt;</code>; numbers are added for you. Stacked by default; add <code>.row</code> to lay three or four short steps side by side on wide screens (they stack again on phones).</p>
+      </div>
+      <div class="demo-live">
+<ol class="steps">
+  <li>
+    <h3>You ask</h3>
+    <p>Say what you want in plain words.</p>
+  </li>
+  <li>
+    <h3>The assistant picks a skill</h3>
+    <p>It follows that skill's written steps.</p>
+  </li>
+  <li>
+    <h3>You check the result</h3>
+    <p>Nothing is final until you say yes.</p>
+  </li>
+</ol>
+      </div>
+      <div class="demo-live" style="border-top: 1px dashed var(--rule)">
+<ol class="steps row">
+  <li>
+    <h3>Ask</h3>
+    <p>One short line.</p>
+  </li>
+  <li>
+    <h3>Build</h3>
+    <p>One short line.</p>
+  </li>
+  <li>
+    <h3>Check</h3>
+    <p>One short line.</p>
+  </li>
+  <li>
+    <h3>Keep</h3>
+    <p>One short line.</p>
+  </li>
+</ol>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+      <p class="demo-note">The code box shows both versions, stacked first.</p>
+    </section>
+
+    <!-- ===== COMPARE ===== -->
+    <section class="demo" id="c-compare">
+      <div class="demo-head">
+        <h2>Before and after</h2>
+        <p><code>.compare</code> holds a <code>.before</code> panel, the <code>.compare-arrow</code> and an <code>.after</code> panel, each starting with a <code>.compare-label</code>. On phones they stack and the arrow points down.</p>
+      </div>
+      <div class="demo-live">
+<div class="compare">
+  <div class="before">
+    <p class="compare-label">Before</p>
+    <h3>Every report starts from scratch</h3>
+    <ul>
+      <li>Charts styled by hand each time</li>
+      <li>Each person's work looks different</li>
+    </ul>
+  </div>
+  <div class="compare-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+  <div class="after">
+    <p class="compare-label">With Cosmo</p>
+    <h3>Reports start from tested parts</h3>
+    <ul>
+      <li>Charts come ready-made from the library</li>
+      <li>Everyone's work shares one look</li>
+    </ul>
+  </div>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== STATS ===== -->
+    <section class="demo" id="c-stats">
+      <div class="demo-head">
+        <h2>Figure tiles</h2>
+        <p>A row of big numbers with a short label each. <code>.stats</code> holds <code>.stat</code> tiles, each with a <code>.stat-num</code> (an optional unit in <code>&lt;small&gt;</code>) and a <code>.stat-label</code>. Two across on phones. Use only figures that are true; the ones below are examples.</p>
+      </div>
+      <div class="demo-live">
+<div class="stats">
+  <div class="stat"><span class="stat-num">10</span><span class="stat-label">skills in the bundle</span></div>
+  <div class="stat"><span class="stat-num">6</span><span class="stat-label">subagents that do focused jobs</span></div>
+  <div class="stat"><span class="stat-num">2</span><span class="stat-label">assistants it works with</span></div>
+  <div class="stat"><span class="stat-num">1<small>library</small></span><span class="stat-label">of charts, tables and slides, shared by all</span></div>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== DEFINE ===== -->
+    <section class="demo" id="c-define">
+      <div class="demo-head">
+        <h2>Definition box: "in plain terms"</h2>
+        <p>Use the first time a term appears that a newcomer may not know. <code>.define</code> with a <code>.define-tag</code> line, then the term in <code>&lt;strong&gt;</code> and a one-line meaning. Several at once go in a <code>.defines</code> grid (two across on wide screens).</p>
+      </div>
+      <div class="demo-live">
+<aside class="define">
+  <p class="define-tag">In plain terms</p>
+  <p><strong>Subagent</strong>: a helper the assistant starts for one focused job. It gets a short brief, does the job and reports back.</p>
+</aside>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== CALLOUT ===== -->
+    <section class="demo" id="c-callout">
+      <div class="demo-head">
+        <h2>Callout</h2>
+        <p>A note set apart from the text. <code>.callout</code> for something good to know, <code>.callout.warn</code> for a caution. The title line (<code>.callout-title</code>) is optional.</p>
+      </div>
+      <div class="demo-live">
+<div class="callout">
+  <p class="callout-title">Good to know</p>
+  <p>Nothing is filed into the team notes without a person saying yes.</p>
+</div>
+<div class="callout warn">
+  <p class="callout-title">Careful</p>
+  <p>Never paste passwords or private data into a note.</p>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== SPLIT ===== -->
+    <section class="demo" id="c-split">
+      <div class="demo-head">
+        <h2>Two-column strip with tick lists</h2>
+        <p><code>.split</code> puts two (or three) panels side by side, stacking on phones. A <code>.split-head</code> pairs an icon with the heading. <code>.ticks</code> is a list with blue ticks; a <code>&lt;span&gt;</code> inside an item is greyed, for a side note.</p>
+      </div>
+      <div class="demo-live wash">
+<div class="split">
+  <div>
+    <div class="split-head">
+      <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+      <h3>Who it is for</h3>
+    </div>
+    <ul class="ticks">
+      <li>A short point.</li>
+      <li>Another point. <span>A greyed side note.</span></li>
+    </ul>
+  </div>
+  <div>
+    <div class="split-head">
+      <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2 2.3-2.2M4 18l1.2 1.2 2.3-2.2"/></svg></span>
+      <h3>What you need</h3>
+    </div>
+    <ul class="ticks">
+      <li>A short point.</li>
+      <li>Another point.</li>
+    </ul>
+  </div>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== FLOW ===== -->
+    <section class="demo" id="c-flow">
+      <div class="demo-head">
+        <h2>Flow diagram (inline SVG)</h2>
+        <p>Boxes and arrows drawn in the page, coloured by cosmo.css, so they follow light and dark. Wrap in <code>&lt;figure class="flow"&gt;&lt;div class="flow-box"&gt;</code>. Each box is a <code>&lt;g class="node"&gt;</code> holding a <code>rect</code> and one or two <code>text</code> lines (second line <code>class="sub"</code>; text is centred on its x, y). Box kinds: <code>.node</code> plain, <code>.node.key</code> the main one (blue), <code>.node.soft</code> shared or supporting (pale blue), <code>.node.ghost</code> optional (dashed). Arrows are <code>&lt;path class="edge"&gt;</code> (<code>.dash</code> dashed, <code>.move</code> gently moving) ending with <code>marker-end</code>; <code>.label</code> is small arrow text; <code>.group</code> and <code>.group-label</code> draw a dashed area around boxes.</p>
+      </div>
+      <div class="demo-live">
+<figure class="flow">
+  <div class="flow-box">
+    <svg viewBox="0 0 720 240" role="img" aria-label="Your question goes to the analysis skill, which takes charts and tables from the design library and writes a report. Results worth keeping can go into the findings.">
+      <defs>
+        <!-- one marker per diagram; give it an id no other diagram on the page uses -->
+        <marker id="ex-arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker>
+      </defs>
+      <rect class="group" x="180" y="10" width="200" height="220" rx="2"/>
+      <text class="group-label" x="196" y="32">Cosmo</text>
+      <g class="node soft"><rect x="200" y="46" width="160" height="44" rx="2"/><text x="280" y="68">Design library</text></g>
+      <g class="node key"><rect x="200" y="150" width="160" height="64" rx="2"/><text x="280" y="171">Analysis skill</text><text class="sub" x="280" y="193">explores the data</text></g>
+      <g class="node"><rect x="10" y="150" width="130" height="64" rx="2"/><text x="75" y="171">Your question</text><text class="sub" x="75" y="193">in plain words</text></g>
+      <g class="node"><rect x="440" y="150" width="130" height="64" rx="2"/><text x="505" y="171">Report</text><text class="sub" x="505" y="193">one HTML file</text></g>
+      <g class="node ghost"><rect x="600" y="46" width="110" height="44" rx="2"/><text x="655" y="68">Findings</text></g>
+      <path class="edge" d="M140 182 H196" marker-end="url(#ex-arr)"/>
+      <path class="edge move" d="M360 182 H436" marker-end="url(#ex-arr)"/>
+      <path class="edge dash" d="M280 90 V146" marker-end="url(#ex-arr)"/>
+      <text class="label" x="330" y="122">charts, tables</text>
+      <path class="edge dash" d="M505 146 V68 H596" marker-end="url(#ex-arr)"/>
+      <text class="label" x="552" y="58">worth keeping</text>
+    </svg>
+  </div>
+  <figcaption>One line saying what the picture shows.</figcaption>
+</figure>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+      <p class="demo-note">Tips: keep the viewBox about 720 wide (it scrolls sideways inside its box on phones); 15px main text fits about 8 characters per 60 units of box width; give each box at least 40 units of gap for its arrow; arrows end 4 units short of the box they point at.</p>
+    </section>
+
+    <!-- ===== PLACEHOLDER ===== -->
+    <section class="demo" id="c-ph">
+      <div class="demo-head">
+        <h2>Placeholder card: "coming soon"</h2>
+        <p>A card for something not written yet: dashed, hatched and greyed so nobody mistakes it for finished. Add <code>.ph</code> to a <code>.card</code> and start it with a <code>.tag.soon</code>. When it is written, remove <code>ph</code> and the tag. Duplicate freely inside a <code>.cards</code> grid.</p>
+      </div>
+      <div class="demo-live">
+<div class="cards">
+  <div class="card ph">
+    <span class="tag soon">Coming soon</span>
+    <h3>Name goes here</h3>
+    <p>One or two lines on what this is and when to use it.</p>
+  </div>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== TAGS AND CODE ===== -->
+    <section class="demo" id="c-tags">
+      <div class="demo-head">
+        <h2>Tags, inline code and code blocks</h2>
+        <p><code>.tag</code> is a small blue label; <code>.tag.soon</code> a greyed one. <code>&lt;code&gt;</code> marks a file or command inside a sentence; <code>&lt;pre&gt;&lt;code&gt;</code> is a block for something to type.</p>
+      </div>
+      <div class="demo-live">
+<p><span class="tag">New</span> <span class="tag soon">Coming soon</span></p>
+<p>Type <code>new project</code> to start.</p>
+<pre><code>python --version</code></pre>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== ICONS ===== -->
+    <section class="demo" id="c-icons">
+      <div class="demo-head">
+        <h2>Icons</h2>
+        <p>Line icons drawn in the page. Put one inside a <code>.card-icon</code> span, or give the <code>svg</code> <code>class="icon"</code> to use it alone. Copy the whole <code>svg</code>.</p>
+      </div>
+      <div class="demo-live">
+<div class="icon-row">
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><path d="M17 13v8M13 17h8"/></svg></span>parts</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>note page</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="12" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v9M10.6 7.1 6.2 16.8M13.4 7.1l4.4 9.7"/></svg></span>helpers</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>person</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2 2.3-2.2M4 18l1.2 1.2 2.3-2.2"/></svg></span>checklist</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg></span>chat</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>data</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 16v-4M12 16V8M17 16v-6"/></svg></span>chart</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8 20h8"/></svg></span>deck</figure>
+  <figure><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>checked</figure>
+</div>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <section class="demo" id="c-footer" data-from="footer.foot">
+      <div class="demo-head">
+        <h2>Footer</h2>
+        <p>The band at the bottom of this page. Copy it as is onto every page. The long form of the name fills <code>.expansion</code> by itself. Classes: <code>.foot</code> <code>.foot-in</code> <code>.foot-name</code> <code>.foot-links</code> <code>.foot-note</code>.</p>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <p class="foot-name">Cosmo</p>
+      <span class="expansion"></span>
+    </div>
+    <ul class="foot-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="deliverables.html">Deliverables</a></li>
+      <li><a href="brain.html">Brain</a></li>
+      <li><a href="orchestration.html">Orchestration</a></li>
+    </ul>
+    <p class="foot-note">An overview for colleagues. Every page is a plain file and works offline.</p>
+  </div>
+</footer>
+
+<script>
+/* Fills each demo's code box with the markup shown above it (this reference page only). */
+(function () {
+  function dedent(text, skipFirst) {
+    var lines = text.replace(/^\s*\n/, '').replace(/\s+$/, '').split('\n');
+    var rest = skipFirst ? lines.slice(1) : lines;
+    var pads = rest.filter(function (l) { return l.trim(); }).map(function (l) { return l.match(/^ */)[0].length; });
+    var min = pads.length ? Math.min.apply(null, pads) : 0;
+    return lines.map(function (l, i) { return skipFirst && i === 0 ? l : l.slice(min); }).join('\n');
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.demo'), function (demo) {
+    var out = demo.querySelector('.demo-code code');
+    if (!out) return;
+    var from = demo.getAttribute('data-from'), text;
+    if (from) {
+      var el = document.querySelector(from);
+      text = el ? el.outerHTML : '';
+    } else {
+      text = Array.prototype.map.call(demo.querySelectorAll('.demo-live'), function (live) { return dedent(live.innerHTML, false); }).join('\n\n');
+    }
+    out.textContent = text;
+  });
+})();
+</script>
+</body>
+</html>

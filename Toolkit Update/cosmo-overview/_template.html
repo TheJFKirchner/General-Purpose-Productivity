@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- TITLE: the page name, then " · Cosmo" -->
+<title>Page name · Cosmo</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="cosmo.css">
+<!-- No <style> or <script> needed: every look comes from cosmo.css. Components and markup: _components.html -->
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- HEADER: copy as is. Put aria-current="page" on THIS page's link (and nowhere else). -->
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="index.html" aria-label="Cosmo home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><ellipse class="mark-ring" cx="16" cy="16" rx="14" ry="6.5" transform="rotate(-25 16 16)"/><circle class="mark-core" cx="16" cy="16" r="6"/><circle class="mark-dot" cx="24" cy="7.7" r="2.6"/></svg>
+      <span>Cosmo</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="index.html">Home</a>
+      <a href="deliverables.html">Deliverables</a>
+      <a href="brain.html">Brain</a>
+      <a href="orchestration.html">Orchestration</a>
+      <span class="nav-gap" aria-hidden="true"></span>
+      <span class="soon" title="Coming soon">Skills</span>
+      <span class="soon" title="Coming soon">Setup</span>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- PAGE TITLE BAND: kicker (e.g. "Idea 1 of 3"), the page title, one plain lead sentence -->
+<section class="hero slim">
+  <div class="wrap hero-in">
+    <div>
+      <p class="hero-kicker">Idea 1 of 3</p>
+      <h1 class="hero-title">Page title</h1>
+      <p class="hero-lead">One sentence that says what this page explains, in plain words.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CONTENT: one <section class="sec"> per topic. Alternate "sec" and "sec alt" (pale background) down the page.
+     Inside each: a .sec-head (eyebrow, h2, lead), then any components from _components.html. -->
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Short label</p>
+      <h2>First topic heading</h2>
+      <p class="lead">One sentence that sets up this section.</p>
+    </div>
+    <!-- CONTENT GOES HERE: cards, steps, a before/after, a flow diagram, definition boxes ... -->
+  </div>
+</section>
+
+<section class="sec alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Short label</p>
+      <h2>Second topic heading</h2>
+      <p class="lead">One sentence that sets up this section.</p>
+    </div>
+    <!-- CONTENT GOES HERE -->
+  </div>
+</section>
+
+<!-- LAST SECTION (suggested): where to go next, as link cards to the other pages -->
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Next</p>
+      <h2>Where to go next</h2>
+    </div>
+    <div class="cards two">
+      <a class="card" href="index.html">
+        <h3>Back to the overview</h3>
+        <p>The three ideas, who Cosmo is for, and what you need.</p>
+        <span class="card-more">Home <span class="arr" aria-hidden="true">&rarr;</span></span>
+      </a>
+      <!-- add a link card for the next idea's page here -->
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- FOOTER: copy as is. The long form of the name fills .expansion by itself (set in cosmo.css). -->
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <p class="foot-name">Cosmo</p>
+      <span class="expansion"></span>
+    </div>
+    <ul class="foot-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="deliverables.html">Deliverables</a></li>
+      <li><a href="brain.html">Brain</a></li>
+      <li><a href="orchestration.html">Orchestration</a></li>
+    </ul>
+    <p class="foot-note">An overview for colleagues. Every page is a plain file and works offline.</p>
+  </div>
+</footer>
+</body>
+</html>

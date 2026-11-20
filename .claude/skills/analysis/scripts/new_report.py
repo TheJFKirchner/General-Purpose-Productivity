@@ -2,10 +2,11 @@
 """Create a report folder from the template, and add one line to the project's map.
 
 Usage:
-  new_report.py <parent folder> <name> --title "Report title" --question "The question"
+  new_report.py [<parent folder>] <name> --title "Report title" --question "The question"
                 [--for "who reads it"] [--source NAME=FILE ...] [--map <project CLAUDE.md>]
                 [--theme TH-02] [--library <design library folder>]
 
+No parent folder: reports/<name>/ under the folder you run this from.
 Creates <parent>/<name>/ with report.py, run.py, page.html and sections/_shared.py.
 --source: fill SOURCES (FILE as seen from where you run this; stored relative to the report folder).
 --map: add a row for the new folder to the "| Folder or file | Holds |" table in that file.
@@ -91,7 +92,8 @@ def dress_page(page: Path, lib, theme) -> str:
     if lib is None:
         return "note: design library not found; page.html keeps the template's copy of its host files"
     text = page.read_text(encoding="utf-8")
-    for tag, ident, f in (("style", "host-css", "host.css"), ("script", "host-runtime", "host-runtime.js")):
+    for tag, ident, f in (("style", "host-css", "host.css"), ("script", "host-runtime", "host-runtime.js"),
+                          ('script', 'host-motion" type="text/x-host-motion', "host-motion.js")):
         body = (lib / f).read_text(encoding="utf-8").strip()
         text = re.sub(rf'(<{tag} id="{ident}">\n)[\s\S]*?(\n</{tag}>)', lambda m: m.group(1) + body + m.group(2),
                       text, count=1)
@@ -105,8 +107,8 @@ def dress_page(page: Path, lib, theme) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("parent")
-    ap.add_argument("name", help="short name, e.g. may-claims-spike")
+    ap.add_argument("where", nargs="+", metavar="[parent] name",
+                    help="short name, e.g. may-claims-spike; a parent folder before it (default: reports)")
     ap.add_argument("--title", required=True)
     ap.add_argument("--question", required=True)
     ap.add_argument("--map", help="the project's CLAUDE.md")
@@ -116,11 +118,15 @@ def main(argv=None) -> int:
     ap.add_argument("--library", help="the design library folder, when it is not found by itself")
     args = ap.parse_args(argv)
 
-    name = re.sub(r"[^a-z0-9]+", "-", args.name.lower()).strip("-")
+    if len(args.where) > 2:
+        print("STOP: give at most a parent folder and a name")
+        return 2
+    parent, raw = (args.where if len(args.where) == 2 else ["reports", args.where[0]])
+    name = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
     if not name:
         print("STOP: the name needs letters or digits")
         return 2
-    dest = Path(args.parent).resolve() / name
+    dest = Path(parent).resolve() / name
     if dest.exists():
         print(f"STOP: {dest} already exists")
         return 2

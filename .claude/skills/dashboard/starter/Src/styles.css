@@ -70,6 +70,7 @@ mark.missing { background: var(--wash); color: var(--orange); padding: 0 3px; fo
 
 .chart { width: 100%; }
 .item-html { display: contents; }
+.item-todo { margin: 0; padding: 6px 10px; border: 1px dashed var(--bad); color: var(--bad); font-size: 0.9em; }
 .section > [data-item] { margin-top: 8px; flex: 1 1 auto; }   /* beside a taller half, a chart grows to match */
 
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }

@@ -19,12 +19,16 @@ Reusable slides, charts, tables, hero cards, animations, layout pieces and theme
 
 ## Use
 - Read `index.md` (id, type, name, purpose and, for charts, tables and hero cards, the data each needs), or one type only: `index/charts.md`, `index/tables.md` ...
-- Into a project: `node item.js <id>` prints the item's block, data note, recipe and own CSS (never the engine); `node item.js fill <id> --data <file> --slot <name>=<column>` puts real columns in; `node item.js theme <TH id>` prints a theme's tokens. The page carries `host.css` and `host-runtime.js` once. All in `AUTHORING.md`.
+- Into a project: `node item.js <id>` prints the item's block, data note, recipe and own CSS (never the engine); `node item.js fill <id> --data <file> --slot <name>=<column>` puts real columns in; `node item.js theme <TH id>` prints a theme's tokens; `node item.js shot <id>` takes a picture of it. The page carries `host.css` and `host-runtime.js` once, and `host-motion.js` when it has an animation. All in `AUTHORING.md`.
 - Each skill adds by id, then you edit the file: analysis `python run.py add-section NAME --use <id> --source SRC --slot ...`; presentation `deck.js add <deck> <id> [<chart id>]`; dashboard `npm run new-section -- NAME --use <id> ...`. A chart into a slide's chart spot: `node item.js swap <slide id> <chart id>`.
 - See every item in every theme: open `index.html` (theme and type dropdowns; click an item for a popup with previous and next).
 
 ## Save
 - A visual the user liked: launch the `design-librarian` agent with the files. Never by hand.
+- The exact shape of an item, how to make a copied chart fit it, and what each check failure means: `ITEM-SHAPE.md`.
 - An item written by hand: `node save-item.js new <chart|table|hero-card|animation|layout|slide> --name <name>`, then fill it as `AUTHORING.md` says.
 - After any change: `node build-index.js`. It fails on a bad id or name, a missing purpose, an outside file, a hard-coded colour or font; a chart, table or hero card without a data note whose slots are all marked; a chart block holding more than its options, key and basis line, or printing over 6 KB; a slide without its spots; and in saved items a date, over 6 points or a word recorded from the source (`denylist.json`, hashed).
-- Files the build writes, never edited: `index.md`, `index/`, `index.html`, `host.css`. `host-runtime.js` is edited by hand; the item engine is built from it.
+- Files the build writes, never edited: `index.md`, `index/`, `index.html`, `host.css`. `host-runtime.js` and `host-motion.js` are edited by hand; the item engine is built from the first.
+- Animations also carry `attaches:` and `fits:` lines; the build checks them.
+- Proof that every item can be added: `node sweep-add.js [--target report|deck|dashboard] [--only ids]` builds a scratch report, deck and dashboard in a temp folder and adds every item through each skill's own add command (all slots, optional slots left out, one required slot left out).
+- It prints PASS, MANUAL or FAIL per case and a summary, writes `results.txt` in that temp folder, and exits 1 on any FAIL. Run it after changing the library or the skills' add commands.

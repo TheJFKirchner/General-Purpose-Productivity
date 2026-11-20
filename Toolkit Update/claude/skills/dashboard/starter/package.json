@@ -12,6 +12,7 @@
     "status": "node Tools/status.mjs",
     "new-section": "node Tools/new-section.mjs",
     "theme": "node Tools/theme.mjs",
+    "show": "node Tools/show.mjs",
     "tables": "node Tools/tables.mjs",
     "build": "node Tools/check.mjs && vite build",
     "serve": "node Tools/py.mjs Analysis/server.py --serve",

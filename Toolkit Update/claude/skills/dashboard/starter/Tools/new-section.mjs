@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, pythonCommand, readJsonFile } from './py.mjs';
 import { findLibrary, itemJs } from './library.mjs';
-import { SAMPLE_WORDS, checkSlots, fillChart } from '../Src/Lib/fill.js';
+import { SAMPLE_WORDS, checkSlots, fillChart, seriesPerSlot } from '../Src/Lib/fill.js';
 
 const SECTIONS = path.join(ROOT, 'Src', 'Sections');
 const INDEX = path.join(SECTIONS, 'index.js');
@@ -92,6 +92,12 @@ if (val('own')) {
 const isChart = item.type === 'chart';
 const note = item.data ?? [];
 const kindOf = Object.fromEntries(note.map((s) => [s.name, s]));
+// slots the recipe gives a rule for ("low: the smaller of start and end"): they must be worked out first
+const rules = {};
+for (const part of String(item.recipe ?? '').split(';')) {
+  const m = /^\s*([a-z][a-z0-9-]*(?:\s*,\s*[a-z][a-z0-9-]*)*)\s*[:=]\s*(.+)$/.exec(part);
+  if (m) for (const n of m[1].split(',').map((x) => x.trim())) if (kindOf[n]) rules[n] = m[2].trim();
+}
 
 // ---- the table and its columns
 const r = spawnSync(pythonCommand(), [path.join('Analysis', 'check.py'), '--describe-only'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -108,95 +114,196 @@ if (!t) fail(`no table "${table}" (tables: ${Object.keys(described).join(', ') |
 const col = t.columns;
 const hasCol = (c) => c === 'rows' || Boolean(col[c]);
 
-// ---- slots: given, or defaults for --own
+// ---- slots: given, or defaults for --own. Nothing here stops the add: a part that cannot be filled is left on the
+// item's sample data (slot set to null) and named in a MANUAL line; anything else odd is a note.
+const notes = [];
+const manual = [];   // [slot, what to do]
 const slots = {};
 for (const s of slotArgs) {
   const [k, v] = s.split(/=(.*)/s, 2);
-  if (!k || v === undefined) fail(`--slot ${s}: write it as slot=column`);
+  if (!k || v === undefined) {
+    notes.push(`--slot ${s} ignored: write it as slot=column`);
+    continue;
+  }
   slots[k.trim()] = v.split(',').map((x) => x.trim()).filter(Boolean);
 }
-const AGG = (val('agg') ?? 'sum').toLowerCase();
-if (!['sum', 'mean', 'count'].includes(AGG)) fail(`--agg must be sum, mean or count (got "${AGG}")`);
-const BY = val('by');
+let AGG = (val('agg') ?? 'sum').toLowerCase();
+if (!['sum', 'mean', 'count'].includes(AGG)) {
+  notes.push(`--agg ${AGG} ignored (sum, mean or count): summed`);
+  AGG = 'sum';
+}
+let BY = val('by');
+if (BY && !col[BY]) {
+  notes.push(`--by ${BY} ignored: no such column in ${table}`);
+  BY = null;
+}
 let between = null;   // --compare COL=A,B: two values of one column side by side
 if (val('compare')) {
   const m = /^([^=]+)=([^,]+),([^,]+)$/.exec(val('compare'));
-  if (!m) fail('--compare takes COL=A,B, e.g. --compare service_date=2026-04,2026-05');
-  between = { col: m[1].trim(), a: m[2].trim(), b: m[3].trim() };
-  if (!hasCol(between.col)) fail(`--compare: no column "${between.col}" in ${table} (columns: ${Object.keys(col).join(', ')})`);
-  if (BY) fail('--compare and --by both split the numbers; use one');
+  if (!m) notes.push('--compare ignored: write it as COL=A,B, e.g. --compare service_date=2026-04,2026-05');
+  else if (!col[m[1].trim()]) notes.push(`--compare ignored: no column "${m[1].trim()}" in ${table}`);
+  else between = { col: m[1].trim(), a: m[2].trim(), b: m[3].trim() };
+  if (between && BY) {
+    notes.push('--by ignored: --compare already splits the numbers');
+    BY = null;
+  }
+}
+for (const k of Object.keys(slots)) {
+  if (!kindOf[k]) {
+    notes.push(`--slot ${k} ignored: ${item.id} has no slot "${k}" (its slots: ${note.map((s) => s.name).join(', ')})`);
+    delete slots[k];
+  }
 }
 const waterfallItem = Boolean(kindOf.base && kindOf.total);
-const textCol = (c) => Boolean(c) && c !== 'rows' && Boolean(col[c]) && col[c].type !== 'number';
-if (waterfallItem && slots.total?.length && textCol(slots.total[0])) fail(`a waterfall's total takes the amount column (a number); ${slots.total[0]} is text. Write: --slot step=${slots.total[0]} --slot total=<amount column>`);
-if (val('waterfall') && textCol(val('waterfall'))) fail(`--waterfall takes the amount column (a number); ${val('waterfall')} is text. Write: --slot step=${val('waterfall')} --slot total=<amount column>`);
-const measure = val('pareto') ?? val('waterfall') ?? (waterfallItem && slots.total?.length ? slots.total[0] : null);
-const shape = waterfallItem && measure ? 'waterfall' : val('pareto') ? 'pareto' : flag('share') ? 'share' : null;
-if (val('own') && !slotArgs.length) {   // a blank section: the first text column and the first number column
-  const text = Object.keys(col).find((c) => ['text', 'month', 'date'].includes(col[c].type));
+const isNumCol = (c) => c === 'rows' || col[c]?.type === 'number';
+let measure = val('pareto') ?? val('waterfall') ?? (waterfallItem && slots.total?.length ? slots.total[0] : null);
+if (measure && !isNumCol(measure)) {
+  manual.push([waterfallItem ? 'total' : 'value', `"${measure}" is ${col[measure] ? `${col[measure].type}, not a number` : `not a column of ${table}`}; a ${waterfallItem ? 'waterfall' : 'pareto'} needs the amount column (a number) in meta.y${waterfallItem ? ' and the groups in slots.step' : ''}`]);
+  if (slots.total) delete slots.total;
+  measure = null;
+}
+// worked out here, from the columns given: a dumbbell's low and gap (from start and end), a running total (from the
+// variance), a running share (pareto), parts as a % of their period (100% columns); waterfalls further down
+let derive = null;
+if (rules.low && rules.gap && slots.start?.length && slots.end?.length) derive = 'range';
+else if (rules.running && slots.variance?.length) derive = 'running';
+else if (rules.part && /%/.test(rules.part) && slots.part?.length) derive = 'percent';
+if (!measure && rules.share && /running/.test(rules.share) && slots.value?.length && isNumCol(slots.value[0])) measure = slots.value[0];
+const pareto = Boolean(val('pareto') || (rules.share && /running/.test(rules.share))) && measure && !waterfallItem;
+const shape = waterfallItem && measure ? 'waterfall' : pareto ? 'pareto' : derive ?? (flag('share') ? 'share' : null);
+const DERIVED = { waterfall: ['base', 'rise', 'fall', 'total', 'key'], pareto: ['share'], share: ['share'], range: ['low', 'high', 'gap', 'range'], running: ['running'], percent: [] };
+for (const k of DERIVED[shape] ?? []) {
+  if (slots[k] && !(shape === 'waterfall' && k === 'total')) notes.push(`--slot ${k} ignored: ${k} is worked out from the other columns (${rules[k] ?? 'the shape'})`);
+  if (!(shape === 'waterfall' && k === 'total')) delete slots[k];
+}
+if (shape === 'waterfall' && AGG === 'mean') {
+  notes.push('--agg mean ignored: a waterfall adds its steps up, so it is summed');
+  AGG = 'sum';
+}
+let ownNote = null;
+if (val('own') && !slotArgs.length) {   // a blank section: a text column with few values, and the first number column
+  const few = Object.keys(col).filter((c) => col[c].type === 'text' && col[c].distinct > 1 && col[c].distinct <= 30).sort((p, q) => col[p].distinct - col[q].distinct);
+  const text = few[0] ?? Object.keys(col).find((c) => ['month', 'date'].includes(col[c].type));   // never a near-unique id
+  if (!text) ownNote = 'no text column with few values to group by: one row per measure for now; set slots.label and meta.x';
   const num = Object.keys(col).find((c) => col[c].type === 'number');
   if (text) slots.label = [text];
   slots.value = [AGG === 'count' || !num ? 'rows' : num];
 }
-const stub = !Object.keys(slots).length && !measure && !between;
-for (const k of Object.keys(slots)) if (!kindOf[k]) fail(`${k} is not a slot of ${item.id} (its slots: ${note.map((s) => s.name).join(', ')})`);
-for (const s of note.filter((x) => x.kind === 'number' && slots[x.name])) {
-  for (const c of slots[s.name]) {
-    if (textCol(c)) fail(`slot ${s.name} takes a number column; ${c} is ${col[c].type}. Text columns go in ${note.filter((x) => x.kind === 'text').map((x) => x.name).join(' or ') || 'no slot of this item'}`);
-  }
+let stub = !Object.keys(slots).length && !measure && !between;
+// a column that is not there, or of the wrong kind: that slot stays on sample data
+for (const s of note.filter((x) => slots[x.name])) {
+  const bad = slots[s.name].filter((c) => !/^-?\d+(\.\d+)?$/.test(c) && c !== '*' && (s.kind === 'number' ? !isNumCol(c) : !col[c]));
+  if (!bad.length) continue;
+  const c = bad[0];
+  manual.push([s.name, `"${c}" is ${col[c] ? `${col[c].type}, not ${s.kind === 'text' ? 'text' : 'a number'}` : `not a column of ${table}`}; put a ${s.kind === 'text' ? 'text' : 'number'} column of ${table} in slots.${s.name}${s.kind === 'text' ? ' and meta.x' : ' and meta.y'}`]);
+  slots[s.name] = slots[s.name].filter((x) => !bad.includes(x));
+  if (!slots[s.name].length) slots[s.name] = null;
 }
 
 // ---- what Python works out: x (the text slot), y (the number columns), and the shape
+const warnings0 = [];
+// the first text part groups the rows (x); every other text part given a text column groups them too (keys: one row
+// per combination); a text part given a number column shows that number (a value)
 const textSlots = note.filter((s) => s.kind === 'text' && slots[s.name]?.length);
-const xCols = [...new Set(textSlots.flatMap((s) => slots[s.name]))];
-if (xCols.length > 1) fail(`only one text column can be grouped by (${xCols.join(', ')}); for more, leave out --slot and write the analytic`);
-const X = xCols[0] ?? null;
-const xSlot = textSlots[0]?.name ?? null;
-const made = shape === 'waterfall' ? ['base', 'rise', 'fall', 'total', 'key'] : shape ? ['share'] : [];
+const isText = (c) => Boolean(col[c]) && col[c].type !== 'number';
+const keySlots = textSlots.filter((s, i) => i === 0 || isText(slots[s.name][0]));
+const textValues = textSlots.filter((s) => !keySlots.includes(s)).map((s) => slots[s.name][0]);
+const X = keySlots[0] ? slots[keySlots[0].name][0] : null;
+const xSlot = keySlots[0]?.name ?? null;
+const keys = [...new Set(keySlots.slice(1).map((s) => slots[s.name][0]))].filter((c) => c !== X);
+// how the rows are made when nothing groups them: a figure-only item takes one row; points (a chart whose parts are
+// read as [col, row, part] pairs, or an item with no text part) take the table's rows as they are
+const figureOnly = note.length > 0 && note.every((s) => s.kind === 'figure');
+const pointChart = isChart && /"slot":\s*"[^":=]*,[^"]*"/.test(String(item.html));
+let layout = null;
+if (!shape && !between && !BY) {
+  if (figureOnly) layout = 'one';
+  else if (!X && (pointChart || !note.some((s) => s.kind === 'text'))) layout = 'rows';
+}
+if (layout === 'one') for (const s of note) if (slots[s.name]?.length && isText(slots[s.name][0]) && !keys.includes(slots[s.name][0])) keys.push(slots[s.name][0]);
+const made = DERIVED[shape] ?? [];
 if (shape === 'waterfall') delete slots.total;
 for (const s of made) if (kindOf[s] && !slots[s]) slots[s] = [s];   // the shape's own columns fill slots of the same name
 if (measure && shape !== 'waterfall') {   // the measure goes in the first number slot still empty
   const open = note.find((s) => s.kind === 'number' && !slots[s.name] && s.count !== 'optional' && s.count !== 'any');
   if (open) slots[open.name] = [measure];
 }
+for (const s of note) {   // a slot that takes one column, given several: the first
+  if (['one', 'optional'].includes(s.count) && s.kind !== 'figure' && slots[s.name] && new Set(slots[s.name]).size > 1) {
+    notes.push(`slot ${s.name} takes one column: ${slots[s.name][0]} used, ${slots[s.name].slice(1).join(', ')} ignored`);
+    slots[s.name] = [slots[s.name][0]];
+  }
+}
 let ys = [];
 for (const s of note) {
-  if (s.kind === 'text' || !slots[s.name]) continue;
+  if (!slots[s.name] || (s.kind === 'text' && !textValues.includes(slots[s.name][0]))) continue;
   for (const c of slots[s.name]) {
+    if (isText(c)) continue;
     if (/^-?\d+(\.\d+)?$/.test(c) || c === '*') continue;
     if ([...made, 'share'].includes(c) && !hasCol(c)) continue;
+    if (s.kind === 'figure' && !col[c]) continue;
     if (!ys.includes(c)) ys.push(c);
   }
 }
 if (measure && !ys.includes(measure)) ys = [measure, ...ys];
 if (AGG === 'count' && !ys.length) ys = ['rows'];
-for (const c of [X, BY, ...ys]) if (c && !hasCol(c)) fail(`no column "${c}" in ${table} (columns: ${Object.keys(col).join(', ')}, or rows)`);
-for (const c of ys) if (c !== 'rows' && col[c].type !== 'number') fail(`${c} is ${col[c].type}, not a number; use --agg count or the column "rows" to count`);
-if ((BY || between) && ys.length > 1) fail(`${BY ? '--by' : '--compare'} takes one value column`);
-const totals = !stub && !X;   // no text column: one row per measure (label, value), or A, B and the change
+if ((BY || between) && ys.length > 1) {
+  notes.push(`${BY ? '--by' : '--compare'} splits one value column: ${ys[0]} used, ${ys.slice(1).join(', ')} left out`);
+  for (const s of note) if (slots[s.name] && s.kind === 'number') slots[s.name] = slots[s.name].filter((c) => c === ys[0]) .length ? slots[s.name].filter((c) => c === ys[0]) : null;
+  for (const s of note) if (slots[s.name] === null && s.count !== 'optional' && s.count !== 'any') manual.push([s.name, `left out because ${BY ? '--by' : '--compare'} takes one value column; give it a column or remove its series from the chart`]);
+  ys = [ys[0]];
+}
+const textGiven = note.some((s) => s.kind === 'text' && (slots[s.name] !== undefined));
+const totals = !stub && !X && !layout;   // no text column: one row per measure (label, value), or A, B and the change
 if (totals) {
   const label = note.find((s) => s.kind === 'text' && s.count === 'one');
   const value = note.find((s) => s.kind === 'number' && s.count !== 'any');
-  if (!label || !value) fail(`${item.id} needs a text column (--slot ${note.find((s) => s.kind === 'text')?.name ?? 'label'}=<column>)`);
-  slots[label.name] = ['label'];
-  for (const s of note) if (s.kind === 'number' && slots[s.name] && s !== value) delete slots[s.name];
-  slots[value.name] = ['value'];
+  if (label && value && ys.length) {
+    slots[label.name] = ['label'];
+    for (const s of note) if (s.kind === 'number' && slots[s.name] && s !== value) delete slots[s.name];
+    slots[value.name] = ['value'];
+    if (textGiven) manual.push([label.name, `grouped by nothing, so one bar or row per measure; put a text column in slots.${label.name} and meta.x, and delete shape: 'totals'`]);
+  }
 }
 if ((BY || between) && !totals && shape !== 'waterfall') {   // one value column per value of BY (or for A and for B)
   const s = note.find((x) => x.kind === 'number' && slots[x.name]?.includes(ys[0]));
   if (s) slots[s.name] = ['*'];
 }
+// a slot the recipe has a rule for, given a column the tool did not work out: say so
+for (const [n, rule] of Object.entries(rules)) {
+  if (made.includes(n) || !slots[n]?.length || slots[n][0] === '*' || kindOf[n].kind === 'text') continue;
+  notes.push(`slot ${n} has to be worked out first (${rule}); check that ${slots[n].join(', ')} already holds that`);
+}
+// a required slot nobody filled: left on the sample data, named in a MANUAL line
+if (!stub) {
+  for (const s of note) {
+    const required = s.count === 'one' || s.count === 'one or more';
+    if (slots[s.name] === undefined && required) slots[s.name] = null;
+    if (slots[s.name] === null && required && !manual.some(([n]) => n === s.name)) {
+      manual.push([s.name, rules[s.name] ? 'it has to be worked out first' : 'no column was given for it']);
+    }
+    if (slots[s.name] === null && !required) delete slots[s.name];   // an optional slot not filled: left out quietly
+  }
+}
+if (!stub && !X && !ys.length && !between && !layout) {   // nothing to group by and nothing to add up: numbers by hand
+  stub = true;
+  manual.push(['numbers', 'no text or number column was given; make the analytic in Analysis/ return rows with the slot names as columns']);
+}
 if (stub) for (const s of note) if (s.kind !== 'figure') slots[s.name] = [s.name];
-const problems = stub ? [] : checkSlots(note, Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v.length === 1 ? v[0] : v])));
-if (problems.length) fail(`${item.id} ${problems.join('; ')} (its data: ${note.map((s) => `${s.name} (${s.kind}, ${s.count})`).join('; ')})`);
 
 const asked = val('period') ?? (flag('month') ? 'month' : null);
-if (asked && !['month', 'quarter', 'year'].includes(asked)) fail('--period takes month, quarter or year');
-if (asked && !(X && ['date', 'month'].includes(col[X]?.type))) fail(`--${flag('month') ? 'month' : 'period'} groups the date column given to a text slot (e.g. --slot ${note.find((s) => s.kind === 'text')?.name ?? 'label'}=service_date)${X ? `; ${X} is ${col[X]?.type}` : ''}`);
-const period = asked ?? (X && col[X]?.type === 'date' ? 'month' : null);
+let period = null;
+if (asked && !['month', 'quarter', 'year'].includes(asked)) notes.push(`--period ${asked} ignored (month, quarter or year)`);
+else if (asked && !(X && ['date', 'month'].includes(col[X]?.type))) notes.push(`--${flag('month') ? 'month' : 'period'} ignored: it groups a date column given to the text slot (--slot ${note.find((s) => s.kind === 'text')?.name ?? 'label'}=<date column>)${X ? `; ${X} is ${col[X]?.type}` : ''}`);
+else period = asked;
+period = period ?? (X && col[X]?.type === 'date' ? 'month' : null);
 const isTime = Boolean(period) || col[X]?.type === 'month';
-const top = val('top') ? Number(val('top')) : null;
-if (top !== null && !(Number.isInteger(top) && top > 0)) fail('--top takes a whole number');
+let top = val('top') ? Number(val('top')) : null;
+if (top !== null && !(Number.isInteger(top) && top > 0)) {
+  notes.push(`--top ${val('top')} ignored: give a whole number`);
+  top = null;
+}
+if (X && col[X]?.distinct > 200 && !top) warnings0.push(`${X} has ${col[X].distinct} different values: add --top N, or pick a column with fewer`);
 
 // ---- words and formats for the columns
 const nameOf = (c) => (c === 'rows' ? human(table) : AGG === 'mean' ? `Average ${String(c).replace(/_/g, ' ')}` : human(c));
@@ -214,13 +321,16 @@ if (shape === 'waterfall') {
   Object.assign(names, { base: nameOf(measure), rise: 'Rise', fall: 'Fall', total: 'Total', key: 'Largest change' });
 }
 if (shape === 'share' || shape === 'pareto') format.share = 'pct';
+if (shape === 'range' && ys.length) for (const k of ['low', 'high', 'gap', 'range']) { names[k] = nameOf(ys[0]); format[k] = formatOf(ys[0]); }
+if (shape === 'running' && ys.length) { names.running = `Running ${String(nameOf(ys[0])).toLowerCase()}`; format.running = formatOf(ys[0]); }
+if (shape === 'percent') format['*'] = 'pct';
 if (X && isTime && period !== 'quarter' && period !== 'year') format[X] = 'month';
-if (totals) format.value = between ? formatOf(ys[0]) : ys.every((c) => formatOf(c) === formatOf(ys[0])) ? formatOf(ys[0]) : 'short';
+if (totals && ys.length) format.value = between ? formatOf(ys[0]) : ys.every((c) => formatOf(c) === formatOf(ys[0])) ? formatOf(ys[0]) : 'short';
 const did = stub ? null : [
   between ? `${between.a} against ${between.b} (${between.col})` : null,
-  `${{ sum: 'sum', mean: 'average', count: 'count' }[AGG]} of ${ys.join(', ')}`,
-  X ? `by ${period ? `${period} of ` : ''}${X} (slot ${xSlot})` : totals && !between ? 'one row per measure' : null,
-  BY ? `one column per ${BY}` : null, top ? `top ${top}` : null, shape ? `as a ${shape}` : null,
+  ys.length ? (ys.join() === 'rows' ? 'count of rows' : `${{ sum: 'sum', mean: 'average', count: 'count' }[AGG]} of ${ys.join(', ')}`) : 'no numbers yet',
+  X ? `by ${period ? `${period} of ` : ''}${X} (slot ${xSlot})` : totals && !between && ys.length ? 'one row per measure' : null,
+  BY ? `one column per ${BY}` : null, top ? `top ${top}` : null, shape ? `as ${{ waterfall: 'a waterfall', pareto: 'a pareto (running share)', share: 'shares', range: 'a range (low and gap worked out)', running: 'a running total', percent: '% of each period', totals: 'one row per measure' }[shape] ?? shape}` : null,
 ].filter(Boolean).join(', ');
 
 // ---- existing sections, the id, the tab
@@ -250,13 +360,14 @@ let tab = null;
 let addTab = null;
 if (tabIds.length) {
   tab = page ?? tabIds[0];
+  if (!tabIds.includes(tab) && !flag('new-tab')) fail(`no tab "${tab}" (tabs: ${tabIds.join(', ')}); add --new-tab to make it`);
   if (!tabIds.includes(tab)) addTab = tab;
 } else if (page && !hasSections) (tab = page), (addTab = page);
 const analysisName = page ?? tab ?? 'overview';
 if (['server', 'check', 'precompute'].includes(analysisName) || analysisName.startsWith('_')) fail(`"${analysisName}" can't be a tab name (it's reserved)`);
 const config = readJsonFile(path.join(ROOT, 'dashboard.config.json'));
 const ignore = X && !flag('keep-filter')
-  ? Object.entries(config.filters ?? {}).filter(([k, f]) => !k.startsWith('_') && [X, BY].includes(f?.column ?? k)).map(([k]) => k)
+  ? Object.entries(config.filters ?? {}).filter(([k, f]) => !k.startsWith('_') && [X].includes(f?.column ?? k)).map(([k]) => k)
   : [];
 
 // ---- the copy
@@ -281,8 +392,8 @@ const title = val('title') ?? (between ? `${nameOf(ys[0])}, ${when(between.a)} t
 const desc = val('desc') ?? `${title}, ${{ sum: 'summed', mean: 'averaged', count: 'counted' }[AGG]}, as ${item.name}`;
 const q = (s) => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 const list = (xs) => `[${xs.map(q).join(', ')}]`;
-const wire = (o) => (!Object.keys(o).length ? '{}' : `{ ${Object.entries(o).map(([k, v]) => `${/^[a-z_$][\w$]*$/i.test(k) ? k : q(k)}: ${Array.isArray(v) ? (v.length === 1 && !kindOf[k]?.count?.includes('more') ? lit(v[0]) : `[${v.map(lit).join(', ')}]`) : lit(v)}`).join(', ')} }`);
-const lit = (v) => (typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(String(v)) ? String(v) : q(v));
+const wire = (o) => (!Object.keys(o).length ? '{}' : `{ ${Object.entries(o).map(([k, v]) => `${/^[a-z_$][\w$]*$/i.test(k) ? k : q(k)}: ${Array.isArray(v) ? (v.length === 1 && !kindOf[k]?.count?.includes('more') ? lit(v[0]) : `[${v.map(lit).join(', ')}]`) : lit(v)}${v === null ? ' /* MANUAL: not filled yet */' : ''}`).join(', ')} }`);
+const lit = (v) => (v === null ? 'null' : typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(String(v)) ? String(v) : q(v));
 
 function jsOf(v, ind = '') {
   const pad = `${ind}  `;
@@ -313,7 +424,8 @@ function sectionFile(noteLines) {
   const numbers = stub ? `tables: ${list(tables)}` : [
     `tables: ${list([table])}`, X ? `x: ${q(X)}` : null, period ? `period: ${q(period)}` : null,
     ys.length && !(AGG === 'count' && ys[0] === 'rows' && ys.length === 1) ? `y: ${list(ys)}` : null, `agg: ${q(AGG)}`, BY ? `by: ${q(BY)}` : null,
-    top ? `top: ${top}` : null, totals ? "shape: 'totals'" : shape ? `shape: ${q(shape)}` : null,
+    keys.length ? `keys: ${list(keys)}` : null,
+    top ? `top: ${top}` : null, totals ? "shape: 'totals'" : shape ? `shape: ${q(shape)}` : layout ? `shape: ${q(layout)}` : null,
     between ? `compare: ${q(`${between.col}=${between.a},${between.b}`)}` : null,
     ignore.length ? `ignore: ${list(ignore)}` : null,
   ].filter(Boolean).join(', ');
@@ -386,7 +498,7 @@ if (stub) {
   const defs = new Set([...analysisSrc.matchAll(/^def\s+([A-Za-z_]\w*)/gm)].map((m) => m[1]));
   let fn = /^[a-z_]/.test(shortName) ? shortName : `section_${shortName}`;
   for (let i = 2; defs.has(fn); i++) fn = `${shortName}_${i}`;
-  const need = Object.keys(slots);
+  const need = Object.keys(slots).filter((k) => slots[k] !== null);
   const head = analysisSrc ? '' : `"""${analysisName.replace(/_/g, ' ')}: the analytics for this tab's sections (one function per section)."""\nfrom Shared.registry import section\n`;
   if (analysisSrc && !/from\s+Shared\.registry\s+import[^\n]*\bsection\b/.test(analysisSrc)) analysisSrc = `from Shared.registry import section\n${analysisSrc}`;
   analysisSrc = `${analysisSrc ? analysisSrc.replace(/\s*$/, '\n') : head}\n\n@section("${id}", tables=[${tables.map((x) => `"${x}"`).join(', ')}])\ndef ${fn}(t):\n    """${title}. Not built yet: return one row per ${isChart ? 'point' : 'row'} with the columns ${need.join(', ')}."""\n    # tables arrive filtered as t.<table> (pandas). ${item.recipe ? `Shaping: ${item.recipe}` : ''}\n    rows = []\n    return {"data": {"rows": rows}, "metrics": {}}\n`;
@@ -418,10 +530,25 @@ try {
   result = { error: (shown.stderr || shown.stdout || 'no output').trim().split('\n').slice(-2).join(' | ') };
 }
 const rows = result.data?.rows ?? [];
+if (!stub && rows.length) {
+  const have = new Set(rows.flatMap((r) => Object.keys(r)));
+  for (const [k, v] of Object.entries(slots)) {
+    const missing = (v ?? []).filter((c) => typeof c === 'string' && c !== '*' && !/^-?\d+(\.\d+)?$/.test(c) && !have.has(c));
+    if (!missing.length) continue;
+    manual.push([k, `the numbers worked out have no column "${missing[0]}" (they have ${[...have].join(', ')})`]);
+    slots[k] = null;
+  }
+}
 const metrics = result.metrics ?? {};
-const warnings = [];
+const warnings = [...warnings0];
 if (result.error) warnings.push(`the numbers failed: ${result.error}`);
-if (isChart) warnings.push(...fillChart(option, stub ? [] : rows, { slots: Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v.length === 1 && !kindOf[k]?.count?.includes('more') ? v[0] : v])), names, format }, { first: true }));
+if (isChart && !stub) {   // several series sharing a slot that takes one column: the column fills each of them
+  for (const [k, n] of Object.entries(seriesPerSlot(option))) {
+    if (n > 1 && slots[k] && slots[k].length === 1 && slots[k][0] !== '*' && ['one', 'optional'].includes(kindOf[k]?.count)) slots[k] = Array(n).fill(slots[k][0]);
+  }
+}
+if (ownNote) warnings.push(ownNote);
+if (isChart) warnings.push(...fillChart(option, stub ? [] : rows, { slots: Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, v === null ? null : v.length === 1 && !kindOf[k]?.count?.includes('more') ? v[0] : v])), names, format }, { first: true }));
 
 const fmt = format[ys[0]] === '$short' ? 'compact' : format[ys[0]] === 'comma' ? 'int' : format[ys[0]] === '$comma' ? 'money' : 'short';
 const pool = between
@@ -454,5 +581,20 @@ const walk = (x) => {
 walk(option);
 for (const l of new Set(literals)) say(`  label: ${l}`);
 if (html) for (const w of SAMPLE_WORDS) for (const m of html.matchAll(new RegExp(`>([^<>]*${w}[^<>]*)<`, 'g'))) say(`  html: ${m[1].trim()}`);
-for (const w of warnings) say(`  check: ${w}`);
+for (const w of warnings.filter((x) => !x.includes("(MANUAL)"))) say(`  check: ${w}`);
+for (const n of notes) say(`  note: ${n}`);
+const yList = (xs) => `y: [${xs.map((c) => `'${c}'`).join(', ')}]`;
+for (const [slot, what] of manual) {
+  const file = slot === 'numbers' ? `Analysis/${analysisName}.py` : `Src/Sections/${id}.jsx`;
+  const cause = what.replace(/;?\s*put a [\s\S]*$/, '').trim() || 'no column was given for it';
+  const k = kindOf[slot]?.kind;
+  const c = k === 'text' ? `<a text column of ${table}>` : `<a number column of ${table}>`;
+  const rule = rules[slot] ? ` Work it out first: ${rules[slot]}. A rule like this needs its own column: add it to the table in a Pipeline script, or write the numbers in Analysis/${analysisName}.py.` : '';
+  let edit;
+  if (slot === 'numbers' || !k) edit = '';
+  else if (k === 'figure') edit = ` Type: in slots, change ${slot}: null to ${slot}: 80 (a number) or ${slot}: '<a column of ${table}>' (its first value is used).`;
+  else if (k === 'text') edit = ` Type: in slots, change ${slot}: null to ${slot}: '${c}'; in meta, ${X && slot !== xSlot ? (keys.length ? `change keys: [${keys.map((x) => `'${x}'`).join(', ')}] to keys: [${[...keys, c].map((x) => `'${x}'`).join(', ')}]` : `add keys: ['${c}'],`) + ' (one row per combination)' : X ? `change x: '${X}' to x: '${c}'` : `add x: '${c}',`}${totals ? " and delete shape: 'totals'" : ''}.`;
+  else edit = ` Type: in slots, change ${slot}: null to ${slot}: '${c}'; in meta, ${ys.length ? `change ${yList(ys)} to ${yList([...ys, c])}` : `add ${yList([c])},`} (add to the list, keep what is there); in format, add '<that column>': '$short' (money) or 'comma' (counts).`;
+  say(`MANUAL: ${slot} not filled - edit ${file}: ${cause}.${rule}${edit}`);
+}
 if (!defaultBlock) say(`  check: add ${id} to Src/Sections/index.js by hand`);

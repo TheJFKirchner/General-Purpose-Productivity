@@ -5,6 +5,10 @@ type: animation
 name: rate-build-steps
 purpose: A rate build-up waterfall whose bars land one at a time, from experience claims through trend, benefit changes and pooling to projected claims, then admin and margin to the required premium, set against current premium so the rate action is measured on the right base; use to walk a renewal audience through the build step by step.
 from: james-themes
+data: step (text, one); base (number, one); total (number, one); rise (number, optional); fall (number, optional); key (number, optional); current (figure, optional)
+recipe: One row per bar, in the order they land; total: the figures that start from the floor, empty on steps; each step's size in rise or fall (always positive; the label adds + or −), key the closing figure (blue); base: 0 on totals and key, the running total before a rise, after a fall
+attaches: chart
+fits: deck, report
 -->
 <html lang="en">
 <head>
@@ -132,20 +136,97 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wash);
 <div class="key"><span><i class="up"></i>Adds cost</span><span><i class="down"></i>Lowers cost</span></div>
 <div class="chart" data-echart>
 <script type="application/json">
-{"xAxis":{"type":"category","data":["Experience\nclaims","Trend\n(24 months)","Benefit\nchanges","Pooling\n(net)","Projected\nclaims","Admin and\nmargin","Required\npremium"],"axisLabel":{"interval":0,"color":"var(--ink)","lineHeight":18}},
-"yAxis":{"type":"value","min":300,"max":480,"interval":30,"axisLabel":{"formatter":"${value}"}},
-"grid":{"left":8,"right":8,"top":30,"bottom":8,"containLabel":true},
-"series":[
-{"type":"bar","stack":"w","silent":true,"animation":false,"barWidth":"56%","itemStyle":{"color":"transparent"},"data":[0,360,400,396,0,396,0]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":0,"animationDuration":450,"itemStyle":{"color":"var(--chart-muted)"},"label":{"show":true,"position":"top"},"data":[{"value":360,"label":{"formatter":"$360"}},"-","-","-","-","-","-"],
- "markLine":{"silent":true,"animation":false,"symbol":"none","lineStyle":{"color":"var(--navy)","type":"dashed","width":2},"label":{"position":"insideStartTop","formatter":"Current premium $420","color":"var(--navy)","fontWeight":600},"data":[{"yAxis":420}]}},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":480,"animationDuration":450,"itemStyle":{"color":"var(--bad)"},"label":{"show":true,"position":"top"},"data":["-",{"value":44,"label":{"formatter":"+$44"}},"-","-","-","-","-"]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":960,"animationDuration":450,"itemStyle":{"color":"var(--good)"},"label":{"show":true,"position":"top"},"data":["-","-",{"value":4,"label":{"formatter":"\u2212$4"}},"-","-","-","-"]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":1440,"animationDuration":450,"itemStyle":{"color":"var(--good)"},"label":{"show":true,"position":"top"},"data":["-","-","-",{"value":4,"label":{"formatter":"\u2212$4"}},"-","-","-"]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":1920,"animationDuration":450,"itemStyle":{"color":"var(--chart-muted)"},"label":{"show":true,"position":"top"},"data":["-","-","-","-",{"value":396,"label":{"formatter":"$396"}},"-","-"]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":2400,"animationDuration":450,"itemStyle":{"color":"var(--bad)"},"label":{"show":true,"position":"top"},"data":["-","-","-","-","-",{"value":54,"label":{"formatter":"+$54"}},"-"]},
-{"type":"bar","stack":"w","barWidth":"56%","animationDelay":2880,"animationDuration":600,"itemStyle":{"color":"var(--blue)"},"label":{"show":true,"position":"top"},"data":["-","-","-","-","-","-",{"value":450,"label":{"formatter":"$450  +7.1%","fontWeight":700}}]}
-]}
+{
+  "xAxis": {
+    "slot": "step",
+    "type": "category",
+    "data": [
+      "Experience\nclaims",
+      "Trend\n(24 months)",
+      "Benefit\nchanges",
+      "Pooling\n(net)",
+      "Projected\nclaims",
+      "Admin and\nmargin",
+      "Required\npremium"
+    ],
+    "axisLabel": { "interval": 0, "color": "var(--ink)", "lineHeight": 18 }
+  },
+  "yAxis": { "type": "value", "min": 300, "max": 480, "interval": 30, "axisLabel": { "formatter": "${value}" } },
+  "grid": { "left": 8, "right": 8, "top": 30, "bottom": 8, "containLabel": true },
+  "series": [
+    {
+      "slot": "base",
+      "type": "bar",
+      "stack": "w",
+      "silent": true,
+      "animation": false,
+      "barWidth": "56%",
+      "itemStyle": { "color": "transparent" },
+      "data": [0, 360, 400, 396, 0, 396, 0]
+    },
+    {
+      "slot": "total",
+      "type": "bar",
+      "name": "Total",
+      "stack": "w",
+      "barWidth": "56%",
+      "itemStyle": { "color": "var(--chart-muted)" },
+      "label": { "show": true, "position": "top", "formatter": "${c}" },
+      "animationDuration": 450,
+      "animationDelay": "index*480",
+      "data": [360, null, null, null, 396, null, null],
+      "markLine": {
+        "silent": true,
+        "animation": false,
+        "symbol": "none",
+        "lineStyle": { "color": "var(--navy)", "type": "dashed", "width": 2 },
+        "label": {
+          "position": "insideStartTop",
+          "formatter": "Current premium $420",
+          "color": "var(--navy)",
+          "fontWeight": 600
+        },
+        "data": [{ "slot": "current:yAxis", "yAxis": 420 }]
+      }
+    },
+    {
+      "slot": "rise",
+      "type": "bar",
+      "name": "Rise",
+      "stack": "w",
+      "barWidth": "56%",
+      "itemStyle": { "color": "var(--bad)" },
+      "label": { "show": true, "position": "top", "formatter": "+${c}" },
+      "animationDuration": 450,
+      "animationDelay": "index*480",
+      "data": [null, 44, null, null, null, 54, null]
+    },
+    {
+      "slot": "fall",
+      "type": "bar",
+      "name": "Fall",
+      "stack": "w",
+      "barWidth": "56%",
+      "itemStyle": { "color": "var(--good)" },
+      "label": { "show": true, "position": "top", "formatter": "−${c}" },
+      "animationDuration": 450,
+      "animationDelay": "index*480",
+      "data": [null, null, 4, 4, null, null, null]
+    },
+    {
+      "slot": "key",
+      "type": "bar",
+      "name": "Key step",
+      "stack": "w",
+      "barWidth": "56%",
+      "itemStyle": { "color": "var(--blue)" },
+      "label": { "show": true, "position": "top", "formatter": "${c}", "fontWeight": 700 },
+      "animationDuration": 450,
+      "animationDelay": "index*480",
+      "data": [null, null, null, null, null, null, 450]
+    }
+  ]
+}
 </script>
 </div>
 <p class="lib-source">Sample values &middot; admin and margin are 12% of required premium ($54 of $450) &middot; axis starts at $300</p>
@@ -200,7 +281,8 @@ window.ItemEngineInside = true;
   function formats(o) {
     Object.keys(o).forEach(function (k) {
       var v = o[k];
-      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+      if (k === 'animationDelay' && typeof v === 'string' && /^index\*\d+$/.test(v)) { var ms = +v.split('*')[1]; o[k] = function (i) { return i * ms; }; }   /* bars land one by one */
+      else if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
         o._tpl = v;
         o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
       } else if (v && typeof v === 'object') formats(v);
@@ -253,15 +335,33 @@ window.ItemEngineInside = true;
       if (hidden(x)) x.emphasis = { disabled: true };
     });
   }
-  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  /* Line end labels: no halo, wrapped to the room grid.right leaves (spaceEnds pushes close ones apart after drawing). */
   function endLabels(o) {
     var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
     [].concat(o.series || []).forEach(function (s) {
+      if (!s || s.type !== 'line') return;
       var e = s.endLabel;
-      if (s.type !== 'line' || !e || !e.show) return;
-      if (e.textBorderWidth == null) e.textBorderWidth = 0;
-      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
-      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+      if (e && e.show) {
+        if (e.textBorderWidth == null) e.textBorderWidth = 0;
+        if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      }
+    });
+  }
+  /* Series labels show a number: the numeric part of a point (a [value, "name"] point prints its value, not its name),
+     formatted (7,000 with no format given). */
+  function seriesLabels(o) {
+    var xs = [].concat(o.xAxis || [])[0] || {}, ys = [].concat(o.yAxis || [])[0] || {}, at = xs.type === 'value' && ys.type === 'category' ? 0 : 1;
+    [].concat(o.series || []).forEach(function (s) {
+      if (!s || s.type === 'pie' || s.type === 'heatmap') return;
+      ['label', 'endLabel'].forEach(function (k) {
+        var l = s[k];
+        if (!l || typeof l.formatter === 'function') return;
+        var t = typeof l.formatter === 'string' ? l.formatter : (l.show && k === 'label' ? '{c:comma}' : null);
+        if (!t || !/\{c[:}]/.test(t)) return;
+        t = t.replace(/\{c\}/g, '{c:comma}');   /* a bare {c} prints 1,844.84, never 1844.8360103943749 */
+        l._tpl = t;
+        l.formatter = function (p) { var v = p.value; if (Array.isArray(v)) v = typeof v[at] === 'number' ? v[at] : v.filter(function (x) { return typeof x === 'number'; }).pop(); return fmt(t, p, v); };
+      });
     });
   }
   function prepare(o, box) {
@@ -271,6 +371,7 @@ window.ItemEngineInside = true;
     endLabels(o);
     if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
     else hover(o);
+    seriesLabels(o);
     formats(o);
     o.animation = false;
     return o;
@@ -281,6 +382,28 @@ window.ItemEngineInside = true;
       var row = tr.cells[0] ? tr.cells[0].innerText.trim() : '';
       Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
     });
+  }
+  /* Labels of several lines at the same end (a slope chart's two ends, end labels) are pushed apart vertically. */
+  function spaceEnds(c, o) {
+    var lines = [].concat(o.series || []).map(function (s, i) { return { s: s, i: i }; }).filter(function (x) { return x.s.type === 'line' && Array.isArray(x.s.data) && x.s.data.length; });
+    var val = function (d) { return d && typeof d === 'object' && !Array.isArray(d) ? d.value : d; };
+    function spread(ls, apply) {
+      if (ls.length < 2) return false;
+      ls.sort(function (a, b) { return a.y - b.y; });
+      ls.forEach(function (x, k) { x.to = k ? Math.max(x.y, ls[k - 1].to + 18) : x.y; });
+      var moved = false;
+      ls.forEach(function (x) { if (x.to !== x.y) { moved = true; apply(x, x.to - x.y); } });
+      return moved;
+    }
+    var starts = lines.filter(function (x) { var d = x.s.data[0]; return d != null && ((d.label && d.label.show) || (x.s.label && x.s.label.show)); })
+      .map(function (x) { x = { s: x.s, i: x.i }; x.y = (c.convertToPixel({ seriesIndex: x.i }, [0, val(x.s.data[0])]) || [0, 0])[1]; return x; });
+    var ends = lines.filter(function (x) { return x.s.endLabel && x.s.endLabel.show; }).map(function (x) {
+      var k = x.s.data.length - 1; while (k > 0 && val(x.s.data[k]) == null) k--;
+      x = { s: x.s, i: x.i }; x.y = (c.convertToPixel({ seriesIndex: x.i }, [k, val(x.s.data[k])]) || [0, 0])[1]; return x;
+    });
+    var a = spread(starts, function (x, dy) { var d = x.s.data[0], p = d && typeof d === 'object' && !Array.isArray(d) ? d : { value: d }; p.label = Object.assign({}, x.s.label || {}, p.label || {}, { offset: [0, dy] }); x.s.data[0] = p; });
+    var b = spread(ends, function (x, dy) { x.s.endLabel = Object.assign({}, x.s.endLabel, { offset: [0, dy] }); });
+    if (a || b) c.setOption({ series: o.series });
   }
   /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
   var drawn = 0;
@@ -299,6 +422,7 @@ window.ItemEngineInside = true;
       if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
       box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
       box._chart.setOption(o);
+      spaceEnds(box._chart, o);
       if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
     });
     window.dispatchEvent(new Event('item:draw'));

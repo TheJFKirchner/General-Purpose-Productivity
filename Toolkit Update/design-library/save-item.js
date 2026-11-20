@@ -12,6 +12,9 @@
  *   any of them: --name <neutral-name> (default: the layout or chart kind; never a project word)
  *   node save-item.js purpose <id> "<one sentence>"                                 (sets a saved item's purpose line)
  *   node save-item.js recipe <id> "<one line>"                                      (sets a saved item's recipe line)
+ *   node save-item.js rename <id> <new-name>                                        (a saved item's name and file name)
+ *   --deck takes the deck folder (or its presentation.html); --report the report folder (sections/sN_name.py);
+ *   --dashboard the dashboard folder (Src/Sections/<id>.jsx)
  *   node save-item.js new <chart|table|hero-card|animation|layout|slide> --name <name> [--group XX]   (a shell to fill by hand)
  *
  * Each save prints a "Preview:" description (layout, what the chart or table shows, the highlight, bullets
@@ -44,7 +47,7 @@ function readHeader(text) {
   return h;
 }
 /* data: the data note (charts, tables, hero cards), recipe: how to shape the data first, when it needs it. AUTHORING.md. */
-const header = h => `<!-- ITEM\nid: ${h.id}\ntype: ${h.type}\nname: ${h.name}\npurpose: ${h.purpose}\nfrom: ${h.from}\n${h.data ? `data: ${h.data}\n` : ''}${h.recipe ? `recipe: ${h.recipe}\n` : ''}-->`;
+const header = h => `<!-- ITEM\nid: ${h.id}\ntype: ${h.type}\nname: ${h.name}\npurpose: ${h.purpose}\nfrom: ${h.from}\n${h.data ? `data: ${h.data}\n` : ''}${h.recipe ? `recipe: ${h.recipe}\n` : ''}${h.attaches ? `attaches: ${h.attaches}\n` : ''}${h.fits ? `fits: ${h.fits}\n` : ''}-->`;
 
 /* ---------- items on disk ---------- */
 function items() {
@@ -379,6 +382,10 @@ function prettyJson(v, ind = '') {
 const HOST_CSS = () => `/* host.css: the styles a page needs for copied design-library items. Written by build-index.js; do not edit.
    Copy it once into the page, with the theme tokens (node item.js theme <id>) and host-runtime.js. */
 [data-item] { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+[data-item][data-item] .chart[data-echart] { min-height: var(--chart-min, 220px); }   /* outranks an item's own "min-height: 0", written for its fixed library frame */
+[data-item^="AN-"] { position: relative; }
+.item-replay { position: absolute; top: 6px; right: 6px; z-index: 2; font: 600 12px var(--body-font); padding: 4px 10px; cursor: pointer; color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); }
+html.is-export .item-replay { display: none; } @media print { .item-replay { display: none; } }
 [data-item] .chart[data-echart] { position: relative; flex: 1 1 auto; height: var(--chart-height, 340px); min-height: 0; min-width: 0; }
 ${CHART_CSS('[data-item]')}
 ${KIT_CSS.split('\n').filter(l => !/^(\.fit\b|html\.narrow)/.test(l)).join('\n')}
@@ -428,7 +435,8 @@ function neutralChart(o) {
   const scaleVal = v => Array.isArray(v) ? v.map(x => (num(x) ? sc(x) : PERIOD.test(String(x)) || typeof x !== 'string' ? x : 'Group')) : sc(v);
   series.forEach(s => {
     if (Array.isArray(s.data)) {
-      if (keep && s.type !== 'scatter' && s.type !== 'heatmap') s.data = s.data.slice(keep[0], keep[1]);
+      const pairs = s.data.some(d => Array.isArray(d) || (d && typeof d === 'object' && Array.isArray(d.value)));   // [x, y] points are not per category
+      if (keep && s.type !== 'heatmap' && !pairs) s.data = s.data.slice(keep[0], keep[1]);
       s.data = s.data.map(d => (d && typeof d === 'object' && !Array.isArray(d)) ? Object.assign(d, { value: scaleVal(d.value) }) : scaleVal(d));
     }
     if (s.name) s.name = `Series ${series.indexOf(s) + 1}`;
@@ -440,7 +448,8 @@ function neutralChart(o) {
     if (!x || typeof x !== 'object') return;
     Object.keys(x).forEach(k => {
       const v = x[k];
-      if (k === 'formatter' && typeof v === 'string' && !/^\{[a-z@\[\]0-9]*\}%?$/.test(v)) x[k] = /%/.test(v) ? '{c}%' : '{c}';
+      // a formatter holding the project's text or a number becomes a format form the runtime reads ({c:short}: 1.8K, 7M)
+      if (k === 'formatter' && typeof v === 'string' && !/^\$?\{(?:[a-z@\[\]0-9]+|c:short|c:comma|value:short|value:comma)\}[%KMB]?$/.test(v)) x[k] = /%/.test(v) ? '{c}%' : /\$/.test(v) ? '${c:short}' : '{c:short}';
       else if ((k === 'xAxis' || k === 'yAxis') && num(v) && key === 'markLine') x[k] = sc(v);
       else walk(v, k === 'markLine' ? 'markLine' : key);
     });
@@ -455,6 +464,23 @@ function neutralChart(o) {
     if (one.markLine && Array.isArray(one.markLine.data)) one.markLine.data.forEach(d => { if (d && num(d.yAxis)) d.yAxis = 45; if (d && num(d.xAxis)) d.xAxis = 45; });
     [].concat(o.xAxis || [], o.yAxis || []).forEach(a => { if (a && a.type === 'value') { delete a.min; if (num(a.max)) a.max = 100; } });
   }
+  // what a project leaves in a chart besides its data: titles and axis names (its words), fixed colours and fonts, axis ranges
+  if (o.title) { const ts = [].concat(o.title); if (ts.length > 1) ts.forEach((t, i) => { if (t) t.text = `Panel ${String.fromCharCode(65 + i)}`; }); else delete o.title; }
+  [].concat(o.xAxis || [], o.yAxis || []).forEach(a => {
+    if (!a) return;
+    if (a.name) a.name = a.type === 'value' ? 'Value' : '';
+    if (a.type === 'value' && a.show !== false) { delete a.min; delete a.max; delete a.interval; }
+  });
+  const strip = x => {
+    if (Array.isArray(x)) return x.forEach(strip);
+    if (!x || typeof x !== 'object') return;
+    Object.keys(x).forEach(k => {
+      const v = x[k];
+      if (typeof v === 'string' && (/^#[0-9a-f]{3,8}$/i.test(v) || /^(rgba?|hsla?)\(/i.test(v) || (k === 'fontFamily' && !/var\(--/.test(v)))) delete x[k];   // the theme colours it
+      else strip(v);
+    });
+  };
+  strip(o);
   return o;
 }
 
@@ -520,10 +546,22 @@ function neutralHtml(html) {
 
 /* ---------- slots: where a project's data goes (AUTHORING.md, "Adding an item to a project") ---------- */
 /* Marks an object with "slot" as its first key. */
-function tag(obj, spec) { const keep = Object.assign({}, obj); Object.keys(obj).forEach(k => delete obj[k]); obj.slot = spec; Object.assign(obj, keep); }
+function tag(obj, spec) { const keep = Object.assign({}, obj); delete keep.slot; Object.keys(obj).forEach(k => delete obj[k]); obj.slot = spec; Object.assign(obj, keep); }
+/* Stem and dot on one column (a lollipop): the stem bar takes "value", the dot follows it ("=value"), so one column fills both;
+   rows sorted largest first keep the first dot's highlight. Returns the data note, or '' when the chart is not that shape. */
+function lollipop(o) {
+  const ss = [].concat(o.series || []).filter(s => s && Array.isArray(s.data)), bar = ss.find(s => s.type === 'bar'), dot = ss.find(s => s.type === 'scatter');
+  const plain = s => s.data.every(d => d == null || typeof d === 'number' || (typeof d === 'object' && !Array.isArray(d) && !Array.isArray(d.value)));
+  const cats = [].concat(o.xAxis || [], o.yAxis || []).filter(a => a && a.type === 'category');
+  if (ss.length !== 2 || !bar || !dot || !plain(bar) || !plain(dot) || !cats.length) return '';
+  cats.forEach(a => tag(a, 'label')); tag(bar, 'value'); tag(dot, '=value');
+  return 'label (text, one); value (number, one)';
+}
 /* A saved chart's slots, guessed from its shape: category axes, each series (an invisible one is a base), a reference
    line as a figure. Marks the option in place; returns the data note and recipe. */
 function autoSlots(o) {
+  const pop = lollipop(o);
+  if (pop) return { data: pop, recipe: 'Sort rows largest first: the first dot keeps the highlight colour' };
   const slots = [], recipe = [];
   const add = (name, kind, count = 'one') => { if (!slots.some(s => s.startsWith(name + ' '))) slots.push(`${name} (${kind}, ${count})`); return name; };
   const cats = { x: [].concat(o.xAxis || []).filter(a => a && a.type === 'category'), y: [].concat(o.yAxis || []).filter(a => a && a.type === 'category') };
@@ -534,12 +572,18 @@ function autoSlots(o) {
   const hidden = s => s.silent === true || (s.itemStyle && s.itemStyle.opacity === 0);
   const shown = series.filter(s => !hidden(s));
   let bases = 0, lines = 0;
+  // several shown series of one kind (lines of a slope chart, layers of a stack): one slot, one column each
+  const firstOf = s => { const f = s.data.find(d => d != null); return f && typeof f === 'object' && !Array.isArray(f) ? f.value : f; };
+  const plainShown = shown.filter(s => !Array.isArray(firstOf(s)) && s.type !== 'pie');
+  const same = plainShown.length > 1 && plainShown.length === shown.length && plainShown.every(s => s.type === plainShown[0].type);
+  const sharedName = same ? (plainShown.some(s => s.stack) ? 'part' : 'value') : null;
   series.forEach(s => {
     const first = s.data.find(d => d != null), v = first && typeof first === 'object' && !Array.isArray(first) ? first.value : first;
     const base = hidden(s);
     const name = base ? (bases++ ? `base-${bases}` : 'base') : shown.length === 1 ? 'value' : `value-${shown.indexOf(s) + 1}`;
     if (base) recipe.push(`${name}: the invisible bar under the visible one (the running total before each step, or the low end of a range)`);
-    if (Array.isArray(v)) {
+    if (!base && sharedName) tag(s, add(sharedName, 'number', 'one or more'));
+    else if (Array.isArray(v)) {
       const parts = v.map((x, i) => (s.type === 'heatmap' ? ['column', 'row', 'value'][i] || `value-${i}` : typeof x === 'string' ? 'label' : cats.x.length + cats.y.length ? name : `${name}-${'xyz'[i] || i}`));
       parts.forEach(p => add(p, ['label', 'column', 'row'].includes(p) ? 'text' : 'number'));
       tag(s, parts.join(','));
@@ -696,8 +740,8 @@ function describeSection(type, shape, from) {
   const out = [];
   if (type === 'table') out.push(`table in a panel: amount by ${by}, ${s.labels.length} rows, columns ${shape.time ? 'Month' : 'Group'} / Value / a meter of the share of the largest; a CSV button`);
   else if (type === 'hero card') out.push('hero card: one tile with the latest amount as a big number and a note line under it');
-  else out.push(`chart: ${shape.kind === 'line' ? 'a line with an end label' : 'columns with value labels'} by ${by} (${s.labels.length} points), a basis line under it`);
-  out.push('data note and slots: where a project\'s columns go (AUTHORING.md)');
+  else out.push(`chart alone under a placeholder heading: ${shape.desc || (shape.kind === 'line' ? 'a line' : 'columns')} by ${by}; a basis line under it`);
+  if (type === 'chart') out.push(shape.option ? 'its options came from the section, made neutral; its slots were kept' : 'its shape came from the section (series kind and count, stack, area); the options are a sample: compare with the source');
   out.push(`not copied: the ${from} section's own calculation, names, wording, bullets and numbers (made-up round values instead)`);
   return out;
 }
@@ -718,22 +762,91 @@ function sectionItem(h, theme, shape) {
     h.data = PLAIN_NOTES.tiles;
     return kitItem(h, theme, { body: PLAIN_TILES(['Amount, latest period'], [show(s.m.latest)]) });
   }
-  const o = sampleOption(shape.kind, shape.time, money);
-  const auto = autoSlots(o);
+  // the section's own options when it has them (a copied library chart, made neutral), else a sample of its shape
+  const o = shape.option ? neutralChart(shape.option) : shape.series > 1 || shape.stacked || shape.area || shape.horizontal ? shapeOption(shape) : sampleOption(shape.kind, shape.time, money);
+  const pop = shape.option && lollipop(o);
+  const kept = !pop && shape.option && noteFromMarks(o);
+  const auto = pop ? { data: pop, recipe: 'Sort rows largest first: the first dot keeps the highlight colour' } : kept ? { data: kept, recipe: '' } : autoSlots(o);
+  shape.desc = describeChart(o);
   Object.assign(h, auto.data ? { data: auto.data } : {}, auto.recipe ? { recipe: auto.recipe } : {});
   return chartItem(h, theme, prettyJson(o));
+}
+/* A report section's CHART (Python dict of ECharts options) as an object, or null when it is not one. */
+function pyChart(src) {
+  const m = src.match(/^CHART\s*=\s*\{/m);
+  if (!m) return null;
+  let i = m.index + m[0].length - 1, depth = 0, q = null;
+  for (let j = i; j < src.length; j++) {
+    const c = src[j];
+    if (q) { if (c === '\\') j++; else if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") q = c; else if (c === '{') depth++; else if (c === '}' && !--depth) { i = [i, j]; break; }
+  }
+  if (!Array.isArray(i)) return null;
+  const py = src.slice(i[0], i[1] + 1).replace(/#[^\n"']*$/gm, '').replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null').replace(/,(\s*[}\]])/g, '$1');
+  try { const o = JSON.parse(py); return o && o.series ? o : null; } catch (e) { return null; }
+}
+/* A dashboard section's chart shape, read from its JSX: series kind and count, stack, area fill, bars on their side. */
+function jsxShape(src) {
+  const kinds = [...src.matchAll(/type:\s*['"](line|bar|scatter)['"]/g)].map(m => m[1]);
+  const mapped = /series:\s*[^\n]*\.map\(/.test(src);
+  return { kind: kinds[0], series: mapped ? 2 : Math.max(1, Math.min(4, kinds.length)), stacked: /\bstack\s*:/.test(src), area: /\bareaStyle\b/.test(src),
+    horizontal: /yAxis:\s*\{[^}]*type:\s*['"]category/.test(src) };
+}
+/* Sample options in a shape: n series of one kind, stacked, area-filled or on their side, 4 to 6 points. */
+function shapeOption({ kind = 'bar', series: n = 1, stacked, area, horizontal, time }) {
+  const s = sample(time), cat = { type: 'category', data: s.labels, boundaryGap: kind !== 'line' }, val = { type: 'value' };
+  const series = Array.from({ length: n }, (_, k) => Object.assign({ type: kind === 'scatter' ? 'scatter' : kind, name: `Series ${k + 1}`, data: s.vals.map((v, i) => Math.round((v * (1 - k * 0.2) + (i % 2) * 5) / 5) * 5) },
+    stacked ? { stack: 'total' } : {}, area ? { areaStyle: { opacity: 0.85 } } : {}, kind === 'line' ? { showSymbol: false } : {}));
+  return Object.assign(n > 1 ? { legend: { top: 0, right: 0 }, grid: { left: 8, right: 8, top: 40, bottom: 8, containLabel: true } } : {},
+    horizontal ? { xAxis: val, yAxis: Object.assign(cat, { inverse: true }) } : { xAxis: cat, yAxis: val }, { series });
+}
+/* The data note for options already marked with slots (a section copied from the library). */
+function noteFromMarks(o) {
+  const I = require('./item.js'), ms = I.marks(o), out = [];
+  if (!ms.length) return '';
+  const add = s => { if (!out.some(x => x.startsWith(s.split(' (')[0] + ' ('))) out.push(s); };
+  ms.forEach(m => {
+    const spec = m.obj.slot;
+    if (spec.includes(':')) return add(`${spec.split(':')[0]} (figure, optional)`);
+    const parts = I.slotNames(spec);
+    if (parts.length > 1) { const f = (m.obj.data || []).find(d => d != null), v = f && !Array.isArray(f) && typeof f === 'object' ? f.value : f; return parts.forEach((p, k) => add(`${p} (${Array.isArray(v) && typeof v[k] === 'string' ? 'text' : 'number'}, one)`)); }
+    const axis = /^(category|value|time|log)$/.test(m.obj.type || '');
+    const many = ms.filter(x => x.obj.slot === spec && !/^(category|value|time|log)$/.test(x.obj.type || '')).length > 1;
+    add(`${spec} (${m.obj.type === 'category' ? 'text' : 'number'}, ${!axis && many ? 'one or more' : 'one'})`);
+  });
+  return out.join('; ');
 }
 
 /* ---------- project words: recorded as hashes, so the library never stores them ---------- */
 const crypto = require('crypto');
 const hash = w => crypto.createHash('sha256').update(String(w).trim().toLowerCase()).digest('hex').slice(0, 16);
-/* Quoted names and values from a source: columns, tables, ids, category values (1 to 3 words). */
+/* ECharts option names and standard values (roundRect, insideTop, containLabel ...): code, never a project's words.
+   Taken from every chart in the library plus a fixed list; neither recorded nor matched by the wording check. */
+let ECHARTS_WORDS = null;
+function echartsWords() {
+  if (ECHARTS_WORDS) return ECHARTS_WORDS;
+  const w = new Set(('series data name type value category time log bar line scatter pie heatmap effectScatter boxplot candlestick funnel gauge radar tree treemap sunburst sankey graph map lines ' +
+    'xAxis yAxis grid legend tooltip title dataset visualMap dataZoom markLine markArea markPoint graphic toolbox axisPointer polar angleAxis radiusAxis ' +
+    'itemStyle lineStyle areaStyle label labelLine labelLayout endLabel emphasis blur select textStyle nameTextStyle axisLabel axisLine axisTick splitLine splitArea rich ' +
+    'show color borderColor borderWidth borderType borderRadius opacity shadowBlur shadowColor width height left right top bottom position distance offset rotate align verticalAlign ' +
+    'fontSize fontWeight fontFamily fontStyle lineHeight padding formatter interval min max scale inverse boundaryGap splitNumber nameLocation nameGap gridIndex xAxisIndex yAxisIndex ' +
+    'stack barWidth barMaxWidth barGap barCategoryGap symbol symbolSize symbolOffset showSymbol smooth step connectNulls silent z zlevel animation animationDuration animationDelay ' +
+    'animationEasing containLabel trigger dimension pieces inRange outOfRange seriesIndex coord yAxis xAxis radius center roseType focus scale disabled moveOverlap shiftX shiftY ' +
+    'circle rect roundRect triangle diamond pin arrow none emptyCircle emptyRect emptyRoundRect emptyTriangle emptyDiamond solid dashed dotted bold bolder lighter normal italic ' +
+    'inside insideTop insideBottom insideLeft insideRight insideTopLeft insideTopRight insideBottomLeft insideBottomRight insideStart insideEnd insideMiddle insideEndTop insideEndBottom ' +
+    'start middle end auto center horizontal vertical piecewise continuous axis item shadow cross break truncate inherit transparent linear cubicOut cubicInOut slot').toLowerCase().split(/\s+/));
+  const walk = x => { if (Array.isArray(x)) return x.forEach(walk); if (!x || typeof x !== 'object') return; Object.keys(x).forEach(k => { w.add(k.toLowerCase()); const v = x[k]; if (typeof v === 'string' && /^[a-zA-Z][\w-]*$/.test(v)) w.add(v.toLowerCase()); walk(v); }); };
+  items().forEach(i => { for (const m of i.text.matchAll(/<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) { try { walk(JSON.parse(m[1])); } catch (e) { /* not JSON */ } } });
+  return (ECHARTS_WORDS = w);
+}
+const isCode = v => echartsWords().has(String(v).trim().toLowerCase()) || /^[a-z]+[A-Z][A-Za-z]*$/.test(String(v).trim());   // camelCase is code
+/* Quoted names and values from a source: columns, tables, ids, category values (1 to 3 words); never ECharts' own words. */
 function projectWords(text, generic) {
   const out = new Set();
   for (const m of text.matchAll(/(["'`])((?:(?!\1)[^\\\n]){2,40})\1/g)) {
     const v = m[2].trim();
     if (!/[A-Za-z]/.test(v) || /^[\s{$%.#:-]/.test(v) || /[{}<>=()]/.test(v) || v.split(/\s+/).length > 3) continue;
-    if (generic.has(v.toLowerCase())) continue;
+    if (generic.has(v.toLowerCase()) || isCode(v)) continue;
     out.add(v);
   }
   return [...out];
@@ -799,8 +912,9 @@ function cli() {
   const generic = genericWords();
 
   if (kind === 'slide' || kind === 'chart') {
-    const deckFile = opt('--deck'), sid = opt('--slide');
-    if (!deckFile || !sid) stop(`${kind} needs --deck <deck.html> --slide <id|n>`);
+    let deckFile = opt('--deck'); const sid = opt('--slide');
+    if (!deckFile || !sid) stop(`${kind} needs --deck <deck folder or its presentation.html> --slide <slide id or number>`);
+    if (fs.existsSync(deckFile) && fs.statSync(deckFile).isDirectory()) deckFile = path.join(deckFile, 'presentation.html');   // a deck is a folder; presentation.html is built from its slides/
     if (!fs.existsSync(deckFile)) stop(`${deckFile} not found (use forward slashes)`);
     const deckHtml = fs.readFileSync(deckFile, 'utf8');
     const body = deckHtml.slice(deckHtml.indexOf('<!-- SLIDES:START -->'), deckHtml.indexOf('<!-- SLIDES:END -->'));
@@ -849,7 +963,7 @@ function cli() {
   const asType = k => (k === 'table' ? 'table' : /^(kpi|tile|tiles|card)$/.test(k) ? 'hero card' : 'chart');
   const nameOf = (type, shape) => type === 'table' ? `table-by-${shape.time ? 'month' : 'group'}-meters`
     : type === 'hero card' ? 'tile-latest-note'
-    : `${shape.kind === 'line' ? 'line' : 'bars'}-by-${shape.time ? 'month' : 'group'}`;
+    : `${shape.stacked ? 'stacked-' : ''}${shape.area ? 'area' : shape.kind === 'line' ? 'line' : shape.kind === 'scatter' ? 'dots' : 'bars'}-by-${shape.time ? 'month' : 'group'}`;
 
   if (kind === 'report-section') {
     const rep = opt('--report'), sec = opt('--section');
@@ -859,8 +973,12 @@ function cli() {
     const chart = (src.match(/^CHART\s*=\s*(\{[\s\S]*?\})\s*$/m) || [])[1] || '';
     const val = k => (chart.match(new RegExp(`"${k}"\\s*:\\s*"([^"]*)"`)) || [])[1];
     const bl = src.match(/^BULLETS\s*=\s*\[([\s\S]*?)^\]/m);
-    const shape = { kind: ['bar', 'line', 'table'].includes(val('type')) ? val('type') : 'bar', time: isTime(val('x')),
+    // a section of the current report skill holds its own options (CHART) or an HTML table or hero card; older ones a CHART recipe
+    const option = pyChart(src), html = (src.match(/^HTML\s*=\s*([\s\S]*?)(?:^[A-Z_]+\s*=|$(?![\s\S]))/m) || [])[1] || '';
+    const old = ['bar', 'line', 'table'].includes(val('type')) ? val('type') : 'bar';
+    const shape = { option, kind: option ? ([].concat(option.series)[0] || {}).type || 'bar' : html ? (/lib-table/.test(html) ? 'table' : /lib-card/.test(html) ? 'kpi' : old) : old, time: isTime(val('x')),
       n: Math.min(4, Math.max(1, bl ? (bl[1].match(/^\s*["f]/gm) || []).length : 2)), wide: /^LAYOUT\s*=\s*"wide"/m.test(src), format: val('format') || '$short' };
+    if (option) Object.assign(shape, { stacked: [].concat(option.series).some(s => s && s.stack), area: [].concat(option.series).some(s => s && s.areaStyle) });
     const type = asType(shape.kind);
     const h = Object.assign({}, base, { id: nextId(PREFIX[type]), type, name: nameFor(nameOf(type, shape)), from: 'analysis' });
     const custom = src.split('\n').filter(l => /pd\.Period|==\s*["']|\.iloc\[0\]|>\s*\d{3,}/.test(l)).length;
@@ -893,6 +1011,8 @@ function cli() {
     const ck = mv('chart') || 'bar';
     const shape = { kind: ['bar', 'line', 'table'].includes(ck) ? ck : /kpi|tile/.test(ck) ? 'kpi' : 'bar', time: isTime(mv('x')),
       n: Math.min(4, Math.max(1, (note.match(/^\s*-\s/gm) || []).length || 2)), format: '$short' };
+    // the chart is built in the JSX: read its series kind and count, stack, area fill and orientation
+    if (shape.kind !== 'table' && shape.kind !== 'kpi') { const js = jsxShape(src); Object.assign(shape, js, { kind: js.kind || shape.kind }, /area/.test(ck) ? { area: true, kind: 'line' } : {}, /stack/.test(ck) ? { stacked: true } : {}); }
     const type = asType(shape.kind);
     const h = Object.assign({}, base, { id: nextId(PREFIX[type]), type, name: nameFor(nameOf(type, shape)), from: 'dashboard' });
     console.log(`Saved as a ${type}: the dashboard section showed a ${shape.kind}.`);
@@ -917,7 +1037,7 @@ function cli() {
     else if (type === 'slide') html = slideItem(h, theme, require('./item.js').markSpots(`<section id="${h.name}" data-component="${id}">\n  <p class="kicker">Section</p>\n  <h2>Headline: the point as a sentence, with its number</h2>\n  <div class="content">\n    <div class="chart" data-echart>\n<script type="application/json">\n${JSON.stringify(plainBar(ex.labels, ex.vals))}\n</script>\n</div>\n  </div>\n  <div class="footnote">What is measured, the period, the source.</div>\n</section>`));
     else if (type === 'table') { h.data = PLAIN_NOTES.table; html = kitItem(h, theme, { body: PLAIN_TABLE(ex.labels, ex.vals), js: CSV_JS }); }
     else if (type === 'hero card') { h.data = PLAIN_NOTES.tiles; html = kitItem(h, theme, { body: PLAIN_TILES(ex.labels.slice(0, 3), ex.vals.slice(0, 3)) }); }
-    else if (type === 'animation') html = kitItem(h, theme, { animate: true,
+    else if (type === 'animation') html = kitItem(Object.assign(h, { attaches: 'figure, chart', fits: 'deck, report' }), theme, { animate: true,
       css: `/* motion runs only under html.play (the engine adds it on load and on Replay); without it the final state shows */\n.play .grow { animation: grow .9s cubic-bezier(.2,.7,.2,1); }\n@keyframes grow { from { width: 0; } }`,
       body: `<div class="lib-card good" style="max-width: 420px;">\n<div class="lib-lab">Label: the measure</div>\n<div class="lib-big"><span data-tick-up="80">80</span></div>\n<div class="lib-tick"><div class="a grow" style="width: 80%;"></div><div class="p" style="left: 70%;"></div></div>\n</div>` });
     else html = kitItem(h, theme, { body: `<div class="lib-panel">\n<h2>Layout piece: what it holds</h2>\n<p class="cap">Neutral sample content only</p>\n</div>` });
@@ -960,9 +1080,24 @@ function cli() {
     fs.writeFileSync(it.file, next);
     return console.log(`${id} recipe set. Next: node build-index.js.`);
   }
-  stop('first argument: slide | chart | report-section | dashboard-section | theme | new | purpose | recipe (see the top of this file)');
+  /* A saved item's name, when the script's guess is wrong: the header, the file name, the title and a slide's section id. */
+  if (kind === 'rename') {
+    const id = args[1], it = items().find(i => i.h.id === id);
+    if (!it || !args[2]) stop('rename <id> <new-name>');
+    const n = slug(args[2]);
+    if (n === it.h.name) return console.log(`${id} is already ${n}.`);
+    if (names.includes(n)) stop(`the name "${n}" is already used in the library`);
+    let t = fs.readFileSync(it.file, 'utf8');
+    t = t.replace(/(<!-- ITEM\r?\n(?:[^\n]*\n)*?)name:[^\r\n]*/, (m, a) => `${a}name: ${n}`).replace(`<title>${id} ${it.h.name}</title>`, `<title>${id} ${n}</title>`);
+    if (it.h.type === 'slide') t = t.replace(`<section id="${it.h.name}" data-component="${id}"`, `<section id="${n}" data-component="${id}"`);
+    const to = path.join(path.dirname(it.file), `${id}-${n}.html`);
+    fs.writeFileSync(to, t);
+    fs.unlinkSync(it.file);
+    return console.log(`${id} renamed to ${n} (${path.basename(to)}). Next: node build-index.js.`);
+  }
+  stop('first argument: slide | chart | report-section | dashboard-section | theme | new | purpose | recipe | rename (see the top of this file)');
 }
 
 module.exports = { LIB, TYPES, PREFIX, GROUPS, DEFAULT_THEME, ECHARTS, ENGINE, KIT_CSS, CHART_CSS, HOST_CSS, PERIOD, readHeader, header, items, nextId, themeOf, fontsOf, tokensBlock, deckCss,
-  slideItem, chartItem, kitItem, sectionItem, themeItem, neutralChart, neutralHtml, sampleOption, hash, prettyJson, autoSlots, tag, plainBar, PLAIN_TABLE, PLAIN_TILES, PLAIN_NOTES, CSV_JS };
+  slideItem, chartItem, kitItem, sectionItem, themeItem, neutralChart, neutralHtml, sampleOption, hash, isCode, echartsWords, prettyJson, autoSlots, tag, plainBar, PLAIN_TABLE, PLAIN_TILES, PLAIN_NOTES, CSV_JS };
 if (require.main === module) cli();

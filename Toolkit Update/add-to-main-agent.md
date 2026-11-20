@@ -88,6 +88,7 @@ How to record:
 | Dashboard text across many filters or refreshes | `commentary` |
 | A deck, or a change to one | `presentation` |
 | The user likes a visual, "save that" | `design-librarian` agent |
+| Planning a report, deck or dashboard: which library items fit | `graphic-designer` agent |
 
 ### Subagents
 - Toolkit work stays in this conversation. A subagent only where the loaded skill names one.

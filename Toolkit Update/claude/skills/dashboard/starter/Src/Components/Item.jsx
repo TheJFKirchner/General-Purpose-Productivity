@@ -71,6 +71,8 @@ function drawingFaults(box, categories = []) {
       if (w > 3 && h > 0.5 * Math.min(a.height, b.height)) out.push(`"${texts[i].t.slice(0, 30)}" overlaps "${texts[j].t.slice(0, 30)}"`);
     }
   }
+  const bigPct = texts.find((x) => /(\d{1,3}(,\d{3})+|\d{4,})(\.\d+)?%/.test(x.t));
+  if (bigPct) out.unshift(`"${bigPct.t.slice(0, 30)}": a percent label on a large number; the label's format does not suit the values`);
   const all = texts.map((x) => x.t).join('').replace(/\s+/g, '');
   const hidden = categories.filter((c) => c && !all.includes(c.replace(/\s+/g, '')));
   if (hidden.length) out.unshift(`${hidden.length} of ${categories.length} category labels are not shown (e.g. "${hidden[0].slice(0, 30)}")`);
@@ -92,6 +94,7 @@ function note(el, problems) {
  */
 export default function Item({ use, chart, html, css, script, rows, slots, names, format, metrics, keyHtml, basis, height }) {
   const wiring = useMemo(() => ({ slots, names, format }), [slots, names, format]);
+  const todo = Object.entries(slots ?? {}).filter(([, v]) => v === null).map(([k]) => k);   // MANUAL: not filled yet
   const box = useRef(null);
   const wrap = useRef(null);
   const instance = useRef(null);
@@ -153,6 +156,7 @@ export default function Item({ use, chart, html, css, script, rows, slots, names
       {chart && keyHtml && <div className="key" dangerouslySetInnerHTML={{ __html: keyHtml }} />}
       {filled && <div className="item-html" dangerouslySetInnerHTML={{ __html: filled.html }} />}
       {basis && <p className="basis">{text(basis, metrics)}</p>}
+      {todo.length > 0 && <p className="item-todo">Not filled yet: {todo.join(', ')}. This part shows the library's sample data until it is set in the section file.</p>}
     </div>
   );
 }

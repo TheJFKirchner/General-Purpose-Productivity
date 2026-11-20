@@ -3,10 +3,12 @@
 The analysis toolbox and brain in one folder, ready to add to a Claude Code workspace.
 
 - The skills, agents and brain files here are copies; their working copies live elsewhere in this repo (see "Keeping this folder current").
-- `design-library\` and `add-to-claude-md.md` are not copies: they live only here and are edited here.
+- `design-library\`, `cosmo-overview\` and `add-to-claude-md.md` are not copies: they live only here and are edited here.
 - `claude\` has no dot on purpose: sessions on this repo do not load every skill twice.
 
 ## What is in it
+
+The analysis, presentation and dashboard skills each hold a short overview `SKILL.md` and one page per action in `references`; their tools have a `show <id>` step to preview a library item before adding it.
 
 | Item | What it does |
 | --- | --- |
@@ -21,9 +23,11 @@ The analysis toolbox and brain in one folder, ready to add to a Claude Code work
 | `claude\skills\brain-ingest` | Pulls facts from documents in the wiki's `personal\raw\` and files them |
 | `claude\skills\brain-promote` | Moves picked lines from a personal page to the team page |
 | `claude\agents\commentary-generator.md` | Writes `commentary.json` for the commentary skill |
-| `claude\agents\design-librarian.md` | Saves visuals the user likes into the design library |
+| `claude\agents\design-librarian.md` | Saves visuals the user likes into the design library, following the library's `ITEM-SHAPE.md` |
+| `claude\agents\graphic-designer.md` | Suggests which library items suit a report, deck or dashboard being planned (reads the index only) |
 | `claude\agents\brain-*.md` (4) | Do the reading and writing for the brain skills |
-| `design-library\` | Shared slides, charts, tables, hero cards, animations, layout pieces and themes; `index.html` shows them all |
+| `design-library\` | Shared slides, charts, tables, hero cards, animations, layout pieces and themes; `index.html` shows them all. Reports and decks add animations by id; `sweep-add.js` checks every item adds to a report, deck and dashboard |
+| `cosmo-overview\` | A small static website introducing Cosmo; open `index.html` in a browser. Not a copy: edited here |
 | `brain\scripts\wiki_index.py` | Lists every wiki page for the brain agents |
 | `add-to-main-agent.md` | Paste into the main agent file: how the main conversation records facts, picks a skill and works beside an existing orchestrator |
 | `add-to-claude-md.md` | Paste into the workspace or user-level CLAUDE.md: install places, software, synced folders, project layout |
@@ -70,13 +74,13 @@ The wiki must already have:
 ## Keeping this folder current
 
 - Never edit the copies here. Edit the working copies, then refresh this folder.
-- The exceptions: edit the design library in place in `design-library\`, then rebuild its index there with `node build-index.js`; edit `add-to-claude-md.md` in place.
+- The exceptions: edit the design library in place in `design-library\` and the Cosmo site in `cosmo-overview\`, then rebuild its index there with `node build-index.js`; edit `add-to-claude-md.md` in place.
 
 | Working copy (in this repo) | Copied to |
 | --- | --- |
 | `.claude\skills\` toolbox, analysis, findings, commentary, dashboard, presentation | `claude\skills\` |
 | `brain-intake\skills\` (4) | `claude\skills\` |
-| `.claude\agents\commentary-generator.md`, `design-librarian.md` | `claude\agents\` |
+| `.claude\agents\commentary-generator.md`, `design-librarian.md`, `graphic-designer.md` | `claude\agents\` |
 | `brain-intake\agents\` (4) | `claude\agents\` |
 | `brain-intake\scripts\wiki_index.py` | `brain\scripts\` |
 | `brain-intake\add-to-main-agent.md` | `add-to-main-agent.md` |
@@ -91,7 +95,7 @@ foreach ($s in "toolbox", "analysis", "findings", "commentary", "dashboard", "pr
   robocopy ".claude\skills\$s" "$T\claude\skills\$s" /MIR /XD $X $Q }
 foreach ($s in "brain-cite", "brain-file", "brain-ingest", "brain-promote") {
   robocopy "brain-intake\skills\$s" "$T\claude\skills\$s" /MIR /XD $X $Q }
-robocopy ".claude\agents" "$T\claude\agents" commentary-generator.md design-librarian.md $Q
+robocopy ".claude\agents" "$T\claude\agents" commentary-generator.md design-librarian.md graphic-designer.md $Q
 robocopy "brain-intake\agents" "$T\claude\agents" *.md $Q
 robocopy "brain-intake\scripts" "$T\brain\scripts" wiki_index.py $Q
 Copy-Item "brain-intake\add-to-main-agent.md" "$T\add-to-main-agent.md"

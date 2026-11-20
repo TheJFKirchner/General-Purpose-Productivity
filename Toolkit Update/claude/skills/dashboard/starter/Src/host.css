@@ -1,6 +1,10 @@
 /* host.css: the styles a page needs for copied design-library items. Written by build-index.js; do not edit.
    Copy it once into the page, with the theme tokens (node item.js theme <id>) and host-runtime.js. */
 [data-item] { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+[data-item][data-item] .chart[data-echart] { min-height: var(--chart-min, 220px); }   /* outranks an item's own "min-height: 0", written for its fixed library frame */
+[data-item^="AN-"] { position: relative; }
+.item-replay { position: absolute; top: 6px; right: 6px; z-index: 2; font: 600 12px var(--body-font); padding: 4px 10px; cursor: pointer; color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); }
+html.is-export .item-replay { display: none; } @media print { .item-replay { display: none; } }
 [data-item] .chart[data-echart] { position: relative; flex: 1 1 auto; height: var(--chart-height, 340px); min-height: 0; min-width: 0; }
 [data-item] > p.basis { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
 [data-item] > .key { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--muted); }

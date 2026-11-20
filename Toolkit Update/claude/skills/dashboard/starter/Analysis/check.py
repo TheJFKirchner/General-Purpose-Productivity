@@ -100,6 +100,19 @@ def columns_of(data) -> list | None:
     return list(dict.fromkeys(k for r in rows if isinstance(r, dict) for k in r))
 
 
+def ranges_of(data) -> dict | None:
+    """The largest absolute value of each number column in a section's data rows, to check its formats."""
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return None
+    out = {}
+    for r in rows:
+        for k, v in (r.items() if isinstance(r, dict) else []):
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                out[k] = max(out.get(k, 0), abs(v))
+    return out
+
+
 def tidy(v):
     """Round for reading: amounts to cents, small rates to 4 decimals."""
     if isinstance(v, float):
@@ -207,11 +220,13 @@ def main() -> int:
         cards[cid] = {
             "filters": c.filters,
             "declared": c.declared is not None,
+            "ignore": list(c.ignore),
             "tables": c.tables,
             "module": c.module,
             "function": c.fn.__name__,
             "metrics": result.get("metrics", {}),
             "columns": columns_of(result.get("data")),
+            "ranges": ranges_of(result.get("data")),
             "error": result.get("error"),
             "slices": slice_failures(cid, options) if uses_report(cid) and "error" not in result else [],
             "bytes": len(json.dumps(result, separators=(",", ":"))) if "error" not in result else None,

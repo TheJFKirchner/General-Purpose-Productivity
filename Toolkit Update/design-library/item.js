@@ -8,6 +8,8 @@
  *                                              the block with its sample data replaced by those columns
  *   node item.js swap <slide id> <chart id> [--spot chart-2] [--json]
  *                                              the slide with that chart in its chart spot
+ *   node item.js shot <id> [--out <file.png>] [--theme <TH id>] [--browser <path>]
+ *                                              a headless Chrome or Edge picture of the item, to look at
  *   node item.js theme <TH id> [--json] [--fonts]
  *                                              the theme's tokens as a :root block (--fonts adds its embedded font)
  *
@@ -86,6 +88,11 @@ const compactJson = html => html.replace(/(<script type="application\/json"[^>]*
 function scopeCss(css, id) {
   const pre = `[data-item="${id}"]`;
   css = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  // keyframe names are global: each takes the item id, so two items never share one
+  [...new Set([...css.matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]))].filter(k => !k.startsWith(id)).forEach(k => {
+    css = css.replace(new RegExp(`@keyframes\\s+${k}\\b`, 'g'), `@keyframes ${id}-${k}`)
+      .replace(new RegExp(`(animation(?:-name)?\\s*:[^;}]*?)\\b${k}\\b`, 'g'), `$1${id}-${k}`);
+  });
   let out = '', i = 0;
   while (i < css.length) {
     const open = css.indexOf('{', i);
@@ -96,7 +103,8 @@ function scopeCss(css, id) {
     const body = css.slice(open + 1, j - 1);
     if (/^@(media|supports)/.test(sel)) out += `${sel} {\n${scopeCss(body, id)}}\n`;
     else if (/^@/.test(sel)) out += `${sel} {${body}}\n`;
-    else out += sel.split(/,(?![^(]*\))/).map(s => s.trim()).map(s => (/^(html|body|:root)\b/.test(s) ? s.replace(/^(\S+)/, `$1 ${pre}`) : `${pre} ${s}`)).join(', ') + ` {${body}}\n`;
+    else out += sel.split(/,(?![^(]*\))/).map(s => s.trim()).map(s => (/^(html)?\.play\b/.test(s) ? s.replace(/^(html)?\.play/, `${pre}.play`)   // an animation plays when its wrapper has .play
+      : /^(html|body|:root)\b/.test(s) ? s.replace(/^(\S+)/, `$1 ${pre}`) : `${pre} ${s}`)).join(', ') + ` {${body}}\n`;
     i = j;
   }
   return out.trim();
@@ -108,6 +116,10 @@ function copyOf(it) {
   const js = ((it.text.match(/<script id="item-js">([\s\S]*?)<\/script>/) || [])[1] || '').trim();
   const block = compactJson(blockOf(it.text));
   const out = { id, type: h.type, name: h.name, purpose: h.purpose, data: parseNote(h.data) || [], dataLine: h.data || '', recipe: h.recipe || '', css: css ? scopeCss(css, id) : '', js };
+  if (h.type === 'animation') {   // what it moves and where it fits; its script runs once per copy, inside that copy (host-motion.js)
+    out.attaches = h.attaches || ''; out.fits = h.fits || '';
+    if (js) out.js = `ItemMotion.attach('${id}', function (document, window, ItemEngine, addEventListener) {\n${js}\n});`;
+  }
   if (h.type === 'slide') { out.html = block; out.spots = spotsOf(block); }
   else if (h.type === 'theme') { out.html = ''; }
   else out.html = `<div data-item="${id}">\n${block}\n</div>`;
@@ -141,9 +153,10 @@ function marks(o) {
   go(o, null, null);
   return out;
 }
-const slotNames = spec => spec.split(':')[0].split(',').map(s => s.trim());
+const slotNames = spec => spec.split(':')[0].split(',').map(s => s.trim().replace(/^=/, ''));   // "=value": follows the value slot's first column
 /* map: { slot: [columns] }. A slot given no column: its marked series or data entries are removed. */
-function fillChart(o, rows, map) {
+function fillChart(o, rows, map, warn = []) {
+  const drop = (m, name) => { if (m.obj.type) warn.push(`series "${m.obj.name || m.obj.type}" (slot ${name}) left out: no column for it`); m.parent.splice(m.parent.indexOf(m.obj), 1); };
   const names = [...new Set(marks(o).flatMap(m => slotNames(m.obj.slot)))];
   names.forEach(name => {
     const ms = marks(o).filter(m => slotNames(m.obj.slot).includes(name));
@@ -158,7 +171,7 @@ function fillChart(o, rows, map) {
       tuple.forEach(m => {
         const parts = slotNames(m.obj.slot);
         if (m.done) return;
-        if (parts.some(p => !(map[p] || []).length)) { if (removable(m)) m.parent.splice(m.parent.indexOf(m.obj), 1); m.done = true; return; }
+        if (parts.some(p => !(map[p] || []).length)) { if (removable(m)) drop(m, name); m.done = true; return; }
         const old = m.obj.data || [];
         m.obj.data = rows.map(r => parts.map(p => (isEmpty(r[map[p][0]]) ? null : num(r[map[p][0]])))).filter(t => t.every(v => v !== null)).map((t, i) => restyle(old[i], t));
         m.done = true;
@@ -173,9 +186,15 @@ function fillChart(o, rows, map) {
       if (m.obj.type === 'category') m.obj.data = [...new Set(column(rows, c).filter(v => v !== null).map(String))];
       else m.obj.data = column(rows, c);
     });
-    const plain = ms.filter(m => slotNames(m.obj.slot).length === 1 && !isAxis(m));
+    // a follower ("slot": "=value", a lollipop's dot) takes the slot's first column too, and never counts as one of its series
+    ms.filter(m => /^=/.test(m.obj.slot)).forEach(m => {
+      if (!cols.length) { if (removable(m)) drop(m, name); return; }
+      const old = m.obj.data || [];
+      m.obj.data = column(rows, cols[0]).map((v, k) => restyle(old[k], v));
+    });
+    const plain = ms.filter(m => slotNames(m.obj.slot).length === 1 && !isAxis(m) && !/^=/.test(m.obj.slot));
     if (!plain.length) return;
-    if (!cols.length) { plain.slice().reverse().forEach(m => { if (removable(m)) m.parent.splice(m.parent.indexOf(m.obj), 1); }); return; }
+    if (!cols.length) { plain.slice().reverse().forEach(m => { if (removable(m)) drop(m, name); }); return; }
     cols.forEach((c, i) => {
       let m = plain[i];
       if (!m) {                                      // more columns than marks: repeat the last mark
@@ -190,7 +209,7 @@ function fillChart(o, rows, map) {
       o2.data = column(rows, c).map((v, k) => restyle(old[k], v));
       if (o2.type && o2.type !== 'value') o2.name = c;
     });
-    plain.slice(cols.length).reverse().forEach(m => { if (removable(m)) m.parent.splice(m.parent.indexOf(m.obj), 1); });
+    plain.slice(cols.length).reverse().forEach(m => { if (removable(m)) drop(m, name); });   // two series on one column: name it twice (value=v,v)
   });
   // a shown value axis drops the fixed range the sample set, so it fits the real values (hidden layout axes keep theirs)
   if (names.length) [].concat(o.xAxis || [], o.yAxis || []).forEach(a => { if (a && a.type === 'value' && a.show !== false) { delete a.min; delete a.max; delete a.interval; } });
@@ -209,8 +228,8 @@ function applySlot(n, row, map, inHead, rows) {
     if (v === undefined || v === null) v = '';
     if (!prop) n.children = [escText(v)];
     else if (prop === 'class') { const cls = (attr(n, 'class') || '').split(/\s+/).filter(x => x && !STATES.test(x)); if (!isEmpty(v)) cls.push(String(v)); setAttr(n, 'class', cls.join(' ')); }
-    else if (/^(aria-|title$)/.test(prop)) setAttr(n, prop, escAttr(v));
-    else { const st = (attr(n, 'style') || '').split(';').map(s => s.trim()).filter(s => s && !s.startsWith(prop + ':')); if (!isEmpty(v)) st.push(`${prop}: ${/^-?\d+(\.\d+)?$/.test(String(v)) ? v + '%' : escAttr(v)}`); setAttr(n, 'style', st.length ? st.join('; ') + ';' : null); }
+    else if (/^(aria-|title$|data-(?!slot|rows|template))/.test(prop)) setAttr(n, prop, escAttr(v));   // data-tick-up, data-v ...
+    else { const unitless = /^(flex-grow|flex-shrink|opacity|order|z-index)$/.test(prop); const st = (attr(n, 'style') || '').split(';').map(s => s.trim()).filter(s => s && !s.startsWith(prop + ':')); if (!isEmpty(v)) st.push(`${prop}: ${/^-?\d+(\.\d+)?$/.test(String(v)) && !unitless ? v + '%' : escAttr(v)}`); setAttr(n, 'style', st.length ? st.join('; ') + ';' : null); }
   });
 }
 /* A th or td whose slot has several columns repeats once per column; the same slot's further cells in that row go
@@ -263,8 +282,8 @@ function fillHtml(html, rows, map) {
 }
 function isHead(tree, node) { let found = false; walk(tree, n => { if (n.tag === 'thead') walk(n, x => { if (x === node) found = true; }); }); return found; }
 /* A block: charts get their JSON filled, everything else its HTML slots. */
-function fill(html, rows, map) {
-  html = html.replace(/(<script type="application\/json"[^>]*>)([\s\S]*?)(<\/script>)/g, (m, a, j, b) => a + JSON.stringify(fillChart(JSON.parse(j), rows, map)) + b);
+function fill(html, rows, map, warn = []) {   // warn collects the series left out for want of a column
+  html = html.replace(/(<script type="application\/json"[^>]*>)([\s\S]*?)(<\/script>)/g, (m, a, j, b) => a + JSON.stringify(fillChart(JSON.parse(j), rows, map, warn)) + b);
   return /data-(slot|rows)/.test(html) ? fillHtml(html, rows, map) : html;
 }
 /* What a fill call is missing against an item's data note. */
@@ -276,7 +295,7 @@ function check(note, map) {
     if (s.count === 'one or more' && n < 1) out.push(`${s.name} needs one or more columns`);
     if (s.count === 'optional' && n > 1) out.push(`${s.name} takes at most one column`);
   });
-  Object.keys(map).forEach(k => { if (note && !note.some(s => s.name === k)) out.push(`${k} is not a slot of this item`); });
+  Object.keys(map || {}).forEach(k => { if (note && !note.some(s => s.name === k)) out.push(`${k} is not a slot of this item`); });
   return out;
 }
 
@@ -369,6 +388,28 @@ function slotProblems(h, block) {
   return out;
 }
 
+/* An animation's script must not carry the block's own sample wording or values (they would overwrite a filled copy). */
+function scriptEchoes(block, js) {
+  if (!js) return [];
+  const dec = s => s.replace(/&middot;/g, '·').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n)).replace(/\s+/g, ' ').trim();
+  const code = js.replace(/\\u([0-9a-f]{4})/gi, (m, h) => String.fromCharCode(parseInt(h, 16)));
+  const out = [], tree = parse(block);
+  walk(tree, n => {
+    if (n.tag === 'script' || n.tag === 'style') return false;
+    if (!/(^|\s)(cap|lib-source|finding|basis)(\s|$)/.test(attr(n, 'class') || '') && !/^h[1-3]$/.test(n.tag) && !attr(n, 'data-slot')) return;
+    const t = dec(textOf(n));
+    if (t.length >= 15 && code.includes(t)) out.push(`its script writes the block's sample text "${t.slice(0, 50)}"; take it from the block`);
+  });
+  for (const m of block.matchAll(/<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) {
+    let o; try { o = JSON.parse(m[1]); } catch (e) { continue; }
+    marks(o).forEach(k => {
+      const nums = [].concat(k.obj.data || []).map(d => (d && typeof d === 'object' && !Array.isArray(d) ? d.value : d)).filter(v => typeof v === 'number');
+      if (nums.length >= 3 && [', ', ','].some(sep => code.includes(`[${nums.slice(0, 3).join(sep)}`))) out.push(`its script holds the sample values of slot ${k.obj.slot}; read them from the block's JSON`);
+    });
+  }
+  return out;
+}
+
 /* ---------- rows from a file ---------- */
 function readRows(file) {
   const t = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
@@ -384,6 +425,8 @@ function text(c) {
   const out = [`${c.id} ${c.name} (${c.type})`];
   if (c.dataLine) out.push(`data: ${c.dataLine}`);
   if (c.recipe) out.push(`recipe: ${c.recipe}`);
+  if (c.attaches) out.push(`attaches: ${c.attaches}`);
+  if (c.fits) out.push(`fits: ${c.fits}`);
   if (c.spots) out.push(`spots: ${c.spots.join(' ')}`);
   if (c.css) out.push('css:', c.css);
   if (c.js) out.push('js:', c.js);
@@ -419,8 +462,24 @@ function cli() {
       else { c = copyOf(get(args[1])); html = c.html; note = c.data; }
       const missing = check(note, map);
       if (missing.length) stop(missing.join('; '));
-      const out = fill(html, rows, map);
+      const warn = [], out = fill(html, rows, map, warn);
+      warn.forEach(w => console.error(`NOTE: ${w}`));
       return json ? say(Object.assign({}, c || {}, { html: out })) : console.log(out);
+    }
+    if (args[0] === 'shot') {   // a picture of the item as the library draws it, to look at (Chrome or Edge, headless)
+      const it = get(args[1]), os = require('os'), { spawnSync } = require('child_process');
+      const out = path.resolve(opt('--out') || path.join(os.tmpdir(), `${it.h.id}.png`));
+      const browsers = [opt('--browser'), process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+        'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/microsoft-edge'].filter(Boolean);
+      const exe = browsers.find(b => fs.existsSync(b));
+      if (!exe) stop('no Chrome or Edge found; pass --browser <path>');
+      const size = it.h.type === 'slide' ? '1280,720' : '960,540';
+      const theme = opt('--theme') ? `&theme=${encodeURIComponent(JSON.stringify(S.themeOf(opt('--theme'))))}` : '';
+      const url = 'file:///' + it.file.split(path.sep).join('/').replace(/^\//, '') + '#grid' + theme;
+      const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--window-size=${size}`, '--virtual-time-budget=6000', `--screenshot=${out}`, url], { encoding: 'utf8' });
+      if (!fs.existsSync(out)) stop(`no picture written (${(r.stderr || '').split('\n').slice(-2).join(' ').trim()})`);
+      return console.log(`Wrote ${out}. Read it to look at the item.`);
     }
     if (args[0] === 'swap') {
       const slide = get(args[1]), chart = get(args[2]);
@@ -440,5 +499,5 @@ function cli() {
 const printed = it => text(copyOf(it));
 
 module.exports = { get, copyOf, blockOf, fill, fillChart, fillHtml, check, swap, parseNote, scopeCss, parse, serialize, walk, attr, textOf, spotsOf, marks, slotNames, readRows, SLOT, SPOT,
-  markSpots, slideProblems, chartBlockProblems, slotProblems, markedSlots, printed };
+  markSpots, slideProblems, chartBlockProblems, slotProblems, markedSlots, printed, scriptEchoes };
 if (require.main === module) cli();

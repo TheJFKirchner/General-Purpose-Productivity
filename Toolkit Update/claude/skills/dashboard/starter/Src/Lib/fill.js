@@ -77,6 +77,9 @@ class Fill {
     this.names = wiring.names ?? {};
     this.fmts = wiring.format ?? {};
     this.problems = [];
+    this.dropped = [];
+    // slots set to null: not filled yet (MANUAL); their marks keep the item's sample data
+    this.todo = new Set(Object.entries(wiring.slots ?? {}).filter(([, v]) => v === null).map(([k]) => k));
   }
   label(c) { return String(this.names[c] ?? pretty(c)); }
   fmt(c) { return this.fmts[c] ?? this.fmts['*'] ?? ''; }
@@ -106,7 +109,7 @@ class Fill {
   }
 }
 
-const slotNames = (spec) => String(spec).split(':')[0].split(',').map((s) => s.trim());
+const slotNames = (spec) => String(spec).split(':')[0].split(',').map((s) => s.trim().replace(/^=/, ''));   // "=value" follows the value slot
 
 function marks(o) {
   const out = [];
@@ -149,6 +152,7 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
   const f = new Fill(rows, wiring);
   const filled = new Map();   // series object -> column
   const pairs = new Map();    // "x,y" series -> [x column, y column]
+  const single = new Map();   // "x,y" series with one number part -> its index (its {@[i]} is that number)
   const done = new Set();
   const removable = (m) => Array.isArray(m[1]) && !AXIS_TYPES.includes(String(m[0].type ?? ''));
   const remove = (m) => {
@@ -159,7 +163,18 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
   };
   const categories = (c) => [...new Set(f.column(c).filter((v) => v !== null).map((v) => f.show(v, c)))];
   const names = [...new Set(marks(o).flatMap((m) => slotNames(m[0].slot)))];
+  const isAxis = (m) => AXIS_TYPES.includes(String(m[0].type ?? ''));
+  const drop = (m, name) => {
+    if (!removable(m)) return;
+    if (m[0].type && !first) f.problems.push(`series "${m[0].name || m[0].type}" (slot ${name}) left out: no column for it`);
+    else if (m[0].type && first) f.dropped.push(`series "${m[0].name || m[0].type}" (slot ${name}) left out: no column for it`);
+    remove(m);
+  };
   for (const name of names) {
+    if (f.todo.has(name)) {
+      f.problems.push(`slot ${name} is not filled yet: it shows the item's sample data (MANUAL)`);
+      continue;
+    }
     const ms = marks(o).filter((m) => slotNames(m[0].slot).includes(name));
     const cols = f.smap[name] ?? [];
     if (ms.some((m) => m[0].slot.includes(':'))) {   // "target:yAxis": one property takes a figure
@@ -170,26 +185,47 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
       }
       continue;
     }
-    for (const m of ms.filter((x) => slotNames(x[0].slot).length > 1)) {   // "x,y": rows of [x, y]
+    const tuple = ms.filter((x) => slotNames(x[0].slot).length > 1);
+    for (const m of tuple) {   // "x,y": rows of [x, y]; a row with an empty cell is left out
       if (done.has(m[0])) continue;
       done.add(m[0]);
       const parts = slotNames(m[0].slot);
+      if (parts.some((p) => f.todo.has(p))) continue;   // a part not filled yet: the sample points stay
       if (parts.some((p) => !(f.smap[p] ?? []).length)) {
-        remove(m);
+        drop(m, name);
         continue;
       }
       if (!parts.every((p) => f.need(f.smap[p][0]))) continue;
       const old = m[0].data ?? [];
       const data = f.rows.map((r) => parts.map((p) => r[f.smap[p][0]] ?? null)).filter((t) => t.every((v) => v !== null));
       m[0].data = data.map((t, i) => restyle(old[i], t));
-      filled.set(m[0], f.smap[parts[1] ?? parts[0]][0]);
+      // the point's one number column (a [value, "name"] point), for its format; else its second part
+      const numeric = parts.map((p, k) => [k, f.smap[p][0]]).filter(([, c]) => data.some((t) => typeof t[parts.findIndex((q) => f.smap[q][0] === c)] === 'number'));
+      filled.set(m[0], numeric.length === 1 ? numeric[0][1] : f.smap[parts[1] ?? parts[0]][0]);
+      if (numeric.length === 1) single.set(m[0], numeric[0][0]);
       pairs.set(m[0], [f.smap[parts[0]][0], f.smap[parts[1] ?? parts[0]][0]]);
       if (first) delete m[0].name;
     }
-    const plain = ms.filter((m) => slotNames(m[0].slot).length === 1);
+    if (tuple.length === ms.length) continue;
+    // every marked axis takes the slot's first column (panels share one category column)
+    for (const m of ms.filter((x) => slotNames(x[0].slot).length === 1 && isAxis(x))) {
+      if (!cols.length) continue;
+      m[0].data = m[0].type === 'category' ? categories(cols[0]) : f.column(cols[0]);
+    }
+    // a follower ("slot": "=value", a lollipop's dot) takes the slot's first column too, never counting as one of its series
+    for (const m of ms.filter((x) => /^=/.test(x[0].slot))) {
+      if (!cols.length) {
+        drop(m, name);
+        continue;
+      }
+      const old = m[0].data ?? [];
+      m[0].data = f.column(cols[0]).map((v, k) => restyle(old[k], v));
+      filled.set(m[0], cols[0]);
+    }
+    const plain = ms.filter((m) => slotNames(m[0].slot).length === 1 && !isAxis(m) && !/^=/.test(m[0].slot));
     if (!plain.length) continue;
     if (!cols.length) {
-      [...plain].reverse().forEach(remove);
+      [...plain].reverse().forEach((m) => drop(m, name));
       continue;
     }
     cols.forEach((c, i) => {
@@ -214,12 +250,16 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
         filled.set(obj, c);
       }
     });
-    for (const m of [...plain.slice(cols.length)].reverse()) {
-      if (removable(m)) remove(m);
-      else if (m[0].type === 'category') m[0].data = categories(cols.at(-1));   // one column may fill several axes
-    }
+    for (const m of [...plain.slice(cols.length)].reverse()) drop(m, name);
   }
   const series = asList(o.series).filter((s) => s && typeof s === 'object');
+  if (f.rows.length) {   // a series that ends up with nothing to draw
+    for (const s of series) {
+      if (typeof s.slot === 'string' && Array.isArray(s.data) && !s.data.some((d) => (d && typeof d === 'object' && !Array.isArray(d) ? d.value : d) !== null && (d && typeof d === 'object' && !Array.isArray(d) ? d.value : d) !== undefined)) {
+        f.problems.push(`series "${s.name || s.type}" (slot ${s.slot}) has no data`);
+      }
+    }
+  }
   const axisCol = (key, j) => series.map((s) => filled.has(s) && Number(s[`${key}Index`] ?? 0) === j && (pairs.get(s)?.[key === 'xAxis' ? 0 : 1] ?? filled.get(s))).find(Boolean);
   if (first && names.length) {
     for (const key of ['xAxis', 'yAxis']) {
@@ -233,11 +273,15 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
     }
     for (const s of series) {
       if (!filled.has(s)) continue;
-      for (const k of ['label', 'endLabel']) if (typeof s[k]?.formatter === 'string') s[k].formatter = tieFormat(s[k].formatter, 'c');
+      for (const k of ['label', 'endLabel']) {
+        if (typeof s[k]?.formatter !== 'string') continue;
+        if (single.has(s)) s[k].formatter = s[k].formatter.replace(new RegExp(`\\$?\\{@\\[${single.get(s)}\\]\\}(%|[KMB](?![a-z]))?`, 'g'), '{c:fmt}');
+        s[k].formatter = tieFormat(s[k].formatter, 'c');
+      }
       for (const ml of [s.markLine, s.markPoint]) if (ml?.label && typeof ml.label.formatter === 'string') ml.label.formatter = /\{/.test(ml.label.formatter) ? tieFormat(ml.label.formatter, 'c') : '{c:fmt}';
     }
   }
-  if (first) return f.problems;   // the copy keeps {c:fmt}: the column's format applies at every draw
+  if (first) return [...f.problems, ...f.dropped];   // the copy keeps {c:fmt}: the column's format applies at every draw
   // a waterfall whose bars all sit well above zero: the value axis starts near the lowest bar (unless set)
   const base = series.find((x) => x.slot === 'base');
   const totalS = series.find((x) => x.slot === 'total');
@@ -257,6 +301,13 @@ export function fillChart(o, rows, wiring, { first = false } = {}) {
     const p = pattern(f.fmt(c), token) ?? `{${token}}`;
     return x.replace(/\$?\{(c|value):fmt\}%?/g, () => p);
   };
+  // a point [value, "name"] whose label prints its number raw ({@[0]}, e.g. a part filled after adding): the column's format
+  for (const s of series) {
+    if (!single.has(s)) continue;
+    for (const k of ['label', 'endLabel']) {
+      if (typeof s[k]?.formatter === 'string') s[k].formatter = s[k].formatter.replace(new RegExp(`\\$?\\{@\\[${single.get(s)}\\]\\}(%|[KMB](?![a-z]))?`, 'g'), '{c:fmt}');
+    }
+  }
   const codeFormats = [];
   for (const s of series) {
     const c = filled.get(s);
@@ -295,7 +346,7 @@ function walkFormatters(x, fn) {
 
 /** "+${c}" -> "+{c:fmt}", "{value}%" -> "{value:fmt}": a sample label's number tied to the column's format. */
 function tieFormat(t, token) {
-  return t.replace(new RegExp(`\\$?\\{${token}\\}(%|[KMB](?![a-z]))?`, 'g'), `{${token}:fmt}`);
+  return t.replace(new RegExp(`\\$?\\{${token}(?::(?:short|comma))?\\}(%|[KMB](?![a-z]))?`, 'g'), `{${token}:fmt}`);
 }
 
 /** After ItemHost.prepare: formats the host cannot express become functions. */
@@ -309,6 +360,17 @@ export function codeFormats(o) {
 /** The block with its rows repeated and slots filled. text(s) fills free text ({metric|format}). */
 export function fillHtml(markup, rows, wiring, text = null) {
   const f = new Fill(rows, wiring);
+  const records = [];   // an item that builds itself from records keeps them in JSON marked like a chart
+  markup = String(markup).replace(/(<script type="application\/json"[^>]*>)([\s\S]*?)(<\/script>)/g, (m, a, j, b) => {
+    try {
+      const o = JSON.parse(j);
+      records.push(...fillChart(o, rows, wiring));
+      delete o.__code;
+      return a + JSON.stringify(o).replace(/<\//g, '<\\/') + b;
+    } catch {
+      return m;
+    }
+  });
   const tpl = document.createElement('template');
   tpl.innerHTML = markup;
   const root = tpl.content;
@@ -322,6 +384,10 @@ export function fillHtml(markup, rows, wiring, text = null) {
     for (const tok of (el.getAttribute('data-slot') ?? '').split(/\s+/).filter(Boolean)) {
       const [nameIdx, prop] = tok.split('@');
       const [name, idx] = nameIdx.split('=');
+      if (f.todo.has(name)) {   // not filled yet: the sample text stays
+        if (!f.problems.some((p) => p.startsWith(`slot ${name} `))) f.problems.push(`slot ${name} is not filled yet: it shows the item's sample data (MANUAL)`);
+        continue;
+      }
       const cols = f.smap[name] ?? [];
       const c = idx !== undefined ? cols[Number(idx)] : cols[0];
       if (c === undefined) {
@@ -369,7 +435,7 @@ export function fillHtml(markup, rows, wiring, text = null) {
   }
   const div = document.createElement('div');
   div.appendChild(root.cloneNode(true));
-  return { html: div.innerHTML, problems: f.problems };
+  return { html: div.innerHTML, problems: [...f.problems, ...records] };
 }
 
 /** A cell whose slot has several columns repeats once per column; extra sample cells of that slot go. */
@@ -386,7 +452,7 @@ function expandColumns(parent, f, keep) {
       done.add(t);
       const cols = f.smap[t] ?? [];
       if (!cols.length) {
-        if (!keep) c.remove();
+        if (!keep && !f.todo.has(t)) c.remove();
         continue;
       }
       let at = c;
@@ -402,11 +468,21 @@ function expandColumns(parent, f, keep) {
   for (const c of [...parent.children]) if (!['SCRIPT', 'STYLE'].includes(c.tagName)) expandColumns(c, f, keep && !c.hasAttribute('data-rows') && c.tagName !== 'THEAD');
 }
 
+/** How many series (not axes, not followers) each slot marks in a chart option. */
+export function seriesPerSlot(o) {
+  const out = {};
+  for (const [m] of marks(o)) {
+    if (AXIS_TYPES.includes(String(m.type ?? '')) || /^=/.test(m.slot) || m.slot.includes(':') || m.slot.includes(',')) continue;
+    out[m.slot] = (out[m.slot] ?? 0) + 1;
+  }
+  return out;
+}
+
 /** What a slot mapping is missing against an item's data note ([{ name, kind, count }]). */
 export function checkSlots(note, slots = {}) {
   const out = [];
   for (const s of note) {
-    const n = asList(slots[s.name]).length;
+    const n = new Set(asList(slots[s.name])).size;   // one column named for several series counts once
     const star = asList(slots[s.name]).includes('*');
     if (s.count === 'one' && n !== 1 && !star) out.push(`${s.name} needs one column`);
     if (s.count === 'one or more' && n < 1) out.push(`${s.name} needs one or more columns`);

@@ -38,6 +38,7 @@ function main() {
     console.error('Usage: node screenshot.js <deck folder or presentation.html> [<output-dir> or -] [slide-id ...] [--browser <path>]');
     process.exit(1);
   }
+  if (!fs.existsSync(htmlPath)) { const d = require('./deck.js').resolveDeck(htmlPath); if (d) htmlPath = d; }   // a deck's name: decks/<name>
   if (fs.existsSync(htmlPath) && fs.statSync(htmlPath).isDirectory()) htmlPath = path.join(htmlPath, 'presentation.html');
   if (!fs.existsSync(htmlPath)) { console.error(`STOP: ${htmlPath} not found`); process.exit(1); }
   // default (no folder, or -): shots/ in the deck folder; for looking, not for sending

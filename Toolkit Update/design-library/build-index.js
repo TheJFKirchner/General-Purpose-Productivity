@@ -80,6 +80,12 @@ all.forEach(it => {
     if (size > 6144) say(it, `node item.js prints ${(size / 1024).toFixed(1)} KB for it; a chart stays under 6 KB`);
   }
   if (h.type === 'slide') I.slideProblems(block).forEach(p => say(it, p));
+  if (h.type === 'animation') {   // what it moves, where it fits, and its data note when it carries data (AUTHORING.md, "Adding an animation")
+    if (!h.attaches || !h.attaches.split(/,\s*/).every(w => /^(figure|chart|table|blocks|steps)$/.test(w))) say(it, 'no "attaches:" line, or not a list of figure, chart, table, blocks, steps');
+    if (!/^(deck|report|deck, report|none: .+)$/.test(h.fits || '')) say(it, 'no "fits:" line: deck, report, "deck, report" or "none: <why>"');
+    if (h.data || I.markedSlots(block).size) I.slotProblems(h, block).forEach(p => say(it, p));
+    I.scriptEchoes(block, (it.text.match(/<script id="item-js">([\s\S]*?)<\/script>/) || [])[1]).forEach(p => say(it, p));
+  }
   if (h.recipe !== undefined && !h.data) say(it, 'a recipe without a data note');
   // an embedded font: only in a theme item, only @font-face rules with woff2 data: URIs, its licence file named and present.
   // That block is the one place a data: URI and a font name are allowed; it is checked here, then left out of the checks below.
@@ -130,7 +136,7 @@ all.forEach(it => {
     for (const m of all.matchAll(/(["'`])((?:(?!\1)[^\\\n]){2,40})\1/g)) toks.add(m[2].trim());
     const plain = all.replace(/<[^>]+>/g, ' ').match(/[A-Za-z][\w-]*/g) || [];
     plain.forEach((w, i) => { toks.add(w); toks.add(`${w} ${plain[i + 1] || ''}`); toks.add(`${w} ${plain[i + 1] || ''} ${plain[i + 2] || ''}`); });
-    const hit = [...toks].find(t => words.includes(S.hash(t)));
+    const hit = [...toks].find(t => !S.isCode(t) && words.includes(S.hash(t)));   // ECharts option names are never project words
     if (hit) say(it, `"${hit}" comes from the project it was copied from; replace it with neutral wording`);
   }
 });
@@ -140,7 +146,7 @@ const order = Object.keys(S.TYPES);
 const rank = id => { const g = S.GROUPS.indexOf(id.split('-')[0]); return (g === -1 ? 99 : g) * 1000 + Number(id.split('-')[1]); };
 const byType = t => all.filter(i => i.h.type === t).sort((a, b) => rank(a.h.id) - rank(b.h.id) || a.h.id.localeCompare(b.h.id));
 /* index.md holds every type; index/<type folder>.md one type each, so a reader can load only the charts. */
-const line = i => `- ${i.h.id} | ${i.h.type} | ${i.h.name} | ${i.h.purpose}${i.h.data ? ` | data: ${i.h.data}` : ''}`;
+const line = i => `- ${i.h.id} | ${i.h.type} | ${i.h.name} | ${i.h.purpose}${i.h.attaches ? ` | attaches: ${i.h.attaches} | fits: ${i.h.fits}` : ''}${i.h.data ? ` | data: ${i.h.data}` : ''}`;
 const section = t => {
   const list = byType(t), out = [`## ${t.charAt(0).toUpperCase() + t.slice(1)}s (\`${S.TYPES[t]}/\`)`, ''];
   if (!list.length) out.push('None yet. Saved by the design-librarian agent.');
@@ -152,7 +158,7 @@ const md = ['# Design library index', '',
 order.forEach(t => md.push(...section(t)));
 fs.writeFileSync(path.join(S.LIB, 'index.md'), md.join('\n'));
 fs.mkdirSync(path.join(S.LIB, 'index'), { recursive: true });
-order.forEach(t => fs.writeFileSync(path.join(S.LIB, 'index', `${S.TYPES[t]}.md`), [`# Design library: ${t}s`, '', 'id | type | name | purpose' + (/^(chart|table|hero card)$/.test(t) ? ' | data it needs (AUTHORING.md, "Adding an item to a project")' : ''), ''].concat(section(t).slice(2)).join('\n')));
+order.forEach(t => fs.writeFileSync(path.join(S.LIB, 'index', `${S.TYPES[t]}.md`), [`# Design library: ${t}s`, '', 'id | type | name | purpose' + (/^(chart|table|hero card)$/.test(t) ? ' | data it needs (AUTHORING.md, "Adding an item to a project")' : t === 'animation' ? ' | what it moves | where it fits | data it needs, if any (AUTHORING.md, "Adding an animation")' : ''), ''].concat(section(t).slice(2)).join('\n')));
 /* what a project's page carries once to draw copied items (host-runtime.js is the other half) */
 fs.writeFileSync(path.join(S.LIB, 'host.css'), S.HOST_CSS());
 

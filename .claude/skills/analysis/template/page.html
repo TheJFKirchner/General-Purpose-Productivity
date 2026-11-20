@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
+<script>
+  /* script errors, reported by `python run.py shot`; #shot shows every animation's end state */
+  window.addEventListener('error', function (e) { var r = document.documentElement;
+    r.setAttribute('data-errors', (r.getAttribute('data-errors') || '') + (e.message || 'error') + ' | '); });
+  if (location.hash === '#shot') document.documentElement.classList.add('is-export');
+</script>
 <!-- The theme: colours and fonts. Change it with `python run.py theme TH-02`, not by hand. -->
 <style id="tokens" data-theme="TH-01">:root {
   --blue: #0170BC;
@@ -48,6 +54,10 @@
 /* host.css: the styles a page needs for copied design-library items. Written by build-index.js; do not edit.
    Copy it once into the page, with the theme tokens (node item.js theme <id>) and host-runtime.js. */
 [data-item] { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+[data-item][data-item] .chart[data-echart] { min-height: var(--chart-min, 220px); }   /* outranks an item's own "min-height: 0", written for its fixed library frame */
+[data-item^="AN-"] { position: relative; }
+.item-replay { position: absolute; top: 6px; right: 6px; z-index: 2; font: 600 12px var(--body-font); padding: 4px 10px; cursor: pointer; color: var(--navy); background: var(--paper); border: 1.5px solid var(--navy); border-radius: var(--radius); }
+html.is-export .item-replay { display: none; } @media print { .item-replay { display: none; } }
 [data-item] .chart[data-echart] { position: relative; flex: 1 1 auto; height: var(--chart-height, 340px); min-height: 0; min-width: 0; }
 [data-item] > p.basis { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
 [data-item] > .key { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--muted); }
@@ -241,6 +251,128 @@ __ITEM_CSS__
 </main>
 <footer><div class="wrap">__FOOTER__</div></footer>
 __ECHARTS__
+<script id="host-motion" type="text/x-host-motion">
+/* host-motion.js: plays copied design-library animations (AUTHORING.md, "Adding an animation"). Copy verbatim once,
+   before the first animation's script; host-runtime.js still comes last. Each copy (<div data-item="AN-..">) stays in its
+   end state until it plays: when it scrolls into view, or, with data-trigger="manual", when the host calls
+   ItemMotion.play(el) (a deck, when its slide shows). A Replay button replays it. Reduced motion: no autoplay, Replay
+   still plays. Print and html.is-export: end state, no button. */
+(function () {
+  var root = document.documentElement, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var recs = [];
+  function rec(el) { for (var i = 0; i < recs.length; i++) if (recs[i].el === el) return recs[i]; var r = { el: el, forced: false, started: false, replay: [] }; recs.push(r); return r; }
+  function moving(r) { return r.started && !root.classList.contains('is-export') && (r.forced || !still); }
+  function show(el, v) { var d = +(el.getAttribute('data-decimals') || 0); el.textContent = (el.getAttribute('data-prefix') || '') + v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + (el.getAttribute('data-suffix') || ''); }
+  function tickUp(r) {
+    Array.prototype.forEach.call(r.el.querySelectorAll('[data-tick-up]'), function (el) {
+      var to = +el.getAttribute('data-tick-up'), from = to * 0.9, t0 = null;
+      function step(ts) { if (t0 === null) t0 = ts; var k = Math.min(1, (ts - t0) / 800), e = 1 - Math.pow(1 - k, 3); show(el, k < 1 ? from + (to - from) * e : to); if (k < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    });
+  }
+  /* plays one copy: CSS motion under .play, charts draw in, count-ups, then the copy's own script hears item:replay */
+  function play(el, explicit) {
+    var r = rec(el);
+    r.started = true;
+    if (explicit) { r.forced = true; if (still) root.classList.add('forced'); }
+    var go = moving(r);
+    el.classList.remove('play');
+    if (go) { void el.offsetWidth; el.classList.add('play'); tickUp(r); }
+    if (window.ItemHost) ItemHost.draw(function (box) { return go && el.contains(box); });
+    var ev = new CustomEvent('item:replay', { detail: { explicit: !!explicit } });
+    r.replay.forEach(function (fn) { fn(ev); });
+  }
+  /* runs a copy's own script inside that copy: document lookups, its Replay hook and ItemEngine all see only it */
+  function attach(id, fn) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-item="' + id + '"]'), function (el) {
+      if (el._motion) return;
+      el._motion = true;
+      var r = rec(el);
+      var doc = new Proxy(document, { get: function (t, k) {
+        if (k === 'querySelector') return function (s) { return el.querySelector(s); };
+        if (k === 'querySelectorAll') return function (s) { return el.querySelectorAll(s); };
+        if (k === 'getElementById') return function (s) { return el.querySelector('#' + CSS.escape(s)); };
+        var v = t[k]; return typeof v === 'function' ? v.bind(t) : v;
+      } });
+      function listen(type, f, o) { if (type === 'item:replay') r.replay.push(f); else window.addEventListener(type, f, o); }
+      var win = new Proxy(window, { get: function (t, k) {
+        if (k === 'addEventListener') return listen;
+        if (k === 'document') return doc;
+        if (k === 'ItemEngine') return eng;
+        var v = t[k]; return typeof v === 'function' && !/^[A-Z]/.test(k) ? v.bind(t) : v;
+      } });
+      var eng = {
+        motion: function () { return moving(r); },
+        play: function () { play(el, true); },
+        force: function () { r.started = true; r.forced = true; if (still) root.classList.add('forced'); el.classList.add('play'); },
+        chart: function (x) { return window.ItemHost ? ItemHost.chart(x || el.querySelector('.chart[data-echart]')) : null; },
+        redraw: function () { if (window.ItemHost) ItemHost.draw(); }
+      };
+      fn.call(win, doc, win, eng, listen);
+    });
+  }
+  function button(el) {
+    if (el.getAttribute('data-replay') === 'off' || el.querySelector('.item-replay')) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'item-replay'; b.textContent = 'Replay';
+    b.addEventListener('click', function () { play(el, true); });
+    el.appendChild(b);
+  }
+  function start() {
+    var els = Array.prototype.slice.call(document.querySelectorAll('[data-item^="AN-"]'));
+    els.forEach(function (el) { rec(el); button(el); });
+    var auto = els.filter(function (el) { return el.getAttribute('data-trigger') !== 'manual'; });
+    if (!window.IntersectionObserver) { auto.forEach(function (el) { play(el); }); return; }
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); play(e.target); } }); }, { threshold: 0.4 });
+    auto.forEach(function (el) { io.observe(el); });
+  }
+  if (document.readyState === 'complete') setTimeout(start, 0); else window.addEventListener('load', function () { setTimeout(start, 0); });
+  window.addEventListener('beforeprint', function () { recs.forEach(function (r) { r.el.classList.remove('play'); }); if (window.ItemHost) ItemHost.draw(); });
+  window.ItemMotion = { attach: attach, play: function (el, explicit) { play(el, explicit); } };
+})();
+</script>
+__ITEM_JS__
+<script>
+/* FORMAT from the section files: value-axis numbers ("$short" -> $4.1M, ".0%" -> 62%), as in run.py */
+(function () {
+  function fmt(v, spec) {
+    if (v === null || v === undefined || v === '' || isNaN(v)) return v;
+    spec = spec || ''; v = +v;
+    var cur = spec.charAt(0) === '$'; if (cur) spec = spec.slice(1);
+    var a = Math.abs(v), s, d = +((spec.match(/\.(\d+)/) || [0, 0])[1]);
+    if (spec.indexOf('abs') >= 0) { spec = spec.replace('abs', ''); v = a; }
+    if (spec.indexOf('short') >= 0) {
+      var u = '';
+      if (a >= 1e9) { a /= 1e9; u = 'B'; } else if (a >= 1e6) { a /= 1e6; u = 'M'; } else if (a >= 1e3) { a /= 1e3; u = 'K'; }
+      s = a < 10 && (u || a % 1) ? a.toFixed(1).replace(/\.0$/, '') : Math.round(a).toLocaleString('en-US');
+      s += u;
+    } else if (/%$/.test(spec)) {
+      s = (a * 100).toFixed(d) + '%';
+    } else {
+      s = a.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    }
+    return (v < 0 ? '-' : '') + (cur ? '$' : '') + s;
+  }
+  /* the page's height, for `python run.py shot` */
+  function mark() { document.documentElement.setAttribute('data-height', Math.ceil(document.body.getBoundingClientRect().height)); }
+  window.addEventListener('load', mark);
+  window.addEventListener('item:draw', function () { setTimeout(mark, 0); });
+  window.addEventListener('item:draw', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-axis-format]'), function (box) {
+      var c = window.ItemHost && ItemHost.chart(box), f = JSON.parse(box.getAttribute('data-axis-format')), patch = {};
+      if (!c) return;
+      Object.keys(f).forEach(function (k) {
+        patch[k] = f[k].map(function (spec) { return spec ? { axisLabel: { formatter: function (v) { return fmt(v, spec); } } } : {}; });
+      });
+      c.setOption(patch);
+    });
+  });
+  if (!window.echarts) Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (el) {
+    el.style.height = 'auto';
+    el.insertAdjacentHTML('beforeend', '<div class="chart-error">The chart library did not load (no internet?). Put echarts.min.js beside run.py and rebuild to embed it.</div>');
+  });
+})();
+</script>
 <script id="host-runtime">
 /* host-runtime.js: draws copied design-library items (AUTHORING.md, "What the host page provides"). Copy verbatim, after
    ECharts, the theme tokens and host.css. ItemHost.draw() redraws; ItemHost.prepare(option, box) readies an option. */
@@ -287,7 +419,8 @@ __ECHARTS__
   function formats(o) {
     Object.keys(o).forEach(function (k) {
       var v = o[k];
-      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+      if (k === 'animationDelay' && typeof v === 'string' && /^index\*\d+$/.test(v)) { var ms = +v.split('*')[1]; o[k] = function (i) { return i * ms; }; }   /* bars land one by one */
+      else if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
         o._tpl = v;
         o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
       } else if (v && typeof v === 'object') formats(v);
@@ -340,15 +473,33 @@ __ECHARTS__
       if (hidden(x)) x.emphasis = { disabled: true };
     });
   }
-  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  /* Line end labels: no halo, wrapped to the room grid.right leaves (spaceEnds pushes close ones apart after drawing). */
   function endLabels(o) {
     var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
     [].concat(o.series || []).forEach(function (s) {
+      if (!s || s.type !== 'line') return;
       var e = s.endLabel;
-      if (s.type !== 'line' || !e || !e.show) return;
-      if (e.textBorderWidth == null) e.textBorderWidth = 0;
-      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
-      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+      if (e && e.show) {
+        if (e.textBorderWidth == null) e.textBorderWidth = 0;
+        if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      }
+    });
+  }
+  /* Series labels show a number: the numeric part of a point (a [value, "name"] point prints its value, not its name),
+     formatted (7,000 with no format given). */
+  function seriesLabels(o) {
+    var xs = [].concat(o.xAxis || [])[0] || {}, ys = [].concat(o.yAxis || [])[0] || {}, at = xs.type === 'value' && ys.type === 'category' ? 0 : 1;
+    [].concat(o.series || []).forEach(function (s) {
+      if (!s || s.type === 'pie' || s.type === 'heatmap') return;
+      ['label', 'endLabel'].forEach(function (k) {
+        var l = s[k];
+        if (!l || typeof l.formatter === 'function') return;
+        var t = typeof l.formatter === 'string' ? l.formatter : (l.show && k === 'label' ? '{c:comma}' : null);
+        if (!t || !/\{c[:}]/.test(t)) return;
+        t = t.replace(/\{c\}/g, '{c:comma}');   /* a bare {c} prints 1,844.84, never 1844.8360103943749 */
+        l._tpl = t;
+        l.formatter = function (p) { var v = p.value; if (Array.isArray(v)) v = typeof v[at] === 'number' ? v[at] : v.filter(function (x) { return typeof x === 'number'; }).pop(); return fmt(t, p, v); };
+      });
     });
   }
   function prepare(o, box) {
@@ -358,6 +509,7 @@ __ECHARTS__
     endLabels(o);
     if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
     else hover(o);
+    seriesLabels(o);
     formats(o);
     o.animation = false;
     return o;
@@ -368,6 +520,28 @@ __ECHARTS__
       var row = tr.cells[0] ? tr.cells[0].innerText.trim() : '';
       Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
     });
+  }
+  /* Labels of several lines at the same end (a slope chart's two ends, end labels) are pushed apart vertically. */
+  function spaceEnds(c, o) {
+    var lines = [].concat(o.series || []).map(function (s, i) { return { s: s, i: i }; }).filter(function (x) { return x.s.type === 'line' && Array.isArray(x.s.data) && x.s.data.length; });
+    var val = function (d) { return d && typeof d === 'object' && !Array.isArray(d) ? d.value : d; };
+    function spread(ls, apply) {
+      if (ls.length < 2) return false;
+      ls.sort(function (a, b) { return a.y - b.y; });
+      ls.forEach(function (x, k) { x.to = k ? Math.max(x.y, ls[k - 1].to + 18) : x.y; });
+      var moved = false;
+      ls.forEach(function (x) { if (x.to !== x.y) { moved = true; apply(x, x.to - x.y); } });
+      return moved;
+    }
+    var starts = lines.filter(function (x) { var d = x.s.data[0]; return d != null && ((d.label && d.label.show) || (x.s.label && x.s.label.show)); })
+      .map(function (x) { x = { s: x.s, i: x.i }; x.y = (c.convertToPixel({ seriesIndex: x.i }, [0, val(x.s.data[0])]) || [0, 0])[1]; return x; });
+    var ends = lines.filter(function (x) { return x.s.endLabel && x.s.endLabel.show; }).map(function (x) {
+      var k = x.s.data.length - 1; while (k > 0 && val(x.s.data[k]) == null) k--;
+      x = { s: x.s, i: x.i }; x.y = (c.convertToPixel({ seriesIndex: x.i }, [k, val(x.s.data[k])]) || [0, 0])[1]; return x;
+    });
+    var a = spread(starts, function (x, dy) { var d = x.s.data[0], p = d && typeof d === 'object' && !Array.isArray(d) ? d : { value: d }; p.label = Object.assign({}, x.s.label || {}, p.label || {}, { offset: [0, dy] }); x.s.data[0] = p; });
+    var b = spread(ends, function (x, dy) { x.s.endLabel = Object.assign({}, x.s.endLabel, { offset: [0, dy] }); });
+    if (a || b) c.setOption({ series: o.series });
   }
   /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
   var drawn = 0;
@@ -386,6 +560,7 @@ __ECHARTS__
       if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
       box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
       box._chart.setOption(o);
+      spaceEnds(box._chart, o);
       if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
     });
     window.dispatchEvent(new Event('item:draw'));
@@ -400,48 +575,6 @@ __ECHARTS__
   var t = null;
   window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.resize(); }); }, 100); });
   window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
-})();
-</script>
-__ITEM_JS__
-<script>
-/* FORMAT from the section files: value-axis numbers ("$short" -> $4.1M, ".0%" -> 62%), as in run.py */
-(function () {
-  function fmt(v, spec) {
-    if (v === null || v === undefined || v === '' || isNaN(v)) return v;
-    spec = spec || ''; v = +v;
-    var cur = spec.charAt(0) === '$'; if (cur) spec = spec.slice(1);
-    var a = Math.abs(v), s, d = +((spec.match(/\.(\d+)/) || [0, 0])[1]);
-    if (spec.indexOf('abs') >= 0) { spec = spec.replace('abs', ''); v = a; }
-    if (spec.indexOf('short') >= 0) {
-      var u = '';
-      if (a >= 1e9) { a /= 1e9; u = 'B'; } else if (a >= 1e6) { a /= 1e6; u = 'M'; } else if (a >= 1e3) { a /= 1e3; u = 'K'; }
-      s = a < 10 && (u || a % 1) ? a.toFixed(1).replace(/\.0$/, '') : Math.round(a).toLocaleString('en-US');
-      s += u;
-    } else if (/%$/.test(spec)) {
-      s = (a * 100).toFixed(d) + '%';
-    } else {
-      s = a.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-    }
-    return (v < 0 ? '-' : '') + (cur ? '$' : '') + s;
-  }
-  /* the page's height, for `python run.py shot` */
-  function mark() { document.documentElement.setAttribute('data-height', Math.ceil(document.body.getBoundingClientRect().height)); }
-  window.addEventListener('load', mark);
-  window.addEventListener('item:draw', function () { setTimeout(mark, 0); });
-  window.addEventListener('item:draw', function () {
-    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-axis-format]'), function (box) {
-      var c = window.ItemHost && ItemHost.chart(box), f = JSON.parse(box.getAttribute('data-axis-format')), patch = {};
-      if (!c) return;
-      Object.keys(f).forEach(function (k) {
-        patch[k] = f[k].map(function (spec) { return spec ? { axisLabel: { formatter: function (v) { return fmt(v, spec); } } } : {}; });
-      });
-      c.setOption(patch);
-    });
-  });
-  if (!window.echarts) Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (el) {
-    el.style.height = 'auto';
-    el.insertAdjacentHTML('beforeend', '<div class="chart-error">The chart library did not load (no internet?). Put echarts.min.js beside run.py and rebuild to embed it.</div>');
-  });
 })();
 </script>
 </body>

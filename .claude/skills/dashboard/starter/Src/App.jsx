@@ -196,7 +196,8 @@ function App({ sections, tabs = [], notes, report = null }) {
   const usedTables = [...new Set(sections.flatMap((s) => cardInfo(s.meta.id)?.tables ?? []))];
   const asOf = dataAsOf(manifest, usedTables);
   const pulled = manifest.generated_at ? daysBetween(manifest.generated_at, todayIso()) : null;
-  const sources = [...new Set(usedTables.map((n) => manifest.tables[n]?.source).filter(Boolean))];
+  // a source given as a file path shows as its file name only
+  const sources = [...new Set(usedTables.map((n) => manifest.tables[n]?.source).filter(Boolean).map((s) => (/[\\/]/.test(s) && !/\s/.test(s) ? s.split(/[\\/]/).pop() : s)))];
 
   const askParam = (name, value) => {
     const p = meta.parameters[name];

@@ -213,6 +213,8 @@ def describe(m: dict | None = None) -> dict:
                     k = "month" if _MONTH.match(text) else ("date" if kind == "date" or _DAY.match(text) else kind)
                     k = "text" if k == "string" else k
                     info = {"type": k, "sample": text}
+                    if k == "text":   # how many different values: a near-unique id is no good to group by
+                        info["distinct"] = con.execute(f"SELECT COUNT(DISTINCT {q}) FROM {src}").fetchone()[0]
                     if k in ("date", "month"):
                         lo, hi = con.execute(f"SELECT MIN({q}), MAX({q}) FROM {src}").fetchone()
                         info["range"] = [str(lo)[:10], str(hi)[:10]]

@@ -1,6 +1,6 @@
 # Writing an item by hand
 
-For anyone filling the library by hand, and for the scripts that copy items into projects ("Adding an item to a project" is their contract). Start every item with `node save-item.js new <type> --name <name>`; it writes a valid shell with the next free id. Then fill it, and run `node build-index.js` until it passes.
+For anyone filling the library by hand, and for the scripts that copy items into projects ("Adding an item to a project" is their contract). Start every item with `node save-item.js new <type> --name <name>`; it writes a valid shell with the next free id. Then fill it, and run `node build-index.js` until it passes. A worked item, a checklist for making a copied chart fit, and every check message with its fix: `ITEM-SHAPE.md`.
 
 ## Every item
 
@@ -23,7 +23,7 @@ For anyone filling the library by hand, and for the scripts that copy items into
 | table (TB) | `table.lib-table` inside `.lib-panel` with a finding `h2` and `.cap`; numbers right-aligned (`.left` for text); lead row `tr.on`; total in `tfoot`; a `<button class="lib-mini" data-csv>` (the shared CSV script, which `new` writes, reads the rows as shown) |
 | hero card (HC) | `.lib-card` (status top bar: `good`, `bad`, `neutral`; lead card: `lead`) with `.lib-lab`, `.lib-big`, and a delta, tick or meter; several in `.lib-cards` (marked `data-rows`, one card a row); no icons |
 | slide | `<section id="<name>" data-component="<id>">`; every chart and piece of visible text in a `data-spot` (below) |
-| animation (AN) | Motion only under `html.play` in `item-css` (the engine adds `play` on load and on Replay; without it the final state shows); count-ups as `<span data-tick-up="1240" data-prefix="$" data-suffix="K">$1,240K</span>`; charts draw in automatically. The shell marks the body `data-animate`; never loop |
+| animation (AN) | `attaches:` and `fits:` header lines and, if it carries data, a data note and slots ("Adding an animation"); scripts look up elements with `document.querySelector` inside the item, never by page position. Motion only under `html.play` in `item-css` (the engine adds `play` on load and on Replay; without it the final state shows); count-ups as `<span data-tick-up="1240" data-prefix="$" data-suffix="K">$1,240K</span>`; charts draw in automatically. The shell marks the body `data-animate`; never loop |
 | any type, with motion | Mark the element (or `<body>`) `data-animate`: count-ups, chart draw-in and `html.play` CSS then run, and the item gets the Replay control like an animation |
 | layout (LY) | One page piece or control, working in plain JS (no frameworks), on neutral sample content; after changing a chart's JSON or showing a hidden chart, call `window.itemRedraw()` |
 
@@ -52,6 +52,7 @@ Charts: a `"slot"` key on the object the data goes into (ECharts ignores it, so 
 
 - `"slot": "label"`: the object's `data` becomes that column. On a category axis the values are de-duplicated, in order.
 - `"slot": "x,y"` (any number of names): `data` becomes rows of `[x, y]`; a row with an empty cell is left out.
+- `"slot": "=value"`: a follower: the object takes the `value` slot's first column too and never counts as one of its series (a lollipop's dot on its stem).
 - `"slot": "target:yAxis"`: a figure; sets that property of the object (`yAxis`, `xAxis`, ...). The host supplies one value: a number given as is (`--slot target=85`, or `{ target: [85] }` from Node), or a column name, whose first value is used.
 - A slot may mark several objects. Every marked axis takes the slot's first column (panels share one category axis column). A `one or more` slot's columns fill its marked series in order; more columns repeat the last one, without its fixed colours (the theme's series order colours them); marked series left over are removed.
 - Filling keeps each sample point's own style by position (a highlight, an estimate's dashes) but drops its label text; names each series after its column; drops the sample's fixed `min`, `max` and `interval` on shown value axes. An optional slot given nothing: its series or data entries go.
@@ -90,9 +91,34 @@ A copied block draws as it does in the library when the page carries, once:
 2. The theme's tokens on `:root` (`node item.js theme <id>`), `--series` included.
 3. `host.css`, copied verbatim (`build-index.js` writes it): the wrapper, a chart height (`--chart-height`, 340px; in a box with a set height the chart fills it), the basis line and key, and the kit classes tables and hero cards use.
 4. Each item's own `css` once, and its `js` after its block. Keep the wrapper `<div data-item="<id>">`: the CSS is scoped to it. An item script that uses element ids (TB-02's pickers) works once per page.
-5. `host-runtime.js`, copied verbatim, after the blocks. It resolves `var(--x)` strings in chart JSON, registers the theme (series colours, axes, fonts), adds a default grid and the one-line hover tooltip, applies the number formats above, wraps line end labels to the room `grid.right` leaves and pushes close ones apart, gives table cells a native tooltip, draws every `.chart[data-echart]` on load and resizes them with the window. `ItemHost.draw()` redraws after a theme or data change; `ItemHost.prepare(option, box)` returns a ready option for a page that draws its own charts (with `ItemHost.theme()` for `echarts.registerTheme`). Item scripts keep their `ItemEngine` hook; nothing moves on a host page.
+5. `host-runtime.js`, copied verbatim, after the blocks. It resolves `var(--x)` strings in chart JSON, registers the theme (series colours, axes, fonts), adds a default grid and the one-line hover tooltip, applies the number formats above (a series label with no format prints `{c:comma}`; on a point `[value, "name"]` `{c}` is the value), wraps line end labels to the room `grid.right` leaves and pushes close labels apart at both ends of the lines, gives table cells a native tooltip, draws every `.chart[data-echart]` on load and resizes them with the window. `ItemHost.draw()` redraws after a theme or data change; `ItemHost.prepare(option, box)` returns a ready option for a page that draws its own charts (with `ItemHost.theme()` for `echarts.registerTheme`). Item scripts keep their `ItemEngine` hook; nothing moves on a host page.
 
 The library's own engine is built from the same `host-runtime.js`, plus fit, motion, Replay, theme fonts and the index's messages. Edit `host-runtime.js` itself; never `host.css`.
+
+## Adding an animation
+
+Every animation carries `attaches:` (what it moves: `figure`, `chart`, `table`, `blocks`, `steps`) and `fits:` (`deck`, `report`, `deck, report`, or `none: <why>`), plus a data note and slots when it carries data, in the grammar above. It brings its own content: a host adds it by id like a chart and fills its slots; it never reaches into the rest of the page.
+
+| Id | Moves | Fits | Data |
+| --- | --- | --- | --- |
+| AN-01 | figure, chart | deck, report | slots (figures, a monthly line) |
+| AN-02 | chart | deck, report | slots (waterfall by role; bars land in row order) |
+| AN-03 | chart | deck, report | slots (one column per year; the year buttons follow the columns) |
+| AN-04 | chart | deck, report | slots (the full-year readout is a figure slot) |
+| AN-05 | table | deck, report | slots (empty cells become gaps) |
+| AN-06 | chart | deck, report | slots (focus bar by position) |
+| AN-07 | chart | deck, report | slots |
+| AN-08 | blocks | deck, report | slots (colours follow product order) |
+| AN-09 | steps | none | a whole slide with its own Space/Enter steps: in a deck use the deck's step reveal |
+| AN-10 | figure, blocks | deck, report | slots |
+
+What a host does:
+
+1. `node item.js AN-xx --json` gives the usual copy object plus `attaches` and `fits`; its `css` is scoped (the `.play` motion rules and keyframe names included) and its `js` comes wrapped in `ItemMotion.attach('AN-xx', function (document, window, ItemEngine, addEventListener) { ... })`, so the script sees only its own copy. Fill it with `node item.js fill` as for a chart.
+2. The page carries, once, `host-motion.js` before the first animation's script, as well as the tokens, `host.css` and `host-runtime.js` (last). Put the block where the animation shows, its `css` once, its `js` right after the block.
+3. Trigger: a report needs nothing (each copy plays once when it scrolls into view). A deck marks the wrapper `data-trigger="manual"` and calls `ItemMotion.play(el)` when its slide shows. Every copy gets a Replay button (`data-replay="off"` removes it).
+4. Until it plays, and in print, `html.is-export` or a static screenshot, a copy shows its end state: motion lives only under its wrapper's `.play` class, count-ups are written as their final value, charts draw finished.
+5. Reduced motion: nothing autoplays; Replay and the item's own buttons still play.
 
 ## Kit classes (in every table, hero card, animation and layout item)
 

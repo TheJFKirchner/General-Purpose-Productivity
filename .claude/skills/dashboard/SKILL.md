@@ -1,60 +1,68 @@
 ---
 name: dashboard
-description: Make a new dashboard (tabs, filters, charts on live data) or change one (a folder with dashboard.config.json). Sections are design library items copied by id, wired to a table, then edited. Also porting, new data, filters, offline reports, hosting.
+description: Make a new dashboard (tabs, filters and charts on live data) or change an existing one (a folder with dashboard.config.json), with every chart, table and hero card copied from the design library by its id, pointed at a table and then edited. Also loading data, filters, themes, offline report files, hosting, porting older work and saving a visual back to the library.
 ---
 
 # Dashboard
 
-A section is one file, `Src/Sections/sN_name.jsx`. "The map" is the project's `CLAUDE.md` folder map.
-Run commands in the dashboard folder (the map's `dashboard/` row).
+A dashboard is a small web page that reads tables of data and shows them in tabs of sections, with filters. Python works out the numbers; the page draws them with the design library's charts, tables and hero cards. Each section is one file holding a copy of a library item, which columns feed it, and its words.
 
-## Before building
-One message, one yes: who uses it, the questions it answers, tabs, sections (claim, item), filters.
-Keep it in `PLAN.md` (`references/plan.md`). Told "just do it": list what you assumed.
+## What a dashboard folder holds
 
-## Make a new one
-1. Folder: the map's `dashboard/` row; none, ask. Never in OneDrive: the workspace dashboards folder.
-2. `python <skill>/tools/setup.py <folder> --title "..." --theme TH-01`, then add the `dashboard/` row to the map.
-3. Per input file, in `Pipeline/sources.py`: `write_source("claims", "../inputs/claims.csv", as_of_from="date")`; `npm run pipeline`.
-4. Filters: `dashboard.config.json` (`references/data.md`).
+```
+<dashboard>/
+  dashboard.config.json   title, theme, filters, the library's folder           edit
+  PLAN.md                 who it is for, the questions, tabs and sections        edit
+  Pipeline/sources.py     one line per input file that loads it as a table      edit
+  Pipeline/<table>.py     a script for a table that needs preparing             edit
+  Data/Current/           the loaded tables                                     never edit
+  Analysis/<tab>.py       hand-written number functions, when a section needs one  edit
+  Src/Sections/index.js   the tabs and the order of the sections                edit
+  Src/Sections/sN_*.jsx   one section each: item copy, columns, title, note     edit
+  Src/custom.css          page width, spacing, chart height, small looks        edit
+  Themes/<TH id>/         the theme taken from the library                      never edit
+  Reports/<name>.json/.py offline report files                                  edit
+  Src/Lib, Src/Components, Tools, Analysis/Shared   the machinery              never edit
+```
 
-## Add from the library
-1. Library: the map's `Design library:` line; else `design-library` beside `.claude`; else `Toolkit Update/design-library`.
-2. Read the index files the request needs there (`index/charts.md`, `tables.md`, `hero-cards.md`); note each pick's `data:` line.
-3. `npm run new-section -- NAME --use CT-34 --page overview --tables claims --slot label=region --slot value=paid,allowed`
-4. Options: `--agg mean|count`, `--by COL` (a line per value), `--month` (groups the date in the text slot), `--top N`,
-   `--share`, `--pareto COL`, `--size half`. `rows` counts rows. No text slot given: one row per measure (tiles).
-5. Two periods or values: `--compare service_date=2026-04,2026-05`. Waterfall (CT-06): `--slot step=GROUP --slot total=AMOUNT`.
-6. It prints what it did and the lines to reword. No `--slot`: a stub in `Analysis/<tab>.py` (`references/sections.md`).
+## How it works
 
-## Change a section
-- One file holds it all: `meta` (title, tab, size, `x`, `y`, `agg` ...), `slots`, `names`, `format`, `note`, `basis`, `chart` or `html`.
-- Edit it by hand. A third line: its column in `meta.y` and `slots`, one more series in `chart`.
-- A line per category: `by: 'col'` in `meta`, `'*'` in that slot. Axis names, ranges, colours, `format` the same way.
-- Data lists refill at every draw and filter change; your edits stay.
+1. Data in: each input file becomes a table.
+2. Pick an item from the library by the claim the section makes.
+3. Copy it in: one command writes one section file.
+4. Point it at a table: each of the item's parts (slots) gets a column.
+5. Edit that file: words, names, formats, colours, extra series.
+6. Check, then look at a screenshot.
+7. A visual the user likes goes back to the library.
 
-## Make your own
-`npm run new-section -- NAME --own chart --page overview --tables claims` (or `--own html`): a blank section. Then as above.
+## Where it goes
 
-## Page-level changes
-- Theme: `npm run theme -- TH-02` (ids: the library's `index/themes.md`). Order: the list in `Src/Sections/index.js`.
-- Spacing, page width, chart height: the settings at the top of `Src/custom.css`.
-- Width: two neighbouring sections with `size: 'half'` share a row at one height; any other section is full width.
-
-## Run, check, look
-- `npm run status`: tabs, sections, tables and columns, filters. Read it before adding.
-- `npm run check`: fix every ERROR, and every WARN about sample words, sample ranges or column words.
-- `npm run shot -- [tab or id] [lob=Medicare]`: a picture plus `check` lines (cut off, overlapping, hidden labels).
+- Default: a `dashboard` folder inside the project's folder.
+- Never inside OneDrive or another synced folder: when the project is in one, the dashboard goes in the workspace's dashboards folder, under the project's name (ask where that is if it is not known), and reads the input files by their full path.
+- The map (the `## Map` section the toolbox skill writes into a project's `CLAUDE.md`) may name another place in its `dashboard/` row; when it does, that wins.
 
 ## Rules
-- Titles say what is shown. Notes use `{metric|format}`, never typed numbers. No column names or company names shown.
-- User likes a visual, or says save it: launch `design-librarian` with the files and the library folder.
-- Never edit the user's files. Never open `Src/Lib`, `Src/Components`, `Tools`, `Analysis/Shared`.
 
-## Elsewhere
-- New data, slow filters, a report's analytics: `references/data.md`
-- Section parts, hand-written analytics: `references/sections.md`
-- Offline HTML reports: `references/exports.md`; live view: `npm run dev`, `npm run stop`
-- Hosting: `references/hosting.md`; many sections at once: `references/helpers.md`
-- Generated commentary: `npm run tables -- --sections <id,id> --by <col>`, then the commentary skill
-- Porting notebooks, scripts, a report or an old dashboard: `references/port.md`
+- Agree who it is for, the questions it answers and the sections (one message, one yes) before building.
+- Every section is a library item, or a blank one made by the tool; never a chart written from nothing.
+- Titles say what is shown. Notes use live figures, never typed numbers.
+- No column names, codes or company names where readers see them.
+- Never change the user's own files.
+- A part the tool could not fill is marked MANUAL: fix it before showing the user.
+
+## To do this, read this
+
+| To do this | Read this |
+| --- | --- |
+| Make a new dashboard | `references/make-a-dashboard.md` |
+| Load data, refresh it, add filters | `references/add-data-and-filters.md` |
+| Add a chart, table or hero card | `references/add-a-section.md` |
+| Change a section | `references/change-a-section.md` |
+| Make a section with no library item to start from | `references/make-your-own-section.md` |
+| Change the theme, spacing, widths or order | `references/change-theme-or-layout.md` |
+| Make an offline report file | `references/export-an-offline-report.md` |
+| Put it on a server | `references/host-it.md` |
+| Move notebooks, scripts, a report or an old dashboard into one | `references/port-existing-work.md` |
+| Add generated commentary | `references/add-generated-commentary.md` |
+| Save a visual to the library | `references/save-a-visual-to-the-library.md` |
+| Work on a dashboard made before library items | `references/older-dashboards.md` |

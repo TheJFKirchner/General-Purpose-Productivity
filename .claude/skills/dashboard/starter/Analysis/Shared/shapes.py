@@ -11,8 +11,15 @@ Worked out here in Python, on the filtered table, like any analytic:
   one 'All other' row or series; otherwise they are left out.
 - shape: 'share' adds share (% of the total), 'pareto' sorts largest first and adds share (running % of the total),
   'waterfall' gives base, rise, fall, total columns building up to a Total bar, 'totals' (no x) gives one row
-  per y column: label, value.
+  per y column: label, value; 'range' adds low, high, gap and range from the first two y columns (a dumbbell);
+  'running' adds running, the cumulative sum of the first y column; 'percent' turns each value column into a %
+  of its row's total (a 100% stacked column).
 - sort: 'value' (largest first; the default except for dates), 'label', or 'none'.
+- keys: more text columns to group by with x (a table or cards whose rows carry several text parts); each row is
+  one combination, shown as its own columns.
+- shape 'rows': the table's rows as they are (x, keys and y columns, no adding up; points such as a capsule grid),
+  at most 5,000; shape 'one': a single row (y columns added up, keys their first value), for an item made only of
+  figures.
 - compare: 'service_date=2026-04,2026-05' (a column and two of its values; dates match by their start): with
   shape 'waterfall' a bridge from the A total through each group's change to the B total; with 'totals' rows for
   A, B and the change; otherwise one value column for A and one for B. (compare: 'year' or 'prev' is the change
@@ -37,7 +44,7 @@ class NoData(Exception):
 _META = re.compile(r"export\s+const\s+meta\s*=\s*\{([^}]*)\}")
 _MONTH = re.compile(r"^\d{4}-\d{2}")
 OTHER = "All other"
-SHAPES = ("share", "pareto", "waterfall", "totals")
+SHAPES = ("share", "pareto", "waterfall", "totals", "range", "running", "percent", "rows", "one")
 
 
 def _get(body: str, key: str) -> str | None:
@@ -66,7 +73,7 @@ def spec_from_jsx(src: str) -> dict | None:
     body = m.group(1)
     x, sid, shape = _get(body, "x"), _get(body, "id"), (_get(body, "shape") or "").lower() or None
     tables, ignore = _list(body, "tables"), _list(body, "ignore")
-    if not sid or not tables or not (x or shape == "totals"):
+    if not sid or not tables or not (x or shape in ("totals", "rows", "one")):
         return None
     ys = _list(body, "y") or ([_get(body, "y")] if _get(body, "y") else [])
     agg = (_get(body, "agg") or ("sum" if ys else "count")).lower()
@@ -81,7 +88,7 @@ def spec_from_jsx(src: str) -> dict | None:
     return {"between": between, "id": sid, "table": tables[0], "x": x, "y": ys[0] if len(ys) == 1 else (ys or None), "ys": ys or ["rows"],
             "agg": agg, "by": _get(body, "by"), "ignore": ignore, "compare": "prev" if between else raw.lower(),
             "period": (_get(body, "period") or "").lower() or None, "top": int(float(top)) if top else None,
-            "shape": shape, "sort": (_get(body, "sort") or "").lower() or None}
+            "shape": shape, "sort": (_get(body, "sort") or "").lower() or None, "keys": _list(body, "keys")}
 
 
 def label_of(spec: dict) -> str:
@@ -181,6 +188,39 @@ def compute(t, spec: dict) -> dict:
 
     if spec.get("between"):
         return _between(t, spec, df)
+    keys = [k for k in spec.get("keys") or [] if k in df.columns]
+    if shape in ("rows", "one"):
+        cols = [c for c in [x, *keys, *spec["ys"]] if c and c != "rows" and c in df.columns]
+        if shape == "rows":
+            rows = [{k: _clean(v) for k, v in r.items()} for r in df[cols].head(5000).to_dict("records")]
+        else:
+            row = {k: _clean(df[k].dropna().iloc[0]) if df[k].notna().any() else None for k in [x, *keys] if k}
+            for c in spec["ys"]:
+                row[c] = _clean(float(len(df)) if c == "rows" else float(getattr(df[c], "mean" if agg == "mean" else "sum")()))
+            rows = [row]
+        first = next((c for c in spec["ys"] if c in (rows[0] if rows else {})), None)
+        return {"data": {"rows": rows, "x": [], "series": {}},
+                "metrics": {"count": len(rows), **({"total": rows[0][first]} if shape == "one" and first else {})}}
+    if keys and not by:   # several text columns: one row per combination
+        df = df.assign(**{x: _period(df[x], spec.get("period"))}) if spec.get("period") else df
+        g = df.groupby([x, *keys], dropna=True)
+        wide = pd.DataFrame({c: _agg(g, c, agg) for c in spec["ys"]}).reset_index()
+        if wide.empty:
+            raise NoData(f"no {table} rows for this selection")
+        first = spec["ys"][0]
+        month = bool(_MONTH.match(str(wide[x].iloc[0]))) or bool(spec.get("period"))
+        order = spec.get("sort") or ("label" if month else "value")
+        wide = wide.sort_values(first, ascending=False) if order == "value" else wide.sort_values([x, *keys]) if order == "label" else wide
+        grand = float(wide[first].sum())
+        if spec.get("top"):
+            wide = wide.head(spec["top"])
+        rows = [{k: (str(v)[:10] if k == x and month else _clean(v) if not isinstance(v, str) else v) for k, v in r.items()} for r in wide.to_dict("records")]
+        top = wide.iloc[0]
+        low = wide.iloc[-1]
+        metrics = {"total": grand, "largest": float(top[first]), "largest_label": " · ".join(str(top[k]) for k in [x, *keys]),
+                   "smallest": float(low[first]), "smallest_label": " · ".join(str(low[k]) for k in [x, *keys]),
+                   "largest_share": ratio(top[first], grand), "count": int(len(wide))}
+        return {"data": {"rows": rows, "x": [str(r[x]) for r in rows], "series": {first: [r[first] for r in rows]}}, "metrics": metrics}
     if shape == "totals":   # one row per measure: label, value
         rows = [{"label": c, "value": _clean(float(len(df)) if c == "rows" else float(getattr(df[c], "mean" if agg == "mean" else "sum")()))}
                 for c in ys]
@@ -225,6 +265,23 @@ def compute(t, spec: dict) -> dict:
         for r, v in zip(rows, row.tolist()):
             run += v
             r["share"] = round((run if shape == "pareto" else v) / tot * 100, 1) if tot else None
+    if shape == "range" and len(wide.columns) >= 2:
+        a, b = str(wide.columns[0]), str(wide.columns[1])
+        for r in rows:
+            u, v = r.get(a), r.get(b)
+            if u is not None and v is not None:
+                r.update({"low": _clean(min(u, v)), "high": _clean(max(u, v)), "gap": _clean(abs(v - u)), "range": _clean(abs(v - u))})
+    if shape == "running":
+        run = 0.0
+        for r in rows:
+            run += float(r.get(first) or 0)
+            r["running"] = _clean(run)
+    if shape == "percent":
+        value_cols = [str(c) for c in wide.columns]
+        for r in rows:
+            tot = sum(float(r.get(c) or 0) for c in value_cols)
+            for c in value_cols:
+                r[c] = round(float(r.get(c) or 0) / tot * 100, 1) if tot else None
     if shape == "waterfall":
         level, out = 0.0, []
         for r in rows:

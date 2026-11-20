@@ -2,10 +2,14 @@
 /**
  * deck.js: a slide deck made of design-library items, one file per slide. No dependencies.
  *
- *   node deck.js new <folder> --title "..." [--theme TH-02]
+ *   node deck.js new <name or folder> --title "..." [--theme TH-02]      a plain name goes in decks/<name>
+ *   node deck.js show <id> [<deck>] [--data <file> | --from "<report>::<section>::<table>"]
+ *       an item's parts (spots or data slots); with data, the columns that fit and a ready add command
  *   node deck.js add <deck> <id> [<item id>] [--after <slide>] [--id <name>] [--section <name>] [--headline "..."]
  *       [--data <file.csv|.json> | --from "<report folder>::<section>[::<table>]"] [--slot <name>=<col>[,<col>]] ...
  *       [--format $short|short|$,|,|%|none] [--agg sum|mean] [--spot chart-2]
+ *   node deck.js animate <deck> [<slide>] <AN id> [--spot chart] [--data ... | --from ...] [--slot ...] [and add's options]
+ *       an animation as a slide of its own, or into the spot of an existing slide that holds what it moves
  *   node deck.js own <deck> [--after <slide>] [--id <name>] [--section <name>] [--headline "..."]
  *   node deck.js list <deck>
  *   node deck.js refill <deck> [<slide>]
@@ -111,6 +115,16 @@ function serialize(n) {
 function walk(n, fn, parent) { if (typeof n !== 'object' || n.comment) return; if (fn(n, parent) === false) return; (n.children || []).forEach(c => walk(c, fn, n)); }
 const elements = n => (n.children || []).filter(c => typeof c === 'object' && !c.comment);
 const textOf = n => (typeof n === 'string' ? n : n.comment || n.raw !== undefined ? '' : (n.children || []).map(textOf).join(''));
+/* pre before the own text of every element inside n that has some (a quote and its cite both get it) */
+function prefixAll(n, pre, skipEl) {
+  let any = false;
+  walk(n, x => {
+    if (x.raw !== undefined || (skipEl && x !== n && skipEl(x))) return false;
+    const i = (x.children || []).findIndex(c => typeof c === 'string' && c.trim());
+    if (i !== -1 && !x.children[i].trim().startsWith(pre.trim())) { x.children[i] = x.children[i].replace(/^(\s*)/, `$1${pre}`); any = true; }
+  });
+  return any;
+}
 function prefixText(n, pre) {   // put pre before the first visible text inside n
   for (let i = 0; i < n.children.length; i++) {
     const c = n.children[i];
@@ -121,11 +135,35 @@ function prefixText(n, pre) {   // put pre before the first visible text inside 
 }
 
 /* ---------------------------------------------------------------- the deck folder */
-function deckOf(p) {
-  if (!p) stop('give the deck folder (the one holding presentation.html and slides/)');
+/* Where decks go. Default: decks/ beside the project's CLAUDE.md (the nearest one above), else decks/ here.
+   The project map can override it: a "Decks: <folder>" line, or a map row whose "Holds" cell starts with "Decks"
+   (or an older per-deck row "Deck: ...", whose parent folder is used). */
+function decksHome(from) {
+  for (let d = path.resolve(from), i = 0; i < 10; i++, d = path.dirname(d)) {
+    const md = path.join(d, 'CLAUDE.md');
+    if (fs.existsSync(md)) {
+      const t = fs.readFileSync(md, 'utf8');
+      const line = t.match(/^\s*Decks:\s*`?([^`\n]+?)`?\s*$/m), row = t.match(/^\|\s*`?([^`|]+?)`?\s*\|\s*Decks\b[^|]*\|/m), old = t.match(/^\|\s*`?([^`|]+?)`?\s*\|\s*Deck:[^|]*\|/m);
+      if (line || row) return { folder: path.resolve(d, (line || row)[1].trim()), why: `set by the project map in ${md}` };
+      if (old) return { folder: path.dirname(path.resolve(d, old[1].trim().replace(/[\\/]+$/, ''))), why: `where the project map's deck rows are (${md})` };
+      return { folder: path.join(d, 'decks'), why: 'the default: decks/ beside the project\'s CLAUDE.md' };
+    }
+    if (d === path.dirname(d)) break;
+  }
+  return { folder: path.resolve(from, 'decks'), why: 'the default: decks/ in this folder (no project CLAUDE.md found above it)' };
+}
+const plainName = p => !/[\\/]/.test(p) && !/^[a-zA-Z]:/.test(p) && !/\.html?$/i.test(p);
+function resolveDeck(p) {
   let d = path.resolve(p);
   if (/\.html?$/i.test(d)) d = path.dirname(d);
-  if (!fs.existsSync(d)) stop(`no folder ${d}`);
+  if (fs.existsSync(d)) return d;
+  if (plainName(p)) { const h = path.join(decksHome(process.cwd()).folder, p); if (fs.existsSync(h)) return h; }
+  return null;
+}
+function deckOf(p) {
+  if (!p) stop('give the deck: its folder, or its name when it is in the decks folder');
+  const d = resolveDeck(p);
+  if (!d) stop(`no deck "${p}" (looked for ${path.resolve(p)}${plainName(p) ? ` and ${path.join(decksHome(process.cwd()).folder, p)}` : ''})`);
   return d;
 }
 function fileKey(f) { const m = f.match(/^(\d+)([a-z]?)-/i); return [Number(m[1]), m[2].toLowerCase(), f]; }
@@ -167,7 +205,7 @@ function renumber(dir, order) {
 }
 
 /* ---------------------------------------------------------------- the design library */
-function findLibrary(dir, given) {
+function findLibrary(dir, given, quiet) {
   const cands = [];
   if (given) cands.push(path.resolve(given));
   for (let d = path.resolve(dir), i = 0; i < 10; i++, d = path.dirname(d)) {
@@ -185,6 +223,7 @@ function findLibrary(dir, given) {
     if (d === path.dirname(d)) break;
   }
   const hit = cands.find(c => fs.existsSync(path.join(c, 'item.js')));
+  if (!hit && quiet) return null;
   if (!hit) stop(`design library not found (no item.js). Looked in:\n  ${[...new Set(cands)].slice(0, 6).join('\n  ')}\nAdd --library <folder>, or a "Design library: <path>" line to the project's CLAUDE.md.`);
   return hit;
 }
@@ -212,7 +251,9 @@ function applyTheme(dir, libFolder, id) {
     css = m ? css.slice(0, m.index + m[0].length) + '\n\n' + block + css.slice(m.index + m[0].length) : block + '\n\n' + css;
   }
   fs.writeFileSync(f, css);
-  if (t.licence && fs.existsSync(path.join(libFolder, t.licence))) fs.copyFileSync(path.join(libFolder, t.licence), path.join(dir, path.basename(t.licence)));
+  const keep = t.licence ? path.basename(t.licence) : null;
+  fs.readdirSync(dir).filter(x => /-OFL\.txt$/i.test(x) && x !== keep).forEach(x => { fs.rmSync(path.join(dir, x)); t.removed = (t.removed || []).concat(x); });   // the font left with the theme that brought it
+  if (t.licence && fs.existsSync(path.join(libFolder, t.licence))) fs.copyFileSync(path.join(libFolder, t.licence), path.join(dir, keep));
   return t;
 }
 
@@ -308,8 +349,14 @@ const ENGINE = `(function () {
         bar.style.left = Math.max(0, (box.offsetWidth - 1280 * s) / 2) + 'px';
         bar.style.bottom = Math.max(0, (box.offsetHeight - 720 * s) / 2) + 'px';
       }
-      Reveal.on('ready', function () { placeBar(); buildBar(); updateBar(); if (window.ItemHost) window.ItemHost.draw(); });
-      Reveal.on('slidechanged', updateBar);
+      /* Library animations on a slide (data-trigger="manual") play each time their slide shows; host-motion.js keeps
+         them in their end state until then, and in export and print. */
+      function playMotion(slide) {
+        if (!window.ItemMotion || !slide) return;
+        Array.prototype.forEach.call(slide.querySelectorAll('[data-item^="AN-"][data-trigger="manual"]'), function (el) { window.ItemMotion.play(el); });
+      }
+      Reveal.on('ready', function () { placeBar(); buildBar(); updateBar(); if (window.ItemHost) window.ItemHost.draw(); playMotion(Reveal.getCurrentSlide()); });
+      Reveal.on('slidechanged', function (e) { updateBar(); playMotion(e.currentSlide); });
       Reveal.on('resize', placeBar);
     })();`;
 
@@ -339,10 +386,10 @@ ${o.slides}
   <script id="deck-engine">
     ${ENGINE}
   </script>
-  <script id="host-runtime">
+${o.motion ? `  <script id="host-motion">\n${o.motion}\n  </script>\n` : ''}${o.js.map(j => `  <script class="item-js">\n${j}\n  </script>\n`).join('')}  <script id="host-runtime">
 ${o.runtime}
   </script>
-${o.js.map(j => `  <script class="item-js">\n${j}\n  </script>\n`).join('')}</body>
+</body>
 </html>
 `;
 }
@@ -357,16 +404,34 @@ function splitSlide(text, file) {
   return { file, section: text.slice(a, b + 10), styles, scripts, offset: (text.slice(0, a).match(/\n/g) || []).length };
 }
 
+/* The library's host files, kept current in the deck when the library is found (the deck keeps its copies otherwise):
+   host-runtime.js and host-motion.js beside the deck, host.css inside styles.css. */
+function refreshHost(dir) {
+  const l = findLibrary(dir, null, true);
+  if (!l) return;
+  ['host-runtime.js', 'host-motion.js'].forEach(f => { const s = path.join(l, f); if (fs.existsSync(s)) { const t = fs.readFileSync(s, 'utf8'), d = path.join(dir, f); if (!fs.existsSync(d) || fs.readFileSync(d, 'utf8') !== t) fs.writeFileSync(d, t); } });
+  const css = path.join(dir, 'styles.css'), host = path.join(l, 'host.css');
+  if (!fs.existsSync(css) || !fs.existsSync(host)) return;
+  const text = fs.readFileSync(css, 'utf8'), mark = '/* ---- host.css, copied from the design library ---- */', end = '/* ---- library items on a slide (deck.js) ---- */';
+  const a = text.indexOf(mark), b = text.indexOf(end);
+  if (a === -1 || b === -1) return;
+  const next = text.slice(0, a + mark.length) + '\n' + fs.readFileSync(host, 'utf8').trim() + '\n\n' + text.slice(b);
+  if (next !== text) fs.writeFileSync(css, next);
+}
 function build(dir, quiet) {
   const files = slideFiles(dir);
-  const rt = path.join(dir, 'host-runtime.js');
-  if (!fs.existsSync(rt)) fs.copyFileSync(path.join(lib(dir).folder, 'host-runtime.js'), rt);
+  refreshHost(dir);
+  const rt = path.join(dir, 'host-runtime.js'), mo = path.join(dir, 'host-motion.js');
+  if (!fs.existsSync(rt)) stop(`${rt} is missing and no design library was found to copy it from`);
   const parts = files.map(f => splitSlide(fs.readFileSync(path.join(dir, 'slides', f), 'utf8'), f));
   const uniq = a => [...new Set(a)];
+  const moving = parts.some(p => /data-item="AN-/.test(p.section));
+  if (moving && !fs.existsSync(mo)) stop(`${mo} is missing and no design library was found to copy it from`);
   const html = shell({
     title: titleOf(dir),
     css: uniq(parts.flatMap(p => p.styles)).join('\n'),
     js: uniq(parts.flatMap(p => p.scripts)),
+    motion: moving ? fs.readFileSync(mo, 'utf8').trim() : '',
     runtime: fs.readFileSync(rt, 'utf8').trim(),
     slides: parts.map(p => `<!-- slides/${p.file} -->\n${p.section}`).join('\n\n'),
   });
@@ -402,14 +467,57 @@ function checkChart(o) {
     if (a && a.type === 'value' && a.show !== false && big && !(a.axisLabel && a.axisLabel.formatter)) out.push('value axis shows raw numbers: give its axisLabel a formatter ("${value:short}", "{value:comma}", "{value}%")');
   });
   series.forEach((s, i) => { if (s.label && s.label.show && big && !s.label.formatter && !(s.data || []).every(d => d && d.label && d.label.formatter)) out.push(`series ${i + 1} labels show raw numbers: give its label a formatter ("\${c:short}", "{c:comma}")`); });
+  /* label formats that do not suit their values: a token the deck cannot read (printed as typed), a % on values in the thousands */
+  const formatters = [];
+  const look = (x, where) => { if (x && typeof x === 'object') { if (typeof x.formatter === 'string') formatters.push({ f: x.formatter, where }); } };
+  series.forEach((s, i) => { look(s.label, i); look(s.endLabel, i); (s.data || []).forEach(d => d && typeof d === 'object' && !Array.isArray(d) && look(d.label, i)); if (s.markLine) look(s.markLine.label, -1); });
+  ['xAxis', 'yAxis'].forEach(k => [].concat(o[k] || []).forEach((a, i) => a && look(a.axisLabel, { axis: k, i })));
+  const valuesOf = (i, k) => (series[i] ? (series[i].data || []).map(d => { const v = d && typeof d === 'object' && !Array.isArray(d) ? d.value : d; return Array.isArray(v) ? v[k === undefined ? v.length - 1 : k] : v; }) : nums).filter(v => typeof v === 'number');
+  const axisValues = w => series.map((s, i) => ((s[`${w.axis}Index`] || 0) === w.i && s.type !== 'scatter' ? valuesOf(i) : [])).flat();
+  formatters.forEach(({ f, where }) => {
+    for (const m of f.matchAll(/\{(c|value|a|b|@\[\d+\])(?::([^}]*))?\}/g)) if (m[2] !== undefined && !/^(short|comma)$/.test(m[2])) out.push(`label format "${f}" prints "${m[0]}" as typed: use {c:short}, {c:comma}, {c} or {value}`);
+    const pct = f.match(/\{(c|value|@\[(\d+)\])(?::\w+)?\}\s*%/);
+    if (pct) {
+      const vs = where && where.axis ? axisValues(where) : where === -1 ? nums : valuesOf(where, pct[2] !== undefined ? +pct[2] : undefined);
+      if (vs.some(v => Math.abs(v) >= 1000)) out.push(`label format "${f}" puts % after values in the thousands: give it a format that suits them ("\${c:short}", "{c:comma}")`);
+    }
+  });
   const ends = series.filter(s => s.type === 'line' && s.endLabel && s.endLabel.show);
   const right = o.grid && !Array.isArray(o.grid) ? o.grid.right : undefined;
   if (ends.length && !(typeof right === 'number' && right >= 60)) out.push('line end labels need room: set "grid": {"right": 130, ...}');
   return out;
 }
 function lineAt(text, idx) { return (text.slice(0, idx).match(/\n/g) || []).length + 1; }
+/* The visible wording of a library item (slide, chart, table, card, animation): every element's own text. */
+const normText = t => unesc(String(t).replace(/&middot;/g, '·').replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')).replace(/^\s*WORD:\s*/, '').replace(/\s+/g, ' ').trim();
+const SAMPLE_CACHE = {};
+function sampleTexts(libFolder, id) {
+  if (SAMPLE_CACHE[id]) return SAMPLE_CACHE[id];
+  const set = new Set();
+  try {
+    const I = require(path.join(libFolder, 'item.js'));
+    walk(parse(I.copyOf(I.get(id)).html), n => {
+      if (n.raw !== undefined) return false;
+      const t = normText((n.children || []).filter(c => typeof c === 'string').join(' '));
+      if (t.length >= 4 && /[a-z]{3}/i.test(t)) set.add(t);
+    });
+  } catch (e) { /* not in this library */ }
+  return (SAMPLE_CACHE[id] = set);
+}
+function sampleWording(libFolder, text) {
+  const ids = [...new Set([...text.matchAll(/data-(?:from|item)="([^"]+)"/g)].flatMap(m => m[1].split(/\s+/)).filter(x => /^[A-Z]{2}-\d{2,}$/.test(x)))];
+  const samples = new Set(ids.flatMap(i => [...sampleTexts(libFolder, i)]));
+  const out = [], seen = new Set();
+  if (!samples.size) return out;
+  walk(parse(text), n => {
+    if (n.raw !== undefined || attr(n, 'data-rows') !== null || attr(n, 'data-spot') === 'kicker') return false;   // scripts and data rows hold data; the kicker is the section name
+    const own = (n.children || []).filter(c => typeof c === 'string').join(' '), t = normText(own);
+    if (t && samples.has(t) && !seen.has(t) && !/^\s*WORD:/.test(own.trim())) { seen.add(t); out.push(t); }
+  });
+  return out;
+}
 function checkStatic(dir, parts) {
-  const out = [], ids = {};
+  const out = [], ids = {}, libFolder = findLibrary(dir, null, true);
   parts.forEach(p => {
     const f = `slides/${p.file}`;
     if (p.bad) { out.push(`${f}: ${p.bad}`); return; }
@@ -417,10 +525,19 @@ function checkStatic(dir, parts) {
     const id = (p.section.match(/<section\b[^>]*\bid="([^"]*)"/) || [])[1];
     if (!id) out.push(`${f}: the <section> has no id`);
     else if (ids[id]) out.push(`${f}: id "${id}" is also used by slides/${ids[id]}`); else ids[id] = p.file;
+    const manual = new Set();
+    const routes = s => `name a column (change "MANUAL ${s}" to it) and run ${ME} refill "${dir}" ${id}; or type the figures and change data-manual="${s}" to data-typed="${s}" (add-a-slide.md, "Acting on a MANUAL line")`;
+    for (const m of text.matchAll(/data-manual="([^"]*)"/g)) m[1].split(/\s+/).filter(Boolean).forEach(s => { manual.add(s); out.push(`${f}:${lineAt(text, m.index)} MANUAL: ${s} is not filled from data yet - ${routes(s)}`); });
+    const typedSlots = new Set([...text.matchAll(/data-typed="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/)));
     text.split('\n').forEach((l, i) => {
+      for (const m of l.matchAll(/MANUAL ([a-z][a-z0-9-]*)/g)) if (!manual.has(m[1])) { manual.add(m[1]); out.push(`${f}:${i + 1} MANUAL: ${m[1]} is on placeholder data${typedSlots.has(m[1]) ? ' (marked data-typed, but "MANUAL ' + m[1] + '" is still there)' : ''} - ${routes(m[1])}`); }
       if (/WORD/.test(l)) out.push(`${f}:${i + 1} to reword: ${l.trim().slice(0, 110)}`);
       else if (/\bdata-sample\b/.test(l)) out.push(`${f}:${i + 1} sample values from the library: fill it (add with a chart id and --data) or edit its data, then delete data-sample`);
       else if (SAMPLE.test(l) && !/application\/json|^\s*[{"]/.test(l)) out.push(`${f}:${i + 1} library sample text: ${l.trim().slice(0, 90)}`);
+    });
+    if (libFolder) sampleWording(libFolder, p.section).forEach(t => {
+      const i = text.split('\n').findIndex(l => normText(l.replace(/<[^>]+>/g, ' ')).includes(t.slice(0, 40)));
+      out.push(`${f}${i >= 0 ? ':' + (i + 1) : ''} still the library sample's wording: "${t.slice(0, 80)}${t.length > 80 ? '...' : ''}"`);
     });
     for (const m of text.matchAll(/<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) {
       const at = lineAt(text, m.index);
@@ -429,7 +546,9 @@ function checkStatic(dir, parts) {
       if (SAMPLE.test(m[1])) out.push(`${f}:${at} chart still holds library sample labels (Group A, Measure A ...)`);
       checkChart(o).forEach(w => out.push(`${f}:${at} ${w}`));
     }
-    for (const m of p.section.matchAll(/<(select|input|button|details|iframe|textarea)\b/g)) out.push(`${f}:${lineAt(text, text.indexOf(m[0]))} <${m[1]}> on a slide: a slide shows one fixed cut, no controls`);
+    let still = p.section;   // an animation's own buttons belong to it; everything else on a slide is fixed
+    for (const m of [...p.section.matchAll(/<div\b[^>]*\bdata-item="AN-[^"]*"[^>]*>/g)].reverse()) { const e = elementEnd(p.section, m.index); if (e !== -1) still = still.slice(0, m.index) + still.slice(e); }
+    for (const m of still.matchAll(/<(select|input|button|details|iframe|textarea)\b/g)) out.push(`${f}:${lineAt(text, text.indexOf(m[0]))} <${m[1]}> on a slide: a slide shows one fixed cut, no controls`);
     const h = p.section.match(/data-spot="headline"[^>]*>([\s\S]*?)<\/h[12]>/);
     if (h && h[1].replace(/<[^>]+>/g, '').trim().length > 120) out.push(`${f}: headline over 2 lines (120 characters)`);
     for (const m of text.matchAll(/data-source="([^"]+)"/g)) { const s = unesc(m[1]); const where = s.split('::')[0]; if (!fs.existsSync(path.resolve(dir, where))) out.push(`${f}:${lineAt(text, m.index)} data-source "${s}" not found from the deck folder`); }
@@ -515,7 +634,7 @@ function parseShape(s) {
   if (!s) return null;
   const o = {};
   s.split(';').map(x => x.trim()).filter(Boolean).forEach(x => { const [k, v] = x.split('='); o[k.trim()] = v === undefined ? true : v.trim(); });
-  return o.by || o.top ? o : null;
+  return o.by || o.top || o.order ? o : null;
 }
 const shapeText = sh => [sh.by ? `agg=${sh.agg}` : '', sh.by ? `by=${sh.by}` : '', sh.month ? 'month' : '', sh.split ? `split=${sh.split}` : '', sh.split ? `value=${sh.value}` : '',
   sh.order ? `order=${sh.order}` : '', sh.top ? `top=${sh.top}` : ''].filter(Boolean).join('; ');
@@ -546,6 +665,7 @@ function applyShape(rows, sh) {
     else if (sh.order) out.sort((a, b) => (Number(b[sh.order]) || 0) - (Number(a[sh.order]) || 0));
     out.parts = parts;
   }
+  if (!sh.by && sh.order && sh.order !== 'label') out = out.slice().sort((a, b) => (toNumber(b[sh.order]) || 0) - (toNumber(a[sh.order]) || 0));   // largest first, no grouping
   if (sh.top && out.length > Number(sh.top)) { const parts = out.parts; out = out.slice(0, Number(sh.top)); out.parts = parts; }
   return out;
 }
@@ -607,24 +727,34 @@ function annotate(I, o, map, rows) {
 }
 /* Axis names and titles hold the library sample's subject: scatter axes take their columns' names, the rest are marked to reword. */
 function nameAxes(I, o, map) {
-  const tuple = I.marks(o).map(m => I.slotNames(m.obj.slot)).find(n => n.length > 1);
   const axes = k => [].concat(o[k] || []).filter(a => a && typeof a === 'object');
+  const xy = ['xAxis', 'yAxis'].every(k => axes(k).length && axes(k).every(a => a.type === 'value'));   // a scatter of two measures: its axes take the columns' names
+  const tuple = xy ? I.marks(o).map(m => I.slotNames(m.obj.slot)).find(n => n.length > 1) : null;
   ['xAxis', 'yAxis'].forEach((k, i) => axes(k).forEach(a => {
     if (typeof a.name !== 'string' || !a.name.trim() || a.show === false) return;
     const col = tuple && tuple[i] && (map[tuple[i]] || [])[0];
-    a.name = col ? pretty(col) : `WORD: ${a.name}`;
+    a.name = col && !/^MANUAL /.test(col) ? pretty(col) : `WORD: ${a.name}`;
   }));
   [].concat(o.title || []).forEach(t => { if (t && typeof t.text === 'string' && t.text.trim()) t.text = `WORD: ${t.text}`; });
 }
-function formatChart(o, f) {
-  const F = FORMATS[f];
-  if (!F) return;
-  [].concat(o.series || []).forEach(s => {
-    if (typeof s.col !== 'string' || s.col.includes(',')) return;
+/* Number formats on labels and value axes. pct: columns that are percents whatever the item's format (a worked-out share);
+   an axis used only by those series reads in %. */
+function formatChart(o, f, pct) {
+  pct = pct || new Set();
+  const series = [].concat(o.series || []);
+  const fmtOf = s => FORMATS[typeof s.col === 'string' && pct.has(s.col) ? '%' : f];
+  series.forEach(s => {
+    const F = fmtOf(s);
+    if (!F || typeof s.col !== 'string' || s.col.includes(',')) return;
     if (s.label && s.label.show) s.label.formatter = F.c;
     if (s.endLabel && s.endLabel.show && typeof s.endLabel.formatter === 'string' && s.endLabel.formatter.includes('{c}')) s.endLabel.formatter = s.endLabel.formatter.replace(/\$?\{c\}%?/g, F.c);
   });
-  [].concat(o.xAxis || [], o.yAxis || []).forEach(a => { if (a && a.type === 'value' && a.show !== false) a.axisLabel = Object.assign({}, a.axisLabel, { formatter: F.value }); });
+  ['xAxis', 'yAxis'].forEach(k => [].concat(o[k] || []).forEach((a, i) => {
+    if (!a || a.type !== 'value' || a.show === false) return;
+    const users = series.filter(s => (s[`${k}Index`] || 0) === i && typeof s.col === 'string');
+    const F = users.length && users.every(s => pct.has(s.col)) ? FORMATS['%'] : FORMATS[f];
+    if (F) a.axisLabel = Object.assign({}, a.axisLabel, { formatter: F.value });
+  }));
 }
 function keepStyle(old, v) {
   if (!old || typeof old !== 'object' || Array.isArray(old) || !('value' in old)) return v;
@@ -649,7 +779,7 @@ function highlightSeries(o) {
     });
   });
 }
-function refillChart(o, rows) {
+function refillChart(o, rows, fmt) {
   const has = c => rows.length && c in rows[0];
   const col = c => { const v = rows.map(r => (r[c] === '' || r[c] === undefined ? null : r[c])); while (v.length && v[v.length - 1] === null) v.pop(); return v; };
   const missing = new Set();
@@ -661,7 +791,8 @@ function refillChart(o, rows) {
       else {
         const vs = col(x.col).filter(v => typeof v === 'number'), f = FIGURES[x.figure] || FIGURES.first;
         const prop = x.set || ('yAxis' in x ? 'yAxis' : 'xAxis' in x ? 'xAxis' : 'value');
-        if (vs.length) x[prop] = Math.round(f(vs) * 100) / 100;
+        const k = WHOLE(fmt) || (/short/.test(fmt || '') && vs.some(v => Math.abs(v) >= 100)) ? 1 : 100;   // rounded as the item's format reads
+        if (vs.length) x[prop] = Math.round(f(vs) * k) / k;
       }
       return;
     }
@@ -687,7 +818,7 @@ function prettyJson(o, ind) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return JSON.stringify(o);
   const lines = Object.keys(o).map(k => {
     const v = o[k];
-    if (Array.isArray(v) && v.length > 1 && v.every(x => x && typeof x === 'object' && !Array.isArray(x))) return `${ind}  "${k}": [\n${v.map(x => `${ind}    ${JSON.stringify(x)}`).join(',\n')}\n${ind}  ]`;
+    if (Array.isArray(v) && (v.length > 1 || (k === 'series' && v.length)) && v.every(x => x && typeof x === 'object' && !Array.isArray(x))) return `${ind}  "${k}": [\n${v.map(x => `${ind}    ${JSON.stringify(x)}`).join(',\n')}\n${ind}  ]`;
     return `${ind}  "${k}": ${JSON.stringify(v)}`;
   });
   return `{\n${lines.join(',\n')}\n${ind}}`;
@@ -759,15 +890,22 @@ function formattedRows(rows, map, html, fmt) {
   return rows.map(r => { const o = {}; Object.keys(r).forEach(k => { o[k] = keep.has(k) ? r[k] : fmtNum(r[k], fmt); }); return o; });
 }
 function stripControls(html) { return html.replace(/\s*<button[^>]*\bdata-csv\b[^>]*>[\s\S]*?<\/button>/g, ''); }
-function fillHtmlItem(I, html, rows, map, fmt) {
-  let out = I.fill(html, formattedRows(rows, map, html, fmt), map);
-  Object.values(map).flat().forEach(c => { out = out.replace(new RegExp(`(<th\\b[^>]*data-slot="[^"]*"[^>]*>)${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(</th>)`, 'g'), `$1${esc(pretty(c))}$2`); });
+const hasHtmlSlots = html => /data-(slot|rows)/.test(html.replace(/<script[\s\S]*?<\/script>/g, ''));
+/* Any copied block: chart options get the columns (marked "col", formats set), then HTML slots get formatted text. */
+function fillBlock(I, html, rows, map, fmt, pct) {
+  let out = html.replace(/(<script type="application\/json"[^>]*>)([\s\S]*?)(<\/script>)/g, (m, x, j, y) => {
+    const o = I.fillChart(JSON.parse(j), rows, map); annotate(I, o, map, rows); nameAxes(I, o, map); formatChart(o, fmt, pct); return x + JSON.stringify(o) + y;
+  });
+  if (hasHtmlSlots(out)) {
+    out = I.fillHtml(out, formattedRows(rows, map, out, fmt), map);
+    Object.values(map).flat().forEach(c => { out = out.replace(new RegExp(`(<th\\b[^>]*data-slot="[^"]*"[^>]*>)${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(</th>)`, 'g'), `$1${esc(pretty(c))}$2`); });
+  }
   return stripControls(out);
 }
 function refillHtmlItem(I, inner, rows, map, fmt) {
   const oldHead = (inner.match(/<thead>[\s\S]*?<\/thead>/) || [])[0];
   const leads = [...inner.matchAll(/<tr\b[^>]*class="[^"]*\bon\b[^"]*"[^>]*>\s*<t[dh]\b[^>]*>([^<]*)</g)].map(m => m[1].trim());
-  let out = I.fill(inner, formattedRows(rows, map, inner, fmt), map);
+  let out = I.fillHtml(inner, formattedRows(rows, map, inner, fmt), map);   // HTML slots only: the chart options were refilled already, keeping edits
   const newHead = (out.match(/<thead>[\s\S]*?<\/thead>/) || [])[0];
   if (oldHead && newHead && (oldHead.match(/<th\b/g) || []).length === (newHead.match(/<th\b/g) || []).length) out = out.replace(newHead, () => oldHead);
   if (leads.length) out = out.replace(/<tr\b([^>]*)>(\s*<t[dh]\b[^>]*>)([^<]*)</g, (m, a, td, txt) => {
@@ -778,29 +916,156 @@ function refillHtmlItem(I, inner, rows, map, fmt) {
   return stripControls(out);
 }
 
+/* data-cols: "label=region; value=paid,allowed"; a comma or semicolon inside one value (a figure typed as is) is %2C / %3B */
+/* A figure typed as is (not a column) is quoted: value="+7.0%". */
+const colsText = (map, cols) => Object.entries(map).map(([k, v]) => `${k}=${v.map(x => { const t = String(x).replace(/%/g, '%25').replace(/,/g, '%2C').replace(/;/g, '%3B'); return cols && !cols.includes(x) && x !== 'count' ? `"${t}"` : t; }).join(',')}`).join('; ');
+function parseCols(s) {
+  const map = {}, typed = new Set();
+  s.split(';').map(x => x.trim()).filter(Boolean).forEach(x => {
+    const at = x.indexOf('=');
+    map[x.slice(0, at).trim()] = x.slice(at + 1).split(',').map(v => { v = v.trim(); const q = /^".*"$/.test(v); v = decodeURIComponent(q ? v.slice(1, -1) : v); if (q) typed.add(v); return v; });
+  });
+  Object.defineProperty(map, 'typed', { value: typed, enumerable: false });
+  return map;
+}
+
 /* ---------------------------------------------------------------- add */
-function slotMap(slots, note, rows, itemId) {
-  const map = {};
-  slots.forEach(s => { const [k, v] = String(s).split('='); if (!k || v === undefined) stop('--slot <name>=<column>[,<column>]'); map[k.trim()] = v.split(',').map(x => x.trim()).filter(Boolean); });
-  const cols = Object.keys(rows[0] || {});
-  if (!slots.length) {   // a small shaped table: text slots take text columns, number slots the numbers, in order
-    const texts = cols.filter(c => rows.some(r => typeof r[c] === 'string')), nums = cols.filter(c => !texts.includes(c));
-    const ask = `say which columns fill which slot: --slot <name>=<column> (${itemId}: ${note.map(s => `${s.name} (${s.kind}, ${s.count})`).join('; ')}). Columns: ${cols.join(', ')}`;
-    if (cols.length > 4) stop(ask);
+/* Which columns fill which slot. Never stops: a slot the item does not have, a column the data lacks or extra columns
+   become notes; a required slot left without a column is returned in `missing` (it goes on placeholder data). */
+function slotMap(slots, note, rows, itemId, notes) {
+  const map = {}, cols = Object.keys(rows[0] || {});
+  const isText = c => rows.slice(0, 200).some(r => typeof r[c] === 'string' && r[c] !== '');
+  const inputs = calcInputs(itemId).filter(n => !note.some(s => s.name === n)).map(n => ({ name: n, kind: 'number', count: 'optional' }));   // columns a worked-out slot is made from (high)
+  slots.forEach(s => {
+    const at = String(s).indexOf('='), k = String(s).slice(0, at).trim(), v = String(s).slice(at + 1);
+    if (at < 1) { notes.push(`Ignored --slot ${s}: write it as --slot <name>=<column>.`); return; }
+    const slot = note.find(x => x.name === k) || inputs.find(x => x.name === k);
+    if (!slot) { notes.push(`Ignored --slot ${k}: ${itemId} has no slot "${k}" (its slots: ${note.map(x => x.name).join(', ') || 'none'}).`); return; }
+    let cs = slot.kind === 'figure' ? [v.trim()] : v.split(',').map(x => x.trim()).filter(Boolean);   // a figure is one value, commas and all
+    if (slot.kind !== 'figure') {
+      const absent = cs.filter(c => !cols.includes(c) && c !== 'count');
+      if (absent.length) { cs = cs.filter(c => !absent.includes(c)); notes.push(`--slot ${k}: the data has no column ${absent.join(', ')}${cs.length ? '' : /optional|any/.test(slot.count) ? ', so it is left out' : ''} (columns: ${cols.join(', ')}).`); }
+    }
+    if (/^(one|optional)$/.test(slot.count) && cs.length > 1) { notes.push(`${k} takes one column: used ${cs[0]}, ignored ${cs.slice(1).join(', ')}.`); cs = cs.slice(0, 1); }
+    if (cs.length) map[k] = cs;
+  });
+  if (!slots.length && cols.length <= 4) {   // a small shaped table: text slots take text columns, number slots the numbers, in order
+    const texts = cols.filter(isText), nums = cols.filter(c => !texts.includes(c));
     note.forEach(s => {
       const pool = s.kind === 'text' ? texts : nums;
       if (s.kind === 'figure' || !pool.length) return;
-      if (s.count === 'one' || s.count === 'optional') { if (s.count === 'one') map[s.name] = [pool.shift()]; }
+      if (s.count === 'one') map[s.name] = [pool.shift()];
       else if (s.count === 'one or more') map[s.name] = pool.splice(0);
     });
-    if (!Object.keys(map).length) stop(ask);
   }
-  Object.entries(map).forEach(([k, cs]) => {
-    const s = note.find(x => x.name === k);
-    cs.forEach(c => { if (!cols.includes(c) && c !== 'count' && !(s && s.kind === 'figure')) stop(`the data has no column "${c}". Columns: ${cols.join(', ')}`); });
-  });
-  return map;
+  const missing = note.filter(s => /^(one|one or more)$/.test(s.count) && !(map[s.name] || []).length);
+  return { map, missing, texts: cols.filter(isText), nums: cols.filter(c => !isText(c)) };
 }
+/* ---- slots worked out from others (an item's recipe line) ----
+   A slot is derived when its recipe part is a calculation ("low: the smaller of start and end"). Where the calculation
+   is mechanical from columns given, add works it out (COMPUTE) and refill repeats it (data-calc on the item). */
+const CALC_WORDS = /\bfit\b|minus|difference|smaller|larger|sum\b|cumulative|running|share|as a %|% of|÷|×|=|scale|combined|change on|width|position|the same as/i;
+function derivedSlots(item) {
+  const out = {};
+  String(item.recipe || '').split(';').forEach(part => {
+    const m = part.match(/^\s*([a-z][a-z0-9-]*(?:\s*,\s*[a-z][a-z0-9-]*)*)\s*[:=]\s*(.+)$/);
+    if (!m) return;
+    const how = m[2].trim();
+    m[1].split(',').map(x => x.trim()).forEach(n => { if ((item.data || []).some(s => s.name === n) && !/^empty/i.test(how) && CALC_WORDS.test(how)) out[n] = how; });
+  });
+  return out;
+}
+/* What add can work out itself: item -> slot -> [function, input slots]. Inputs that are not slots (high) are given with --slot too. */
+const COMPUTE = {
+  'CT-08': { low: ['min', 'start', 'end'], gap: ['absdiff', 'start', 'end'] },
+  'CT-11': { range: ['minus', 'high', 'low'] },
+  'CT-22': { running: ['cumsum', 'variance'] },
+  'CT-24': { share: ['runshare', 'value'] },
+  'CT-19': { part: ['rowpct', 'part'] },
+  'TB-08': { incurred: ['plus', 'paid', 'ibnr'], pmpm: ['divide', 'incurred', 'members'] },
+  'AN-01': { 'value-number': ['number', 'value'] },
+  'AN-10': { 'value-number': ['number', 'value'] },
+};
+const SORT_FIRST = { 'CT-02': 'value', 'CT-24': 'value' };   // items whose rows go largest first
+const calcInputs = id => [...new Set(Object.values(COMPUTE[id] || {}).flatMap(c => c.slice(1)))];
+const toNumber = v => (typeof v === 'number' ? v : Number(String(v).replace(/[^0-9.\-]/g, '')));
+/* Works out one derived column (or several, for rowpct) into rows; returns the new column names, or null when an input is missing. */
+function computeSlot(rows, fn, inputs, slot) {
+  if (inputs.some(c => !c || !c.length)) return null;
+  const col = c => rows.map(r => toNumber(r[c]));
+  const name = (s) => `${s} (worked out)`;
+  if (fn === 'rowpct') {
+    const cs = inputs[0], made = cs.map(c => name(c));
+    rows.forEach(r => { const tot = cs.reduce((a, c) => a + (toNumber(r[c]) || 0), 0); cs.forEach((c, i) => { r[made[i]] = tot ? Math.round(toNumber(r[c]) / tot * 1000) / 10 : null; }); });
+    return made;
+  }
+  const [a, b] = inputs.map(x => x[0]), out = name(slot);
+  const A = col(a), B = b ? col(b) : null;
+  let run = 0;
+  const tot = A.reduce((s, v) => s + (v || 0), 0);
+  rows.forEach((r, i) => {
+    const x = A[i], y = B ? B[i] : null;
+    r[out] = fn === 'min' ? Math.min(x, y) : fn === 'absdiff' ? Math.abs(y - x) : fn === 'minus' ? x - y : fn === 'plus' ? x + y
+      : fn === 'divide' ? (y ? x / y : null) : fn === 'cumsum' ? (run += x || 0) : fn === 'runshare' ? Math.round((run += x || 0) / (tot || 1) * 1000) / 10 : fn === 'number' ? x : null;
+  });
+  return [out];
+}
+/* Fills what can be worked out; returns the data-calc text that lets refill repeat it. */
+function applyCalc(itemId, rows, map, notes) {
+  const plan = COMPUTE[itemId], done = [];
+  if (!plan) return '';
+  Object.entries(plan).forEach(([slot, [fn, ...ins]]) => {
+    if (fn === 'number') {   // a figure typed as is (or a column's first value): its plain number for a count-up
+      const v = (map[ins[0]] || [])[0];
+      if (v === undefined || (map[slot] || []).length) return;
+      const first = rows.length && v in rows[0] ? rows[0][v] : v;
+      if (!isNaN(toNumber(first))) { map[slot] = [String(toNumber(first))]; notes.push(`Worked out ${slot}: ${toNumber(first)}, the plain number in ${ins[0]}.`); }
+      return;
+    }
+    const inputs = ins.map(s => (s === slot ? map[s] : map[s] || []));
+    if (fn !== 'rowpct' && (map[slot] || []).length && !/ \(worked out\)$/.test(map[slot][0])) notes.push(`${slot} is worked out from ${ins.join(' and ')}, so the column you gave it (${map[slot].join(', ')}) was not used.`);
+    const made = computeSlot(rows, fn, fn === 'rowpct' ? [map[slot] || []] : inputs, slot);
+    if (!made) return;
+    map[slot] = made;
+    done.push(`${slot}=${fn}(${(fn === 'rowpct' ? map[slot].map(c => c.replace(/ \(worked out\)$/, '')) : ins.map(s => (map[s] || [])[0])).join(',')})`);
+    const cols = ins.map(s => (map[s] || [])[0]);
+    const words = { min: `the smaller of ${cols.join(' and ')}`, absdiff: `the difference between ${cols.join(' and ')}`, minus: `${cols[0]} minus ${cols[1]}`, plus: `${cols[0]} plus ${cols[1]}`,
+      divide: `${cols[0]} divided by ${cols[1]}`, cumsum: `the running total of ${cols[0]}`, runshare: `the running total of ${cols[0]} as a % of its total`, rowpct: 'each column as a % of the row total' }[fn];
+    notes.push(`Worked out ${slot}: ${words}.`);
+  });
+  return done.join('; ');
+}
+/* refill: repeat the calculations recorded in data-calc ("low=min(start,end); share=runshare(value)"). */
+function reapplyCalc(rows, calc) {
+  String(calc || '').split(';').map(s => s.trim()).filter(Boolean).forEach(s => {
+    const m = s.match(/^([a-z0-9-]+)=(\w+)\(([^)]*)\)$/);
+    if (!m) return;
+    const cols = m[3].split(',').map(x => x.trim());
+    computeSlot(rows, m[2], m[2] === 'rowpct' ? [cols] : cols.map(c => [c]), m[1]);
+  });
+  return rows;
+}
+
+/* Required slots with no column: a clearly marked placeholder column ("MANUAL <slot>") in the rows. */
+function placeholders(rows, missing, map) {
+  /* placeholder numbers sit on the scale of a number column already filled, so the chart stays readable */
+  const real = Object.values(map).flat().find(c => !/^MANUAL /.test(c) && rows.some(r => typeof r[c] === 'number'));
+  const top = real ? Math.max(...rows.map(r => Math.abs(toNumber(r[real]) || 0))) : 50;
+  missing.forEach(s => {
+    const c = `MANUAL ${s.name}`;
+    rows.forEach((r, i) => { r[c] = s.kind === 'number' ? Math.round(top * (0.5 + 0.1 * (i % 5)) * 100) / 100 : s.kind === 'text' ? `MANUAL ${i + 1}` : 'MANUAL'; });
+    map[s.name] = [c];
+  });
+}
+/* A MANUAL line with both routes and the exact commands ({file}, {refill} and {build} are filled in once the slide exists). */
+const manualLine = (s, cols, how) => `MANUAL: ${s.name} is not filled - it shows placeholder data, marked "MANUAL ${s.name}", in {file}.
+  Either name a column: in that file change "MANUAL ${s.name}" to one of your ${s.kind === 'number' ? 'number ' : s.kind === 'text' ? 'text ' : ''}columns (${cols.join(', ') || 'none fits yet'})${how ? `; ${s.name} must be worked out first (${how}): add that column to your data` : ''}, then run
+    {refill}
+  Or type the figures by hand: replace the placeholder figures with yours, delete "MANUAL ${s.name}" from that item (the "col" in a chart, the data-cols entry in a table), and change data-manual="${s.name}" to data-typed="${s.name}" on it; then run
+    {build}
+  build and check list this slot until one of the two is done.`;
+const fillTokens = (s, dir, file, id) => s.split('{file}').join(`slides/${file}`).split('{refill}').join(`${ME} refill "${dir}" ${id}`).split('{build}').join(`${ME} build "${dir}"`);
+function getItem(I, id) { try { return I.get(id); } catch (e) { stop(`no library item ${id}. The library's index pages list the ids (index/slides.md, index/charts.md, index/tables.md, index/hero-cards.md, index/animations.md).`); } }
 function facts(rows, label, value, fmt) {
   if (!label || !value || !rows.length || !rows.every(r => typeof r[value] === 'number')) return '';
   const order = rows.map((r, i) => i).sort((a, b) => rows[b][value] - rows[a][value]);
@@ -870,100 +1135,145 @@ function cmdAdd(a) {
   const dir = deckOf(a.pos[0]);
   let files = slideFiles(dir);
   const ids = a.pos.slice(1);
-  const slideId = ids.find(x => SLIDE_ID.test(x)), itemId = ids.find(x => ITEM_ID.test(x));
-  const bad = ids.filter(x => x !== slideId && x !== itemId);
-  if (bad.length || (!slideId && !itemId)) stop(`give a slide id (FR EX LV CH CP BD UN DE BK) and/or one chart, table or hero card id (CT TB HC)${bad.length ? `; not understood: ${bad.join(' ')}` : ''}. The library's index/slides.md, index/charts.md, index/tables.md and index/hero-cards.md list them.`);
+  if (ids.some(x => /^AN-\d/.test(x))) return cmdAnimate(a);   // an animation id: the animate command does it
+  if (a.opt.data && !fs.existsSync(path.resolve(a.opt.data))) stop(`data file ${path.resolve(a.opt.data)} not found`);
   const I = lib(dir, a.opt.library);
-  if ((a.opt.data || a.opt.from || a.slots.length || a.opt.by) && !itemId) stop(`${slideId}'s own chart is a picture of sample values and cannot take data. To put your data on this slide, give a chart, table or hero card id after it, and the data goes into that: deck.js add <deck> ${slideId} CT-34 --data ... --slot ... (CT-34 plain bars, CT-35 plain line, TB-09 plain table).`);
+  const notes = [];
+  ids.forEach(x => { if (!/^[A-Z]{2}-\d{2,}$/.test(x)) stop(`"${x}" is not a library id (two capitals, a hyphen, two digits, such as LV-05 or CT-34)`); getItem(I, x); });
+  const slideId = ids.find(x => SLIDE_ID.test(x)), itemId = ids.find(x => ITEM_ID.test(x));
+  ids.filter(x => x !== slideId && x !== itemId).forEach(x => notes.push(`Ignored ${x}: add takes one slide id and one chart, table or hero card id (${getItem(I, x).h.type}s: ${/^TH-/.test(x) ? 'deck.js theme' : 'not added to slides'}).`));
+  if (!slideId && !itemId) stop('give a slide id (FR EX LV CH CP BD UN DE BK), a chart, table or hero card id (CT TB HC), or both');
   const after = a.opt.after === undefined ? files.length - 1 : String(a.opt.after) === '0' ? -1 : findSlide(dir, files, a.opt.after);
   const isFrame = slideId && /^FR-/.test(slideId);
   const section = isFrame && a.opt.section === undefined ? undefined : sectionNear(dir, files, after, a.opt.section);
+  if (slideId && !itemId && (a.opt.data || a.opt.from || a.slots.length || a.opt.by))
+    notes.push(`MANUAL: ${slideId}'s own chart holds sample values and takes no data, so the slide went in without your data (as {file}). To show the data, run
+    ${ME} add "${dir}" ${slideId} CT-34 ${a.opt.data ? `--data "${a.opt.data}"` : a.opt.from ? `--from "${a.opt.from}"` : '--data <file>'} ${a.slots.map(s => `--slot "${s}"`).join(' ') || '--slot label=<text column> --slot value=<number column>'}${a.opt.by ? ` --by ${a.opt.by}` : ''}
+  (CT-34 is plain bars; CT-35 line, CT-36 stacked bars, TB-09 table and HC-15 cards also take data; deck.js show <id> lists their slots), then delete {file}.`);
+  if (slideId && itemId) {   // a slide with no spot for the item: both go in, the item on a plain chart slide right after
+    const spots = I.copyOf(getItem(I, slideId)).spots || [];
+    if (!(a.opt.spot ? spots.includes(a.opt.spot) : spots.some(s => /^(chart|table|figure)/.test(s)))) {
+      const first = finishAdd(I, a, dir, files, after, section, slideId, null, null, null,
+        notes.concat([`MANUAL: ${slideId} has no ${a.opt.spot ? `spot "${a.opt.spot}"` : 'chart spot'} (its spots: ${spots.join(', ')}), so ${itemId} went on a plain chart slide right after it. Keep both, or move the item by hand.`]));
+      files = slideFiles(dir);
+      const b = Object.assign({}, a, { opt: Object.assign({}, a.opt, { headline: undefined, id: undefined }) });
+      const p = prepareItem(I, b, dir, itemId, /^(chart|table|hero card)$/, 'a chart, table or hero card');
+      finishAdd(I, b, dir, files, files.indexOf(first), sectionNear(dir, files, files.indexOf(first), a.opt.section), null, itemId, p.item, p.src, p.said);
+      return;
+    }
+  }
+  const { item, src, said } = itemId ? prepareItem(I, a, dir, itemId, /^(chart|table|hero card)$/, 'a chart, table or hero card') : { item: null, src: null, said: [] };
+  finishAdd(I, a, dir, files, after, section, slideId, itemId, item, src, notes.concat(said));
+}
 
-  /* the item, filled when data is given */
-  let item = null, src = null, said = [];
-  if (itemId) {
-    const it = I.get(itemId);
-    if (!/^(chart|table|hero card)$/.test(it.h.type)) stop(`${itemId} is a ${it.h.type}, not a chart, table or hero card`);
+/* A library item copied and, with --data or --from, filled: its html carries the data record on its wrapper. */
+function prepareItem(I, a, dir, itemId, types, what) {
+  let item = null, src = null;
+  const said = [];
+  {
+    const it = getItem(I, itemId);
+    if (!types.test(it.h.type)) stop(`${itemId} is a ${it.h.type}, not ${what}`);
     item = I.copyOf(it);
     if (a.opt.data || a.opt.from) {
       let rows, record, label;
       if (a.opt.from) {
         const [typed, an, tb] = a.opt.from.split('::').map(s => s.trim());
-        if (!an) stop('--from "<report folder>::<section>[::<table>]"');
+        if (!an) stop('--from "<report folder>::<section>[::<table>]" (the folder alone lists its sections and tables)');
         const folder = reportFolder(typed, dir);
         rows = runReport(folder, an, tb);
         record = `${rel(dir, folder)}::${an}${tb ? '::' + tb : ''}`;
         label = `${path.basename(folder)} report, ${an.replace(/^s\d+_/, '')}${tb ? ' ' + tb : ''}`;
       } else {
         const f = path.resolve(a.opt.data);
-        if (!fs.existsSync(f)) stop(`${f} not found`);
+        if (!fs.existsSync(f)) stop(`data file ${f} not found`);
         rows = readTable(f); record = rel(dir, f); label = path.basename(f);
       }
-      if (!rows.length) stop('the data has no rows');
-      const map = slotMap(a.slots, item.data, rows, itemId);
-      const miss = I.check(item.data, map);
-      if (miss.length) stop(`${miss.join('; ')}. ${itemId} needs: ${item.dataLine}${item.recipe ? `\nrecipe: ${item.recipe}` : ''}\nColumns: ${Object.keys(rows[0]).join(', ')}`);
+      if (!rows.length) said.push(`MANUAL: the data has no rows, so ${itemId} went in on placeholder data in {file}. Point it at data that has rows:
+    {refill} --data <file>`);
+      const sm = slotMap(a.slots, item.data, rows, itemId, said);
+      const map = sm.map;
       /* raw rows (a label repeats, or --by): sum the numbers by it, days become months when there are many;
          --by makes one column per group; tables keep their first rows (--top) */
       const textSlot = item.data.find(s => s.kind === 'text' && (map[s.name] || []).length);
       const by = textSlot ? map[textSlot.name][0] : null;
       let shape = null;
-      if (a.opt.by) {
-        if (!by) stop(`--by needs the item's label column (${item.dataLine})`);
-        if (rows.length && !(a.opt.by in rows[0])) stop(`the data has no column "${a.opt.by}". Columns: ${Object.keys(rows[0]).join(', ')}`);
-      }
-      if (by && (a.opt.by || new Set(rows.map(r => r[by])).size < rows.length)) {
+      let split = a.opt.by;
+      if (split && !by) { said.push(`Ignored --by ${split}: the label slot has no column.`); split = null; }
+      if (split && rows.length && !(split in rows[0])) { said.push(`Ignored --by ${split}: the data has no column "${split}" (columns: ${Object.keys(rows[0]).join(', ')}).`); split = null; }
+      const splitSlot = split && item.data.find(s => s.kind === 'number' && /one or more|any/.test(s.count) && (map[s.name] || []).length);
+      if (split && !splitSlot) { said.push(`Ignored --by ${split}: ${itemId} takes one value column, so it cannot show one line or bar per group (CT-34 bars, CT-35 lines and CT-36 stacked bars can).`); split = null; }
+      if (split && map[splitSlot.name].length !== 1) { said.push(`--by splits one column: used ${map[splitSlot.name][0]}.`); map[splitSlot.name] = map[splitSlot.name].slice(0, 1); }
+      if (!by && sm.missing.some(s => s.kind === 'text') && rows.length > 5) { rows = rows.slice(0, 5); said.push('The label slot has no column: placeholder labels on the first 5 rows.'); }
+      if (by && (split || new Set(rows.map(r => r[by])).size < rows.length)) {
         const days = rows.every(r => typeof r[by] === 'string' && ISO_DAY.test(r[by]));
         const month = days && new Set(rows.map(r => r[by])).size > 24;
         const firstNum = item.data.filter(s => s.kind === 'number').flatMap(s => map[s.name] || [])[0];
         const periods = month || rows.slice(0, 50).every(r => PERIOD.test(String(r[by])) || ISO_DAY.test(String(r[by])));
         shape = { agg: a.opt.agg === 'mean' ? 'mean' : 'sum', by, month, order: periods ? 'label' : firstNum };
-        if (a.opt.by) {
-          const slot = item.data.find(s => s.kind === 'number' && /one or more|any/.test(s.count) && (map[s.name] || []).length);
-          if (!slot) stop(`${itemId} takes one value column, so it cannot show one line or bar per group. Use a chart that takes one or more: CT-34 bars, CT-35 lines, CT-36 stacked bars.`);
-          if (map[slot.name].length !== 1) stop(`--by splits one column: --slot ${slot.name}=<one column>`);
-          Object.assign(shape, { split: a.opt.by, value: map[slot.name][0], order: periods ? 'label' : undefined });
+        if (split) {
+          const slot = splitSlot;
+          Object.assign(shape, { split, value: map[slot.name][0], order: periods ? 'label' : undefined });
           rows = applyShape(rows, shape);
-          if (rows.parts.length > 6) said.push(`${a.opt.by} has ${rows.parts.length} groups: a slide reads 4 at most.`);
+          if (rows.parts.length > 6) said.push(`${split} has ${rows.parts.length} groups: a slide reads 4 at most.`);
           map[slot.name] = rows.parts;
         } else rows = applyShape(rows, shape);
-        said.push(`Grouped: ${shape.agg} by ${by}${month ? ' month' : ''}${a.opt.by ? `, one ${item.type === 'chart' ? 'series' : 'column'} per ${a.opt.by} (${map[item.data.find(s => s.kind === 'number' && /one or more|any/.test(s.count) && (map[s.name] || []).length).name].join(', ')})` : ''}, ${rows.length} rows, ${periods ? 'in order' : shape.order ? `largest ${shape.order} first` : 'in source order'}.`);
+        said.push(`Grouped: ${shape.agg} by ${by}${month ? ' month' : ''}${split ? `, one ${item.type === 'chart' ? 'series' : 'column'} per ${split} (${map[splitSlot.name].join(', ')})` : ''}, ${rows.length} rows, ${periods ? 'in order' : shape.order ? `largest ${shape.order} first` : 'in source order'}.`);
       }
-      const top = a.opt.top !== undefined ? Number(a.opt.top) : item.type === 'table' ? 8 : 0;
-      if (a.opt.top !== undefined && !(top > 0)) stop('--top takes a number of rows, such as --top 8');
+      if (SORT_FIRST[itemId] && (map[SORT_FIRST[itemId]] || []).length && !(shape && shape.by)) {   // largest first, as the item's recipe says
+        const c = map[SORT_FIRST[itemId]][0];
+        rows = rows.slice().sort((x, y) => (toNumber(y[c]) || 0) - (toNumber(x[c]) || 0));
+        shape = Object.assign(shape || {}, { order: c });
+        said.push(`Sorted largest ${c} first (the item's recipe).`);
+      }
+      let top = a.opt.top !== undefined ? Number(a.opt.top) : item.type === 'table' ? 8 : 0;
+      if (a.opt.top !== undefined && !(top > 0)) { said.push(`Ignored --top ${a.opt.top}: give a number of rows, such as --top 8.`); top = item.type === 'table' ? 8 : 0; }
       if (top && rows.length > top) {
         const all = rows.length, parts = rows.parts;
         rows = rows.slice(0, top); rows.parts = parts;
         shape = Object.assign(shape || {}, { top });
         said.push(`Kept the first ${top} of ${all} rows${a.opt.top === undefined ? ' (a slide reads about 8; --top N to change)' : ''}.`);
       }
+      if (!rows.length) rows = [{}, {}, {}, {}, {}];
+      /* slots worked out from others: largest first where the item wants it, then the calculations add can do */
+      const derived = derivedSlots(item);
+      const calc = applyCalc(itemId, rows, map, said);
+      Object.entries(derived).forEach(([n, how]) => {
+        if ((map[n] || []).length && !(COMPUTE[itemId] || {})[n]) said.push(`${n} must be worked out first (${how}); check that ${map[n].join(', ')} already holds that.`);
+      });
+      const missing = item.data.filter(s => /^(one|one or more)$/.test(s.count) && !(map[s.name] || []).length);
+      placeholders(rows, missing, map);   // required slots with no column: marked placeholder data
+      missing.forEach(s => said.push(manualLine(s, s.kind === 'text' ? sm.texts : s.kind === 'number' ? sm.nums : sm.texts.concat(sm.nums), derived[s.name])));
       const numCols = item.data.filter(s => s.kind !== 'text').flatMap(s => map[s.name] || []).filter(c => rows.length && c in rows[0]);
-      const fmt = a.opt.format || (shape && shape.split ? guessFormat(shape.value, rows.map(r => ({ [shape.value]: r[numCols[0]] }))) : numCols[0] ? guessFormat(numCols[0], rows) : 'none');
-      if (!FORMATS[fmt] && fmt !== 'none') stop(`--format is one of ${FORMAT_NAMES}`);
-      rows = tidy(rows, numCols, fmt);
-      let html = item.html;
-      if (item.type === 'chart') {
-        html = html.replace(/(<script type="application\/json"[^>]*>)([\s\S]*?)(<\/script>)/g, (m, x, j, y) => {
-          const o = I.fillChart(JSON.parse(j), rows, map); annotate(I, o, map, rows); nameAxes(I, o, map); formatChart(o, fmt); return x + JSON.stringify(o) + y;
-        });
-      } else html = fillHtmlItem(I, html, rows, map, fmt);
-      html = html.replace(/\s*<p class="lib-source">Sample values<\/p>/, '');
+      let fmt = a.opt.format || (shape && shape.split ? guessFormat(shape.value, rows.map(r => ({ [shape.value]: r[numCols[0]] }))) : numCols[0] && !/^MANUAL /.test(numCols[0]) ? guessFormat(numCols[0], rows) : 'none');
+      if (!FORMATS[fmt] && fmt !== 'none') { said.push(`Ignored --format ${fmt}: it is one of ${FORMAT_NAMES}.`); fmt = numCols[0] ? guessFormat(numCols[0], rows) : 'none'; }
+      const pct = new Set(Object.entries(COMPUTE[itemId] || {}).filter(([, v]) => /^(runshare|rowpct)$/.test(v[0])).flatMap(([k]) => map[k] || []));   // worked-out shares read in %
+      rows = tidy(rows, numCols.filter(c => !pct.has(c)), fmt);
+      let html = fillBlock(I, item.html, rows, map, fmt, pct);
+      html = html.replace(/\s*<p class="lib-source"[^>]*>Sample values[^<]*<\/p>/, '');
       const attrs = ` data-source="${escA(record)}"${shape ? ` data-shape="${escA(shapeText(shape))}"` : ''} data-format="${fmt}"` +
-        (item.type === 'chart' ? '' : ` data-cols="${escA(Object.entries(map).map(([k, v]) => `${k}=${v.join(',')}`).join('; '))}"`);
+        (calc ? ` data-calc="${escA(calc)}"` : '') + (missing.length ? ` data-manual="${missing.map(s => s.name).join(' ')}"` : '') +
+        (item.type === 'chart' ? '' : ` data-cols="${escA(colsText(map, Object.keys(rows[0] || {})))}"`);
       html = html.replace(/^<div data-item="([^"]+)"/, `<div data-item="$1"${attrs}`);
       item.html = html;
       src = { label, record };
       const labelCol = textSlot ? map[textSlot.name][0] : null;
       said.push(`Data: ${Object.entries(map).map(([k, v]) => `${k}=${v.join(',')}`).join('; ')} from ${record}; numbers as ${fmt}${a.opt.format ? '' : ' (guessed; --format to change)'}.`);
-      said.push(...factsAll(rows, labelCol, numCols, fmt));
+      said.push(...factsAll(rows, labelCol, numCols.filter(c => !/^MANUAL /.test(c) && !pct.has(c)), fmt), ...factsAll(rows, labelCol, [...pct], '%'));
     } else {
       item.html = stripControls(item.html).replace(/^<div data-item="([^"]+)"/, '<div data-item="$1" data-sample');
       said.push(`${itemId} holds library sample values: give --data or --from with --slot to fill it (${item.dataLine}).`);
     }
     if (item.js && /data-csv/.test(item.js)) item.js = '';
-    if (item.type !== 'chart') item.html = item.html.replace(/(<h2>)(?!WORD)([^<]+)(<\/h2>)/g, '$1WORD: $2$3').replace(/(<p class="cap">)(?!WORD)([^<]+)/g, '$1WORD: $2');
+    if (item.type !== 'chart') {   // the item's own wording (heading, caption, notes): every text not filled from data
+      const tree = parse(item.html);
+      prefixAll(tree, 'WORD: ', x => attr(x, 'data-slot') !== null || attr(x, 'data-rows') !== null || /^(button|script|style)$/.test(x.tag) || /\blib-source\b/.test(attr(x, 'class') || ''));
+      item.html = serialize(tree);
+    }
   }
+  return { item, src, said };
+}
 
+function finishAdd(I, a, dir, files, after, section, slideId, itemId, item, src, said) {
   /* the slide */
   const basis = item ? ((item.html.match(/<p class="basis">([\s\S]*?)<\/p>/) || [])[1] || '') : '';
   const foot = `WORD: ${basis && !/^What is measured/.test(basis) ? basis.replace(/\.?\s*Sample values\.?/, '') : 'what is measured, the period'}.${src ? ` Source: ${esc(src.label)}.` : ''}`.replace(/\.\./g, '.');
@@ -972,7 +1282,7 @@ function cmdAdd(a) {
     const wrap = item.html.replace(/<p class="basis">[\s\S]*?<\/p>\s*/, '').replace(/^<div data-item="([^"]+)"/, '<div data-item="$1" data-spot="chart"');
     text = plainSlide({ id: 'x', section, headline: a.opt.headline, from, footnote: foot, spot: wrap.split('\n').map(l => '      ' + l).join('\n') });
   } else {
-    const sl = I.copyOf(I.get(slideId));
+    const sl = I.copyOf(getItem(I, slideId));
     let block = sl.html;
     const spots = sl.spots || [];
     if (item) {
@@ -998,10 +1308,14 @@ function cmdAdd(a) {
       }
       if (/^(chart|table)/.test(s)) { setAttr(n, 'data-sample', null); n.attrs.push(['data-sample', null]); if (parent && /grid/.test(attr(parent, 'style') || '')) setAttr(parent, 'style', attr(parent, 'style').replace(/gap:\s*\d+px/, 'gap: var(--split-gap)')); return false; }
       if (s === 'kicker' && section) { n.children = [esc(section)]; return false; }
-      if (s === 'headline' && a.opt.headline) { n.children = [esc(a.opt.headline)]; return false; }
+      if (s === 'headline' && a.opt.headline) {   // the headline's own text; anything nested (a quote's cite) stays to word
+        const i = n.children.findIndex(c => typeof c === 'string' && c.trim());
+        if (i === -1) n.children = [esc(a.opt.headline)];
+        else { n.children[i] = n.children[i].replace(/\S[\s\S]*\S|\S/, () => esc(a.opt.headline)); n.children.filter(c => typeof c === 'object').forEach(c => prefixAll(c, 'WORD: ')); }
+        return false;
+      }
       if (s === 'footnote' && item) { n.children = [foot]; return false; }
-      if (/^bullets/.test(s)) { walk(n, x => { if (x.tag === 'li') { prefixText(x, 'WORD: '); return false; } }); return false; }
-      prefixText(n, 'WORD: ');
+      prefixAll(n, 'WORD: ');   // every piece of text in the spot: a bullet each, a quote and its cite
       return false;
     });
     text = serialize(tree).replace(/^\s+/, '').replace(/\n[ \t]*(?=\n)/g, '').replace(/\n {6}<\/section>\s*$/, '\n</section>') + '\n';
@@ -1009,15 +1323,19 @@ function cmdAdd(a) {
   }
   if (item && item.css) text += `<style>\n${item.css}\n</style>\n`;
   if (item && item.js) text += `<script>\n${item.js}\n</script>\n`;
-  const want = a.opt.id ? a.opt.id : slug(a.opt.headline || (src && item ? `${item.name} ${src.label.replace(/\.\w+$/, '')}` : (slideId ? I.get(slideId).h.name : item.name)));
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(want)) stop('--id: lowercase letters, digits and hyphens, such as paid-by-month');
+  const tidyId = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'slide';
+  let want = a.opt.id ? tidyId(a.opt.id) : slug(a.opt.headline || (src && item ? `${item.name} ${src.label.replace(/\.\w+$/, '')}` : (slideId ? getItem(I, slideId).h.name : item.name)));
+  if (a.opt.id && want !== a.opt.id) said.unshift(`--id ${a.opt.id} became ${want} (lowercase letters, digits and hyphens).`);
   const done = place(dir, files, after, want, text);
   build(dir, true);
   const r = reportLines(dir, done.file);
   console.log(`Added slides/${done.file} (${from}${src ? `, data from ${src.record}` : ''}), slide ${after + 2} of ${files.length + 1}.`);
-  said.forEach(s => console.log(s));
+  const manual = said.filter(s => /^MANUAL:/.test(s)).map(s => fillTokens(s, dir, done.file, done.id));
+  said.filter(s => !/^MANUAL:/.test(s)).forEach(s => console.log(fillTokens(s, dir, done.file, done.id)));
+  if (manual.length) console.log(`\n${manual.join('\n')}`);
   console.log(`\nWords to write: edit only these ${r.count} line${r.count === 1 ? '' : 's'} of slides/${done.file}:\n${r.hits.join('\n') || '  (none)'}`);
   console.log(`\nThen: ${ME} build "${dir}"`);
+  return done.file;
 }
 
 function cmdOwn(a) {
@@ -1030,8 +1348,127 @@ function cmdOwn(a) {
   build(dir, true);
   const r = reportLines(dir, done.file);
   console.log(`Added slides/${done.file}: a blank slide (headline, chart spot with empty options, commentary), slide ${after + 2} of ${files.length + 1}.`);
-  console.log('Write the chart options in its <script type="application/json"> (references/charts.md); or put a table, cards or text in the chart spot instead.');
+  console.log('Write the chart options in its <script type="application/json"> (references/make-your-own-slide.md); or put a table, cards or text in the chart spot instead.');
   console.log(`\nWords to write: edit only these ${r.count} lines of slides/${done.file}:\n${r.hits.join('\n')}`);
+  console.log(`\nThen: ${ME} build "${dir}"`);
+}
+
+/* ---------------------------------------------------------------- show */
+/* One library item's parts, never its code: what it is, its spots or data slots, and with data the columns that fit
+   each slot and a ready add command. */
+function cmdShow(a) {
+  const id = a.pos.find(x => /^[A-Z]{2}-\d{2,}$/.test(x));
+  if (!id) stop('give a library id: deck.js show LV-05 [<deck>] [--data <file> | --from "<report>::<section>::<table>"]');
+  const deckArg = a.pos.find(x => x !== id);
+  const base = deckArg ? (resolveDeck(deckArg) || process.cwd()) : process.cwd();
+  const I = lib(base, a.opt.library);
+  const c = I.copyOf(getItem(I, id));
+  const out = [], deck = deckArg ? `"${deckArg}"` : '<deck>';
+  const purpose = String(c.purpose || '').replace(/\s+/g, ' ');
+  out.push(`${id}  ${c.name}  (${c.type})`, purpose.length > 160 ? purpose.slice(0, purpose.lastIndexOf(' ', 157)) + ' ...' : purpose);
+  if (c.type === 'slide') {
+    const counts = {};
+    (c.spots || []).forEach(s => { const k = s.replace(/-\d+$/, ''); counts[k] = (counts[k] || 0) + 1; });
+    out.push(`Spots (the parts you word or fill): ${Object.entries(counts).map(([k, n]) => (n > 1 ? `${k} x${n}` : k)).join(', ')}`);
+    const holder = (c.spots || []).find(s => /^(chart|table|figure)/.test(s));
+    if (/^(chart|table)/.test(holder || '')) out.push(`Its own ${holder.replace(/-\d+$/, '')} shows sample values and takes no data. To show your data, add a chart, table or hero card id after this slide's id; it goes into the ${holder} spot.`);
+    else if (holder) out.push(`No chart spot. A chart, table or hero card id given with it goes into its ${holder} spot.`);
+    else out.push('No chart spot: it takes no chart and no data. A chart id given with it goes on a plain chart slide after it.');
+  } else if (c.type === 'theme') out.push(`A theme: deck.js theme ${deck} ${id}`);
+  else {
+    if (c.type === 'animation') out.push(`Moves: ${c.attaches || '-'}.  Fits: ${c.fits || '-'}.`);
+    if (!c.data.length) out.push(c.type === 'animation' ? 'No data slots: its data is in its own script, edited by hand.' : 'No data slots.');
+    else {
+      out.push('Data slots (fill each with --slot <name>=<column>):');
+      const w = Math.max(...c.data.map(s => s.name.length));
+      const kind = s => (s.kind === 'figure' ? 'one value (a column\'s first value, or typed as is)' : `${s.kind} column${/one or more|any/.test(s.count) ? 's' : ''}`);
+      const need = s => ({ one: 'required, one', 'one or more': 'required, one or more', optional: 'optional, one', any: 'optional, any number' }[s.count]);
+      const der = derivedSlots(c), comp = COMPUTE[id] || {};
+      c.data.forEach(s => {
+        out.push(`  ${s.name.padEnd(w)}  ${kind(s)}, ${need(s)}`);
+        if (der[s.name] || comp[s.name]) out.push(`  ${''.padEnd(w)}  worked out first: ${der[s.name] || 'from ' + comp[s.name].slice(1).join(' and ')}${comp[s.name] ? ` - add does this from ${comp[s.name][0] === 'rowpct' ? 'the columns you give it' : comp[s.name].slice(1).join(' and ')}` : ' - add cannot: make it a column in your data first, or type it in by hand after adding'}`);
+      });
+      calcInputs(id).filter(n => !c.data.some(s => s.name === n)).forEach(n => out.push(`  ${n.padEnd(w)}  number column, needed so add can work out ${Object.entries(comp).filter(([, v]) => v.includes(n)).map(([k]) => k).join(', ')}`));
+    }
+  }
+  if (c.recipe) out.push(`Recipe (shape the data first): ${c.recipe}`);
+  if ((a.opt.data || a.opt.from) && c.type !== 'theme') {
+    let rows, flag;
+    if (a.opt.from) { const [t, an, tb] = a.opt.from.split('::').map(s => s.trim()); if (!an) stop('--from "<report folder>::<section>[::<table>]"'); const folder = reportFolder(t, base); rows = runReport(folder, an, tb); flag = `--from "${a.opt.from}"`; }
+    else { const f = path.resolve(a.opt.data); if (!fs.existsSync(f)) stop(`data file ${f} not found`); rows = readTable(f); flag = `--data "${a.opt.data}"`; }
+    const cols = Object.keys(rows[0] || {}), isText = col => rows.slice(0, 200).some(r => typeof r[col] === 'string' && r[col] !== '');
+    const texts = cols.filter(isText), nums = cols.filter(x => !isText(x));
+    const slots = c.type === 'slide' ? null : c.data;
+    out.push(`Your data: ${rows.length} rows; text columns: ${texts.join(', ') || 'none'}; number columns: ${nums.join(', ') || 'none'}.`);
+    const chartId = c.type === 'slide' ? ((c.spots || []).some(s => /^(chart|table|figure)/.test(s)) ? 'CT-34' : null) : null;
+    /* the ready command never maps a raw column onto a slot that is worked out first; it gives the inputs add needs */
+    const useId = slots ? id : chartId, useItem = useId ? I.copyOf(getItem(I, useId)) : null;
+    const der = useItem ? derivedSlots(useItem) : {}, comp = COMPUTE[useId] || {};
+    const use = (useItem ? useItem.data : []).filter(s => !der[s.name] && !(comp[s.name] && comp[s.name][0] !== 'rowpct'))
+      .concat(calcInputs(useId).filter(n => !(useItem ? useItem.data : []).some(s => s.name === n)).map(n => ({ name: n, kind: 'number', count: 'one' })));
+    const distinct = col => new Set(rows.map(r => r[col])).size;
+    const tp = texts.filter(x => distinct(x) > 1).sort((x, y) => distinct(x) - distinct(y)), np = nums.slice(), pick = {};   // labels: the column with fewest groups first
+    use.forEach(s => {
+      const fit = s.kind === 'text' ? texts : s.kind === 'number' ? nums : cols;
+      if (slots) out.push(`  ${s.name}: ${fit.join(', ') || 'no column fits'}`);
+      if (/^one/.test(s.count)) { const pool = s.kind === 'text' ? tp : np; const v = pool.find(x => fit.includes(x)); if (v) { pick[s.name] = v; pool.splice(pool.indexOf(v), 1); } }
+    });
+    const slotArgs = Object.entries(pick).map(([k, v]) => `--slot ${k}=${v}`).join(' ');
+    const cmd = c.type === 'animation' ? `animate ${deck} ${id}` : c.type === 'slide' ? (chartId ? `add ${deck} ${id} ${chartId}` : `add ${deck} ${id}`) : `add ${deck} ${id}`;
+    if (c.type === 'slide' && !chartId) out.push('This slide takes no data; add it without --data.');
+    else out.push(`Ready to copy${chartId ? ` (with ${chartId} plain bars in its chart spot; any chart id works)` : ''}:`, `  ${ME} ${cmd} ${flag} ${slotArgs}`.replace(/\s+$/, ''));
+    const lab = Object.entries(pick).find(([k]) => (use.find(s => s.name === k) || {}).kind === 'text');
+    if (lab && distinct(lab[1]) < rows.length) out.push(`Raw rows: ${lab[1]} repeats, so the numbers are summed by it (dates by month when there are many).`);
+  } else if (c.type !== 'slide' && c.type !== 'theme' && c.data.length) out.push(`With --data <file> or --from "<report>::<section>::<table>", show lists the columns that fit each slot and a ready add command.`);
+  console.log(out.join('\n'));
+}
+
+/* ---------------------------------------------------------------- animate */
+/* An animation (AN id) as a slide of its own, or into a spot of an existing slide (a figure, a chart, a table),
+   chosen by what it moves (its attaches line). It plays each time its slide shows. */
+function cmdAnimate(a) {
+  const dir = deckOf(a.pos[0]);
+  const files = slideFiles(dir);
+  const rest = a.pos.slice(1), anId = rest.find(x => /^AN-\d{2,}$/.test(x)), key = rest.find(x => x !== anId);
+  if (!anId) return cmdAdd(a);   // no animation id: an ordinary add
+  if (a.opt.data && !fs.existsSync(path.resolve(a.opt.data))) stop(`data file ${path.resolve(a.opt.data)} not found`);
+  const I = lib(dir, a.opt.library);
+  const it = getItem(I, anId);
+  const fits = it.h.fits || '';
+  if (!/\bdeck\b/.test(fits) || /^none/.test(fits)) stop(`${anId} does not fit a deck (${fits}).`);
+  const { item, src, said } = prepareItem(I, a, dir, anId, /^animation$/, 'an animation');
+  item.html = item.html.replace(/^<div data-item="([^"]+)"/, '<div data-item="$1" data-trigger="manual"');
+  said.push(`${anId} moves: ${item.attaches || '-'}. It plays each time its slide shows, has a Replay button, and shows its end state in screenshots, print and PDF.`);
+  const own = (after, extra) => finishAdd(I, a, dir, files, after, sectionNear(dir, files, after, a.opt.section), null, anId, item, src, said.concat(extra || []));
+  if (key === undefined) return own(a.opt.after === undefined ? files.length - 1 : String(a.opt.after) === '0' ? -1 : findSlide(dir, files, a.opt.after));
+  /* into an existing slide: the spot that holds what it moves */
+  const at = findSlide(dir, files, key), f = files[at], p = path.join(dir, 'slides', f);
+  const tree = parse(fs.readFileSync(p, 'utf8'));
+  const spots = [];
+  walk(tree, (n, parent) => { const s = attr(n, 'data-spot'); if (s) { spots.push({ s, n, parent }); return false; } });
+  const holds = (x, kind) => kind === 'figure' ? /^figure/.test(x.s) || /^HC-/.test(attr(x.n, 'data-item') || '') : kind === 'table' ? /^table/.test(x.s) || /^TB-/.test(attr(x.n, 'data-item') || '') : /^chart/.test(x.s);
+  const kinds = (item.attaches || '').split(/,\s*/).map(k => (k === 'blocks' || k === 'steps' ? 'chart' : k)).concat(['chart', 'table', 'figure']);
+  let hit = a.opt.spot ? spots.find(x => x.s === a.opt.spot) : null;
+  for (const k of kinds) { if (hit) break; hit = spots.find(x => holds(x, k)); }
+  if (!hit) {   // nowhere to put it: a slide of its own right after, and say so
+    return own(at, [`MANUAL: slides/${f} has no ${a.opt.spot ? `spot "${a.opt.spot}"` : 'chart, table or figure spot'} for ${anId} (its spots: ${spots.map(x => x.s).join(', ')}), so it went on a slide of its own right after it. Keep both, or move it by hand.`]);
+  }
+  const ind = '      ';
+  const wrap = elements(parse(item.html.replace(/<p class="basis">[\s\S]*?<\/p>\s*/, '').split('\n').map((l, i) => (i ? ind + '  ' : '') + l).join('\n')))[0];
+  setAttr(wrap, 'data-spot', hit.s);
+  hit.parent.children[hit.parent.children.indexOf(hit.n)] = wrap;
+  let text = serialize(tree).replace(/\n*$/, '\n');
+  if (item.css && !text.includes(item.css)) text += `<style>\n${item.css}\n</style>\n`;
+  if (item.js && !text.includes(item.js)) text += `<script>\n${item.js}\n</script>\n`;
+  fs.writeFileSync(p, prettyScripts(text));
+  build(dir, true);
+  const r = reportLines(dir, f);
+  console.log(`slides/${f}: ${anId} is in its ${hit.s} spot (it replaced ${attr(hit.n, 'data-item') || hit.n.tag}).`);
+  const sid = readSlide(dir, f).id;
+  said.filter(s => !/^MANUAL:/.test(s)).forEach(s => console.log(fillTokens(s, dir, f, sid)));
+  const manual = said.filter(s => /^MANUAL:/.test(s));
+  if (manual.length) console.log(`\n${manual.map(s => fillTokens(s, dir, f, sid)).join('\n')}`);
+  console.log(`\nWords to write: edit only these ${r.count} line${r.count === 1 ? '' : 's'} of slides/${f}:\n${r.hits.join('\n') || '  (none)'}`);
   console.log(`\nThen: ${ME} build "${dir}"`);
 }
 
@@ -1094,9 +1531,12 @@ function cmdRefill(a) {
         inner = inner.replace(j[0], () => j[0].replace(j[1], JSON.stringify(o)));
       }
       let rows = applyShape(src.rows.map(r => Object.assign({}, r)), sh);
-      const map = {};
+      reapplyCalc(rows, unesc((open.match(/data-calc="([^"]*)"/) || [])[1] || ''));   // slots worked out from others
+      const still = [...new Set([...(open + inner).matchAll(/MANUAL ([a-z][a-z0-9-]*)/g)].map(m => m[1]))];
+      if (still.length) placeholders(rows, still.map(n => ({ name: n, kind: rows.some(r => typeof r[n] === 'string') ? 'text' : 'number' })), {});   // slots not yet given a column keep their placeholder
       const colsAttr = (open.match(/data-cols="([^"]*)"/) || [])[1];
-      if (colsAttr) unesc(colsAttr).split(';').map(s => s.trim()).filter(Boolean).forEach(s => { const [k, v] = s.split('='); map[k.trim()] = v.split(',').map(x => x.trim()); });
+      const map = colsAttr ? parseCols(unesc(colsAttr)) : {};
+      const typed = map.typed || new Set();
       const numCols = colsAttr ? [...new Set(Object.values(map).flat())].filter(c => rows.length && rows.some(r => typeof r[c] === 'number')) : [];
       let missing = [];
       const jsonCols = [];
@@ -1105,21 +1545,27 @@ function cmdRefill(a) {
         const cs = colsOfChart(o); if (!cs.length) return all;
         jsonCols.push(...cs);
         rows = tidy(rows, [...new Set(cs)].filter(c => rows.some(r => typeof r[c] === 'number')), fmt);
-        missing.push(...refillChart(o, rows));
+        missing.push(...refillChart(o, rows, fmt));
         return x + JSON.stringify(o) + y;
       });
       if (colsAttr && /data-rows|data-slot/.test(inner)) {
         const I = lib(dir, a.opt.library);
         const cols = Object.keys(rows[0] || {});
-        Object.values(map).flat().forEach(c => { if (!cols.includes(c)) missing.push(c); });
+        Object.values(map).flat().forEach(c => { if (!cols.includes(c) && !typed.has(c) && c !== 'count') missing.push(c); });
         if (!missing.length) inner = refillHtmlItem(I, inner, tidy(rows, numCols, fmt), map, fmt);
       }
       if (missing.length) { console.log(`slides/${f}: ${itemId} not refilled: ${srcText} has no column ${[...new Set(missing)].join(', ')} (columns: ${Object.keys(rows[0] || {}).join(', ')})`); continue; }
       if (rows.parts) { const shown = new Set(jsonCols); const extra = rows.parts.filter(p => !shown.has(p)); if (extra.length) console.log(`slides/${f}: new groups not on the chart: ${extra.join(', ')} (copy a series line, set its "name" and "col", refill again)`); }
       open = open.replace(/data-source="[^"]*"/, `data-source="${escA(srcText)}"`);
+      const manualNow = ((open.match(/data-manual="([^"]*)"/) || [])[1] || '').split(/\s+/).filter(Boolean);
+      if (manualNow.length) {   // a slot counts as filled once its placeholder is gone and this refill filled it from the data
+        const left = manualNow.filter(s => (open + inner).includes(`MANUAL ${s}`));
+        manualNow.filter(s => !left.includes(s)).forEach(s => console.log(`slides/${f}: ${s} is now filled from ${srcText}.`));
+        open = left.length ? open.replace(/data-manual="[^"]*"/, `data-manual="${left.join(' ')}"`) : open.replace(/\s*data-manual="[^"]*"/, '');
+      }
       if (sh) open = /data-shape="/.test(open) ? open.replace(/data-shape="[^"]*"/, `data-shape="${escA(shapeText(sh))}"`) : open.replace(/>$/, ` data-shape="${escA(shapeText(sh))}">`);
       edits.push({ start, end: end - 6, inner: open + inner });
-      const allCols = [...new Set([...jsonCols, ...Object.values(map).flat()])];
+      const allCols = [...new Set([...jsonCols, ...Object.values(map).flat()])].filter(c => !typed.has(c));
       const label = allCols.find(c => rows.some(r => typeof r[c] === 'string'));
       const values = allCols.filter(c => rows.length && rows.every(r => typeof r[c] === 'number'));
       console.log(`slides/${f}: ${itemId} refilled from ${srcText} (${rows.length} rows).`);
@@ -1141,6 +1587,18 @@ function cmdRefill(a) {
 }
 
 /* ---------------------------------------------------------------- list, theme, place */
+/* Where a slide's chart (or table) sits: left, right, full, above or below its text; '' when it has none. */
+function chartPlace(text) {
+  let spot = null, grid = null;
+  walk(parse(text), (n, parent) => { if (spot) return false; const s = attr(n, 'data-spot'); if (s && /^(chart|table)/.test(s)) { spot = n; grid = parent; return false; } });
+  if (!spot) return '';
+  const st = styleMap(grid && attr(grid, 'style')), kids = grid ? elements(grid) : [];
+  if (!grid || !/grid/.test(st.get('display') || '') || kids.length < 2) return 'full';
+  const cols = (st.get('grid-template-columns') || '').split(/\s+/).filter(Boolean);
+  const first = kids.indexOf(spot) === 0;
+  if (cols.length >= 2) return first ? 'left' : 'right';
+  return attr(grid, 'data-place') === 'full' ? 'full' : first ? 'above the text' : 'below the text';
+}
 function cmdList(a) {
   const dir = deckOf(a.pos[0]);
   const files = slideFiles(dir);
@@ -1149,7 +1607,8 @@ function cmdList(a) {
     const t = fs.readFileSync(path.join(dir, 'slides', f), 'utf8');
     const h = (t.match(/data-spot="headline"[^>]*>([\s\S]*?)<\/(h[12]|blockquote|p)>/) || t.match(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/) || [])[1] || '(no headline)';
     const from = (t.match(/data-from="([^"]*)"/) || [])[1];
-    const flags = [/WORD/.test(t) ? 'to word' : '', /data-sample/.test(t) ? 'sample values' : '', /data-source=/.test(t) ? 'has data' : ''].filter(Boolean);
+    const where = chartPlace(t);
+    const flags = [/WORD/.test(t) ? 'to word' : '', /data-sample/.test(t) ? 'sample values' : '', /data-source=/.test(t) ? 'has data' : '', /data-manual=/.test(t) ? 'MANUAL slot' : '', where ? `chart ${where}` : ''].filter(Boolean);
     console.log(`${String(i + 1).padStart(2)}  slides/${f}${from ? `  [${from}]` : ''}${flags.length ? `  (${flags.join(', ')})` : ''}\n    ${h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 120)}`);
   });
 }
@@ -1158,7 +1617,7 @@ function cmdTheme(a) {
   const id = a.pos[1];
   const I = lib(dir, a.opt.library);
   const t = applyTheme(dir, I.folder, id);
-  console.log(`Theme ${t.id} (${t.name}) is in ${path.join(dir, 'styles.css')}.${t.licence ? ` Its font's licence was copied beside it (${path.basename(t.licence)}); send it with the deck.` : ''} Open presentation.html again; no build needed.`);
+  console.log(`Theme ${t.id} (${t.name}) is in ${path.join(dir, 'styles.css')}.${t.licence ? ` Its embedded font's licence is beside it (${path.basename(t.licence)}); send it with the deck.` : ''}${t.removed ? ` Removed ${t.removed.join(', ')} (the previous theme's font licence).` : ''} Open presentation.html again; no build needed.`);
 }
 function styleMap(s) { const m = new Map(); (s || '').split(';').map(x => x.trim()).filter(Boolean).forEach(x => { const i = x.indexOf(':'); m.set(x.slice(0, i).trim(), x.slice(i + 1).trim()); }); return m; }
 const styleText = m => [...m].map(([k, v]) => `${k}: ${v};`).join(' ');
@@ -1207,19 +1666,23 @@ function cmdPlace(a) {
 
 /* ---------------------------------------------------------------- new */
 function cmdNew(a) {
-  if (!a.pos[0]) stop(`${ME} new <deck folder> --title "Short deck title" [--theme TH-02]`);
-  if (!a.opt.title) stop('--title "Short deck title" (30 characters at most: it shows in the bottom bar)');
-  const dir = path.resolve(a.pos[0]);
+  if (!a.pos[0]) stop(`${ME} new <name or folder> --title "Short deck title" [--theme TH-02]`);
+  const home = decksHome(process.cwd());
+  const dir = plainName(a.pos[0]) ? path.join(home.folder, a.pos[0]) : path.resolve(a.pos[0]);
   if (fs.existsSync(path.join(dir, 'presentation.html')) || fs.existsSync(path.join(dir, 'slides'))) stop(`${dir} already holds a deck`);
+  if (!a.opt.title) a.opt.title = pretty(path.basename(dir).replace(/^\d{4}-\d{2}-/, '').replace(/-/g, ' '));
   const I = lib(dir, a.opt.library);
-  const theme = themeFrom(I.folder, a.opt.theme || 'TH-01');
+  let tid = a.opt.theme || 'TH-01';
+  if (!/^TH-\d{2,}$/.test(tid)) { console.log(`Ignored --theme ${tid}: a theme is an id such as TH-02; using TH-01.`); tid = 'TH-01'; }
+  const theme = themeFrom(I.folder, tid);
   fs.mkdirSync(path.join(dir, 'slides'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'styles.css'), stylesCss(theme, fs.readFileSync(path.join(I.folder, 'host.css'), 'utf8')));
   fs.copyFileSync(path.join(I.folder, 'host-runtime.js'), path.join(dir, 'host-runtime.js'));
   if (theme.licence && fs.existsSync(path.join(I.folder, theme.licence))) fs.copyFileSync(path.join(I.folder, theme.licence), path.join(dir, path.basename(theme.licence)));
   fs.writeFileSync(path.join(dir, 'presentation.html'), `<title>${esc(a.opt.title)}</title>`);
   build(dir, true);
-  console.log(`Made ${dir}: presentation.html (built), styles.css (look and spacing, theme ${theme.id} ${theme.name}), slides/ (empty).`);
+  console.log(`Made ${dir}: presentation.html (built), styles.css (look and spacing, theme ${theme.id} ${theme.name}), slides/ (empty). Title: "${a.opt.title}".`);
+  if (plainName(a.pos[0])) console.log(`Folder: ${home.why}.`);
   console.log(`Library: ${I.folder}\nNext: ${ME} add "${dir}" FR-01 --headline "The answer as a sentence"`);
 }
 
@@ -1344,8 +1807,13 @@ function cmdCheck(a) {
 function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const a = parseArgs(rest);
-  const run = { new: cmdNew, add: cmdAdd, own: cmdOwn, list: cmdList, refill: cmdRefill, theme: cmdTheme, place: cmdPlace, check: cmdCheck, build: x => build(deckOf(x.pos[0])) }[cmd];
+  const run = { new: cmdNew, show: cmdShow, add: cmdAdd, animate: cmdAnimate, own: cmdOwn, list: cmdList, refill: cmdRefill, theme: cmdTheme, place: cmdPlace, check: cmdCheck, build: x => {
+    const d = deckOf(x.pos[0]), p = path.join(d, 'presentation.html');
+    if (x.opt.title && fs.existsSync(p)) fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(x.opt.title)}</title>`));   // a new title for the bottom bar
+    build(d);
+  } }[cmd];
   if (!run) { console.log(fs.readFileSync(__filename, 'utf8').match(/\/\*\*([\s\S]*?)\*\//)[1].replace(/^ \* ?/gm, '').trim()); process.exit(cmd ? 1 : 0); }
   run(a);
 }
-main();
+module.exports = { resolveDeck };
+if (require.main === module) main();

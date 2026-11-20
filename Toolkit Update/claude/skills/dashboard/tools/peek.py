@@ -429,8 +429,8 @@ def main() -> int:
     p = print
     p(f"# Inventory of {root}")
     if report["integrated_dashboard"]:
-        p("This is an integrated dashboard project (v2/v3 layout). Moving it: the dashboard skill, references/plan.md,"
-          " \"What old things become\" (last row). Only its own sections, Analysis pages and Pipeline scripts are listed to read.")
+        p("This is an integrated dashboard project (v2/v3 layout). Moving it: the dashboard skill, references/port-existing-work.md,"
+          " step 4 (last row). Only its own sections, Analysis pages and Pipeline scripts are listed to read.")
     if truncated:
         p(f"(stopped after {a.max_files} files; run on a subfolder or raise --max-files for the rest)")
     if not have_pandas:

@@ -33,6 +33,7 @@ Write good commit messages as you go: the automatic description is built from th
 `.claude/skills/` and `.claude/agents/` in this repo are the only copies of the factory-mode skill and the factory, security-review and git-shipper agents. On the desktop, the user-level folders are links to these, so edit them here and nowhere else.
 
 - The design library lives only in `Toolkit Update/design-library/` and is edited there (rebuild its index with `node build-index.js` in that folder).
-- The analysis toolbox skills, the `commentary-generator` and `design-librarian` agents and `brain-intake/` are edited in their working locations, never in `Toolkit Update/`, and copied into it.
+- `Toolkit Update/cosmo-overview/` (the static Cosmo overview site) also lives only there and is edited in place.
+- The analysis toolbox skills, the `commentary-generator`, `design-librarian` and `graphic-designer` agents and `brain-intake/` are edited in their working locations, never in `Toolkit Update/`, and copied into it.
 - `Toolkit Update/add-to-claude-md.md` and `Toolkit Update/README.md` are also edited in place. `Toolkit Update/add-to-main-agent.md` is a copy of `brain-intake/add-to-main-agent.md`; edit that one.
 - Apart from the design library and those pages, `Toolkit Update/` is a copy for installing elsewhere. After any such edit, refresh it with the commands in [its README](Toolkit%20Update/README.md).

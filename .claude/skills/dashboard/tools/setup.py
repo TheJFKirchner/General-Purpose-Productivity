@@ -133,6 +133,7 @@ def main() -> int:
     ap.add_argument("--theme", default="TH-01", help="the design library theme id (default TH-01)")
     ap.add_argument("--library", default=None, help="the design library folder, when it is not found by itself")
     ap.add_argument("--keep-examples", action="store_true", help="keep the example sections, sample data and report")
+    ap.add_argument("--allow-synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--no-install", action="store_true", help="skip npm install and the check")
     a = ap.parse_args()
 
@@ -153,9 +154,12 @@ def main() -> int:
     if dest == SKILL or SKILL in dest.parents:
         say("setup: the dashboard can't go inside the skill folder. Pick another place.")
         return 1
-    if "onedrive" in str(dest).lower():
-        say("note: this folder is in OneDrive. It works, but the installed packages (node_modules) sync slowly;")
-        say("      a folder outside OneDrive is better if you have the choice.")
+    synced = next((w for w in ("onedrive", "dropbox", "google drive", "icloud", "box sync") if w in str(dest).lower()), None)
+    if synced and not a.allow_synced:
+        say(f"setup: {dest} is inside a synced folder ({synced}). Dashboards are never built there (thousands of")
+        say("  package files sync badly). Put it in the workspace's dashboards folder, under the project's name,")
+        say("  and read the input files by their full path. Nothing was changed.")
+        return 1
 
     # ---- copy
     say(f"Setting up '{title}' in {dest}")
@@ -186,7 +190,7 @@ def main() -> int:
         cfg["filters"] = {"_note": "Fast filters: every value is already in the loaded tables, e.g. \"region\": {\"label\": \"Region\", \"column\": \"region\"}. "
                                    "Each lives at one level: no tab/section = the whole dashboard (above the tabs); \"tab\": \"<tab id>\" = that tab; \"section\": \"<section id>\" = that section. "
                                    "A filter whose data must be re-queried goes under parameters (slow, always dashboard-wide). "
-                                   "See the dashboard skill, references/data.md."}
+                                   "See the dashboard skill, references/add-data-and-filters.md."}
     port = free_port(8765)
     lib = find_library(a.library, dest)
     cfg.setdefault("server", {})["port"] = port

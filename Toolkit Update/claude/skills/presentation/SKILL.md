@@ -1,56 +1,63 @@
 ---
 name: presentation
-description: Build or change a slide deck (reveal.js HTML) from work that already exists - findings, an analysis report, a dashboard, a plan. Slides and charts are copied from the design library by id and filled with real data. Use for "make a deck / slides / presentation / readout on ...", or to change, restyle or refresh a deck. Not for .pptx, and not for a written report (that is the analysis skill).
+description: Build or change a slide deck (reveal.js HTML) from existing work - findings, an analysis report, a dashboard, a plan - by copying slides, charts, tables and animations from the design library and filling them with real data. Use for "make a deck / slides / presentation / readout on ...", or to change, restyle or refresh a deck. Not for .pptx, and not for a written report (that is the analysis skill).
 ---
 
 # Presentation
 
-A deck is a folder: `slides/` (one file per slide), `styles.css`, and `presentation.html`, built from them. Commands: `node <skill>/scripts/deck.js <command> <deck folder> ...`.
+This skill makes slide decks to present or to send: one HTML file that opens in a browser, with real charts. Every slide starts as a copy of a slide, chart, table, hero card or animation from the design library, is filled from a data file or an analysis report, and is then reworded by hand. The deck keeps a snapshot of its data and refreshes it with one command.
 
-## Gather first
-- Read the project's `CLAUDE.md` map: findings, reports, decks.
-- One message, one yes: the audience, the one message, the slide list (per slide: headline, library id). Told "just do it": list what you assumed.
+## A deck on disk
 
-## The design library
-- First that exists: the map's `Design library:` line; `design-library` beside `.claude`; `Toolkit Update/design-library`.
-- Pick ids from its `index/slides.md`, `index/charts.md`, `index/tables.md`, `index/hero-cards.md`; themes: `index/themes.md`.
+```
+decks/<name>/
+  slides/             one file per slide (01-<name>.html, 02-...), in order    edit these
+  styles.css          spacing and size settings at the top, then the theme     edit the settings only
+  presentation.html   the deck itself, rebuilt from slides/ every time         open and send it; never edit
+  host-runtime.js     the library's chart engine, copied in                    never edit
+  host-motion.js      the library's animation engine (decks with animations)   never edit
+  <font>-OFL.txt      the licence of a theme's font (themes TH-04 to TH-07)    send it with the deck
+  shots/              screenshots from the last look; sheet.png shows them all not sent
+```
 
-## Make a new deck
-`deck.js new <deck> --title "Short title" --theme TH-01`. Folder: the map's deck folder, else `deck/<yyyy-mm-name>/`. Add a map row.
+To send a deck: `presentation.html` and `styles.css` (and the licence file, if there is one). It needs internet to open.
 
-## Add from the library
-- `add <deck> LV-05`: that slide. `add <deck> LV-05 CT-35`: the chart in its chart spot. `add <deck> CT-35` (or TB, HC): a plain chart-and-commentary slide.
-- A slide's own chart shows sample values; data needs a chart, table or card id after the slide id.
-- Data: `--from "<report folder>::<section>::<table>"` or `--data <file.csv>`, with `--slot label=region --slot value=paid,allowed` (slots: the item's `data:` line). `--from "<report folder>"` alone lists its tables.
-- Raw rows are summed by the label column; many dates become months. `--by <column>`: one line or bar per group. `--top N`: first N rows (tables keep 8).
-- Also: `--headline "..."`, `--section Results`, `--after <slide>`, `--id <name>`, `--format $short|$0|0|,|%` ($0: whole dollars).
-- It prints the lines to reword (WORD). Edit only those.
+## How it works
 
-## Change a slide
-- `deck.js list <deck>` gives each slide's file. Edit that one file only.
-- A third line: copy a series line, set its `"name"` and `"col"`, then `refill <deck> <slide>`. One line per group on a slide already added: `refill <deck> <slide> --by <column>`.
-- Axes, colours, a highlight by name, a line at an average: `references/charts.md`.
-- Reorder: renumber the file. Remove: delete it.
+1. Pick each slide, chart, table or animation by its id from the design library's lists.
+2. Copy it in: one command writes it into the deck as its own slide file.
+3. Point it at data: the same command fills it from a data file or a report table and records where the data came from.
+4. Edit that one file: reword the lines marked WORD; change the chart if needed.
+5. Build, check and look at the contact sheet of every slide.
+6. When the data changes, one command refills every chart and lists figures in the words that went out of date.
+7. A slide you like can be saved back to the library as a new item.
 
-## The data changed
-- `refill <deck>` (or `<deck> <slide>`): new figures from each item's source; hand edits stay. A new file: `refill <deck> --data <new.csv>` (or `--from`).
-- It prints facts for every series and lists typed figures that went stale. Reword those.
+## Where decks go
 
-## Make your own
-`deck.js own <deck> --headline "..."`: headline, empty chart, bullets. Write the chart options, or put a table or cards in the chart spot.
-
-## Deck-level changes
-- Theme: `deck.js theme <deck> TH-02`. Spacing and sizes: the settings at the top of `styles.css`.
-- Where the chart sits: `deck.js place <deck> <slide> left|right|full`.
-
-## Build, check, look
-- Build: `deck.js build <deck>`; fix every line it lists.
-- Check: `deck.js check <deck>`: overflow, undrawn charts, cut-off or overlapping labels; exits 1 until clean.
-- Look: `node <skill>/scripts/screenshot.js <deck>`; read `<deck>/shots/sheet.png`. One fix pass, one re-shot.
+- By default in `decks/<name>/`, beside the project's `CLAUDE.md` (or in the current folder when there is none).
+- The map can override this. The map is the `## Map` section the toolbox skill writes into a project's `CLAUDE.md`; a row whose "Holds" cell starts with "Decks", or a line `Decks: <folder>`, names the decks folder.
 
 ## Rules
-- One point per slide, in its headline; the visual shows that number. Words: `references/slides.md`.
-- Every figure from a source named in the footnote. No real company names or logos in the deck's own words; names in the data may show.
-- Never edit `presentation.html` or the scripts.
-- User likes a visual or says save it: launch `design-librarian` with the slide file and the library folder.
-- A deck without `slides/` (older): edit `presentation.html` by hand; check, theme, screenshot work.
+
+- Before building, agree in one message: the audience, the one message, and the slide list (each slide's headline and library id). Told "just do it": list what you assumed.
+- One point per slide, stated in its headline as a sentence with its number.
+- Every figure comes from data named in the slide's footnote, never from memory.
+- A missing part never blocks: the slide goes in and a `MANUAL:` line says what to finish by hand.
+- Edit slide files only; never `presentation.html` or the scripts.
+- No real company names or logos in the deck's own words; names that are in the data may show.
+
+## To do this | Read this
+
+| To do this | Read this |
+| --- | --- |
+| Start a new deck | `references/make-a-deck.md` |
+| Add a slide, chart, table or hero card, with or without data | `references/add-a-slide.md` |
+| Add an animation | `references/add-an-animation.md` |
+| Reword a slide or change its chart | `references/change-a-slide.md` |
+| Make a slide the library does not have | `references/make-your-own-slide.md` |
+| Refresh the figures after the data changed | `references/refresh-the-data.md` |
+| Change the theme, spacing, title or where the chart sits | `references/change-theme-or-layout.md` |
+| Save a slide you like to the library | `references/save-a-visual-to-the-library.md` |
+| Work on a deck made before slides were separate files | `references/older-decks.md` |
+
+Deck engine adapted from github.com/ryanbbrown/revealjs-skill (MIT, see `LICENSE-revealjs-skill`).

@@ -16,6 +16,6 @@
     }
   },
   "parameters": {
-    "_note": "Slow filters: any choice whose data has to be pulled on its own (a snapshot month, a scenario). Changing one in the app re-runs Pipeline/run_all.py after a confirmation; one value for everyone. Fixed list: {label, default, options: [...]}; month ends: {label, type: month_end, default: latest, options: {month_ends: 12}}. See the dashboard skill, references/data.md."
+    "_note": "Slow filters: any choice whose data has to be pulled on its own (a snapshot month, a scenario). Changing one in the app re-runs Pipeline/run_all.py after a confirmation; one value for everyone. Fixed list: {label, default, options: [...]}; month ends: {label, type: month_end, default: latest, options: {month_ends: 12}}. See the dashboard skill, references/add-data-and-filters.md."
   }
 }
