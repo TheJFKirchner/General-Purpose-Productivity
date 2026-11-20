@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 
 /**
- * Keeps every item's shared blocks in step, checks every item, and writes index.md and index.html.
- * No dependencies. Usage: node build-index.js
+ * Keeps every item's shared blocks in step, checks every item, and writes index.md, index/<type>.md,
+ * index.html and host.css. No dependencies. Usage: node build-index.js
  *
  * Shared blocks, rewritten from one source each: the tokens (from the default theme item, or a
  * theme item's own tokens), the deck stylesheet in slides (from the presentation skill's
- * base-styles.css) and the item engine (from save-item.js).
+ * base-styles.css), the kit and chart styles and the item engine (from save-item.js and host-runtime.js).
  *
  * Fails on: a missing or duplicate id or name, an id in the wrong scheme or a retired one, a missing
  * purpose, anything loaded from outside the file except the ECharts CDN, and a colour or font
- * written outside the tokens (exceptions: `transparent`, `currentColor`, `font: inherit`). Items saved by the librarian (all but original-samples.txt) also fail
+ * written outside the tokens (exceptions: `transparent`, `currentColor`, `font: inherit`).
+ * Charts, tables and hero cards fail without a data note whose slots are all marked in the block; a chart
+ * block holding anything but its options, key and basis line, or printing over 6 KB from item.js; a slide
+ * without its spots (every chart and piece of text marked data-spot). Items saved by the librarian (all but original-samples.txt) also fail
  * on a date, on more than 6 data points, and on any word denylist.json recorded from their source. Not checked for colours: the tokens block, a theme's JSON block,
- * an embedded SOURCE block (the code to copy) and HTML comments. No other exceptions.
+ * an embedded SOURCE block (older saved items had one) and HTML comments. No other exceptions.
  */
 
 const fs = require('fs');
 const path = require('path');
 const S = require('./save-item.js');
+const I = require('./item.js');
 
 const problems = [];
 const say = (it, msg) => problems.push(`${it.rel}: ${msg}`);
@@ -33,6 +37,10 @@ S.items().forEach(it => {
   t = t.replace(/<script id="item-engine">[\s\S]*?<\/script>/, () => `<script id="item-engine">\n${S.ENGINE}\n</script>`);
   if (it.h.type === 'slide') t = t.replace(/<style id="deck-css">[\s\S]*?<\/style>/, () => `<style id="deck-css">\n${css}\n</style>`);
   t = t.replace(/<style id="kit-css">[\s\S]*?<\/style>/, () => `<style id="kit-css">\n${S.KIT_CSS}\n</style>`);
+  if (it.h.type === 'chart') {   // the basis line and key styles every chart shares
+    const cc = `<style id="chart-css">\n${S.CHART_CSS('.fit')}\n</style>`;
+    t = /<style id="chart-css">/.test(t) ? t.replace(/<style id="chart-css">[\s\S]*?<\/style>/, () => cc) : t.replace('<style id="item-css">', () => `${cc}\n<style id="item-css">`);
+  }
   if (t !== it.text) { fs.writeFileSync(it.file, t); synced++; }
 });
 
@@ -63,6 +71,16 @@ all.forEach(it => {
   if (!h.purpose || /^WRITE/i.test(h.purpose)) say(it, 'no purpose sentence');
   if (!h.from) say(it, 'no "from" (the skill it came from)');
   if (h.type === 'slide' && !new RegExp(`<section id="${h.name}" data-component="${h.id}"`).test(it.text)) say(it, 'the slide\'s section needs id="<name>" data-component="<id>"');
+  // what a project copies: data note and slots (charts, tables, hero cards), a bare chart block, slide spots (AUTHORING.md)
+  const block = I.blockOf(it.text);
+  if (/^(chart|table|hero card)$/.test(h.type)) I.slotProblems(h, block).forEach(p => say(it, p));
+  if (h.type === 'chart') {
+    I.chartBlockProblems(block).forEach(p => say(it, p));
+    const size = Buffer.byteLength(I.printed(it));
+    if (size > 6144) say(it, `node item.js prints ${(size / 1024).toFixed(1)} KB for it; a chart stays under 6 KB`);
+  }
+  if (h.type === 'slide') I.slideProblems(block).forEach(p => say(it, p));
+  if (h.recipe !== undefined && !h.data) say(it, 'a recipe without a data note');
   // an embedded font: only in a theme item, only @font-face rules with woff2 data: URIs, its licence file named and present.
   // That block is the one place a data: URI and a font name are allowed; it is checked here, then left out of the checks below.
   let text = it.text;
@@ -121,16 +139,22 @@ all.forEach(it => {
 const order = Object.keys(S.TYPES);
 const rank = id => { const g = S.GROUPS.indexOf(id.split('-')[0]); return (g === -1 ? 99 : g) * 1000 + Number(id.split('-')[1]); };
 const byType = t => all.filter(i => i.h.type === t).sort((a, b) => rank(a.h.id) - rank(b.h.id) || a.h.id.localeCompare(b.h.id));
+/* index.md holds every type; index/<type folder>.md one type each, so a reader can load only the charts. */
+const line = i => `- ${i.h.id} | ${i.h.type} | ${i.h.name} | ${i.h.purpose}${i.h.data ? ` | data: ${i.h.data}` : ''}`;
+const section = t => {
+  const list = byType(t), out = [`## ${t.charAt(0).toUpperCase() + t.slice(1)}s (\`${S.TYPES[t]}/\`)`, ''];
+  if (!list.length) out.push('None yet. Saved by the design-librarian agent.');
+  else list.forEach(i => out.push(line(i)));
+  return out.concat('');
+};
 const md = ['# Design library index', '',
-  'One line per item: id, type, name, purpose. An item is the file `<type folder>/<id>-<name>.html`; open only the one you need.', ''];
-order.forEach(t => {
-  const list = byType(t);
-  md.push(`## ${t.charAt(0).toUpperCase() + t.slice(1)}s (\`${S.TYPES[t]}/\`)`, '');
-  if (!list.length) { md.push('None yet. Saved by the design-librarian agent.', ''); return; }
-  list.forEach(i => md.push(`- ${i.h.id} | ${i.h.type} | ${i.h.name} | ${i.h.purpose}`));
-  md.push('');
-});
+  'One line per item: id, type, name, purpose and, for charts, tables and hero cards, the data it needs. An item is the file `<type folder>/<id>-<name>.html`; open only the one you need, or print its block with `node item.js <id>`. One type alone: `index/<type folder>.md`.', ''];
+order.forEach(t => md.push(...section(t)));
 fs.writeFileSync(path.join(S.LIB, 'index.md'), md.join('\n'));
+fs.mkdirSync(path.join(S.LIB, 'index'), { recursive: true });
+order.forEach(t => fs.writeFileSync(path.join(S.LIB, 'index', `${S.TYPES[t]}.md`), [`# Design library: ${t}s`, '', 'id | type | name | purpose' + (/^(chart|table|hero card)$/.test(t) ? ' | data it needs (AUTHORING.md, "Adding an item to a project")' : ''), ''].concat(section(t).slice(2)).join('\n')));
+/* what a project's page carries once to draw copied items (host-runtime.js is the other half) */
+fs.writeFileSync(path.join(S.LIB, 'host.css'), S.HOST_CSS());
 
 /* ---------- index.html ---------- */
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -318,5 +342,5 @@ ${cards}
 `);
 
 const counts = order.map(t => `${byType(t).length} ${t}`).join(', ');
-console.log(`${all.length} items (${counts}).${synced ? ` Shared blocks brought in step in ${synced}.` : ''} Wrote index.md and index.html.`);
+console.log(`${all.length} items (${counts}).${synced ? ` Shared blocks brought in step in ${synced}.` : ''} Wrote index.md, index/, index.html and host.css.`);
 if (problems.length) { console.log(`\n${problems.length} to fix:`); problems.forEach(p => console.log('  - ' + p)); process.exit(1); }

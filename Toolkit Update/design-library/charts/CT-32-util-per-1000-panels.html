@@ -5,6 +5,8 @@ type: chart
 name: util-per-1000-panels
 purpose: Use to compare utilisation per 1,000 members by service category against last year and a benchmark, each in its own unit; draws one small panel per category with last year and this year to date as bars, the benchmark as a line, and the change on each in the panel title, categories more than 5% over benchmark in blue.
 from: design-library
+data: period (text, one); value-1 (number, one); benchmark-1 (figure, optional); value-2 (number, optional); benchmark-2 (figure, optional); value-3 (number, optional); benchmark-3 (figure, optional); value-4 (number, optional); benchmark-4 (figure, optional)
+recipe: One panel per measure (1 to 4), each on its own scale: value is the rate per 1,000 for each period; the panel titles (name, latest rate, changes) and each axis max are set by hand
 -->
 <html lang="en">
 <head>
@@ -47,8 +49,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
 .chart { position: relative; flex: 1; min-height: 0; }
 .source { display: none; }
 </style>
+<style id="chart-css">
+.fit > p.basis { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.fit > .key { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--muted); }
+.fit > .key span { display: inline-flex; align-items: center; gap: 7px; }
+.fit > .key i { display: inline-block; width: 28px; border-top: 3px solid var(--blue); }
+.fit > .key i.dash { border-top-style: dashed; } .fit > .key i.dot { border-top-style: dotted; } .fit > .key i.thin { border-top-width: 2px; }
+.fit > .key i.mid { border-top-color: var(--muted); } .fit > .key i.lite { border-top-color: var(--chart-muted); } .fit > .key i.good { border-top-color: var(--good); }
+.fit > .key i.box { width: 16px; height: 10px; border: 0; border-radius: 3px; background: var(--blue); } .fit > .key i.box.lite { background: var(--chart-muted); } .fit > .key i.box.empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--chart-muted); }
+</style>
 <style id="item-css">
-.fit p.basis { font-size: 13px; line-height: 1.4; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 </head>
@@ -75,7 +85,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     },
     {
       "text": "{n|Outpatient visits}\n{v|1,900}{u| per 1,000 in 2026}\n{d|+4% on 2025, +6% on benchmark}",
-      "left": "34.3%",
+      "left": "51%",
       "top": 0,
       "textStyle": {
         "rich": {
@@ -87,22 +97,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       }
     },
     {
-      "text": "{n|Emergency visits}\n{v|190}{u| per 1,000 in 2026}\n{d|−3% on 2025, −5% on benchmark}",
-      "left": "67.6%",
-      "top": 0,
-      "textStyle": {
-        "rich": {
-          "n": { "fontSize": 14, "fontWeight": 600, "color": "var(--navy)", "lineHeight": 20 },
-          "v": { "fontSize": 18, "fontWeight": 700, "color": "var(--ink)" },
-          "u": { "fontSize": 12, "color": "var(--muted)" },
-          "d": { "fontSize": 12, "color": "var(--muted)", "lineHeight": 18 }
-        }
-      }
-    },
-    {
       "text": "{n|Office visits}\n{v|4,300}{u| per 1,000 in 2026}\n{d|+4% on 2025, +5% on benchmark}",
       "left": "1.0%",
-      "top": "49%",
+      "top": "40%",
       "textStyle": {
         "rich": {
           "n": { "fontSize": 14, "fontWeight": 600, "color": "var(--navy)", "lineHeight": 20 },
@@ -114,8 +111,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     },
     {
       "text": "{n|High-tech imaging}\n{v|160}{u| per 1,000 in 2026}\n{d|+7% on 2025, +14% on benchmark}",
-      "left": "34.3%",
-      "top": "49%",
+      "left": "51%",
+      "top": "40%",
       "textStyle": {
         "rich": {
           "n": { "fontSize": 14, "fontWeight": 600, "color": "var(--navy)", "lineHeight": 20 },
@@ -124,62 +121,91 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
           "d": { "fontSize": 12, "color": "var(--bad)", "lineHeight": 18 }
         }
       }
-    },
-    {
-      "text": "{n|Prescriptions}\n{v|11,800}{u| per 1,000 in 2026}\n{d|+3% on 2025, −2% on benchmark}",
-      "left": "67.6%",
-      "top": "49%",
-      "textStyle": {
-        "rich": {
-          "n": { "fontSize": 14, "fontWeight": 600, "color": "var(--navy)", "lineHeight": 20 },
-          "v": { "fontSize": 18, "fontWeight": 700, "color": "var(--ink)" },
-          "u": { "fontSize": 12, "color": "var(--muted)" },
-          "d": { "fontSize": 12, "color": "var(--muted)", "lineHeight": 18 }
-        }
-      }
     }
   ],
   "grid": [
-    { "left": "1.0%", "width": "29%", "top": 72, "height": "22%", "containLabel": true },
-    { "left": "34.3%", "width": "29%", "top": 72, "height": "22%", "containLabel": true },
-    { "left": "67.6%", "width": "29%", "top": 72, "height": "22%", "containLabel": true },
-    { "left": "1.0%", "width": "29%", "top": "67%", "height": "22%", "containLabel": true },
-    { "left": "34.3%", "width": "29%", "top": "67%", "height": "22%", "containLabel": true },
-    { "left": "67.6%", "width": "29%", "top": "67%", "height": "22%", "containLabel": true }
+    { "left": "1.0%", "width": "46%", "top": 72, "height": "23%", "containLabel": true },
+    { "left": "51%", "width": "46%", "top": 72, "height": "23%", "containLabel": true },
+    { "left": "1.0%", "width": "46%", "top": "63%", "height": "23%", "containLabel": true },
+    { "left": "51%", "width": "46%", "top": "63%", "height": "23%", "containLabel": true }
   ],
   "xAxis": [
-    { "gridIndex": 0, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } },
-    { "gridIndex": 1, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } },
-    { "gridIndex": 2, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } },
-    { "gridIndex": 3, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } },
-    { "gridIndex": 4, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } },
-    { "gridIndex": 5, "type": "category", "data": ["2025", "2026 YTD"], "axisLabel": { "fontSize": 12 } }
+    {
+      "slot": "period",
+      "gridIndex": 0,
+      "type": "category",
+      "data": ["2025", "2026 YTD"],
+      "axisLabel": { "fontSize": 12 }
+    },
+    {
+      "slot": "period",
+      "gridIndex": 1,
+      "type": "category",
+      "data": ["2025", "2026 YTD"],
+      "axisLabel": { "fontSize": 12 }
+    },
+    {
+      "slot": "period",
+      "gridIndex": 2,
+      "type": "category",
+      "data": ["2025", "2026 YTD"],
+      "axisLabel": { "fontSize": 12 }
+    },
+    {
+      "slot": "period",
+      "gridIndex": 3,
+      "type": "category",
+      "data": ["2025", "2026 YTD"],
+      "axisLabel": { "fontSize": 12 }
+    }
   ],
   "yAxis": [
-    { "gridIndex": 0, "type": "value", "min": 0, "max": 80, "splitNumber": 2, "axisLabel": { "fontSize": 11 } },
-    { "gridIndex": 1, "type": "value", "min": 0, "max": 3000, "splitNumber": 2, "axisLabel": { "fontSize": 11 } },
-    { "gridIndex": 2, "type": "value", "min": 0, "max": 250, "splitNumber": 2, "axisLabel": { "fontSize": 11 } },
-    { "gridIndex": 3, "type": "value", "min": 0, "max": 6000, "splitNumber": 2, "axisLabel": { "fontSize": 11 } },
-    { "gridIndex": 4, "type": "value", "min": 0, "max": 200, "splitNumber": 2, "axisLabel": { "fontSize": 11 } },
-    { "gridIndex": 5, "type": "value", "min": 0, "max": 15000, "splitNumber": 2, "axisLabel": { "fontSize": 11 } }
+    {
+      "gridIndex": 0,
+      "type": "value",
+      "min": 0,
+      "max": 80,
+      "splitNumber": 2,
+      "axisLabel": { "fontSize": 11 }
+    },
+    {
+      "gridIndex": 1,
+      "type": "value",
+      "min": 0,
+      "max": 3000,
+      "splitNumber": 2,
+      "axisLabel": { "fontSize": 11 }
+    },
+    {
+      "gridIndex": 2,
+      "type": "value",
+      "min": 0,
+      "max": 6000,
+      "splitNumber": 2,
+      "axisLabel": { "fontSize": 11 }
+    },
+    {
+      "gridIndex": 3,
+      "type": "value",
+      "min": 0,
+      "max": 200,
+      "splitNumber": 2,
+      "axisLabel": { "fontSize": 11 }
+    }
   ],
   "series": [
     {
+      "slot": "value-1",
       "type": "bar",
       "xAxisIndex": 0,
       "yAxisIndex": 0,
       "barWidth": "46%",
       "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
       "data": [
-        {
-          "value": 60,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "60", "color": "var(--ink)" }
-        },
+        60,
         {
           "value": 62,
-          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "62", "color": "var(--ink)" }
+          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" }
         }
       ],
       "markLine": {
@@ -187,25 +213,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
         "symbol": "none",
         "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
         "label": { "position": "insideEndTop", "formatter": "Benchmark 58", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 58 }]
-      }
+        "data": [{ "slot": "benchmark-1:yAxis", "yAxis": 58 }]
+      },
+      "itemStyle": { "color": "var(--chart-muted)" }
     },
     {
+      "slot": "value-2",
       "type": "bar",
       "xAxisIndex": 1,
       "yAxisIndex": 1,
       "barWidth": "46%",
       "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
       "data": [
-        {
-          "value": 1820,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "1,820", "color": "var(--ink)" }
-        },
+        { "value": 1820, "label": { "formatter": "1,820" } },
         {
           "value": 1900,
           "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "1,900", "color": "var(--ink)" }
+          "label": { "formatter": "1,900" }
         }
       ],
       "markLine": {
@@ -213,51 +237,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
         "symbol": "none",
         "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
         "label": { "position": "insideEndTop", "formatter": "Benchmark 1,800", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 1800 }]
-      }
+        "data": [{ "slot": "benchmark-2:yAxis", "yAxis": 1800 }]
+      },
+      "itemStyle": { "color": "var(--chart-muted)" }
     },
     {
+      "slot": "value-3",
       "type": "bar",
       "xAxisIndex": 2,
       "yAxisIndex": 2,
       "barWidth": "46%",
       "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
       "data": [
-        {
-          "value": 195,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "195", "color": "var(--ink)" }
-        },
-        {
-          "value": 190,
-          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--muted)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "190", "color": "var(--ink)" }
-        }
-      ],
-      "markLine": {
-        "silent": true,
-        "symbol": "none",
-        "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
-        "label": { "position": "insideEndTop", "formatter": "Benchmark 200", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 200 }]
-      }
-    },
-    {
-      "type": "bar",
-      "xAxisIndex": 3,
-      "yAxisIndex": 3,
-      "barWidth": "46%",
-      "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
-      "data": [
-        {
-          "value": 4150,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "4,150", "color": "var(--ink)" }
-        },
+        { "value": 4150, "label": { "formatter": "4,150" } },
         {
           "value": 4300,
           "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "4,300", "color": "var(--ink)" }
+          "label": { "formatter": "4,300" }
         }
       ],
       "markLine": {
@@ -265,25 +261,22 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
         "symbol": "none",
         "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
         "label": { "position": "insideEndTop", "formatter": "Benchmark 4,100", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 4100 }]
-      }
+        "data": [{ "slot": "benchmark-3:yAxis", "yAxis": 4100 }]
+      },
+      "itemStyle": { "color": "var(--chart-muted)" }
     },
     {
+      "slot": "value-4",
       "type": "bar",
-      "xAxisIndex": 4,
-      "yAxisIndex": 4,
+      "xAxisIndex": 3,
+      "yAxisIndex": 3,
       "barWidth": "46%",
       "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
       "data": [
-        {
-          "value": 150,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "150", "color": "var(--ink)" }
-        },
+        150,
         {
           "value": 160,
-          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "160", "color": "var(--ink)" }
+          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--blue)", "borderWidth": 1.5, "borderType": "dashed" }
         }
       ],
       "markLine": {
@@ -291,34 +284,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
         "symbol": "none",
         "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
         "label": { "position": "insideEndTop", "formatter": "Benchmark 140", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 140 }]
-      }
-    },
-    {
-      "type": "bar",
-      "xAxisIndex": 5,
-      "yAxisIndex": 5,
-      "barWidth": "46%",
-      "label": { "show": true, "position": "insideBottom", "distance": 6, "fontSize": 12, "fontWeight": 600 },
-      "data": [
-        {
-          "value": 11500,
-          "itemStyle": { "color": "var(--chart-muted)" },
-          "label": { "formatter": "11,500", "color": "var(--ink)" }
-        },
-        {
-          "value": 11800,
-          "itemStyle": { "color": "var(--tint)", "borderColor": "var(--muted)", "borderWidth": 1.5, "borderType": "dashed" },
-          "label": { "formatter": "11,800", "color": "var(--ink)" }
-        }
-      ],
-      "markLine": {
-        "silent": true,
-        "symbol": "none",
-        "lineStyle": { "color": "var(--navy)", "type": "solid", "width": 2 },
-        "label": { "position": "insideEndTop", "formatter": "Benchmark 12,000", "color": "var(--navy)", "fontSize": 12 },
-        "data": [{ "yAxis": 12000 }]
-      }
+        "data": [{ "slot": "benchmark-4:yAxis", "yAxis": 140 }]
+      },
+      "itemStyle": { "color": "var(--chart-muted)" }
     }
   ]
 }
@@ -333,17 +301,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
 -->
 </div>
 <script id="item-engine">
+window.ItemEngineInside = true;
+/* host-runtime.js: draws copied design-library items (AUTHORING.md, "What the host page provides"). Copy verbatim, after
+   ECharts, the theme tokens and host.css. ItemHost.draw() redraws; ItemHost.prepare(option, box) readies an option. */
 (function () {
-  var root = document.documentElement, body = document.body;
+  var root = document.documentElement;
   function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
   function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
-  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
-     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
-     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
-  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
-  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
-  function moves(box) { return (forced || !still) && marked(box); }
-  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
   function resolve(o) {
     Object.keys(o).forEach(function (k) {
       var v = o[k];
@@ -359,25 +323,44 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
       legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
       bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
-      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15, color: css('--ink'), textBorderWidth: 0 } },
       scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
       markLine: { label: { fontSize: 14, color: css('--muted') } },
       pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
     };
   }
-  /* Hover: a one-line tooltip and a light emphasis on the hovered mark. Nothing moves, fades or redraws on hover.
-     Off for one chart with data-hover="off" (or the item's body), or "tooltip": {"show": false} in its JSON;
-     an item may supply its own tooltip.formatter. Off when exported (html.is-export) and never during a play. */
-  function hoverOff(box) { return root.classList.contains('is-export') || body.getAttribute('data-hover') === 'off' || box.getAttribute('data-hover') === 'off'; }
-  function fmt(t, p, v) {
-    return String(t).split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
-      .replace(/{@[(d+)]}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  /* Number formats in formatter strings: {value:short} or {c:short} gives 7M, 1.2K; {value:comma} or {c:comma} gives 7,000,000. */
+  function short(v) {
+    if (typeof v !== 'number') return v;
+    var a = Math.abs(v), u = a >= 1e9 ? ['B', 1e9] : a >= 1e6 ? ['M', 1e6] : a >= 1e3 ? ['K', 1e3] : ['', 1], n = v / u[1];
+    return n.toLocaleString('en-US', { maximumFractionDigits: u[1] === 1 ? 2 : Math.abs(n) < 10 ? 1 : 0 }) + u[0];
   }
+  function comma(v) { return typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v; }
+  var CODED = /\{(?:c|value):(?:short|comma)\}/;
+  function fmt(t, p, v) {
+    return String(t).replace(/\{(?:c|value):short\}/g, function () { return short(v); }).replace(/\{(?:c|value):comma\}/g, function () { return comma(v); })
+      .split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/\{@\[(\d+)\]\}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function tplOf(x) { return x ? (x._tpl || (typeof x.formatter === 'string' ? x.formatter : null)) : null; }
+  /* formatter strings with a number format become functions; the string stays in _tpl for the tooltip */
+  function formats(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+        o._tpl = v;
+        o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
+      } else if (v && typeof v === 'object') formats(v);
+    });
+  }
+  /* Hover: a one-line tooltip and a light emphasis; nothing moves. Off with data-hover="off" (chart or body),
+     "tooltip": {"show": false}, or when exported (html.is-export). An item may give its own tooltip.formatter. */
+  function hoverOff(box) { return root.classList.contains('is-export') || document.body.getAttribute('data-hover') === 'off' || !!(box && box.getAttribute('data-hover') === 'off'); }
   function hover(o) {
     var list = [].concat(o.series || []);
     var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
     var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
-    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a && a.axisLabel && typeof a.axisLabel.formatter === 'string' ? a.axisLabel.formatter : null; };
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a ? tplOf(a.axisLabel) : null; };
     var lines = list.some(function (x) { return x.type === 'line'; });
     var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
     function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
@@ -385,12 +368,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       var x = list[p.seriesIndex] || {}, v = p.value;
       if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
       if (v == null || v === '-') return null;
-      var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
-      var shared = x.label && typeof x.label.formatter === 'string' ? x.label.formatter : null;
-      var t = own || shared || axisFmt(x.yAxisIndex || x.xAxisIndex);
-      return t ? fmt(t, p, v) : (typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v));
+      var t = tplOf(p.data && p.data.label) || tplOf(x.label) || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : comma(v);
     }
-    /* the series name goes in front once, never when the value text (its own label formatter) already carries it */
+    /* the series name goes in front once, never when the value text already carries it */
     function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
     var tip = {
       show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
@@ -412,14 +393,35 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     };
     o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
     list.forEach(function (x) {
-      if (x.emphasis && !x.emphasis.disabled) return;   /* the item's own emphasis stands */
+      if (x.emphasis && !x.emphasis.disabled) return;
       var w = x.lineStyle && x.lineStyle.width || 3;
       x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
         : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
       if (hidden(x)) x.emphasis = { disabled: true };
     });
   }
-  /* Tables: a native tooltip on each cell (row, column: value) and a subtle highlight (kit CSS). */
+  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  function endLabels(o) {
+    var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
+    [].concat(o.series || []).forEach(function (s) {
+      var e = s.endLabel;
+      if (s.type !== 'line' || !e || !e.show) return;
+      if (e.textBorderWidth == null) e.textBorderWidth = 0;
+      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+    });
+  }
+  function prepare(o, box) {
+    resolve(o);
+    var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+    if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+    endLabels(o);
+    if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+    else hover(o);
+    formats(o);
+    o.animation = false;
+    return o;
+  }
   function tableTips() {
     Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
       var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
@@ -427,33 +429,48 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
     });
   }
+  /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
   var drawn = 0;
-  function draw(play) {
+  function draw(animate) {
     if (!window.echarts) return;
     var name = 'item' + (++drawn);
     echarts.registerTheme(name, theme());
     Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
       var src = box.querySelector('script[type="application/json"]');
       if (!src) return;
-      var o = JSON.parse(src.textContent);
-      resolve(o);
-      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
-      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
-      var anim = play && moves(box);
-      var off = hoverOff(box) || (o.tooltip && o.tooltip.show === false);
-      if (off) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
-      else hover(o);
-      o.animation = !!anim;
+      var o = prepare(JSON.parse(src.textContent), box);
+      var anim = !!(animate && animate(box));
+      o.animation = anim;
       if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
       if (box._chart) box._chart.dispose();
       if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
       box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
       box._chart.setOption(o);
-      /* no hover while it plays: the pointer is ignored until the draw-in is over */
       if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
     });
     window.dispatchEvent(new Event('item:draw'));
   }
+  function chart(el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; }
+  window.ItemHost = { css: css, theme: theme, prepare: prepare, draw: draw, chart: chart, tableTips: tableTips };
+  if (window.ItemEngineInside) return;   /* inside a library item its engine drives drawing and motion */
+  window.ItemEngine = { motion: function () { return false; }, play: function () {}, force: function () {}, chart: chart, redraw: function () { draw(); } };
+  window.itemRedraw = window.ItemEngine.redraw;
+  function start() { tableTips(); draw(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  var t = null;
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.resize(); }); }, 100); });
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+})();
+(function () {
+  var root = document.documentElement, body = document.body, H = window.ItemHost;
+  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
+     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
+     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
+  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
+  function moves(box) { return (forced || !still) && marked(box); }
+  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
+  function draw(play) { H.draw(play ? moves : null); }
   /* Count-up: <span data-tick-up="1240" data-prefix="$" data-suffix="K" data-decimals="0">$1,240K</span>.
      The written text is the final value, so the item reads right with motion off. */
   function show(el, v) {
@@ -555,13 +572,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     motion: function () { return forced || !still; },   /* may motion run now: true unless reduced and no explicit action */
     play: function () { replay(true); },                 /* an item's own Play control: a full explicit replay */
     force: function () { force(); },                     /* an item's own step or switch control: let its motion run */
-    chart: function (el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; },
+    chart: H.chart,
     redraw: function () { draw(false); }
   };
   window.itemRedraw = window.ItemEngine.redraw;
   window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
   window.addEventListener('resize', function () { fit(); draw(false); });
-  tableTips(); fit(); replay();
+  H.tableTips(); fit(); replay();
 })();
 </script>
 </body>

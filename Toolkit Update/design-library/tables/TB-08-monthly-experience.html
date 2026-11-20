@@ -5,6 +5,8 @@ type: table
 name: monthly-experience
 purpose: Monthly experience by incurral month: member months, paid, IBNR, incurred, percent complete, PMPM against plan and the variance, with year-to-date and rolling-12 rows and months under 95% complete marked as estimates; for the regular monthly experience report.
 from: design-library
+data: label (text, one); members (number, one); paid (number, one); ibnr (number, one); incurred (number, one); complete (text, one); pmpm (number, one); plan (number, one); gap (text, one); gap-pct (text, one); status (text, one); ytd-members (figure, optional); ytd-incurred (figure, optional); ytd-pmpm (figure, optional); ytd-plan (figure, optional); ytd-gap (figure, optional); ytd-gap-pct (figure, optional)
+recipe: One row per incurral month; incurred = paid + IBNR; pmpm = incurred ÷ member months; gap: pmpm minus plan with its arrow; status: bad over plan, good under; mark months under 95% complete by hand (class est and the est. tag); the prior-period and rolling 12 rows by hand
 -->
 <html lang="en">
 <head>
@@ -134,13 +136,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wash);
 <div class="fit">
 <!-- ITEM:START -->
 <div class="lib-panel">
-<div class="lib-panelhead"><div><h2>Year to date runs $3.10 PMPM (0.7%) over plan; the largest overruns are still estimates</h2><p class="cap">Experience by incurral month, $ PMPM against plan; <span class="tag">est.</span> under 95% complete, incurred includes IBNR</p></div><button type="button" class="lib-mini" id="csv">CSV</button></div>
+<div class="lib-panelhead"><div><h2>Year to date runs $3.10 PMPM (0.7%) over plan; the largest overruns are still estimates</h2><p class="cap">Experience by incurral month, $ PMPM against plan; <span class="tag">est.</span> under 95% complete, incurred includes IBNR</p></div><button type="button" class="lib-mini" data-csv>CSV</button></div>
 <div class="tw">
 <table class="lib-table mx">
 <thead><tr><th class="left">Incurred</th><th>Member months</th><th>Paid ($K)</th><th>IBNR ($K)</th><th>Incurred ($K)</th><th>Complete</th><th class="pm">PMPM ($)</th><th>Plan ($)</th><th class="left">Against plan</th></tr></thead>
-<tbody>
+<tbody data-rows>
 <tr class="pri"><td class="left">Jul to Dec, prior</td><td>59,400</td><td>23,880</td><td>20</td><td>23,900</td><td>99.9%</td><td class="pm pmv">402.36</td><td>400.00</td><td class="left"><span class="lib-delta bad">&#9650; +2.36</span><span class="pc">+0.6%</span></td></tr>
-<tr><td class="left">Jan</td><td>10,000</td><td>4,120</td><td>30</td><td>4,150</td><td>99.3%</td><td class="pm pmv">415.00</td><td>420.00</td><td class="left"><span class="lib-delta good">&#9660; &minus;5.00</span><span class="pc">&minus;1.2%</span></td></tr>
+<tr data-template><td class="left" data-slot="label">Jan</td><td data-slot="members">10,000</td><td data-slot="paid">4,120</td><td data-slot="ibnr">30</td><td data-slot="incurred">4,150</td><td data-slot="complete">99.3%</td><td class="pm pmv" data-slot="pmpm">415.00</td><td data-slot="plan">420.00</td><td class="left"><span class="lib-delta good" data-slot="gap status@class">&#9660; &minus;5.00</span><span class="pc" data-slot="gap-pct">&minus;1.2%</span></td></tr>
 <tr><td class="left">Feb</td><td>10,050</td><td>4,120</td><td>60</td><td>4,180</td><td>98.6%</td><td class="pm pmv">415.92</td><td>420.00</td><td class="left"><span class="lib-delta good">&#9660; &minus;4.08</span><span class="pc">&minus;1.0%</span></td></tr>
 <tr><td class="left">Mar</td><td>10,100</td><td>4,190</td><td>110</td><td>4,300</td><td>97.4%</td><td class="pm pmv">425.74</td><td>420.00</td><td class="left"><span class="lib-delta bad">&#9650; +5.74</span><span class="pc">+1.4%</span></td></tr>
 <tr class="est"><td class="left">Apr<span class="tag">est.</span></td><td>10,100</td><td>3,980</td><td>280</td><td class="e">4,260</td><td>93.4%</td><td class="pm pmv e">421.78</td><td>420.00</td><td class="left e"><span class="lib-delta bad">&#9650; +1.78</span><span class="pc">+0.4%</span></td></tr>
@@ -148,7 +150,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wash);
 <tr class="est on"><td class="left">Jun<span class="tag">est.</span></td><td>10,200</td><td>2,420</td><td>1,980</td><td class="e">4,400</td><td>55.0%</td><td class="pm pmv e">431.37</td><td>420.00</td><td class="left e"><span class="lib-delta bad">&#9650; +11.37</span><span class="pc">+2.7%</span></td></tr>
 </tbody>
 <tfoot>
-<tr><td class="left">Year to date</td><td>60,600</td><td>22,530</td><td>3,110</td><td>25,640</td><td>87.9%</td><td class="pm">423.10</td><td>420.00</td><td class="left"><span class="lib-delta bad">&#9650; +3.10</span><span class="pc">+0.7%</span></td></tr>
+<tr><td class="left">Year to date</td><td data-slot="ytd-members">60,600</td><td>22,530</td><td>3,110</td><td data-slot="ytd-incurred">25,640</td><td>87.9%</td><td class="pm" data-slot="ytd-pmpm">423.10</td><td data-slot="ytd-plan">420.00</td><td class="left"><span class="lib-delta bad" data-slot="ytd-gap">&#9650; +3.10</span><span class="pc" data-slot="ytd-gap-pct">+0.7%</span></td></tr>
 <tr><td class="left">Rolling 12 months</td><td>120,000</td><td>46,410</td><td>3,130</td><td>49,540</td><td>93.7%</td><td class="pm">412.83</td><td>410.10</td><td class="left"><span class="lib-delta bad">&#9650; +2.73</span><span class="pc">+0.7%</span></td></tr>
 </tfoot>
 </table>
@@ -159,41 +161,28 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wash);
 </div>
 
 <script id="item-js">
-/* CSV of the sample rows: what the table shows, as a file */
-function saveCsv(name, cols, rows) {
-  var cell = function (v) { var s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  var text = [cols.map(cell).join(',')].concat(rows.map(function (r) { return r.map(cell).join(','); })).join('\n');
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
-  a.download = name; document.body.appendChild(a); a.click(); a.remove();
-}
-document.getElementById('csv').addEventListener('click', function () {
-  saveCsv('monthly-experience.csv', ['Incurred', 'Estimate', 'Member months', 'Paid ($K)', 'IBNR ($K)', 'Incurred ($K)', 'Complete', 'PMPM', 'Plan PMPM', 'Against plan', 'Against plan (%)'], [
-    ['Jul to Dec, prior year', '', 59400, 23880, 20, 23900, 0.999, 402.36, 400.00, 2.36, 0.006],
-    ['Jan', '', 10000, 4120, 30, 4150, 0.993, 415.00, 420.00, -5.00, -0.012],
-    ['Feb', '', 10050, 4120, 60, 4180, 0.986, 415.92, 420.00, -4.08, -0.010],
-    ['Mar', '', 10100, 4190, 110, 4300, 0.974, 425.74, 420.00, 5.74, 0.014],
-    ['Apr', 'est.', 10100, 3980, 280, 4260, 0.934, 421.78, 420.00, 1.78, 0.004],
-    ['May', 'est.', 10150, 3700, 650, 4350, 0.851, 428.57, 420.00, 8.57, 0.020],
-    ['Jun', 'est.', 10200, 2420, 1980, 4400, 0.550, 431.37, 420.00, 11.37, 0.027],
-    ['Year to date, Jan to Jun', '', 60600, 22530, 3110, 25640, 0.879, 423.10, 420.00, 3.10, 0.007],
-    ['Rolling 12, Jul to Jun', '', 120000, 46410, 3130, 49540, 0.937, 412.83, 410.10, 2.73, 0.007]
-  ]);
+/* CSV of the rows as shown: every button[data-csv] downloads the table in its panel */
+Array.prototype.forEach.call(document.querySelectorAll('button[data-csv]'), function (b) {
+  if (b._csv) return;
+  b._csv = true;
+  b.addEventListener('click', function () {
+    var t = b.closest('.lib-panel').querySelector('table'), cell = function (s) { s = s.trim(); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    var text = Array.prototype.map.call(t.rows, function (r) { return Array.prototype.map.call(r.cells, function (c) { return cell(c.innerText); }).join(','); }).join('\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'table.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
 });
 </script>
 
 <script id="item-engine">
+window.ItemEngineInside = true;
+/* host-runtime.js: draws copied design-library items (AUTHORING.md, "What the host page provides"). Copy verbatim, after
+   ECharts, the theme tokens and host.css. ItemHost.draw() redraws; ItemHost.prepare(option, box) readies an option. */
 (function () {
-  var root = document.documentElement, body = document.body;
+  var root = document.documentElement;
   function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
   function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
-  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
-     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
-     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
-  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
-  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
-  function moves(box) { return (forced || !still) && marked(box); }
-  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
   function resolve(o) {
     Object.keys(o).forEach(function (k) {
       var v = o[k];
@@ -209,25 +198,44 @@ document.getElementById('csv').addEventListener('click', function () {
       valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
       legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
       bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
-      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15, color: css('--ink'), textBorderWidth: 0 } },
       scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
       markLine: { label: { fontSize: 14, color: css('--muted') } },
       pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
     };
   }
-  /* Hover: a one-line tooltip and a light emphasis on the hovered mark. Nothing moves, fades or redraws on hover.
-     Off for one chart with data-hover="off" (or the item's body), or "tooltip": {"show": false} in its JSON;
-     an item may supply its own tooltip.formatter. Off when exported (html.is-export) and never during a play. */
-  function hoverOff(box) { return root.classList.contains('is-export') || body.getAttribute('data-hover') === 'off' || box.getAttribute('data-hover') === 'off'; }
-  function fmt(t, p, v) {
-    return String(t).split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
-      .replace(/{@[(d+)]}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  /* Number formats in formatter strings: {value:short} or {c:short} gives 7M, 1.2K; {value:comma} or {c:comma} gives 7,000,000. */
+  function short(v) {
+    if (typeof v !== 'number') return v;
+    var a = Math.abs(v), u = a >= 1e9 ? ['B', 1e9] : a >= 1e6 ? ['M', 1e6] : a >= 1e3 ? ['K', 1e3] : ['', 1], n = v / u[1];
+    return n.toLocaleString('en-US', { maximumFractionDigits: u[1] === 1 ? 2 : Math.abs(n) < 10 ? 1 : 0 }) + u[0];
   }
+  function comma(v) { return typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v; }
+  var CODED = /\{(?:c|value):(?:short|comma)\}/;
+  function fmt(t, p, v) {
+    return String(t).replace(/\{(?:c|value):short\}/g, function () { return short(v); }).replace(/\{(?:c|value):comma\}/g, function () { return comma(v); })
+      .split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/\{@\[(\d+)\]\}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function tplOf(x) { return x ? (x._tpl || (typeof x.formatter === 'string' ? x.formatter : null)) : null; }
+  /* formatter strings with a number format become functions; the string stays in _tpl for the tooltip */
+  function formats(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+        o._tpl = v;
+        o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
+      } else if (v && typeof v === 'object') formats(v);
+    });
+  }
+  /* Hover: a one-line tooltip and a light emphasis; nothing moves. Off with data-hover="off" (chart or body),
+     "tooltip": {"show": false}, or when exported (html.is-export). An item may give its own tooltip.formatter. */
+  function hoverOff(box) { return root.classList.contains('is-export') || document.body.getAttribute('data-hover') === 'off' || !!(box && box.getAttribute('data-hover') === 'off'); }
   function hover(o) {
     var list = [].concat(o.series || []);
     var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
     var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
-    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a && a.axisLabel && typeof a.axisLabel.formatter === 'string' ? a.axisLabel.formatter : null; };
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a ? tplOf(a.axisLabel) : null; };
     var lines = list.some(function (x) { return x.type === 'line'; });
     var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
     function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
@@ -235,12 +243,10 @@ document.getElementById('csv').addEventListener('click', function () {
       var x = list[p.seriesIndex] || {}, v = p.value;
       if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
       if (v == null || v === '-') return null;
-      var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
-      var shared = x.label && typeof x.label.formatter === 'string' ? x.label.formatter : null;
-      var t = own || shared || axisFmt(x.yAxisIndex || x.xAxisIndex);
-      return t ? fmt(t, p, v) : (typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v));
+      var t = tplOf(p.data && p.data.label) || tplOf(x.label) || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : comma(v);
     }
-    /* the series name goes in front once, never when the value text (its own label formatter) already carries it */
+    /* the series name goes in front once, never when the value text already carries it */
     function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
     var tip = {
       show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
@@ -262,14 +268,35 @@ document.getElementById('csv').addEventListener('click', function () {
     };
     o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
     list.forEach(function (x) {
-      if (x.emphasis && !x.emphasis.disabled) return;   /* the item's own emphasis stands */
+      if (x.emphasis && !x.emphasis.disabled) return;
       var w = x.lineStyle && x.lineStyle.width || 3;
       x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
         : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
       if (hidden(x)) x.emphasis = { disabled: true };
     });
   }
-  /* Tables: a native tooltip on each cell (row, column: value) and a subtle highlight (kit CSS). */
+  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  function endLabels(o) {
+    var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
+    [].concat(o.series || []).forEach(function (s) {
+      var e = s.endLabel;
+      if (s.type !== 'line' || !e || !e.show) return;
+      if (e.textBorderWidth == null) e.textBorderWidth = 0;
+      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+    });
+  }
+  function prepare(o, box) {
+    resolve(o);
+    var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+    if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+    endLabels(o);
+    if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+    else hover(o);
+    formats(o);
+    o.animation = false;
+    return o;
+  }
   function tableTips() {
     Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
       var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
@@ -277,33 +304,48 @@ document.getElementById('csv').addEventListener('click', function () {
       Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
     });
   }
+  /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
   var drawn = 0;
-  function draw(play) {
+  function draw(animate) {
     if (!window.echarts) return;
     var name = 'item' + (++drawn);
     echarts.registerTheme(name, theme());
     Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
       var src = box.querySelector('script[type="application/json"]');
       if (!src) return;
-      var o = JSON.parse(src.textContent);
-      resolve(o);
-      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
-      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
-      var anim = play && moves(box);
-      var off = hoverOff(box) || (o.tooltip && o.tooltip.show === false);
-      if (off) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
-      else hover(o);
-      o.animation = !!anim;
+      var o = prepare(JSON.parse(src.textContent), box);
+      var anim = !!(animate && animate(box));
+      o.animation = anim;
       if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
       if (box._chart) box._chart.dispose();
       if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
       box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
       box._chart.setOption(o);
-      /* no hover while it plays: the pointer is ignored until the draw-in is over */
       if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
     });
     window.dispatchEvent(new Event('item:draw'));
   }
+  function chart(el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; }
+  window.ItemHost = { css: css, theme: theme, prepare: prepare, draw: draw, chart: chart, tableTips: tableTips };
+  if (window.ItemEngineInside) return;   /* inside a library item its engine drives drawing and motion */
+  window.ItemEngine = { motion: function () { return false; }, play: function () {}, force: function () {}, chart: chart, redraw: function () { draw(); } };
+  window.itemRedraw = window.ItemEngine.redraw;
+  function start() { tableTips(); draw(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  var t = null;
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.resize(); }); }, 100); });
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+})();
+(function () {
+  var root = document.documentElement, body = document.body, H = window.ItemHost;
+  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
+     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
+     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
+  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
+  function moves(box) { return (forced || !still) && marked(box); }
+  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
+  function draw(play) { H.draw(play ? moves : null); }
   /* Count-up: <span data-tick-up="1240" data-prefix="$" data-suffix="K" data-decimals="0">$1,240K</span>.
      The written text is the final value, so the item reads right with motion off. */
   function show(el, v) {
@@ -405,13 +447,13 @@ document.getElementById('csv').addEventListener('click', function () {
     motion: function () { return forced || !still; },   /* may motion run now: true unless reduced and no explicit action */
     play: function () { replay(true); },                 /* an item's own Play control: a full explicit replay */
     force: function () { force(); },                     /* an item's own step or switch control: let its motion run */
-    chart: function (el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; },
+    chart: H.chart,
     redraw: function () { draw(false); }
   };
   window.itemRedraw = window.ItemEngine.redraw;
   window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
   window.addEventListener('resize', function () { fit(); draw(false); });
-  tableTips(); fit(); replay();
+  H.tableTips(); fit(); replay();
 })();
 </script>
 </body>

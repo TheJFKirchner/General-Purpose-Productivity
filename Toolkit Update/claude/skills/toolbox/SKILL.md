@@ -19,7 +19,7 @@ One short talk, a map in `CLAUDE.md`, a plan. Skip any question the request alre
 | Analysis report | `reports/` (one folder per report, made by `analysis`) |
 | Data asset | `pipeline/`, `data/` |
 | Excel file | `exports/` |
-| Dashboard | `dashboard/` (inner folders are made by `dashboard-new`) |
+| Dashboard | `dashboard/` (inner folders are made by `dashboard`) |
 | Deck | `deck/` |
 
 - A mix: join the rows. `pipeline/` only when data must be joined or cleaned before more than one deliverable uses it. `analytics/` only for scripts shared by more than one output (such as prep code a dashboard runs). Other names only if the user asks.
@@ -38,7 +38,7 @@ One short talk, a map in `CLAUDE.md`, a plan. Skip any question the request alre
 ```
 
 - The map lists only what exists. Planned deliverables go in Making; each skill adds its own row when it makes the file or folder (Findings, Design library).
-- Map and plan use relative or shared paths only, never one person's computer. One exception: a dashboard kept outside a synced project folder (`dashboard-new`).
+- Map and plan use relative or shared paths only, never one person's computer. One exception: a dashboard kept outside a synced project folder (`dashboard`).
 - Anything run again (a report, a dashboard): end its row with `Refresh: <one command or step>`.
 
 ```markdown

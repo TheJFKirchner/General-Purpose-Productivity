@@ -1,0 +1,73 @@
+/* host.css: the styles a page needs for copied design-library items. Written by build-index.js; do not edit.
+   Copy it once into the page, with the theme tokens (node item.js theme <id>) and host-runtime.js. */
+[data-item] { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+[data-item] .chart[data-echart] { position: relative; flex: 1 1 auto; height: var(--chart-height, 340px); min-height: 0; min-width: 0; }
+[data-item] > p.basis { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+[data-item] > .key { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--muted); }
+[data-item] > .key span { display: inline-flex; align-items: center; gap: 7px; }
+[data-item] > .key i { display: inline-block; width: 28px; border-top: 3px solid var(--blue); }
+[data-item] > .key i.dash { border-top-style: dashed; } [data-item] > .key i.dot { border-top-style: dotted; } [data-item] > .key i.thin { border-top-width: 2px; }
+[data-item] > .key i.mid { border-top-color: var(--muted); } [data-item] > .key i.lite { border-top-color: var(--chart-muted); } [data-item] > .key i.good { border-top-color: var(--good); }
+[data-item] > .key i.box { width: 16px; height: 10px; border: 0; border-radius: 3px; background: var(--blue); } [data-item] > .key i.box.lite { background: var(--chart-muted); } [data-item] > .key i.box.empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--chart-muted); }
+.lib-lab { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lib-card { background: var(--paper); color: var(--ink); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px 20px; min-width: 0; transition: box-shadow .15s; }
+.lib-card:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-card.good { border-top-color: var(--good); } .lib-card.bad { border-top-color: var(--bad); } .lib-card.neutral { border-top-color: var(--neutral); }
+.lib-card.lead { background: var(--tint); border-color: var(--tint); }
+.lib-big { font: var(--heading-weight) 52px/1 var(--heading-font); color: var(--navy); font-variant-numeric: tabular-nums; margin: 8px 0; }
+.lib-sub { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-said { font-size: 15px; color: var(--muted); margin: 8px 0 14px; }
+.lib-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-top: 12px; color: var(--muted); }
+.lib-delta { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-delta.good, .lib-good { color: var(--good); } .lib-delta.bad, .lib-bad { color: var(--bad); } .lib-delta.neutral { color: var(--neutral); }
+.lib-meter { display: inline-block; vertical-align: middle; width: 130px; height: 12px; background: var(--track); margin-right: 10px; }
+.lib-meter b { display: block; height: 12px; background: var(--blue); } .lib-meter b.bad { background: var(--bad); } .lib-meter b.good { background: var(--good); }
+.lib-tick { position: relative; height: 18px; background: var(--track); }
+.lib-tick .a { position: absolute; left: 0; top: 4px; height: 10px; background: var(--good); } .lib-tick .a.bad { background: var(--bad); }
+.lib-tick .p { position: absolute; top: -4px; width: 3px; height: 26px; background: var(--navy); }
+.lib-tick .l { position: absolute; top: 4px; width: 2px; height: 10px; background: var(--chart-muted); }
+.lib-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.lib-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lib-table th { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 2px solid var(--navy); text-align: right; }
+.lib-table td { font-size: 15px; padding: 12px; border-bottom: 1px solid var(--rule); text-align: right; }
+.lib-table .left { text-align: left; }
+.lib-table tbody tr { transition: background .12s; }
+.lib-table tbody tr:hover, .lib-table tr.on { background: var(--tint); }
+.lib-table tr.on td:first-child { box-shadow: inset 4px 0 0 var(--blue); }
+.lib-table tbody td:hover { box-shadow: inset 0 0 0 1.5px var(--navy); }
+@media print { .lib-table tbody td:hover { box-shadow: none; } }
+.lib-table tfoot td { font-weight: 700; border-top: 2px solid var(--navy); border-bottom: none; background: var(--tint); }
+.lib-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.lib-btn { font: inherit; font-size: 14px; font-weight: 600; min-height: 44px; padding: 8px 18px; border-radius: var(--radius); border: 1.5px solid; cursor: pointer; transition: background .12s, color .12s; }
+.lib-btn.pri { background: var(--blue); color: var(--paper); border-color: var(--blue); } .lib-btn.pri:hover { background: var(--navy); border-color: var(--navy); }
+.lib-btn.sec { background: var(--paper); color: var(--blue); border-color: var(--blue); } .lib-btn.sec:hover { background: var(--tint); }
+.lib-btn.solid { background: var(--on-band); color: var(--band); border-color: var(--on-band); } .lib-btn.solid:hover { background: var(--tint); border-color: var(--tint); }
+.lib-btn.line { background: transparent; color: var(--on-band); border-color: var(--on-band); } .lib-btn.line:hover { background: var(--tint); color: var(--navy); }
+.lib-mini { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 4px 10px; border-radius: var(--radius); border: 1.5px solid var(--blue); background: var(--paper); color: var(--blue); cursor: pointer; }
+.lib-mini:hover { background: var(--tint); }
+.lib-seg { display: inline-flex; flex-wrap: wrap; } .lib-seg button { font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; padding: 6px 14px; cursor: pointer; background: var(--paper); color: var(--navy); border: 1.5px solid var(--navy); }
+.lib-seg button + button { margin-left: -1.5px; } .lib-seg button[aria-pressed="true"] { background: var(--navy); color: var(--paper); }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lib-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px 0 14px; border: 1.5px solid currentColor; border-radius: var(--radius); font-size: 14px; font-weight: 600; }
+.lib-chip button { font: inherit; font-size: 16px; width: 32px; height: 32px; border: none; background: transparent; color: inherit; cursor: pointer; border-radius: var(--radius); } .lib-chip button:hover { background: var(--tint); color: var(--navy); }
+.lib-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.lib-gate label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; color: var(--navy); }
+.lib-gate input[type="range"] { width: 150px; accent-color: var(--blue); } .lib-gate output { min-width: 52px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+.lib-panel { min-width: 0; background: var(--paper); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px; transition: box-shadow .15s; }
+.lib-panel:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-panel h2 { margin: 0; font: var(--heading-weight) 18px var(--heading-font); color: var(--navy); } .lib-panel .cap { margin: 3px 0 10px; font-size: 14px; color: var(--muted); }
+.lib-panelhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.lib-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.lib-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 13px; line-height: 1.45; color: var(--muted); }
+.lib-source { margin: 8px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lib-band { background: var(--band); color: var(--on-band); padding: 26px 28px; }
+.lib-band h1 { margin: 6px 0 0; font: var(--heading-weight) 28px/1.15 var(--heading-font); color: var(--on-band); } .lib-band .lib-lab { color: var(--on-band); }
+.lib-rail { background: var(--menu); color: var(--on-menu); border-right: 1.5px solid var(--on-menu); padding: 26px 14px; display: flex; flex-direction: column; gap: 6px; }
+.lib-rail .brand { font: var(--heading-weight) 20px var(--heading-font); padding: 0 12px 16px; }
+.lib-rail a { display: block; min-height: 40px; padding: 10px 12px; border-radius: var(--radius); font-size: 15px; font-weight: 600; text-decoration: none; color: var(--on-menu); transition: background .15s, padding-left .15s; }
+.lib-rail a[aria-current="page"] { background: var(--on-menu); color: var(--menu); } .lib-rail a:not([aria-current]):hover { background: var(--tint); color: var(--navy); padding-left: 20px; }
+.lib-btnrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.lib-band :focus-visible { outline-color: var(--on-band); }
+.lib-scroll { overflow-x: auto; } .lib-scroll .lib-table { min-width: 560px; }
+@media (prefers-reduced-motion: reduce) { html:not(.forced) * { transition: none !important; animation: none !important; } }

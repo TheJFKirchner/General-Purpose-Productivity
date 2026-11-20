@@ -1,0 +1,30 @@
+{
+  "name": "dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node Tools/dev.mjs",
+    "stop": "node Tools/stop.mjs",
+    "shot": "node Tools/shot.mjs",
+    "pipeline": "node Tools/py.mjs Pipeline/run_all.py",
+    "check": "node Tools/check.mjs",
+    "status": "node Tools/status.mjs",
+    "new-section": "node Tools/new-section.mjs",
+    "theme": "node Tools/theme.mjs",
+    "tables": "node Tools/tables.mjs",
+    "build": "node Tools/check.mjs && vite build",
+    "serve": "node Tools/py.mjs Analysis/server.py --serve",
+    "export": "node Tools/export.mjs"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.2.1",
+    "vite": "^8.3.6",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

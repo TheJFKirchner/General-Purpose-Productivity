@@ -1,0 +1,11 @@
+/* Page settings and looks-only overrides, hand-written. Wins over styles.css (which sits in @layer base).
+   Spacing and sizes: change the numbers below. */
+:root {
+  --page-width: 1200px;    /* the widest the page gets */
+  --section-gap: 16px;     /* space between sections */
+  --section-pad: 16px;     /* space inside a section's border */
+  --chart-height: 340px;   /* every library chart; one section: height={300} on its <Item> */
+}
+/* Scope a change to one section with its id, e.g. #s3_paid_by_region h2 { color: var(--blue); }
+   Use the theme's color variables (--blue, --navy, --green, --teal, --orange, --ink, --muted, --rule, --wash,
+   --paper), never typed-in colors. */

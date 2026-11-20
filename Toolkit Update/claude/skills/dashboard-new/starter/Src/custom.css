@@ -1,4 +1,0 @@
-/* Looks-only overrides, hand-written. Wins over styles.css (which sits in @layer base).
-   Scope a change to one section with its id, e.g. #s3_paid_by_region h2 { color: var(--blue); }
-   Use the theme's color variables (--blue, --navy, --green, --teal, --orange, --ink, --muted, --rule, --wash,
-   --paper), never typed-in colors. */

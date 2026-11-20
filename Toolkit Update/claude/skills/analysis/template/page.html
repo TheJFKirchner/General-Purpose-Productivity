@@ -4,42 +4,149 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
-<style>
-  /* The look of this report. Colours and font are the :root block; charts read them too.
-     Keep every __TOKEN__ in the body: the build fills them in. */
+<!-- The theme: colours and fonts. Change it with `python run.py theme TH-02`, not by hand. -->
+<style id="tokens" data-theme="TH-01">:root {
+  --blue: #0170BC;
+  --navy: #002D72;
+  --green: #56A944;
+  --teal: #00A9A5;
+  --orange: #F68621;
+  --ink: #1F2A37;
+  --muted: #5B6770;
+  --rule: #D9E2EA;
+  --wash: #F4F8FB;
+  --paper: #FFFFFF;
+  --chart-muted: #C3CDD6;
+  --chart-grid: #E8EDF2;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --body-font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --heading-weight: 600;
+  --good: #2E7D32;
+  --bad: #B45309;
+  --neutral: #8A96A0;
+  --track: #E8EDF2;
+  --tint: #EAF3FA;
+  --shadow: #C9D4DE;
+  --band: #002D72;
+  --on-band: #FFFFFF;
+  --menu: #FFFFFF;
+  --on-menu: #002D72;
+  --radius: 2px;
+  --series: --blue --navy --green --teal --muted;
+}</style>
+<style id="page-settings">
+  /* Page settings: change these freely, then python run.py report. */
   :root {
-    --blue: #0170BC; --navy: #002D72; --green: #56A944; --teal: #00A9A5; --orange: #F68621;
-    --ink: #1F2A37; --muted: #5B6770; --rule: #D9E2EA; --wash: #F4F8FB; --paper: #FFFFFF;
-    --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-    --blue-light: #7FB8E0;   /* second series: a lighter --blue */
-    /* chart series order: blue, blue-light, navy, teal, orange, muted (set in the script below) */
+    --section-gap: 40px;     /* space between sections */
+    --text-share: 5fr;       /* side by side: width of the text ... */
+    --visual-share: 7fr;     /* ... and of the visual */
+    --page-width: 1120px;
+    --chart-height: 340px;   /* every chart; one section: HEIGHT = 420 in its file */
   }
+</style>
+<style id="host-css">
+/* host.css: the styles a page needs for copied design-library items. Written by build-index.js; do not edit.
+   Copy it once into the page, with the theme tokens (node item.js theme <id>) and host-runtime.js. */
+[data-item] { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+[data-item] .chart[data-echart] { position: relative; flex: 1 1 auto; height: var(--chart-height, 340px); min-height: 0; min-width: 0; }
+[data-item] > p.basis { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+[data-item] > .key { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--muted); }
+[data-item] > .key span { display: inline-flex; align-items: center; gap: 7px; }
+[data-item] > .key i { display: inline-block; width: 28px; border-top: 3px solid var(--blue); }
+[data-item] > .key i.dash { border-top-style: dashed; } [data-item] > .key i.dot { border-top-style: dotted; } [data-item] > .key i.thin { border-top-width: 2px; }
+[data-item] > .key i.mid { border-top-color: var(--muted); } [data-item] > .key i.lite { border-top-color: var(--chart-muted); } [data-item] > .key i.good { border-top-color: var(--good); }
+[data-item] > .key i.box { width: 16px; height: 10px; border: 0; border-radius: 3px; background: var(--blue); } [data-item] > .key i.box.lite { background: var(--chart-muted); } [data-item] > .key i.box.empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--chart-muted); }
+.lib-lab { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lib-card { background: var(--paper); color: var(--ink); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px 20px; min-width: 0; transition: box-shadow .15s; }
+.lib-card:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-card.good { border-top-color: var(--good); } .lib-card.bad { border-top-color: var(--bad); } .lib-card.neutral { border-top-color: var(--neutral); }
+.lib-card.lead { background: var(--tint); border-color: var(--tint); }
+.lib-big { font: var(--heading-weight) 52px/1 var(--heading-font); color: var(--navy); font-variant-numeric: tabular-nums; margin: 8px 0; }
+.lib-sub { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-said { font-size: 15px; color: var(--muted); margin: 8px 0 14px; }
+.lib-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-top: 12px; color: var(--muted); }
+.lib-delta { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-delta.good, .lib-good { color: var(--good); } .lib-delta.bad, .lib-bad { color: var(--bad); } .lib-delta.neutral { color: var(--neutral); }
+.lib-meter { display: inline-block; vertical-align: middle; width: 130px; height: 12px; background: var(--track); margin-right: 10px; }
+.lib-meter b { display: block; height: 12px; background: var(--blue); } .lib-meter b.bad { background: var(--bad); } .lib-meter b.good { background: var(--good); }
+.lib-tick { position: relative; height: 18px; background: var(--track); }
+.lib-tick .a { position: absolute; left: 0; top: 4px; height: 10px; background: var(--good); } .lib-tick .a.bad { background: var(--bad); }
+.lib-tick .p { position: absolute; top: -4px; width: 3px; height: 26px; background: var(--navy); }
+.lib-tick .l { position: absolute; top: 4px; width: 2px; height: 10px; background: var(--chart-muted); }
+.lib-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.lib-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lib-table th { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 2px solid var(--navy); text-align: right; }
+.lib-table td { font-size: 15px; padding: 12px; border-bottom: 1px solid var(--rule); text-align: right; }
+.lib-table .left { text-align: left; }
+.lib-table tbody tr { transition: background .12s; }
+.lib-table tbody tr:hover, .lib-table tr.on { background: var(--tint); }
+.lib-table tr.on td:first-child { box-shadow: inset 4px 0 0 var(--blue); }
+.lib-table tbody td:hover { box-shadow: inset 0 0 0 1.5px var(--navy); }
+@media print { .lib-table tbody td:hover { box-shadow: none; } }
+.lib-table tfoot td { font-weight: 700; border-top: 2px solid var(--navy); border-bottom: none; background: var(--tint); }
+.lib-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.lib-btn { font: inherit; font-size: 14px; font-weight: 600; min-height: 44px; padding: 8px 18px; border-radius: var(--radius); border: 1.5px solid; cursor: pointer; transition: background .12s, color .12s; }
+.lib-btn.pri { background: var(--blue); color: var(--paper); border-color: var(--blue); } .lib-btn.pri:hover { background: var(--navy); border-color: var(--navy); }
+.lib-btn.sec { background: var(--paper); color: var(--blue); border-color: var(--blue); } .lib-btn.sec:hover { background: var(--tint); }
+.lib-btn.solid { background: var(--on-band); color: var(--band); border-color: var(--on-band); } .lib-btn.solid:hover { background: var(--tint); border-color: var(--tint); }
+.lib-btn.line { background: transparent; color: var(--on-band); border-color: var(--on-band); } .lib-btn.line:hover { background: var(--tint); color: var(--navy); }
+.lib-mini { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 4px 10px; border-radius: var(--radius); border: 1.5px solid var(--blue); background: var(--paper); color: var(--blue); cursor: pointer; }
+.lib-mini:hover { background: var(--tint); }
+.lib-seg { display: inline-flex; flex-wrap: wrap; } .lib-seg button { font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; padding: 6px 14px; cursor: pointer; background: var(--paper); color: var(--navy); border: 1.5px solid var(--navy); }
+.lib-seg button + button { margin-left: -1.5px; } .lib-seg button[aria-pressed="true"] { background: var(--navy); color: var(--paper); }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lib-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px 0 14px; border: 1.5px solid currentColor; border-radius: var(--radius); font-size: 14px; font-weight: 600; }
+.lib-chip button { font: inherit; font-size: 16px; width: 32px; height: 32px; border: none; background: transparent; color: inherit; cursor: pointer; border-radius: var(--radius); } .lib-chip button:hover { background: var(--tint); color: var(--navy); }
+.lib-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.lib-gate label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; color: var(--navy); }
+.lib-gate input[type="range"] { width: 150px; accent-color: var(--blue); } .lib-gate output { min-width: 52px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+.lib-panel { min-width: 0; background: var(--paper); border: 1.5px solid var(--navy); border-top: 8px solid var(--blue); border-radius: var(--radius); padding: 18px 22px; transition: box-shadow .15s; }
+.lib-panel:hover { box-shadow: 3px 3px 0 var(--shadow); }
+.lib-panel h2 { margin: 0; font: var(--heading-weight) 18px var(--heading-font); color: var(--navy); } .lib-panel .cap { margin: 3px 0 10px; font-size: 14px; color: var(--muted); }
+.lib-panelhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.lib-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.lib-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 13px; line-height: 1.45; color: var(--muted); }
+.lib-source { margin: 8px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lib-band { background: var(--band); color: var(--on-band); padding: 26px 28px; }
+.lib-band h1 { margin: 6px 0 0; font: var(--heading-weight) 28px/1.15 var(--heading-font); color: var(--on-band); } .lib-band .lib-lab { color: var(--on-band); }
+.lib-rail { background: var(--menu); color: var(--on-menu); border-right: 1.5px solid var(--on-menu); padding: 26px 14px; display: flex; flex-direction: column; gap: 6px; }
+.lib-rail .brand { font: var(--heading-weight) 20px var(--heading-font); padding: 0 12px 16px; }
+.lib-rail a { display: block; min-height: 40px; padding: 10px 12px; border-radius: var(--radius); font-size: 15px; font-weight: 600; text-decoration: none; color: var(--on-menu); transition: background .15s, padding-left .15s; }
+.lib-rail a[aria-current="page"] { background: var(--on-menu); color: var(--menu); } .lib-rail a:not([aria-current]):hover { background: var(--tint); color: var(--navy); padding-left: 20px; }
+.lib-btnrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.lib-band :focus-visible { outline-color: var(--on-band); }
+.lib-scroll { overflow-x: auto; } .lib-scroll .lib-table { min-width: 560px; }
+@media (prefers-reduced-motion: reduce) { html:not(.forced) * { transition: none !important; animation: none !important; } }
+</style>
+<style>
+  /* The report's own look. Uses only the theme's tokens, so a theme change restyles it. */
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 var(--font);
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body-font);
          font-variant-numeric: lining-nums; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 40px; }
+  .wrap { max-width: var(--page-width); margin: 0 auto; padding: 0 40px; }
   a { color: var(--blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
   code { font-size: .92em; background: var(--wash); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; }
   .label { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--blue); }
+  h1, h2, h3 { font-family: var(--heading-font); }
 
   /* header band */
-  .top { background: var(--wash); border-top: 5px solid var(--navy); border-bottom: 1px solid var(--rule);
-         padding: 34px 0 36px; }
+  .top { background: var(--wash); border-top: 5px solid var(--navy); border-bottom: 1px solid var(--rule); padding: 34px 0 36px; }
   .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-  h1 { font-size: 32px; line-height: 1.18; margin: 8px 0 8px; color: var(--navy); font-weight: 700; max-width: 30em; }
+  h1 { font-size: 32px; line-height: 1.18; margin: 8px 0 8px; color: var(--navy); font-weight: var(--heading-weight); max-width: 30em; }
   h1 + .answer { margin-top: 24px; }
   .question { font-size: 16.5px; color: var(--muted); margin: 0 0 26px; max-width: 48em; }
 
   /* the answer */
   .answer { background: var(--paper); border: 1px solid var(--rule); border-left: 5px solid var(--blue);
-            border-radius: 4px; padding: 22px 28px 22px 26px; }
-  .answer .headline { font-size: 22px; line-height: 1.35; font-weight: 600; color: var(--navy); margin: 6px 0 6px; max-width: 40em; }
+            border-radius: var(--radius); padding: 22px 28px 22px 26px; }
+  .answer .headline { font-size: 22px; line-height: 1.35; font-weight: 600; color: var(--navy); margin: 6px 0; max-width: 40em; }
   .answer .basis { font-size: 13px; color: var(--muted); margin: 0; max-width: 60em; }
   .answer .bullets { margin-top: 16px; font-size: 15.5px; max-width: 56em; }
 
-  /* figures: one row, equal width */
+  /* figures in the answer: one row, equal width */
   .kpis { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 250px); gap: 0; }
   .answer .kpis { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
   .kpi { border-left: 3px solid var(--rule); padding: 2px 16px 2px 14px; }
@@ -48,7 +155,6 @@
   .kpi-label { font-size: 13px; color: var(--ink); margin-top: 4px; font-weight: 600; }
   .kpi-note { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
   .sec > .kpis { margin: 4px 0 22px; }
-  .sec .kpi-value { font-size: 26px; }
 
   /* bullets */
   .bullets { list-style: none; margin: 0; padding: 0; max-width: 46em; }
@@ -56,7 +162,7 @@
   .bullets li:last-child { margin-bottom: 0; }
   .bullets li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 7px; height: 7px; background: var(--blue); }
   .bullets strong { color: var(--navy); }
-  .bullets.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 24px; max-width: none; margin-top: 22px; }
+  .bullets.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 24px; max-width: none; }
   .bullets.cols li { padding: 12px 0 0; margin: 0; border-top: 2px solid var(--navy); }
   .bullets.cols li::before { display: none; }
 
@@ -67,34 +173,23 @@
   .contents a { color: var(--ink); display: grid; grid-template-columns: 30px minmax(0, 1fr); }
   .contents .num { color: var(--blue); font-weight: 700; }
 
-  /* sections */
-  .sec { padding: 40px 0 8px; }
-  .sec + .sec { border-top: 1px solid var(--rule); margin-top: 32px; }
+  /* sections: LAYOUT in a section file is side, flip, above or below */
+  .sec { padding: var(--section-gap) 0 8px; }
+  .sec + .sec { border-top: 1px solid var(--rule); margin-top: calc(var(--section-gap) * .8); }
   .sec-head { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: start; margin-bottom: 20px; }
   .sec-head .num { font-size: 26px; line-height: 1.1; font-weight: 300; color: var(--blue); font-variant-numeric: tabular-nums; }
-  h2 { font-size: 22px; line-height: 1.3; margin: 0; color: var(--navy); font-weight: 650; max-width: 38em; }
-  .body.side { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px; align-items: start; }
-  .body.side .bullets { padding-top: 6px; font-size: 15.5px; }
-  .body.stack > .bullets:not(.cols) { margin-top: 18px; }
-  .body.stack > .bullets:first-child { margin-top: 0; }
-  figure { margin: 0; }
-  .chart-card { border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px 10px; background: var(--paper); }
-  figcaption { font-size: 13px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
-  .chart { width: 100%; }
-  .chart > div, .chart svg { max-width: 100%; }
+  h2 { font-size: 22px; line-height: 1.3; margin: 0; color: var(--navy); font-weight: var(--heading-weight); max-width: 38em; }
+  .body { display: grid; gap: 22px 40px; align-items: start; }
+  .body .text { grid-area: text; min-width: 0; padding-top: 6px; font-size: 15.5px; }
+  .body .visual { grid-area: visual; min-width: 0; }
+  .lay-side { grid-template-columns: minmax(0, var(--text-share)) minmax(0, var(--visual-share)); grid-template-areas: "text visual"; }
+  .lay-flip { grid-template-columns: minmax(0, var(--visual-share)) minmax(0, var(--text-share)); grid-template-areas: "visual text"; }
+  .lay-above { grid-template-areas: "visual" "text"; }
+  .lay-below { grid-template-areas: "text" "visual"; }
+  .lay-one { grid-template-columns: minmax(0, 1fr); }
+  .body.lay-one > .text, .body.lay-one > .visual { grid-area: auto; }
   .chart-error { color: var(--muted); font-style: italic; padding: 24px 0; }
-  .note { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
-  .table-card { margin-top: 26px; }
   .export { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
-
-  /* tables */
-  .tablewrap { overflow: auto; max-height: 460px; border-top: 2px solid var(--navy); }
-  table.data { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-  table.data th { position: sticky; top: 0; background: var(--paper); text-align: left; font-weight: 600; color: var(--muted);
-                  padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; cursor: pointer; user-select: none; }
-  table.data td { padding: 7px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  table.data tbody tr:nth-child(even) td { background: var(--wash); }
-  table.data .num { text-align: right; white-space: nowrap; }
 
   /* footer */
   footer { margin-top: 48px; background: var(--wash); border-top: 1px solid var(--rule); padding: 28px 0 40px; font-size: 13px; color: var(--muted); }
@@ -108,7 +203,8 @@
 
   @media screen and (max-width: 820px) {
     .wrap { padding: 0 20px; }
-    .body.side, .foot-grid { grid-template-columns: 1fr; gap: 22px; }
+    .lay-side, .lay-flip { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "visual"; }
+    .foot-grid { grid-template-columns: 1fr; gap: 22px; }
     .kpis { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 14px; }
     .sec-head { grid-template-columns: 40px minmax(0, 1fr); }
   }
@@ -120,16 +216,14 @@
     .top .wrap, footer .wrap { padding: 0 14px; }
     .contents { display: none; }
     .sec { padding-top: 22px; }
-    .sec + .sec { margin-top: 14px; }
     .sec-head, h2 { break-after: avoid; }
-    .body, .chart-card, .answer, .kpis { break-inside: avoid; }
-    .tablewrap { max-height: none; overflow: visible; }
-    .body.side { gap: 24px; }
-    .kpi-value { font-size: 24px; }
-    /* charts scale to the paper width (the script sets each chart's viewBox) */
-    .chart > div, .chart svg { width: 100% !important; height: 100% !important; }
+    .body, .answer, .kpis, [data-item] { break-inside: avoid; }
     footer { break-inside: avoid; }
   }
+</style>
+<style id="item-css">
+/* the copied items' own styles (each section file's CSS) */
+__ITEM_CSS__
 </style>
 </head>
 <body>
@@ -146,22 +240,178 @@
   __SECTIONS__
 </main>
 <footer><div class="wrap">__FOOTER__</div></footer>
-<script type="application/json" id="chart-options">__CHARTS__</script>
 __ECHARTS__
-<script>
+<script id="host-runtime">
+/* host-runtime.js: draws copied design-library items (AUTHORING.md, "What the host page provides"). Copy verbatim, after
+   ECharts, the theme tokens and host.css. ItemHost.draw() redraws; ItemHost.prepare(option, box) readies an option. */
 (function () {
-  var css = getComputedStyle(document.documentElement);
-  function token(name) { return css.getPropertyValue('--' + name).trim(); }
-  var PALETTE = ['blue', 'blue-light', 'navy', 'teal', 'orange', 'muted'].map(token);
-  var INK = token('ink'), MUTED = token('muted'), RULE = token('rule'), FONT = token('font');
-  var options = JSON.parse(document.getElementById('chart-options').textContent);
-
-  // "$short" -> $4.1M, ".0%" -> 62%, ",.1f" -> 1,234.5 ; same rules as run.py
+  var root = document.documentElement;
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+  function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
+  function resolve(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (typeof v === 'string' && v.indexOf('var(--') === 0) o[k] = css(v.slice(4, -1)) || v;
+      else if (v && typeof v === 'object') resolve(v);
+    });
+  }
+  function theme() {
+    var axis = { axisLine: { lineStyle: { color: css('--rule') } }, axisTick: { show: false }, axisLabel: { color: css('--muted'), fontSize: 15 } };
+    return {
+      color: series(), textStyle: { fontFamily: css('--body-font'), color: css('--ink') },
+      categoryAxis: Object.assign({}, axis, { splitLine: { show: false } }),
+      valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
+      legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
+      bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15, color: css('--ink'), textBorderWidth: 0 } },
+      scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
+      markLine: { label: { fontSize: 14, color: css('--muted') } },
+      pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
+    };
+  }
+  /* Number formats in formatter strings: {value:short} or {c:short} gives 7M, 1.2K; {value:comma} or {c:comma} gives 7,000,000. */
+  function short(v) {
+    if (typeof v !== 'number') return v;
+    var a = Math.abs(v), u = a >= 1e9 ? ['B', 1e9] : a >= 1e6 ? ['M', 1e6] : a >= 1e3 ? ['K', 1e3] : ['', 1], n = v / u[1];
+    return n.toLocaleString('en-US', { maximumFractionDigits: u[1] === 1 ? 2 : Math.abs(n) < 10 ? 1 : 0 }) + u[0];
+  }
+  function comma(v) { return typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v; }
+  var CODED = /\{(?:c|value):(?:short|comma)\}/;
+  function fmt(t, p, v) {
+    return String(t).replace(/\{(?:c|value):short\}/g, function () { return short(v); }).replace(/\{(?:c|value):comma\}/g, function () { return comma(v); })
+      .split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/\{@\[(\d+)\]\}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function tplOf(x) { return x ? (x._tpl || (typeof x.formatter === 'string' ? x.formatter : null)) : null; }
+  /* formatter strings with a number format become functions; the string stays in _tpl for the tooltip */
+  function formats(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+        o._tpl = v;
+        o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
+      } else if (v && typeof v === 'object') formats(v);
+    });
+  }
+  /* Hover: a one-line tooltip and a light emphasis; nothing moves. Off with data-hover="off" (chart or body),
+     "tooltip": {"show": false}, or when exported (html.is-export). An item may give its own tooltip.formatter. */
+  function hoverOff(box) { return root.classList.contains('is-export') || document.body.getAttribute('data-hover') === 'off' || !!(box && box.getAttribute('data-hover') === 'off'); }
+  function hover(o) {
+    var list = [].concat(o.series || []);
+    var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
+    var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a ? tplOf(a.axisLabel) : null; };
+    var lines = list.some(function (x) { return x.type === 'line'; });
+    var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
+    function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
+    function value(p) {
+      var x = list[p.seriesIndex] || {}, v = p.value;
+      if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
+      if (v == null || v === '-') return null;
+      var t = tplOf(p.data && p.data.label) || tplOf(x.label) || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : comma(v);
+    }
+    /* the series name goes in front once, never when the value text already carries it */
+    function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
+    var tip = {
+      show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
+      backgroundColor: css('--paper'), borderColor: css('--rule'), borderWidth: 1, padding: [6, 10],
+      textStyle: { color: css('--ink'), fontFamily: css('--body-font'), fontSize: 13 },
+      extraCssText: 'box-shadow:none;border-radius:' + (css('--radius') || '2px') + ';pointer-events:none;',
+      axisPointer: lines
+        ? { type: 'line', animation: false, lineStyle: { color: css('--muted'), width: 1, type: 'solid' }, label: { show: false } }
+        : { type: 'shadow', animation: false, shadowStyle: { color: css('--chart-grid'), opacity: 0.7 }, label: { show: false } },
+      formatter: function (p) {
+        if (Array.isArray(p)) {
+          var rows = p.filter(function (q) { return !hidden(list[q.seriesIndex]) && value(q) != null; })
+            .map(function (q) { return (named(q) ? q.seriesName + ': ' : '') + '<b>' + value(q) + '</b>'; });
+          return rows.length ? (p[0].name ? p[0].name + (rows.length > 1 ? '<br>' : ' ') : '') + rows.join(rows.length > 1 ? '<br>' : '') : '';
+        }
+        if (p.componentType !== 'series' || hidden(list[p.seriesIndex]) || value(p) == null) return '';
+        return (named(p) ? p.seriesName + ' · ' : '') + (p.name ? p.name + ': ' : '') + '<b>' + value(p) + '</b>';
+      }
+    };
+    o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
+    list.forEach(function (x) {
+      if (x.emphasis && !x.emphasis.disabled) return;
+      var w = x.lineStyle && x.lineStyle.width || 3;
+      x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
+        : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
+      if (hidden(x)) x.emphasis = { disabled: true };
+    });
+  }
+  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  function endLabels(o) {
+    var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
+    [].concat(o.series || []).forEach(function (s) {
+      var e = s.endLabel;
+      if (s.type !== 'line' || !e || !e.show) return;
+      if (e.textBorderWidth == null) e.textBorderWidth = 0;
+      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+    });
+  }
+  function prepare(o, box) {
+    resolve(o);
+    var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+    if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+    endLabels(o);
+    if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+    else hover(o);
+    formats(o);
+    o.animation = false;
+    return o;
+  }
+  function tableTips() {
+    Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
+      var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
+      var row = tr.cells[0] ? tr.cells[0].innerText.trim() : '';
+      Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
+    });
+  }
+  /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
+  var drawn = 0;
+  function draw(animate) {
+    if (!window.echarts) return;
+    var name = 'item' + (++drawn);
+    echarts.registerTheme(name, theme());
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
+      var src = box.querySelector('script[type="application/json"]');
+      if (!src) return;
+      var o = prepare(JSON.parse(src.textContent), box);
+      var anim = !!(animate && animate(box));
+      o.animation = anim;
+      if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
+      if (box._chart) box._chart.dispose();
+      if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
+      box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
+      box._chart.setOption(o);
+      if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
+    });
+    window.dispatchEvent(new Event('item:draw'));
+  }
+  function chart(el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; }
+  window.ItemHost = { css: css, theme: theme, prepare: prepare, draw: draw, chart: chart, tableTips: tableTips };
+  if (window.ItemEngineInside) return;   /* inside a library item its engine drives drawing and motion */
+  window.ItemEngine = { motion: function () { return false; }, play: function () {}, force: function () {}, chart: chart, redraw: function () { draw(); } };
+  window.itemRedraw = window.ItemEngine.redraw;
+  function start() { tableTips(); draw(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  var t = null;
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.resize(); }); }, 100); });
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+})();
+</script>
+__ITEM_JS__
+<script>
+/* FORMAT from the section files: value-axis numbers ("$short" -> $4.1M, ".0%" -> 62%), as in run.py */
+(function () {
   function fmt(v, spec) {
     if (v === null || v === undefined || v === '' || isNaN(v)) return v;
     spec = spec || ''; v = +v;
     var cur = spec.charAt(0) === '$'; if (cur) spec = spec.slice(1);
     var a = Math.abs(v), s, d = +((spec.match(/\.(\d+)/) || [0, 0])[1]);
+    if (spec.indexOf('abs') >= 0) { spec = spec.replace('abs', ''); v = a; }
     if (spec.indexOf('short') >= 0) {
       var u = '';
       if (a >= 1e9) { a /= 1e9; u = 'B'; } else if (a >= 1e6) { a /= 1e6; u = 'M'; } else if (a >= 1e3) { a /= 1e3; u = 'K'; }
@@ -174,103 +424,23 @@ __ECHARTS__
     }
     return (v < 0 ? '-' : '') + (cur ? '$' : '') + s;
   }
-  // "@orange" anywhere in an option -> the colour token
-  function tokens(o) {
-    if (Array.isArray(o)) return o.map(tokens);
-    if (o && typeof o === 'object') { Object.keys(o).forEach(function (k) { o[k] = tokens(o[k]); }); return o; }
-    if (typeof o === 'string' && o.charAt(0) === '@' && token(o.slice(1))) return token(o.slice(1));
-    return o;
-  }
-  function list(x) { return Array.isArray(x) ? x : (x ? [x] : []); }
-  function def(obj, key, val) { if (obj[key] === undefined) obj[key] = val; return obj[key]; }
-  function styleAxis(ax, f) {
-    def(def(def(ax, 'axisLine', {}), 'lineStyle', {}), 'color', RULE);
-    def(def(ax, 'axisTick', {}), 'show', false);
-    var lab = def(ax, 'axisLabel', {}); def(lab, 'color', MUTED); def(lab, 'fontSize', 12);
-    if (ax.type === 'value' && f) def(lab, 'formatter', function (v) { return fmt(v, f); });
-    def(def(def(ax, 'splitLine', {}), 'lineStyle', {}), 'color', RULE);
-    if (ax.type === 'category') def(ax.splitLine, 'show', false);
-    var nm = def(ax, 'nameTextStyle', {}); def(nm, 'color', MUTED); def(nm, 'fontSize', 12);
-  }
-  function defaults(o) {
-    var f = o.format || ''; delete o.format;
-    o = tokens(o);
-    def(o, 'color', PALETTE);
-    o.animation = false;                       // steady on screen and in print
-    def(o, 'textStyle', { fontFamily: FONT, color: INK });
-    var series = list(o.series), cart = !!(o.xAxis || o.yAxis);
-    var tip = def(o, 'tooltip', cart ? { trigger: 'axis', axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(1,112,188,0.06)' } } } : { trigger: 'item' });
-    def(tip, 'transitionDuration', 0); def(tip, 'confine', true);
-    if (f) def(tip, 'valueFormatter', function (v) { return fmt(v, f); });
-    if (series.length > 1 && o.legend === undefined) o.legend = { top: 0, left: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 12, textStyle: { color: INK } };
-    if (cart) {
-      var hbar = list(o.yAxis).some(function (a) { return a.type === 'category'; });
-      var xName = list(o.xAxis).some(function (a) { return a.name; });
-      var yName = list(o.yAxis).some(function (a) { return a.name && a.type === 'value'; });
-      var refLine = hbar && series.some(function (s) { return s.markLine; });  // its label sits above the plot
-      def(o, 'grid', { left: 4, right: hbar ? 56 : 16, top: (o.legend ? 34 : 6) + (yName || refLine ? 26 : 8),
-                       bottom: xName ? 30 : 4, containLabel: true });
-      // value-axis name: above the axis for columns, centred below it for horizontal bars
-      list(o.xAxis).forEach(function (a) { styleAxis(a, f); def(a, 'nameLocation', 'middle'); def(a, 'nameGap', 30); });
-      list(o.yAxis).forEach(function (a) { styleAxis(a, f); def(a.nameTextStyle, 'align', 'left'); });
-    }
-    series.forEach(function (s) {
-      def(s, 'emphasis', { disabled: true });  // no hover state: no flicker
-      if (s.type === 'bar') { def(s, 'barMaxWidth', 38); def(s, 'barCategoryGap', '32%'); }
-      if (s.type === 'line') { def(def(s, 'lineStyle', {}), 'width', 2.5); def(s, 'symbol', 'circle'); def(s, 'symbolSize', 6); }
-      if (s.label && s.label.show) {
-        def(s.label, 'color', INK); def(s.label, 'fontSize', 12);
-        if (f) def(s.label, 'formatter', function (p) { return fmt(p.value && p.value.value !== undefined ? p.value.value : p.value, f); });
-      }
-    });
-    return o;
-  }
-
-  var charts = [];
-  document.querySelectorAll('[data-chart]').forEach(function (el) {
-    if (typeof echarts === 'undefined') {
-      el.style.height = 'auto';
-      el.innerHTML = '<div class="chart-error">The chart library did not load (no internet?). Put echarts.min.js beside run.py and rebuild to embed it.</div>';
-      return;
-    }
-    try {
-      var c = echarts.init(el, null, { renderer: 'svg' });
-      c.setOption(defaults(options[el.getAttribute('data-chart')]));
-      var svg = el.querySelector('svg');           // lets print scale the chart to the page
-      if (svg) svg.setAttribute('viewBox', '0 0 ' + el.clientWidth + ' ' + el.clientHeight);
-      charts.push(c);
-    } catch (e) {
-      el.innerHTML = '<div class="chart-error">This chart could not be drawn: ' + e.message + '</div>';
-    }
-  });
-  function fit() {
-    charts.forEach(function (c) {
-      c.resize();
-      var el = c.getDom(), svg = el.querySelector('svg');
-      if (svg) svg.setAttribute('viewBox', '0 0 ' + el.clientWidth + ' ' + el.clientHeight);
-    });
-  }
-  var t;
-  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(fit, 120); });
-  window.addEventListener('beforeprint', fit);
-  window.addEventListener('afterprint', fit);
-
-  // click a column heading to sort
-  document.querySelectorAll('table.data').forEach(function (tb) {
-    tb.querySelectorAll('th').forEach(function (th, i) {
-      var asc = false;
-      th.addEventListener('click', function () {
-        var body = tb.tBodies[0], rows = Array.prototype.slice.call(body.rows);
-        asc = !asc;
-        rows.sort(function (a, b) {
-          var x = a.cells[i].getAttribute('data-v'), y = b.cells[i].getAttribute('data-v');
-          var nx = parseFloat(x), ny = parseFloat(y);
-          var r = (!isNaN(nx) && !isNaN(ny)) ? nx - ny : x.localeCompare(y);
-          return asc ? r : -r;
-        });
-        rows.forEach(function (r) { body.appendChild(r); });
+  /* the page's height, for `python run.py shot` */
+  function mark() { document.documentElement.setAttribute('data-height', Math.ceil(document.body.getBoundingClientRect().height)); }
+  window.addEventListener('load', mark);
+  window.addEventListener('item:draw', function () { setTimeout(mark, 0); });
+  window.addEventListener('item:draw', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.chart[data-axis-format]'), function (box) {
+      var c = window.ItemHost && ItemHost.chart(box), f = JSON.parse(box.getAttribute('data-axis-format')), patch = {};
+      if (!c) return;
+      Object.keys(f).forEach(function (k) {
+        patch[k] = f[k].map(function (spec) { return spec ? { axisLabel: { formatter: function (v) { return fmt(v, spec); } } } : {}; });
       });
+      c.setOption(patch);
     });
+  });
+  if (!window.echarts) Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (el) {
+    el.style.height = 'auto';
+    el.insertAdjacentHTML('beforeend', '<div class="chart-error">The chart library did not load (no internet?). Put echarts.min.js beside run.py and rebuild to embed it.</div>');
   });
 })();
 </script>

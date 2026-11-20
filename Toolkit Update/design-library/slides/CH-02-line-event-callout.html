@@ -389,23 +389,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
 <div class="fit reveal"><div class="slides">
 <!-- ITEM:START -->
 <section id="line-event-callout" data-component="CH-02">
-        <p class="kicker">Results</p>
-        <h2>Churn fell in the first month after launch and stayed down</h2>
+        <p class="kicker" data-spot="kicker">Results</p>
+        <h2 data-spot="headline">Churn fell in the first month after launch and stayed down</h2>
         <div class="content">
           <div style="flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 30px; min-height: 0; min-width: 0;">
             <div class="callout" style="display: flex; flex-direction: column; justify-content: center;">
               <div class="stat">
-                <p class="stat-value">3.1%</p>
-                <p class="stat-label">monthly early churn in October</p>
-                <p class="stat-note">Share of new customers cancelling in their first 90 days.</p>
+                <p class="stat-value" data-spot="figure">3.1%</p>
+                <p class="stat-label" data-spot="text">monthly early churn in October</p>
+                <p class="stat-note" data-spot="text-2">Share of new customers cancelling in their first 90 days.</p>
               </div>
-              <ul style="margin-top: 22px;">
+              <ul style="margin-top: 22px;" data-spot="bullets">
                 <li>The drop began in July, the first full month after launch.</li>
                 <li>It has held for four months.</li>
                 <li>Customers still on the old checklist stayed at 5.2%.</li>
               </ul>
             </div>
-            <div class="chart" data-echart>
+            <div class="chart" data-echart data-spot="chart">
               <script type="application/json">
               {
                 "xAxis": { "type": "category", "boundaryGap": false, "data": ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"] },
@@ -426,22 +426,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
             </div>
           </div>
         </div>
-        <div class="footnote">Share of new customers who cancel in their first 90 days, by month joined, April to October 2026. Customer accounts data.</div>
+        <div class="footnote" data-spot="footnote">Share of new customers who cancel in their first 90 days, by month joined, April to October 2026. Customer accounts data.</div>
       </section>
 <!-- ITEM:END -->
 </div></div>
 <script id="item-engine">
+window.ItemEngineInside = true;
+/* host-runtime.js: draws copied design-library items (AUTHORING.md, "What the host page provides"). Copy verbatim, after
+   ECharts, the theme tokens and host.css. ItemHost.draw() redraws; ItemHost.prepare(option, box) readies an option. */
 (function () {
-  var root = document.documentElement, body = document.body;
+  var root = document.documentElement;
   function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
   function series() { return css('--series').split(/\s+/).filter(Boolean).map(css); }
-  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
-     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
-     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
-  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
-  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
-  function moves(box) { return (forced || !still) && marked(box); }
-  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
   function resolve(o) {
     Object.keys(o).forEach(function (k) {
       var v = o[k];
@@ -457,25 +453,44 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       valueAxis: Object.assign({}, axis, { axisLine: { show: false }, splitLine: { lineStyle: { color: css('--chart-grid') } } }),
       legend: { bottom: 0, icon: 'rect', itemWidth: 14, itemHeight: 14, textStyle: { color: css('--ink'), fontSize: 15 } },
       bar: { itemStyle: { borderRadius: 0 }, barMaxWidth: 110, label: { color: css('--ink'), fontSize: 16, fontWeight: 600 } },
-      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15 } },
+      line: { lineStyle: { width: 3 }, symbol: 'circle', symbolSize: 8, label: { color: css('--ink'), fontSize: 15 }, endLabel: { fontSize: 15, color: css('--ink'), textBorderWidth: 0 } },
       scatter: { symbolSize: 16, itemStyle: { opacity: 1 }, label: { color: css('--ink'), fontSize: 15 } },
       markLine: { label: { fontSize: 14, color: css('--muted') } },
       pie: { label: { color: css('--ink'), fontSize: 15 }, itemStyle: { borderColor: css('--paper'), borderWidth: 2 } }
     };
   }
-  /* Hover: a one-line tooltip and a light emphasis on the hovered mark. Nothing moves, fades or redraws on hover.
-     Off for one chart with data-hover="off" (or the item's body), or "tooltip": {"show": false} in its JSON;
-     an item may supply its own tooltip.formatter. Off when exported (html.is-export) and never during a play. */
-  function hoverOff(box) { return root.classList.contains('is-export') || body.getAttribute('data-hover') === 'off' || box.getAttribute('data-hover') === 'off'; }
-  function fmt(t, p, v) {
-    return String(t).split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
-      .replace(/{@[(d+)]}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  /* Number formats in formatter strings: {value:short} or {c:short} gives 7M, 1.2K; {value:comma} or {c:comma} gives 7,000,000. */
+  function short(v) {
+    if (typeof v !== 'number') return v;
+    var a = Math.abs(v), u = a >= 1e9 ? ['B', 1e9] : a >= 1e6 ? ['M', 1e6] : a >= 1e3 ? ['K', 1e3] : ['', 1], n = v / u[1];
+    return n.toLocaleString('en-US', { maximumFractionDigits: u[1] === 1 ? 2 : Math.abs(n) < 10 ? 1 : 0 }) + u[0];
   }
+  function comma(v) { return typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v; }
+  var CODED = /\{(?:c|value):(?:short|comma)\}/;
+  function fmt(t, p, v) {
+    return String(t).replace(/\{(?:c|value):short\}/g, function () { return short(v); }).replace(/\{(?:c|value):comma\}/g, function () { return comma(v); })
+      .split('{c}').join(v).split('{value}').join(v).split('{b}').join(p.name || '').split('{a}').join(p.seriesName || '')
+      .replace(/\{@\[(\d+)\]\}/g, function (m, i) { return Array.isArray(p.value) ? p.value[+i] : v; });
+  }
+  function tplOf(x) { return x ? (x._tpl || (typeof x.formatter === 'string' ? x.formatter : null)) : null; }
+  /* formatter strings with a number format become functions; the string stays in _tpl for the tooltip */
+  function formats(o) {
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if (k === 'formatter' && typeof v === 'string' && CODED.test(v)) {
+        o._tpl = v;
+        o[k] = function (x) { var p = x && typeof x === 'object' ? x : { value: x }, n = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value; return fmt(v, p, n); };
+      } else if (v && typeof v === 'object') formats(v);
+    });
+  }
+  /* Hover: a one-line tooltip and a light emphasis; nothing moves. Off with data-hover="off" (chart or body),
+     "tooltip": {"show": false}, or when exported (html.is-export). An item may give its own tooltip.formatter. */
+  function hoverOff(box) { return root.classList.contains('is-export') || document.body.getAttribute('data-hover') === 'off' || !!(box && box.getAttribute('data-hover') === 'off'); }
   function hover(o) {
     var list = [].concat(o.series || []);
     var cat = [].concat(o.xAxis || [], o.yAxis || []).some(function (a) { return a && a.type === 'category'; });
     var valAxis = [].concat(o.yAxis || [], o.xAxis || []).filter(function (a) { return a && a.type === 'value'; });
-    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a && a.axisLabel && typeof a.axisLabel.formatter === 'string' ? a.axisLabel.formatter : null; };
+    var axisFmt = function (i) { var a = valAxis[i || 0] || valAxis[0]; return a ? tplOf(a.axisLabel) : null; };
     var lines = list.some(function (x) { return x.type === 'line'; });
     var axis = cat && list.every(function (x) { return x.type === 'line' || x.type === 'bar' || x.type === 'scatter'; });
     function hidden(x) { return !x || (x.itemStyle && x.itemStyle.opacity === 0) || x.silent === true || /^_/.test(x.name || ''); }
@@ -483,12 +498,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       var x = list[p.seriesIndex] || {}, v = p.value;
       if (Array.isArray(v)) v = x.type === 'scatter' || x.type === 'effectScatter' ? v[v.length > 2 ? 2 : 1] : v[v.length - 1];
       if (v == null || v === '-') return null;
-      var own = p.data && p.data.label && typeof p.data.label.formatter === 'string' ? p.data.label.formatter : null;
-      var shared = x.label && typeof x.label.formatter === 'string' ? x.label.formatter : null;
-      var t = own || shared || axisFmt(x.yAxisIndex || x.xAxisIndex);
-      return t ? fmt(t, p, v) : (typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v));
+      var t = tplOf(p.data && p.data.label) || tplOf(x.label) || axisFmt(x.yAxisIndex || x.xAxisIndex);
+      return t ? fmt(t, p, v) : comma(v);
     }
-    /* the series name goes in front once, never when the value text (its own label formatter) already carries it */
+    /* the series name goes in front once, never when the value text already carries it */
     function named(p) { return list.length > 1 && p.seriesName && p.seriesName.indexOf('series') !== 0 && String(value(p)).indexOf(p.seriesName) === -1; }
     var tip = {
       show: true, trigger: axis ? 'axis' : 'item', confine: true, transitionDuration: 0, showDelay: 0, hideDelay: 60, enterable: false,
@@ -510,14 +523,35 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     };
     o.tooltip = Object.assign(tip, o.tooltip && typeof o.tooltip === 'object' ? o.tooltip : {});
     list.forEach(function (x) {
-      if (x.emphasis && !x.emphasis.disabled) return;   /* the item's own emphasis stands */
+      if (x.emphasis && !x.emphasis.disabled) return;
       var w = x.lineStyle && x.lineStyle.width || 3;
       x.emphasis = x.type === 'line' ? { focus: 'none', scale: false, lineStyle: { width: w }, label: { show: x.label && x.label.show } }
         : { focus: 'none', scale: false, itemStyle: { borderColor: css('--navy'), borderWidth: 1.5 } };
       if (hidden(x)) x.emphasis = { disabled: true };
     });
   }
-  /* Tables: a native tooltip on each cell (row, column: value) and a subtle highlight (kit CSS). */
+  /* End labels: no halo, wrapped to the room grid.right leaves, close labels pushed apart. */
+  function endLabels(o) {
+    var right = o.grid && !Array.isArray(o.grid) && typeof o.grid.right === 'number' ? o.grid.right : 0;
+    [].concat(o.series || []).forEach(function (s) {
+      var e = s.endLabel;
+      if (s.type !== 'line' || !e || !e.show) return;
+      if (e.textBorderWidth == null) e.textBorderWidth = 0;
+      if (right > 40 && e.width == null) { e.width = right - 12; if (e.overflow == null) e.overflow = 'break'; }
+      if (!s.labelLayout) s.labelLayout = { moveOverlap: 'shiftY' };
+    });
+  }
+  function prepare(o, box) {
+    resolve(o);
+    var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
+    if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
+    endLabels(o);
+    if (hoverOff(box) || (o.tooltip && o.tooltip.show === false)) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
+    else hover(o);
+    formats(o);
+    o.animation = false;
+    return o;
+  }
   function tableTips() {
     Array.prototype.forEach.call(document.querySelectorAll('.lib-table tbody tr'), function (tr) {
       var table = tr.closest('table'), heads = table ? Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.innerText.trim(); }) : [];
@@ -525,33 +559,48 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
       Array.prototype.forEach.call(tr.cells, function (td, i) { if (i && !td.title && td.innerText.trim()) td.title = row + (heads[i] ? ' · ' + heads[i] : '') + ': ' + td.innerText.trim(); });
     });
   }
+  /* animate(box), when given, says which charts draw in (the library's own engine uses it) */
   var drawn = 0;
-  function draw(play) {
+  function draw(animate) {
     if (!window.echarts) return;
     var name = 'item' + (++drawn);
     echarts.registerTheme(name, theme());
     Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (box) {
       var src = box.querySelector('script[type="application/json"]');
       if (!src) return;
-      var o = JSON.parse(src.textContent);
-      resolve(o);
-      var y = o.yAxis && !Array.isArray(o.yAxis) && o.yAxis.name && o.yAxis.show !== false;
-      if (!o.grid) o.grid = { left: y ? 46 : 8, right: 28, top: 30, bottom: o.legend ? 44 : 8, containLabel: true };
-      var anim = play && moves(box);
-      var off = hoverOff(box) || (o.tooltip && o.tooltip.show === false);
-      if (off) { o.tooltip = { show: false }; [].concat(o.series || []).forEach(function (s) { s.emphasis = { disabled: true }; }); }
-      else hover(o);
-      o.animation = !!anim;
+      var o = prepare(JSON.parse(src.textContent), box);
+      var anim = !!(animate && animate(box));
+      o.animation = anim;
       if (anim) { o.animationDuration = o.animationDuration || 900; o.animationEasing = o.animationEasing || 'cubicOut'; }
       if (box._chart) box._chart.dispose();
       if (!box._holder) { box._holder = document.createElement('div'); box._holder.style.cssText = 'position:absolute;inset:0;'; box.appendChild(box._holder); }
       box._chart = echarts.init(box._holder, name, { renderer: 'svg' });
       box._chart.setOption(o);
-      /* no hover while it plays: the pointer is ignored until the draw-in is over */
       if (anim) { box._holder.style.pointerEvents = 'none'; clearTimeout(box._still); box._still = setTimeout(function () { box._holder.style.pointerEvents = ''; }, (o.animationDuration || 900) + 300); }
     });
     window.dispatchEvent(new Event('item:draw'));
   }
+  function chart(el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; }
+  window.ItemHost = { css: css, theme: theme, prepare: prepare, draw: draw, chart: chart, tableTips: tableTips };
+  if (window.ItemEngineInside) return;   /* inside a library item its engine drives drawing and motion */
+  window.ItemEngine = { motion: function () { return false; }, play: function () {}, force: function () {}, chart: chart, redraw: function () { draw(); } };
+  window.itemRedraw = window.ItemEngine.redraw;
+  function start() { tableTips(); draw(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  var t = null;
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.resize(); }); }, 100); });
+  window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
+})();
+(function () {
+  var root = document.documentElement, body = document.body, H = window.ItemHost;
+  /* Motion only for items marked data-animate (body or one element). Reduced motion means no AUTOPLAY:
+     load, scroll into view and theme changes show the finished state. An explicit action (Replay, an item's
+     own Play or step control, opening the item in the index popup) always plays: it sets forced. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches, forced = false;
+  function marked(box) { return body.hasAttribute('data-animate') || !!(box && box.hasAttribute('data-animate')); }
+  function moves(box) { return (forced || !still) && marked(box); }
+  function force() { forced = true; root.classList.add('forced'); if (!root.classList.contains('play')) root.classList.add('play'); }
+  function draw(play) { H.draw(play ? moves : null); }
   /* Count-up: <span data-tick-up="1240" data-prefix="$" data-suffix="K" data-decimals="0">$1,240K</span>.
      The written text is the final value, so the item reads right with motion off. */
   function show(el, v) {
@@ -653,13 +702,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper)
     motion: function () { return forced || !still; },   /* may motion run now: true unless reduced and no explicit action */
     play: function () { replay(true); },                 /* an item's own Play control: a full explicit replay */
     force: function () { force(); },                     /* an item's own step or switch control: let its motion run */
-    chart: function (el) { var box = el && el.closest ? (el.closest('.chart[data-echart]') || (el.querySelector && el.querySelector('.chart[data-echart]'))) : document.querySelector('.chart[data-echart]'); return (box && box._chart) || null; },
+    chart: H.chart,
     redraw: function () { draw(false); }
   };
   window.itemRedraw = window.ItemEngine.redraw;
   window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('.chart[data-echart]'), function (b) { if (b._chart) b._chart.dispatchAction({ type: 'hideTip' }); }); });
   window.addEventListener('resize', function () { fit(); draw(false); });
-  tableTips(); fit(); replay();
+  H.tableTips(); fit(); replay();
 })();
 </script>
 </body>
