@@ -1,69 +1,57 @@
 ---
 name: analysis
-description: Data analysis in two modes. Explore (the default) tests things in the conversation, creating and saving nothing. Report, only when asked, builds a quick templated HTML readout, one file per section (an analytic returning tables and metrics, its chart, and author-written bullets whose figures are pulled from those metrics). Use for "can you tell me if / where / why ..." questions on data, and to rerun or change an existing report folder. Not for standing weekly or monthly views; that is a dashboard.
+description: Data analysis in two modes. Explore (the default) answers a question about data in the conversation and saves nothing. Report, only when asked, builds a one-file HTML readout whose sections each hold a calculation, a chart, table, hero card or animation copied from the design library, and words whose figures come from the data. Use for "can you tell me if / where / why ..." questions on data, and to change or rerun a report. Not for standing weekly or monthly views; that is a dashboard.
 ---
 
 # Analysis
 
-Explore by default. Build a report only when asked.
+The skill answers questions about data. By default it explores: it tests things in the conversation and saves nothing. When asked for a report, it builds a single HTML page: a headline answer, then one to a few sections, each proving one point with one visual taken from the design library.
 
-## First
+## A finished report folder
 
-- Read the project's `CLAUDE.md` map. Open the project plan and findings it lists when they bear on the question.
+```
+reports/claims-review/
+  report.py              the brief, the sources, the answer and the order of sections   edit
+  sections/s1_<name>.py  one section: its calculation, wiring, words and copied visual  edit
+  sections/_shared.py    thresholds and helpers shared by the sections                  edit
+  page.html              the page shell: theme, spacing settings, library runtime       edit the settings only
+  run.py                 the tool that builds the report                                never edit
+  claims-review.html     the report itself, rebuilt every time                          never edit
+  claims-review_shot.png the latest screenshot                                          never edit
+```
 
-## Explore
+## How it works
 
-- Test however suits the question: Python or SQL in the session, counts, cuts, comparisons. No required file format.
-- Results go in the conversation: a small table or a few figures, each with one line on what it shows.
-- Create no folders and save no files unless asked. A table asked for as a file (Excel, CSV) goes in the project's `exports/`; new folder: add its map row.
-- Open question ("why is X high?"): name the few things you will test, likeliest first. Ask before chasing something off that list.
-- Data with more than one date (paid, service, received): check the answer on each. If they disagree, say so.
-- Say when a result looks worth a report. The person decides.
+1. Pick a visual from the design library (its lists of charts, tables, hero cards and animations).
+2. Copy it into the report: the tool writes one section file holding the visual and a calculation.
+3. Point it at the data: the section's wiring says which column fills which part of the visual.
+4. Edit that one file to change words, series, axes, formats or colours.
+5. Build the report and look at its screenshot; data changes need no edits, only a rebuild.
+6. A visual you like can be saved back to the library.
 
-## Report
+## Where reports go
 
-Only when asked ("write it up", "make a report").
-
-| Request | Before building |
-| --- | --- |
-| Small: one question, one or two sections | One message: the question, who reads it, the answer and the sections you will show. One yes covers it |
-| Larger, or an open question | 1. Brief: question, reader, what they must be able to say or do after, sources, things to test. Yes. 2. The answer in two sentences, one line per section (its claim, its chart). Yes |
-
-Told "just do it": skip the yes and list what you assumed at hand-over.
-
-A caveat from exploring that changes the size or reading of the answer goes in the headline, `basis` or an answer bullet, never only in a note.
-
-1. **Where.** The map's folder for reports or outputs. No fitting folder, or no map: ask where.
-2. **Create.** `python <this skill>/scripts/new_report.py <parent> <name> --title "..." --question "..." --for "<reader>" --source <name>=<file> --map <project CLAUDE.md>`. It adds the map line.
-3. **Sections.** `python run.py list` shows the sources and columns. Per section: `python run.py add-section NAME --source SRC --chart bar|line|table --x COL [--y COL] [--agg sum|count|mean] [--where COL=VALUE] --bullets N --desc "8 to 10 words"` (no `--y`: counts rows; `--y`: sums; `--where` limits rows; quote `"COL>=VALUE"` and `<=`). It writes a working `sections/sN_NAME.py`; reword the lines it prints. It notes a section that seems to repeat one already there: tell the user or ask which they meant. Other shapes: edit that file (`references/section.md`).
-4. **Answer.** In `report.py`: the brief (docstring) and `ANSWER`. `python run.py report`. Fix every `STOP:` and `check:` line.
-5. **Look at it.** `python run.py shot` saves a screenshot to read: charts drawn, nothing overlapping, plain words throughout.
-6. **Hand over.** The report path, the answer, anything assumed or unverified. Offer a cold read (`references/cold-read.md`); run it only if accepted.
-
-## Bullets
-
-- You write them from the results and the project's findings. No commentary step.
-- Every figure is a placeholder pulling a metric: `{metric:.0%}`, `{section_name.metric:$short}`. Never type a result: a typed number is flagged, so make it a metric. Years, and thresholds that match `DEFAULTS` or `PARAMS`, may be typed.
-- A comparison word (normal, in line, flat, up) needs both sides as metrics on one basis.
-- Section title: the finding as a sentence. Up to 3 bullets, about 25 words each, point first.
-- The answer is a headline and `basis` (a chart note is not enough). Bullets and key figures are optional. A named size gets exactly that: one chart and three bullets means no more.
+- By default in `reports/<name>/` under the folder the work starts from.
+- A project's map (the `## Map` section the toolbox skill writes into a project's `CLAUDE.md`) may name a reports folder; that overrides the default. A project without a map works fine.
 
 ## Rules
 
-- The report answers the question, nothing else. One to five sections, each proving one claim the answer needs. No overview or profiling section.
-- One chart per section, proving its claim. Reads the same without it: cut it.
-- Reader does not know the data: no column names, codes or unexplained abbreviations anywhere.
-- Nothing saved by default: sources and tables live in memory for each run. `KEEP` saves a slow source; a section's `export` writes a table as CSV.
-- Never read or edit `run.py`. `page.html` only for a restyle the user asks for, and then only its `:root` block.
-- No company names or logos.
-- User likes a visual, or says save it: launch `design-librarian` with the files and the library folder (the map's optional `Design library:` line, for a library kept elsewhere; else `design-library` beside `.claude`, else `Toolkit Update/design-library`); it saves them there.
+- Every figure in the text is a placeholder filled from the data; a typed number is flagged.
+- One visual per section, proving one claim the answer needs.
+- No column names, codes or company names where the reader sees them.
+- Never edit `run.py`.
 
-## Existing report folder
+## To do this | Read this
 
-- Add or change a section: `python run.py list` (the registry), then `add-section` or the one file it names; reword the bullets; `python run.py report`; `python run.py shot`.
-- Open `report.py` only for the brief, the answer or the order. Open a section file only when you just added it or the user points at it.
-- Rerun: compare the new file's date range and row count with the old one and update `DEFAULTS` (or `PARAMS`, if only this report differs). `python run.py report`, then reread the headline, `basis`, titles and bullets; placeholders update, words do not. A section that changes the answer means rewriting `ANSWER`.
-- A deck, dashboard or Excel file needs a section's numbers: `python run.py data NAME [TABLE] [--json] [--out FILE]` (`.xlsx` writes a workbook). No script needed.
-- New question: new folder.
-
-`python run.py --help` lists the commands. A `STOP:` line names the file and the fix.
+| To do this | Read this |
+| --- | --- |
+| Answer a question without making anything | `references/explore-a-question.md` |
+| Start a new report | `references/make-a-report.md` |
+| Add a chart, table or hero card | `references/add-a-chart.md` |
+| Add an animation | `references/add-an-animation.md` |
+| Change a section (words, series, axes, formats) | `references/change-a-section.md` |
+| Draw a visual the library does not have | `references/make-your-own-section.md` |
+| Change the theme, spacing or where a visual sits | `references/change-theme-or-layout.md` |
+| Rebuild with new data | `references/rerun-with-new-data.md` |
+| Get a section's numbers out (CSV, Excel) | `references/get-numbers-out.md` |
+| Save a visual to the design library | `references/save-a-visual-to-the-library.md` |

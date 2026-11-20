@@ -20,7 +20,7 @@
 - No environment variables anywhere; settings live in each output's own files.
 
 ### Synced folders
-- Workspace dashboards folder, outside OneDrive and every synced folder: `<path>`. `dashboard-new` puts dashboards for projects in a synced folder there.
+- Workspace dashboards folder, outside OneDrive and every synced folder: `<path>`. `dashboard` puts dashboards for projects in a synced folder there.
 
 ### Project layout
 Folders appear only when they hold a file. Other names only if the user asks.

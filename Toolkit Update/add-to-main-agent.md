@@ -84,11 +84,11 @@ How to record:
 | New project, full rescope, a new kind of output | `toolbox` |
 | A question of the data; "write it up"; change or rerun a report; a report table out to Excel | `analysis` |
 | "Note that"; before writing any deck, report or summary | `findings` |
-| New dashboard, or port work into one | `dashboard-new` |
-| Change a dashboard, new data for it, an offline file from it | `dashboard-work` |
+| New dashboard, change one, port work into one, new data for it, an offline file from it | `dashboard` |
 | Dashboard text across many filters or refreshes | `commentary` |
 | A deck, or a change to one | `presentation` |
 | The user likes a visual, "save that" | `design-librarian` agent |
+| Planning a report, deck or dashboard: which library items fit | `graphic-designer` agent |
 
 ### Subagents
 - Toolkit work stays in this conversation. A subagent only where the loaded skill names one.

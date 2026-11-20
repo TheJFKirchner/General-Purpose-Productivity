@@ -3,10 +3,10 @@
 /**
  * Screenshots every slide of a presentation with a headless Edge or Chrome already on the machine,
  * then joins them into one contact sheet, sheet.png: read that one image, not each slide.
- * No dependencies. Images are for checking the deck; keep them out of the presentation folder.
+ * No dependencies. Images are for checking the deck, not for sending it.
  *
- * Usage: node screenshot.js <path-to-html> [<output-dir> or -] [slide-id ...] [--browser <path>]
- * Default output: <system temp>/deck-shots/<deck folder name>/.
+ * Usage: node screenshot.js <deck folder or presentation.html> [<output-dir> or -] [slide-id ...] [--browser <path>]
+ * Default output: shots/ in the deck folder.
  */
 
 const fs = require('fs');
@@ -31,13 +31,18 @@ function main() {
   const args = process.argv.slice(2);
   const b = args.indexOf('--browser');
   const given = b !== -1 ? args.splice(b, 2)[1] : null;
-  let [htmlPath, outDir, ...only] = args;
+  // Git Bash paths (/c/Users/...) as Windows paths
+  const fix = p => (process.platform === 'win32' && typeof p === 'string' ? p.replace(/^\/([a-zA-Z])(?=\/|$)/, (m, d) => `${d.toUpperCase()}:`) : p);
+  let [htmlPath, outDir, ...only] = args.map(fix);
   if (!htmlPath) {
-    console.error('Usage: node screenshot.js <path-to-html> [<output-dir> or -] [slide-id ...] [--browser <path>]');
+    console.error('Usage: node screenshot.js <deck folder or presentation.html> [<output-dir> or -] [slide-id ...] [--browser <path>]');
     process.exit(1);
   }
-  // default (no folder, or -): the system temp folder, deck-shots/<deck folder name>; for looking, not kept
-  if (!outDir || outDir === '-') outDir = path.join(os.tmpdir(), 'deck-shots', path.basename(path.dirname(path.resolve(htmlPath))));
+  if (!fs.existsSync(htmlPath)) { const d = require('./deck.js').resolveDeck(htmlPath); if (d) htmlPath = d; }   // a deck's name: decks/<name>
+  if (fs.existsSync(htmlPath) && fs.statSync(htmlPath).isDirectory()) htmlPath = path.join(htmlPath, 'presentation.html');
+  if (!fs.existsSync(htmlPath)) { console.error(`STOP: ${htmlPath} not found`); process.exit(1); }
+  // default (no folder, or -): shots/ in the deck folder; for looking, not for sending
+  if (!outDir || outDir === '-') outDir = path.join(path.dirname(path.resolve(htmlPath)), 'shots');
   const browser = [given, ...BROWSERS].filter(Boolean).find(p => fs.existsSync(p));
   if (!browser) {
     console.error('STOP: no Edge or Chrome found. Pass --browser <path to the browser>, or look at the deck in a browser instead.');
@@ -49,13 +54,16 @@ function main() {
   const end = html.indexOf('<!-- SLIDES:END -->');
   const slidesHtml = start !== -1 && end !== -1 ? html.slice(start, end) : html;
   const ids = [...slidesHtml.matchAll(/<section\b[^>]*\bid="([^"]+)"/g)].map(m => m[1]);
+  const empty = !ids.length && !only.length;   // a new deck with no slides: one picture of the empty page
+  if (empty) { ids.push('empty'); console.log('The deck has no slides yet: shooting the empty page.'); }
   const wanted = only.length ? ids.filter(id => only.includes(id)) : ids;
   if (wanted.length === 0) {
-    console.error('STOP: no slides with an id found' + (only.length ? ' matching ' + only.join(', ') : '') + '.');
+    console.error('STOP: no slides with an id matching ' + only.join(', ') + '.');
     process.exit(1);
   }
 
   fs.mkdirSync(outDir, { recursive: true });
+  if (!only.length) fs.readdirSync(outDir).filter(f => /^\d\d+-.*\.png$/.test(f)).forEach(f => fs.rmSync(path.join(outDir, f)));   // pictures of slides since removed
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'deck-shot-'));
   const base = pathToFileURL(path.resolve(htmlPath)).href;
   let failed = 0;
@@ -69,7 +77,7 @@ function main() {
       `--user-data-dir=${profile}`,
       '--window-size=1280,720', '--virtual-time-budget=6000',
       `--screenshot=${file}`,
-      `${base}?export#/${id}`,
+      empty ? `${base}?export` : `${base}?export#/${id}`,
     ], { stdio: 'ignore', timeout: 60000 });
     if (fs.existsSync(file)) {
       console.log(`${n}-${id}.png`);
