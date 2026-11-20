@@ -15,7 +15,7 @@
 .bg-req-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 .bg-req button.btn { font: inherit; font-weight: 600; cursor: pointer; }
 .bg-req button:disabled { opacity: .5; cursor: default; }
-.bg-grid { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.bg-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .bg-stage { position: relative; background: var(--paper); border: 1px solid var(--rule); }
 .bg-svg { display: block; width: 100%; height: auto; }
 .bg-svg .be { stroke: var(--neutral); stroke-width: 1.25; opacity: .55; transition: opacity .3s, stroke .3s, stroke-width .3s; }
@@ -25,7 +25,7 @@
 .bg-svg .hit { fill: transparent; }
 .bg-svg .ring { fill: none; stroke: var(--blue); stroke-width: 2; stroke-dasharray: 3 3; opacity: 0; transition: opacity .3s; }
 .bg-svg .halo { fill: var(--blue); opacity: .14; transform-box: fill-box; transform-origin: center; }
-.bg-svg .bl { fill: var(--ink); font-size: 17px; font-weight: 600; text-anchor: middle; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.bg-svg .bl { fill: var(--ink); font-size: 18px; font-weight: 600; text-anchor: middle; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
 .bg-svg .bn:hover .dot, .bg-svg .bn:focus .dot, .bg-svg .bn.sel .dot { stroke: var(--ink); stroke-width: 3; }
 .bg-svg .bn:focus-visible .ring { opacity: 1; stroke: var(--ink); }
 .bg.running .bn:not(.picked) { opacity: .28; }
@@ -37,16 +37,15 @@
 .bg-tip strong, .bg-panel strong { display: block; color: var(--ink); }
 .bg-tip span { color: var(--muted); }
 .bg-panel { display: none; margin-top: 10px; padding: 12px 14px; min-height: 5.5em; background: var(--wash); border: 1px solid var(--rule); font-size: .92rem; color: var(--muted); }
-.bg-read h3 { margin: 0 0 10px; font-size: 1.05rem; }
-.bg-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.bg-list li { padding: 8px 10px; border-left: 3px solid var(--blue); background: var(--tint); font-size: .88rem; color: var(--muted); }
-.bg-list li strong { display: block; color: var(--ink); font-size: .92rem; }
+.bg-read h3 { margin: 0 0 8px; font-size: 1rem; }
+.bg-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.bg-list li { padding: 4px 8px; border-left: 3px solid var(--blue); background: var(--tint); font-size: .78rem; line-height: 1.3; color: var(--muted); }
+.bg-list li strong { display: block; color: var(--ink); font-size: .84rem; }
 .bg-list li.bg-empty { border-left-color: var(--rule); background: var(--wash); }
-.bg-count { margin: 12px 0 0; font-weight: 600; color: var(--ink); }
-.bg-cap { margin: 16px 0 0; font-size: .9rem; color: var(--muted); max-width: 52rem; }
-.bg-point { margin: 12px 0 0; max-width: 52rem; }
+.bg-count { margin: 8px 0 0; font-size: .92rem; font-weight: 600; color: var(--ink); }
+.bg-cap { margin: 14px 0 0; font-size: .9rem; color: var(--muted); max-width: 52rem; }
 @media (max-width: 860px) { .bg-grid { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 640px) { .bg-tip { display: none; } .bg-panel { display: block; } .bg-svg .bl { font-size: 22px; } }
+@media (max-width: 640px) { .bg-tip { display: none; } .bg-panel { display: block; } .bg-svg .bl { font-size: 26px; stroke-width: 5px; } }
 @media (prefers-reduced-motion: no-preference) {
   .bg-svg .halo { animation: bg-pulse 4.5s ease-in-out infinite; }
   @keyframes bg-pulse { 0%, 100% { transform: scale(1); opacity: .14; } 50% { transform: scale(1.35); opacity: .05; } }
@@ -55,6 +54,11 @@
   .bg-svg *, .bg-svg .be, .bg-svg .bn { transition: none !important; animation: none !important; }
 }
 @media print { .bg-req-btns, .bg-tip, .bg-panel { display: none; } .bg-svg .halo { display: none; } }
+.qa-wrap { padding-block: clamp(4px, 1.5vw, 16px); }
+.bg-block-sec { padding-block: clamp(32px, 5vw, 52px); }
+.more-body > :first-child { margin-top: 0; }
+.more-body .split { margin-top: 24px; }
+.more-body figure.flow { margin-top: 24px; }
 </style>
 </head>
 <body>
@@ -85,64 +89,35 @@
     <div>
       <p class="hero-kicker">Idea 2 of 3</p>
       <h1 class="hero-title">The brain</h1>
-      <p class="hero-lead">Shared memory for the assistant and the team: short notes that outlive any one conversation.</p>
+      <p class="hero-lead">A shared notebook the assistant reads before it answers.</p>
     </div>
   </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The problem</p>
-      <h2>The assistant forgets everything</h2>
-    </div>
-    <div class="prose">
-      <p>An assistant starts every conversation knowing nothing about your work. So you explain the same facts again: what a column means, which table to trust, why a number is defined that way.</p>
-      <p>What one person works out stays with that person. A colleague who starts the same kind of work begins from zero.</p>
-    </div>
+<section class="sec qa-wrap"><div class="wrap">
+<section class="qa">
+  <h2 class="qa-q">Why does the assistant need a brain?</h2>
+  <div class="qa-a">
+    <p>Because it starts every conversation knowing nothing about your work. So you explain the same things again: what a column means, which table to trust, why a number is defined that way. And when one person figures something out, it stays with them.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>Explain a thing once, not every time.</li>
+    <li>What one person learns, the team gets.</li>
+  </ul>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">So what is it, actually?</h2>
+  <div class="qa-a">
+    <p>A folder of short note pages, one per topic, kept as plain files (markdown, if you know it). Some pages are yours alone. Others are shared with the team. Before the assistant answers, it reads the ones that matter.</p>
+    <p>The graph below is a made-up brain: each circle is a page, each line joins two related pages. Press the button to see what the assistant would open for a real question.</p>
   </div>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">What it is</p>
-      <h2>A set of short pages, kept as ordinary files</h2>
-      <p class="lead">The brain is a wiki: one page per topic, written as plain markdown files in a folder.</p>
-    </div>
-    <aside class="define">
-      <p class="define-tag">In plain terms</p>
-      <p><strong>The brain</strong>: a shared folder of short note pages that the assistant can read before it answers, so it already knows what your team knows.</p>
-    </aside>
-    <div class="cards three" style="margin-top:24px">
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2-2h8l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
-        <h3>Where it lives</h3>
-        <p>In a wiki folder of markdown pages. The files are not locked inside one tool.</p>
-      </div>
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>
-        <h3>What goes in</h3>
-        <p>Facts that stay true: how data and systems behave, known traps, methods, metric definitions, agreed numbers.</p>
-      </div>
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-        <h3>Who can read it</h3>
-        <p>It has two sides. <strong>Personal</strong> pages are your own. <strong>Team</strong> pages are shared. Lines reach the team side only when a person moves them there.</p>
-      </div>
-    </div>
-  </div>
-</section>
+</div></section>
 
-
-<!--BG-START-->
-<section class="sec">
+<section class="sec alt bg-block-sec">
   <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">A look inside</p>
-      <h2>Pages that link to each other</h2>
-      <p class="lead">Each circle is one page. A line joins two pages that are related. The pages here are made up, to show the shape.</p>
-    </div>
     <div class="bg-req">
       <p class="bg-req-label" id="bg-req-label">Example request</p>
       <p class="bg-req-box" aria-labelledby="bg-req-label">How has claims trend changed month over month?</p>
@@ -280,209 +255,133 @@
         <p class="bg-count" id="bg-count" role="status" aria-live="polite">Nothing read yet.</p>
       </div>
     </div>
-    <p class="bg-cap" id="bg-cap">Running the request would light up the pages that bear on trend, with the lines between them, and dim the rest. The ones that light up are listed beside the graph. Larger circles are the pages most other pages link to.</p>
-    <p class="bg-point"><strong>The assistant reads the few pages that bear on the request, not the whole brain.</strong> That keeps the conversation short, and the answer matches what the team has already agreed.</p>
-  </div>
-</section>
-<!--BG-END-->
-
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">How it works</p>
-      <h2>From a passing fact to a page anyone can read</h2>
-      <p class="lead">Four steps. The assistant does the writing; you decide when it files and what the team sees.</p>
-    </div>
-    <ol class="steps">
-      <li>
-        <h3>Something worth keeping comes up</h3>
-        <p>During a session the assistant jots down each durable fact as one plain line. It asks itself two things: is this a result of the project (that goes to findings), and would someone starting other work want to know it first?</p>
-      </li>
-      <li>
-        <h3>Intake decides where it belongs</h3>
-        <p>When you ask it to, the filing step goes through the waiting facts without asking you questions. It works each one into the right personal page, or starts a new page from a template if the topic has none.</p>
-      </li>
-      <li>
-        <h3>It is written as a short page with its source</h3>
-        <p>Pages follow the wiki's own rules for layout, tags and sources. To share a page, you pick the lines and move them to the team page of the same name.</p>
-      </li>
-      <li>
-        <h3>Later sessions read the relevant pages</h3>
-        <p>At the start of new work, the assistant lists which pages and sections are worth reading, each with a reason, and reads only those. This works for you or a colleague.</p>
-      </li>
-    </ol>
-
-    <figure class="flow" style="margin-top:32px">
-      <div class="flow-box">
-        <svg viewBox="0 0 720 250" role="img" aria-label="A fact comes up in a session and is noted. Intake files it on a personal page. You can promote chosen lines to a team page. A reading list points a new session to the pages worth reading.">
-          <defs>
-            <marker id="br-arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker>
-          </defs>
-          <g class="node"><rect x="10" y="30" width="140" height="64" rx="2"/><text x="80" y="51">Fact comes up</text><text class="sub" x="80" y="73">noted as one line</text></g>
-          <g class="node key"><rect x="210" y="30" width="140" height="64" rx="2"/><text x="280" y="51">Intake</text><text class="sub" x="280" y="73">files it</text></g>
-          <g class="node soft"><rect x="410" y="30" width="140" height="64" rx="2"/><text x="480" y="51">Personal page</text><text class="sub" x="480" y="73">with its source</text></g>
-          <g class="node ghost"><rect x="590" y="30" width="120" height="64" rx="2"/><text x="650" y="51">Team page</text><text class="sub" x="650" y="73">if you promote</text></g>
-          <g class="node"><rect x="410" y="170" width="140" height="64" rx="2"/><text x="480" y="191">Reading list</text><text class="sub" x="480" y="213">pages worth reading</text></g>
-          <g class="node"><rect x="210" y="170" width="140" height="64" rx="2"/><text x="280" y="191">New session</text><text class="sub" x="280" y="213">you or a colleague</text></g>
-          <path class="edge" d="M150 62 H206" marker-end="url(#br-arr)"/>
-          <path class="edge move" d="M350 62 H406" marker-end="url(#br-arr)"/>
-          <path class="edge dash" d="M550 62 H586" marker-end="url(#br-arr)"/>
-          <path class="edge" d="M480 94 V166" marker-end="url(#br-arr)"/>
-          <path class="edge" d="M406 202 H354" marker-end="url(#br-arr)"/>
-          <text class="label" x="525" y="136">listed for</text>
-        </svg>
-      </div>
-      <figcaption>A fact is filed once, then read by every later session that needs it.</figcaption>
-    </figure>
+    <p class="bg-cap" id="bg-cap">Running the request lights up the pages that bear on trend, plus the lines between them, and dims the rest. The big circles are the pages most others link to.</p>
   </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The parts</p>
-      <h2>The skills and helpers behind each step</h2>
-      <p class="lead">A <strong>skill</strong> is a written guide the assistant follows. A <strong>subagent</strong> is a helper it starts for one focused job.</p>
-    </div>
-    <div class="cards two">
-      <div class="card">
-        <span class="tag">Skill</span>
-        <h3>brain-file</h3>
-        <p>Files the facts recorded so far into personal pages. Runs only when you ask, and asks no questions.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Skill</span>
-        <h3>brain-ingest</h3>
-        <p>Pulls the lasting facts out of documents you drop in a folder, then files them the same way.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Skill</span>
-        <h3>brain-promote</h3>
-        <p>Moves lines you pick from a personal page to the team page. The only step that changes team pages.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Skill</span>
-        <h3>brain-cite</h3>
-        <p>Lists the pages and sections worth reading for what you are doing, each with a reason, in a file called <code>braincite.md</code>.</p>
-      </div>
-      <div class="card">
-        <span class="tag soon">Subagent</span>
-        <h3>brain-filer</h3>
-        <p>Decides where each fact belongs and writes it into the page. Creates a page when a topic has none.</p>
-      </div>
-      <div class="card">
-        <span class="tag soon">Subagent</span>
-        <h3>brain-extractor</h3>
-        <p>Reads documents and returns the facts in them that will still be true next month.</p>
-      </div>
-      <div class="card">
-        <span class="tag soon">Subagent</span>
-        <h3>brain-promoter</h3>
-        <p>Adds the lines you picked to the team page and removes them from your personal page.</p>
-      </div>
-      <div class="card">
-        <span class="tag soon">Subagent</span>
-        <h3>brain-context-analyst</h3>
-        <p>Goes through the list of pages and picks the few worth reading for an ask.</p>
-      </div>
-    </div>
-    <p style="margin-top:20px">The wiki app can also open the same folders, so you can browse the pages and review changes on screen.</p>
+<section class="sec qa-wrap"><div class="wrap">
+<section class="qa">
+  <h2 class="qa-q">Does it read the whole thing every time?</h2>
+  <div class="qa-a">
+    <p>No. For a question about claims trend, the assistant above opens 11 of the 22 pages and leaves the rest closed. It picks pages by what they say about the question, and it opens only the part that applies.</p>
   </div>
+  <ul class="qa-wins">
+    <li>Shorter conversations.</li>
+    <li>The same answer for everyone, because it comes from the same pages.</li>
+  </ul>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">What belongs</p>
-      <h2>Facts go in the brain. Results and secrets do not.</h2>
-    </div>
-    <div class="split">
-      <div>
-        <div class="split-head">
-          <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
-          <h3>In the brain</h3>
+<section class="qa">
+  <h2 class="qa-q">How does something get into the brain?</h2>
+  <div class="qa-a">
+    <p>While you work, the assistant jots down facts worth keeping, one line each. Later, when you ask it to, it files each one onto the right personal page, or starts a new page if the topic has none. Sharing is your call: you pick which lines move to the team page.</p>
+  </div>
+  <details class="more">
+    <summary>How it works, step by step</summary>
+    <div class="more-body">
+      <ol class="steps row">
+        <li><h3>Something comes up</h3><p>The assistant notes it as one plain line.</p></li>
+        <li><h3>Intake files it</h3><p>It goes onto the right personal page.</p></li>
+        <li><h3>You share it</h3><p>Pick lines to move to the team page.</p></li>
+        <li><h3>Later sessions read it</h3><p>You or a colleague, on a similar task.</p></li>
+      </ol>
+      <figure class="flow">
+        <div class="flow-box">
+          <svg viewBox="0 0 720 250" role="img" aria-label="A fact comes up in a session and is noted. Intake files it on a personal page. You can promote chosen lines to a team page. A reading list points a new session to the pages worth reading.">
+            <defs>
+              <marker id="br-arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker>
+            </defs>
+            <g class="node"><rect x="10" y="30" width="140" height="64" rx="2"/><text x="80" y="51">Fact comes up</text><text class="sub" x="80" y="73">noted as one line</text></g>
+            <g class="node key"><rect x="210" y="30" width="140" height="64" rx="2"/><text x="280" y="51">Intake</text><text class="sub" x="280" y="73">files it</text></g>
+            <g class="node soft"><rect x="410" y="30" width="140" height="64" rx="2"/><text x="480" y="51">Personal page</text><text class="sub" x="480" y="73">with its source</text></g>
+            <g class="node ghost"><rect x="590" y="30" width="120" height="64" rx="2"/><text x="650" y="51">Team page</text><text class="sub" x="650" y="73">if you promote</text></g>
+            <g class="node"><rect x="410" y="170" width="140" height="64" rx="2"/><text x="480" y="191">Reading list</text><text class="sub" x="480" y="213">pages worth reading</text></g>
+            <g class="node"><rect x="210" y="170" width="140" height="64" rx="2"/><text x="280" y="191">New session</text><text class="sub" x="280" y="213">you or a colleague</text></g>
+            <path class="edge" d="M150 62 H206" marker-end="url(#br-arr)"/>
+            <path class="edge move" d="M350 62 H406" marker-end="url(#br-arr)"/>
+            <path class="edge dash" d="M550 62 H586" marker-end="url(#br-arr)"/>
+            <path class="edge" d="M480 94 V166" marker-end="url(#br-arr)"/>
+            <path class="edge" d="M406 202 H354" marker-end="url(#br-arr)"/>
+            <text class="label" x="525" y="136">listed for</text>
+          </svg>
         </div>
-        <ul class="ticks">
-          <li>Facts that outlive a project, such as how a table behaves or a known gotcha.</li>
-          <li>Definitions and methods, including the organisation's standing definitions.</li>
-          <li>Decisions and the reason for them.</li>
-          <li>Reference numbers someone would look up again. <span>Give the period and where it came from.</span></li>
-          <li>Something you are unsure of. <span>Say in the fact that it is unconfirmed.</span></li>
-        </ul>
-      </div>
-      <div>
-        <div class="split-head">
-          <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2 2.3-2.2M4 18l1.2 1.2 2.3-2.2"/></svg></span>
-          <h3>Not in the brain</h3>
+        <figcaption>A fact is filed once, then read by every later session that needs it.</figcaption>
+      </figure>
+      <div class="split">
+        <div>
+          <div class="split-head"><h3>Four skills</h3></div>
+          <p>A skill is a written guide the assistant follows.</p>
+          <ul class="ticks">
+            <li><strong>brain-file</strong> files the facts noted so far. <span>Only when you ask.</span></li>
+            <li><strong>brain-ingest</strong> pulls facts out of documents you drop in a folder.</li>
+            <li><strong>brain-promote</strong> moves lines you pick to the team page.</li>
+            <li><strong>brain-cite</strong> lists the pages worth reading for your task.</li>
+          </ul>
         </div>
-        <ul class="ticks">
-          <li>A project's results. <span>They go in that project's findings, tied to its plan.</span></li>
-          <li>Working choices for one project. <span>Those belong in the plan.</span></li>
-          <li>Public or textbook knowledge, to-dos, one-off deadlines and scratch work.</li>
-          <li>Passwords, keys and other secrets.</li>
-          <li>Personal details about people.</li>
-        </ul>
+        <div>
+          <div class="split-head"><h3>Four helpers</h3></div>
+          <p>A helper is a small assistant started for one job.</p>
+          <ul class="ticks">
+            <li><strong>brain-filer</strong> decides where each fact goes and writes it.</li>
+            <li><strong>brain-extractor</strong> finds the lasting facts in documents.</li>
+            <li><strong>brain-promoter</strong> adds picked lines to the team page.</li>
+            <li><strong>brain-context-analyst</strong> picks the few pages worth reading.</li>
+          </ul>
+        </div>
       </div>
     </div>
+  </details>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">What goes in, and what stays out?</h2>
+  <div class="qa-a">
+    <p>Things that stay true go in. Results, secrets and private details stay out.</p>
+  </div>
+  <div class="split" style="margin-top:20px">
+    <div>
+      <div class="split-head">
+        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
+        <h3>In</h3>
+      </div>
+      <ul class="ticks">
+        <li>Definitions and methods</li>
+        <li>How data and systems behave, and known traps</li>
+        <li>Decisions, and the reason for them</li>
+      </ul>
+    </div>
+    <div>
+      <div class="split-head">
+        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>
+        <h3>Out</h3>
+      </div>
+      <ul class="crosses">
+        <li>A project's results <span>They go in that project's findings.</span></li>
+        <li>Passwords, keys and other secrets</li>
+        <li>Personal details about people</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:24px">
+    <p>The brain is only as good as what gets put in. Keep each fact short, say where it came from, and keep anything private out.</p>
   </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Why bother</p>
-      <h2>What you get</h2>
-    </div>
-    <div class="cards two">
-      <div class="card">
-        <h3>Less re-explaining</h3>
-        <p>A fact is written down once. The next session reads it instead of asking you.</p>
-      </div>
-      <div class="card">
-        <h3>The same answer for everyone</h3>
-        <p>Team pages hold one agreed version of a definition or a trap, so colleagues start from the same facts.</p>
-      </div>
-      <div class="card">
-        <h3>Knowledge that lasts</h3>
-        <p>It sits in files, so it survives a closed conversation. It is not tied to one tool.</p>
-      </div>
-      <div class="card">
-        <h3>Cheaper sessions</h3>
-        <p>The assistant reads a few short sections picked for the job, not a long briefing every time.</p>
-      </div>
-    </div>
-  </div>
-</section>
+</div></section>
 
 <section class="sec alt">
   <div class="wrap">
-    <div class="callout warn">
-      <p class="callout-title">What to expect</p>
-      <p>The brain is only as good as what goes in. A page without a source is hard to trust, so keep the source with each fact. Pages go out of date, so prune them now and then. Nothing private goes in: no secrets, no personal details.</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Next</p>
-      <h2>Where to go next</h2>
-    </div>
     <div class="cards three">
       <a class="card" href="deliverables.html">
         <h3>Back to Deliverables</h3>
-        <p>How reports, decks and dashboards get made.</p>
         <span class="card-more">Deliverables <span class="arr" aria-hidden="true">&rarr;</span></span>
       </a>
       <a class="card" href="orchestration.html">
         <h3>On to Orchestration</h3>
-        <p>How the assistant splits work across helpers.</p>
         <span class="card-more">Orchestration <span class="arr" aria-hidden="true">&rarr;</span></span>
       </a>
       <a class="card" href="index.html">
         <h3>Home</h3>
-        <p>The three ideas and what you need.</p>
         <span class="card-more">Home <span class="arr" aria-hidden="true">&rarr;</span></span>
       </a>
     </div>
@@ -592,6 +491,5 @@
   runBtn.addEventListener('click', function () { run(false); });
   resetBtn.addEventListener('click', function () { reset(false); });
 })();
-</script>
-</body>
+</script></body>
 </html>

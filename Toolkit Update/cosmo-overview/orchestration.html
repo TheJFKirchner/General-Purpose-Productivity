@@ -8,19 +8,16 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="cosmo.css">
 <style>
-  .flow svg.wide { min-width: 780px; }
-  .price-wrap { overflow-x: auto; margin: 0 0 1.5em; }
-  .price { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  .flow svg.wide { min-width: 0; }
+  @media (max-width: 820px) { .flow svg.wide { min-width: 640px; } }
+  .price-wrap { overflow-x: auto; margin: 0 0 1.2em; }
+  .price { width: 100%; min-width: 520px; border-collapse: collapse; font-size: .95rem; }
   .price caption { text-align: left; padding: 0 0 10px; color: var(--muted); font-size: .9rem; }
-  .price th, .price td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--rule); }
+  .price th, .price td { padding: 8px 14px; text-align: left; border-bottom: 1px solid var(--rule); }
   .price th { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .price td:first-child { font-weight: 600; white-space: nowrap; }
-  .price { min-width: 520px; }
-  .ex-tag { margin: 0 0 .5em; }
-  .ex-back { margin: .5em 0 0; color: var(--muted); }
-  .ex-back strong { color: var(--ink); }
-  .compare + .stats, .stats + p, .price-wrap + p { margin-top: 1.5em; }
-  .compare { margin-bottom: 1.5em; }
+  details.more .compare { margin: 1.2em 18px; }
+  .qa ol.run li { margin: 0 0 .5em; }
 </style>
 </head>
 <body>
@@ -51,62 +48,28 @@
     <div>
       <p class="hero-kicker">Idea 3 of 3</p>
       <h1 class="hero-title">Orchestration</h1>
-      <p class="hero-lead">One planner, several helpers. For a big job, the assistant you talk to splits the work and hands each piece to a helper.</p>
+      <p class="hero-lead">How one planner and a few helpers get a big job done.</p>
     </div>
   </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The problem</p>
-      <h2>One long conversation does too much</h2>
-      <p class="lead">Picture a single chat that plans a job, reads the files, builds the result and checks it. It works for a while. Then it starts to struggle.</p>
-    </div>
-    <div class="cards three">
-      <div class="card">
-        <h3>It fills up</h3>
-        <p>Everything the assistant reads and writes stays in its <strong>context window</strong>: the working memory of one conversation. It has a fixed size, and a long job fills it.</p>
-      </div>
-      <div class="card">
-        <h3>It slows down and costs more</h3>
-        <p>Each new message makes the assistant take in the whole conversation again. The longer it gets, the slower and dearer every reply is.</p>
-      </div>
-      <div class="card">
-        <h3>It loses the thread</h3>
-        <p>Early decisions get buried under pages of detail. Late in the job, the assistant may forget what you agreed at the start.</p>
-      </div>
-    </div>
+<div class="wrap">
+
+<section class="qa">
+  <h2 class="qa-q">Why not just do everything in one long chat?</h2>
+  <div class="qa-a">
+    <p>For a small job, do. For a big one, the chat fills up its <strong>context window</strong>, which is how much it can hold in mind at once. Every new step makes it re-read the whole conversation, so it gets slower and costs more. And what you decided at the start gets buried.</p>
   </div>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The idea</p>
-      <h2>Keep one conversation short, and share out the work</h2>
-      <p class="lead">You talk to one assistant that only plans and coordinates. The heavy work happens elsewhere.</p>
-    </div>
-    <aside class="define">
-      <p class="define-tag">In plain terms</p>
-      <p>An <strong>orchestrator</strong> is the one conversation you talk to. It holds the plan and hands each piece of work to a <strong>subagent</strong>: a separate helper with its own fresh memory. The subagent does the work and sends back a short report.</p>
-    </aside>
-    <div class="prose">
-      <p>The orchestrator never has to read every file or try every idea itself. It reads the reports and decides what happens next, like a project lead who works from team updates and not from everyone's notes.</p>
-    </div>
+<section class="qa">
+  <h2 class="qa-q">So what's the idea?</h2>
+  <div class="qa-a">
+    <p>You talk to one planner, the <strong>orchestrator</strong>. It splits the job up and hands each piece to a helper, a <strong>subagent</strong>, that starts with a fresh memory. The helper does the work and sends back a short report. The planner only ever reads the reports.</p>
   </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">A typical run</p>
-      <h2>From your request to one summary</h2>
-      <p class="lead">Take a software project as the example. The same pattern fits any job big enough to split into pieces.</p>
-    </div>
-    <figure class="flow">
+  <figure class="flow">
       <div class="flow-box">
-        <svg class="wide" viewBox="0 0 860 460" role="img" aria-label="You send a request to the orchestrator and get one summary back. The orchestrator sends a short brief to each helper and gets a short report back from each. The helpers are a reader, then two builders working at the same time, then a reviewer and a safety check.">
+        <svg class="wide" viewBox="0 0 700 460" role="img" aria-label="You send a request to the orchestrator and get one summary back. The orchestrator sends a short brief to each helper and gets a short report back from each. The helpers are a reader, then two builders working at the same time, then a reviewer and a safety check.">
           <defs>
             <marker id="orc-arr" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker>
           </defs>
@@ -116,133 +79,99 @@
           <text class="label" x="158" y="209">request</text>
           <path class="edge" d="M206 244 H114" marker-end="url(#orc-arr)"/>
           <text class="label" x="158" y="261">one summary</text>
-          <g class="node"><rect x="520" y="26" width="160" height="48" rx="2"/><text x="600" y="43">Reader</text><text class="sub" x="600" y="61">reads the data once</text></g>
+          <g class="node"><rect x="520" y="26" width="160" height="48" rx="2"/><text x="600" y="43">Reader</text><text class="sub" x="600" y="61">reads the data first</text></g>
           <path class="edge" d="M384 40 H516" marker-end="url(#orc-arr)"/><text class="label" x="450" y="35">brief</text>
           <path class="edge" d="M516 60 H384" marker-end="url(#orc-arr)"/><text class="label" x="450" y="76">short report</text>
-          <g class="node soft"><rect x="520" y="126" width="160" height="48" rx="2"/><text x="600" y="143">Builder A</text><text class="sub" x="600" y="161">builds one piece</text></g>
+          <g class="node soft"><rect x="520" y="126" width="160" height="48" rx="2"/><text x="600" y="143">Builder A</text><text class="sub" x="600" y="161">at the same time</text></g>
           <path class="edge" d="M384 140 H516" marker-end="url(#orc-arr)"/><text class="label" x="450" y="135">brief</text>
           <path class="edge" d="M516 160 H384" marker-end="url(#orc-arr)"/><text class="label" x="450" y="176">short report</text>
-          <g class="node soft"><rect x="520" y="206" width="160" height="48" rx="2"/><text x="600" y="223">Builder B</text><text class="sub" x="600" y="241">builds another piece</text></g>
+          <g class="node soft"><rect x="520" y="206" width="160" height="48" rx="2"/><text x="600" y="223">Builder B</text><text class="sub" x="600" y="241">at the same time</text></g>
           <path class="edge" d="M384 220 H516" marker-end="url(#orc-arr)"/><text class="label" x="450" y="215">brief</text>
           <path class="edge" d="M516 240 H384" marker-end="url(#orc-arr)"/><text class="label" x="450" y="256">short report</text>
-          <g class="node"><rect x="520" y="306" width="160" height="48" rx="2"/><text x="600" y="323">Reviewer</text><text class="sub" x="600" y="341">checks the work</text></g>
+          <g class="node"><rect x="520" y="306" width="160" height="48" rx="2"/><text x="600" y="323">Reviewer</text><text class="sub" x="600" y="341">after the builders</text></g>
           <path class="edge" d="M384 320 H516" marker-end="url(#orc-arr)"/><text class="label" x="450" y="315">brief</text>
           <path class="edge" d="M516 340 H384" marker-end="url(#orc-arr)"/><text class="label" x="450" y="356">short report</text>
-          <g class="node"><rect x="520" y="386" width="160" height="48" rx="2"/><text x="600" y="403">Safety check</text><text class="sub" x="600" y="421">nothing private</text></g>
+          <g class="node"><rect x="520" y="386" width="160" height="48" rx="2"/><text x="600" y="403">Safety check</text><text class="sub" x="600" y="421">after the builders</text></g>
           <path class="edge" d="M384 400 H516" marker-end="url(#orc-arr)"/><text class="label" x="450" y="395">brief</text>
           <path class="edge" d="M516 420 H384" marker-end="url(#orc-arr)"/><text class="label" x="450" y="436">short report</text>
-          <path class="edge" d="M688 26 H698 V74 H688"/><text class="label" x="775" y="54">first</text>
-          <path class="edge" d="M688 126 H698 V254 H688"/><text class="label" x="775" y="194">at the same time</text>
-          <path class="edge" d="M688 306 H698 V434 H688"/><text class="label" x="775" y="374">after the builders</text>
         </svg>
       </div>
-      <figcaption>The orchestrator sends each helper a short brief and gets a short report back. The builders run at the same time. The reviewer and the safety check come after them.</figcaption>
+      <figcaption>The planner sends each helper a short brief and gets a short report back. The builders run at the same time; the reviewer and the safety check come after them.</figcaption>
     </figure>
-    <ol class="steps">
-      <li>
-        <h3>You describe what you want</h3>
-        <p>Say it in plain words, as you would to a colleague.</p>
-      </li>
-      <li>
-        <h3>The orchestrator asks questions until it is clear</h3>
-        <p>It would sooner ask now than build the wrong thing.</p>
-      </li>
-      <li>
-        <h3>It shows a short plan and waits for your yes</h3>
-        <p>You see what will be built, and by which helper, before any work starts.</p>
-      </li>
-      <li>
-        <h3>Helpers build the pieces</h3>
-        <p>Pieces that do not overlap are built at the same time. Each helper gets a short brief and works alone.</p>
-      </li>
-      <li>
-        <h3>A separate helper checks the result</h3>
-        <p>It looks at the work with fresh eyes. Another one checks that nothing private is about to be shared.</p>
-      </li>
-      <li>
-        <h3>One summary comes back to you</h3>
-        <p>What was built, what went wrong, and what is worth a second look.</p>
-      </li>
+  <ul class="qa-wins">
+    <li>The chat you're in stays short and focused.</li>
+    <li>Pieces that don't overlap run at the same time.</li>
+    <li>Each helper can use the model that suits its job.</li>
+  </ul>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">What does that look like on a real question?</h2>
+  <div class="qa-a">
+    <p>Say you ask: "How has claims trend changed month over month, and is there a notable difference in the number of high-cost claimants?" Here's the run.</p>
+    <ol class="run">
+      <li><strong>The planner settles the definitions.</strong> Which date counts, paid or service? What counts as "high-cost"? Then it agrees a short plan with you.</li>
+      <li><strong>A small model looks at the data once.</strong> It reports the columns, the date range and the row count.</li>
+      <li><strong>Two builders work at the same time.</strong> One does the month-over-month trend, the other counts high-cost claimants. Each adds a chart from the design library.</li>
+      <li><strong>A checker re-runs both.</strong> It confirms the numbers in the text match the data.</li>
+      <li><strong>The planner writes the answer</strong> from the four short reports.</li>
     </ol>
   </div>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">A worked example</p>
-      <h2>One question, five helpers</h2>
-      <p class="lead">Here is the same pattern on an everyday data question. Each step says who does the work, on which model, and what comes back.</p>
-    </div>
-    <div class="callout">
-      <p class="callout-title">The request</p>
-      <p>"How has claims trend changed month over month, and is there a notable difference in the number of high-cost claimants?"</p>
-    </div>
-    <ol class="steps">
-      <li>
-        <h3>The orchestrator asks, then plans</h3>
-        <p class="ex-tag"><span class="tag">Largest model</span></p>
-        <p>It asks the two questions that change the answer. Which date counts: the date a claim was paid, or the date of service? And what counts as "high-cost", for example a claimant whose claims total over a set dollar amount in a year? Then it agrees a three-line plan with you: look at the data once, work out the trend and the high-cost counts side by side, check the figures and write the answer.</p>
-        <p class="ex-back"><strong>Comes back:</strong> your two answers and a plan you have approved.</p>
-      </li>
-      <li>
-        <h3>The reader looks at the data once</h3>
-        <p class="ex-tag"><span class="tag">Small model</span></p>
-        <p>It opens the data and reports what is in it, so nobody else has to open the whole file.</p>
-        <p class="ex-back"><strong>Comes back:</strong> a few lines with the columns, the date range and the number of rows.</p>
-      </li>
-      <li>
-        <h3>Builder A works out the trend</h3>
-        <p class="ex-tag"><span class="tag">Mid-sized model</span> <span class="tag soon">at the same time as B</span></p>
-        <p>It works out how claims changed from month to month and adds a trend chart from the design library.</p>
-        <p class="ex-back"><strong>Comes back:</strong> the monthly figures, the chart and a short note on what it did.</p>
-      </li>
-      <li>
-        <h3>Builder B counts the high-cost claimants</h3>
-        <p class="ex-tag"><span class="tag">Mid-sized model</span> <span class="tag soon">at the same time as A</span></p>
-        <p>It counts high-cost claimants in each period, using the definition you agreed, and adds a comparison chart or table from the library.</p>
-        <p class="ex-back"><strong>Comes back:</strong> the counts, the chart or table and a short note on what it did.</p>
-      </li>
-      <li>
-        <h3>The checker re-runs both</h3>
-        <p class="ex-tag"><span class="tag">Mid-sized model</span></p>
-        <p>It repeats both calculations from the data and confirms that every figure in the text matches. This is the reviewer role from the picture above.</p>
-        <p class="ex-back"><strong>Comes back:</strong> a pass, or a list of figures that do not match.</p>
-      </li>
-      <li>
-        <h3>The orchestrator writes the answer</h3>
-        <p class="ex-tag"><span class="tag">Largest model</span></p>
-        <p>It reads the four short reports and writes the answer in plain words, with the two charts. Nothing here is shared outside, so the safety check is not needed. It would run before anything is shared.</p>
-        <p class="ex-back"><strong>Comes back to you:</strong> one answer with its charts.</p>
-      </li>
-    </ol>
+<section class="qa">
+  <h2 class="qa-q">Why give helpers different models?</h2>
+  <div class="qa-a">
+    <p>A <strong>model</strong> is the AI engine behind an assistant. Bigger ones think better but are slower and dearer, so using one for every little job is wasteful. We match the model to the work.</p>
   </div>
+  <div class="cards three">
+      <div class="card">
+        <span class="tag">Small, fast</span>
+        <h3>A quick look</h3>
+        <p>Reading the data once and reporting what's in it.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Mid-sized</span>
+        <h3>Building and checking</h3>
+        <p>The charts, the counts and the re-run.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Largest</span>
+        <h3>Planning and judgement</h3>
+        <p>Settling definitions and writing the answer.</p>
+      </div>
+    </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">A rough cost</p>
-      <h2>What the same question might cost</h2>
-      <p class="lead">Two ways to answer it: one conversation on the largest model, or the largest model orchestrating smaller ones. This is an estimate built from assumed step counts. It is not a measurement.</p>
-    </div>
+<section class="qa">
+  <h2 class="qa-q">Doesn't all that cost more?</h2>
+  <div class="qa-a">
+    <p>Not for this one. As a rough estimate from assumed step counts, it comes to about <span class="fig">$1.00</span> orchestrated, against about <span class="fig">$2.20</span> in one chat on the largest model. It also finishes sooner, because the two builders run together. That's an estimate, not a measurement.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>Shorter chats get re-read less: about 1.2M tokens in total instead of 3.2M. A token is roughly a word.</li>
+    <li>The building is done on a model that costs half as much.</li>
+    <li>The first look at the data is done on one that costs a fortieth as much.</li>
+  </ul>
+  <details class="more">
+    <summary>Show the math</summary>
     <div class="price-wrap">
       <table class="price">
-        <caption>Prices used, in dollars per million tokens. First-party list prices as of November 2026. Your organisation's rates may differ.</caption>
-        <thead><tr><th scope="col">Model</th><th scope="col">Read, new</th><th scope="col">Written</th><th scope="col">Re-read from memory</th></tr></thead>
+        <caption>Dollars per million tokens. First-party list prices as of November 2026; your organisation's rates may differ.</caption>
+        <thead><tr><th scope="col">Model</th><th scope="col">Read, new</th><th scope="col">Written</th><th scope="col">Re-read</th></tr></thead>
         <tbody>
           <tr><td>Largest (Opus 5.5)</td><td>$4</td><td>$20</td><td>$0.20</td></tr>
           <tr><td>Mid-sized (Sonnet 5.5)</td><td>$2</td><td>$10</td><td>$0.10</td></tr>
-          <tr><td>Small (Haiku 5.5)</td><td>$0.10</td><td>$0.50</td><td>not used here</td></tr>
+          <tr><td>Small (Haiku 5.5)</td><td>$0.10</td><td>$0.50</td><td>not used</td></tr>
         </tbody>
       </table>
     </div>
-    <p>Assumed: text read for the first time is stored so it can be re-read cheaply, and storing it costs 1.25 times the normal read price. That makes new material $5.00 per million on the largest model and $2.50 on the mid-sized one. Re-reading is what an assistant does at every step: it takes in the whole conversation so far again.</p>
+    <p>We assume text read for the first time is stored so it can be re-read cheaply, at 1.25 times the read price. That makes new material $5.00 per million on the largest model and $2.50 on the mid-sized one.</p>
     <div class="compare">
       <div class="before">
-        <p class="compare-label">One conversation</p>
+        <p class="compare-label">One chat</p>
         <h3>Largest model only</h3>
-        <p>About 40 steps. The conversation grows from about 15,000 to about 150,000 tokens, so each step re-reads about 80,000 on average.</p>
+        <p>About 40 steps. The chat grows from about 15,000 to about 150,000 tokens, so each step re-reads about 80,000 on average.</p>
         <ul>
           <li>Re-reading: 40 &times; 80,000 = 3.2M tokens &times; $0.20 = $0.64</li>
           <li>New material read (data peeks, results, errors): 135,000 &times; $5.00 = $0.68</li>
@@ -253,9 +182,9 @@
       <div class="compare-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
       <div class="after">
         <p class="compare-label">Orchestrated</p>
-        <h3>Largest model plans, smaller models build</h3>
+        <h3>Largest plans, smaller build</h3>
         <ul>
-          <li>Orchestrator, largest model, about 12 steps at about 25,000 tokens: re-reading 0.3M &times; $0.20 = $0.06; new 20,000 &times; $5.00 = $0.10; written 8,000 &times; $20 = $0.16. About $0.32</li>
+          <li>Planner, largest model, about 12 steps at about 25,000 tokens: re-reading 0.3M &times; $0.20 = $0.06; new 20,000 &times; $5.00 = $0.10; written 8,000 &times; $20 = $0.16. About $0.32</li>
           <li>Reader, small model: 60,000 read, 3,000 written. About $0.01</li>
           <li>Builder A, mid-sized, about 15 steps at about 30,000: re-reading 0.45M &times; $0.10 = $0.05; new 40,000 &times; $2.50 = $0.10; written 15,000 &times; $10 = $0.15. About $0.30</li>
           <li>Builder B, mid-sized: the same. About $0.30</li>
@@ -264,163 +193,38 @@
         </ul>
       </div>
     </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-num">$2.20</span><span class="stat-label">one conversation, largest model only</span></div>
-      <div class="stat"><span class="stat-num">$1.00</span><span class="stat-label">orchestrated, a bit under half</span></div>
-      <div class="stat"><span class="stat-num">3.2M<small>vs 1.2M</small></span><span class="stat-label">tokens re-read: one conversation against all helpers together</span></div>
-      <div class="stat"><span class="stat-num">1/40</span><span class="stat-label">price of the small model for the first look at the data</span></div>
-    </div>
-    <p>So the orchestrated run costs roughly $1.00 against roughly $2.20. The two builders also run at the same time, so it finishes sooner. The saving comes from three places.</p>
-    <div class="cards three">
-      <div class="card">
-        <h3>Less is re-read</h3>
-        <p>Each helper's conversation stays short, so far less is re-read at every step: 3.2M tokens in one conversation against about 1.2M across all the helpers.</p>
-      </div>
-      <div class="card">
-        <h3>Building costs half as much</h3>
-        <p>The building is done on a model that costs half as much per token.</p>
-      </div>
-      <div class="card">
-        <h3>The first look is nearly free</h3>
-        <p>The one-off look at the data is done on a model that costs a fortieth as much.</p>
-      </div>
-    </div>
-    <div class="callout warn">
-      <p class="callout-title">The honest limits</p>
-      <ul>
-        <li>These are estimates built from assumed step counts. A harder question, more retries or a larger data sample changes both sides.</li>
-        <li>Orchestration has a fixed overhead. Each helper must be briefed and starts from nothing. For a question one chart can answer, a single conversation is cheaper.</li>
-        <li>The smaller model should not be the one deciding what "high-cost" means. That is why the orchestrator settles definitions before any building starts.</li>
-      </ul>
-    </div>
+  </details>
+  <div class="callout warn">
+    <p class="callout-title">The honest part</p>
+    <p>It doesn't remove work, it moves it to shorter chats and cheaper models. For a question one chart can answer, one chat is cheaper. And the planner settles what "high-cost" means before anyone builds, because a small model shouldn't be the one deciding that.</p>
   </div>
 </section>
+
+<section class="qa">
+  <h2 class="qa-q">What keeps it from going off the rails?</h2>
+  <div class="qa-a">
+    <p>You stay in charge. The work also happens on a <strong>branch</strong>, a separate copy of the project's history, until you accept it. And none of this depends on one vendor's assistant.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>Nothing gets built until you say yes to a short plan.</li>
+    <li>Each helper is told which files it may touch.</li>
+    <li>Automatic fix rounds have a fixed limit, so it can't loop.</li>
+  </ul>
+</section>
+
+</div>
 
 <section class="sec alt">
   <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Roles</p>
-      <h2>Different helpers, different models</h2>
-      <p class="lead">A <strong>model</strong> is the AI engine behind an assistant. Some are small and quick, some are large and thorough. Each helper gets the one that suits its job.</p>
-    </div>
-    <div class="cards">
-      <div class="card">
-        <span class="tag">Small, fast model</span>
-        <h3>The reader</h3>
-        <p>Answers one pointed question, such as "where is this set up?". It needs speed, not deep thought.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Most capable model</span>
-        <h3>The builder</h3>
-        <p>Does the real construction. Mistakes here cost the most, so this is where the strongest model goes.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Fresh eyes</span>
-        <h3>The reviewer</h3>
-        <p>Looks at the result without having seen how it was made. That distance helps it spot what the builder missed.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Before sharing</span>
-        <h3>The safety check</h3>
-        <p>Looks only for things that should not leave, such as keys, personal details and private paths.</p>
-      </div>
-      <div class="card">
-        <span class="tag">Mid-sized model</span>
-        <h3>The routine helper</h3>
-        <p>Handles mechanical steps that follow clear rules, such as saving work and tidying files.</p>
-      </div>
-    </div>
-    <div class="callout">
-      <p class="callout-title">Why match the model to the job</p>
-      <p>Larger models cost more and take longer per answer, so using one for every small task wastes both. Giving the strongest model only the hard work keeps quality where it matters, and keeps the bill and the wait down everywhere else.</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Efficiency</p>
-      <h2>Why this is efficient, and what it costs</h2>
-      <p class="lead">Orchestration saves time and keeps the conversation clear. It does not remove work. It moves it to shorter conversations and cheaper models.</p>
-    </div>
-    <div class="cards three">
-      <div class="card">
-        <h3>The conversation stays short</h3>
-        <p>A helper's reading and trial and error stay in its own memory. Only its short report comes back, so the conversation you are in stays focused.</p>
-      </div>
-      <div class="card">
-        <h3>Independent pieces run together</h3>
-        <p>Work that does not overlap is done at the same time, so the whole job finishes sooner.</p>
-      </div>
-      <div class="card">
-        <h3>Cheap models do cheap jobs</h3>
-        <p>Small jobs go to small models. The strongest model is kept for the work that needs it.</p>
-      </div>
-    </div>
-    <aside class="define">
-      <p class="define-tag">In plain terms</p>
-      <p><strong>Token</strong>: a small piece of text, roughly a word or part of one. Assistants read and write in tokens, and usage is counted in them.</p>
-    </aside>
-    <div class="callout warn">
-      <p class="callout-title">The trade-off</p>
-      <p>Orchestration does not remove work. It moves it to shorter conversations and cheaper models. In one real build, the helpers together worked through several million tokens, while the planning conversation received only their short reports. That is a lot of effort, so orchestration is for sizeable jobs. Small fixes are done directly.</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Safety</p>
-      <h2>What keeps it safe and predictable</h2>
-      <p class="lead">Four habits keep you in charge and stop it running away.</p>
-    </div>
-    <div class="cards">
-      <div class="card">
-        <h3>Your yes comes first</h3>
-        <p>Nothing is built before you approve the plan.</p>
-      </div>
-      <div class="card">
-        <h3>Each helper has a boundary</h3>
-        <p>Every helper is told exactly which files it may touch, so two helpers do not overwrite each other.</p>
-      </div>
-      <div class="card">
-        <h3>Work happens on a branch</h3>
-        <p>A <strong>branch</strong> is a separate copy of the project's history. The work stays there, apart from the main version, until you accept it.</p>
-      </div>
-      <div class="card">
-        <h3>A fixed limit on fix rounds</h3>
-        <p>If a check fails, the helper may try again, but only a set number of times. After that it stops and tells you, so it cannot loop for ever.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="callout">
-      <p class="callout-title">Not tied to one tool</p>
-      <p>The pattern is written so it does not depend on one vendor's assistant. The same planner-and-helpers way of working applies in Claude Code and in Cursor.</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Next</p>
-      <h2>Where to go next</h2>
-    </div>
     <div class="cards two">
       <a class="card" href="brain.html">
         <h3>Back to the brain</h3>
-        <p>The shared notes that every helper can read before it starts.</p>
+        <p>The shared notes every helper can read first.</p>
         <span class="card-more">Brain <span class="arr" aria-hidden="true">&rarr;</span></span>
       </a>
       <a class="card" href="index.html">
         <h3>Back to the overview</h3>
-        <p>The three ideas, who Cosmo is for, and what you need.</p>
+        <p>The three-minute version.</p>
         <span class="card-more">Home <span class="arr" aria-hidden="true">&rarr;</span></span>
       </a>
     </div>

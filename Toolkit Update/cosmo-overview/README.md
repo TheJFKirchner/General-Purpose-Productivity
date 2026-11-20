@@ -6,13 +6,30 @@ A small static website that introduces Cosmo to colleagues. Open `index.html` in
 
 | File | What it is |
 | --- | --- |
-| `index.html` | Home page: what Cosmo is, the three ideas, who it is for, and placeholder cards for the skills |
+| `index.html` | Home page, the three-minute version: seven questions that cover the big things, and placeholder cards for the skills |
 | `deliverables.html`, `brain.html`, `orchestration.html` | One page per idea |
 | `cosmo.css` | The whole look: colours, fonts, layout, light and dark, phone width, printing |
 | `_components.html` | Every component, shown once with the markup to copy |
 | `_template.html` | An empty page with the header, title band, sections and footer in place |
+| `cosmo.html` | All four pages in one file, for sending or putting on a shared drive. Generated: do not edit it |
+| `build-single.mjs` | Builds `cosmo.html` from the four pages and `cosmo.css` (Node, no installs) |
 
 The colours and fonts are the design library's default themes (light TH-01, dark TH-02). The site follows the computer's light or dark setting.
+
+## Tone and the fold
+
+- Every section is a question someone would actually ask (`<section class="qa">`), answered in 2 to 4 short, casual sentences ("we", "you", contractions; no hype), then at most three one-line wins.
+- Detail most readers can skip goes behind a fold: `<details class="more"><summary>Show the math</summary>...</details>`.
+
+## The single file (`cosmo.html`)
+
+`cosmo.html` holds Home, Deliverables, Brain and Orchestration as four views in one file, with nothing outside it. The address (`cosmo.html#brain`) says which view is open, so the back button and pasted links work. Without scripts, and when printed, all four show one after another. The separate pages are the source: after changing any of them or `cosmo.css`, rebuild it from this folder:
+
+```
+node build-single.mjs
+```
+
+A new page joins the single file once it is added to the `PAGES` list at the top of `build-single.mjs`.
 
 ## Add a page
 

@@ -224,7 +224,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 .hero-in {
   display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   align-items: center; gap: 40px;
-  padding-block: clamp(64px, 10vw, 128px);
+  padding-block: clamp(52px, 7vw, 96px);
 }
 .hero-kicker {
   display: inline-flex; align-items: center; gap: 10px;
@@ -254,7 +254,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 }
 .hero-lead:last-child { margin-bottom: 0; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.hero-art { justify-self: end; width: 100%; max-width: 440px; height: auto; overflow: visible; }
+.hero-art { justify-self: end; width: 100%; max-width: 380px; height: auto; overflow: visible; }
 
 .hero.slim .hero-in { grid-template-columns: minmax(0, 1fr); padding-block: clamp(48px, 7vw, 92px); }
 .hero.slim .hero-lead { max-width: 52ch; }
@@ -538,6 +538,130 @@ a.card:hover h3 { color: var(--blue); }
 .flow .head.blue { fill: var(--blue); }
 .flow .label { fill: var(--muted); font-size: 12px; text-anchor: middle; }
 
+/* --- 13b. Question blocks (.qa), the fold (details.more), figures (.fig) --
+   Pages are a run of questions someone would actually ask, each with a short
+   plain answer and up to three one-line wins:
+   <section class="qa"><h2 class="qa-q">Question?</h2><div class="qa-a"><p>..</p></div>
+   <ul class="qa-wins"><li>..</li></ul></section>                              */
+.qa {
+  max-width: 44rem;
+  padding-block: clamp(40px, 6vw, 68px);
+  border-top: 1px solid var(--rule);
+}
+.qa:first-child, .qa-first { border-top: 0; }
+.qa-q {
+  margin: 0 0 .65em;
+  font-size: clamp(1.55rem, 1.15rem + 1.5vw, 2.15rem);
+  line-height: 1.2; letter-spacing: -.02em;
+  color: var(--navy);
+}
+.qa-q::before {
+  content: ""; display: block;
+  width: 40px; height: 3px; margin-bottom: 20px;
+  background: var(--blue);
+}
+.qa-a { font-size: 1.1rem; line-height: 1.72; }
+.qa-a > p:first-child { font-size: 1.2rem; line-height: 1.6; color: var(--ink); }
+.qa-a p { margin: 0 0 .85em; }
+.qa-a p:last-child { margin-bottom: 0; }
+.qa-a ul, .qa-a ol { margin: 0 0 .85em; }
+.qa-wins {
+  list-style: none;
+  display: grid; gap: 8px;
+  margin: 26px 0 0; padding: 16px 20px;
+  background: var(--wash);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius);
+}
+.qa-wins li { position: relative; margin: 0; padding-left: 28px; font-size: 1rem; line-height: 1.5; }
+.qa-wins li::before {
+  content: ""; position: absolute; left: 2px; top: .38em;
+  width: 12px; height: 6px;
+  border-left: 2px solid var(--blue); border-bottom: 2px solid var(--blue);
+  transform: rotate(-45deg);
+}
+.qa > .flow, .qa > .compare, .qa > .stats, .qa > .cards, .qa > .callout, .qa > .ticks { margin-top: 26px; }
+.qa > .flow { margin-bottom: 0; }
+.qa > .split { margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.qa > .cards .card, .qa > .split > * { padding: 20px 22px; }
+.qa > .stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+.qa-note { margin: 14px 0 0; font-size: .92rem; color: var(--muted); }
+
+/* a list of things that stay out: dashes instead of ticks */
+.crosses { list-style: none; margin: 0; padding: 0; }
+.crosses li { position: relative; margin: 10px 0; padding-left: 30px; }
+.crosses li::before, .crosses li::after {
+  content: ""; position: absolute; left: 3px; top: .72em;
+  width: 13px; height: 2px; background: var(--bad);
+  transform: rotate(45deg);
+}
+.crosses li::after { transform: rotate(-45deg); }
+.crosses li span { color: var(--muted); }
+/* wide screens: the question sits on the left and stays in view; the answer reads on the right */
+@media (min-width: 1000px) {
+  .qa {
+    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); column-gap: 64px;
+    max-width: none;
+  }
+  .qa > * { grid-column: 2; }
+  .qa > .qa-q { grid-column: 1; grid-row: 1 / span 30; align-self: start; position: sticky; top: 96px; margin: 0; }
+  .qa > :nth-child(2) { margin-top: 0; }
+}
+.qa-more { margin: 22px 0 0; font-size: .95rem; }
+.qa-more a { font-weight: 600; text-decoration: none; }
+.qa-more a::after { content: "\2192"; display: inline-block; margin-left: .35em; transition: transform .2s var(--ease); }
+.qa-more a:hover { text-decoration: underline; }
+.qa-more a:hover::after { transform: translateX(3px); }
+
+/* the fold: <details class="more"><summary>Show the math</summary>...</details> */
+details.more {
+  margin: 22px 0 0;
+  background: var(--paper);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+}
+details.more > summary {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  font-weight: 600; color: var(--blue);
+  list-style: none; cursor: pointer;
+  border-radius: var(--radius);
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before {
+  content: ""; flex: none;
+  width: 7px; height: 7px; margin-left: 2px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform .2s var(--ease);
+}
+details.more[open] > summary::before { transform: rotate(45deg); }
+details.more > summary:hover { background: var(--wash); }
+details.more[open] > summary { border-bottom: 1px solid var(--rule); border-radius: var(--radius) var(--radius) 0 0; }
+details.more > :not(summary) { margin-left: 18px; margin-right: 18px; }
+details.more > :not(summary):first-of-type,
+details.more > summary + * { margin-top: 16px; }
+details.more > :last-child:not(summary) { margin-bottom: 18px; }
+details.more p, details.more li { font-size: 1rem; }
+details.more table { width: calc(100% - 36px); border-collapse: collapse; font-size: .95rem; }
+details.more th, details.more td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--rule); }
+details.more th { color: var(--muted); font-weight: 600; }
+details.more td.num, details.more th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* a figure inside a sentence: <span class="fig">63%</span> */
+.fig {
+  padding: 0 .3em;
+  font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--blue); background: var(--tint);
+  border-radius: var(--radius);
+}
+
+/* compact card grid, for long lists of small cards */
+.cards.compact { gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
+.cards.compact .card { padding: 16px 18px; }
+.cards.compact .card h3 { margin-bottom: .2em; font-size: 1.02rem; }
+.cards.compact .card p { font-size: .9rem; line-height: 1.5; }
+.cards.compact .tag { margin-bottom: 10px; }
+
 /* --- 14. Footer (.foot) -------------------------------------------------- */
 .foot {
   padding-block: 48px;
@@ -638,4 +762,7 @@ a.card:hover h3 { color: var(--blue); }
   .flow-box { overflow: visible; }
   .flow svg { min-width: 0; }
   .foot { background: none; }
+  .qa { break-inside: avoid-page; }
+  details.more > summary::before { display: none; }
+  details.more::details-content { content-visibility: visible; display: block; }   /* print folds open where supported */
 }

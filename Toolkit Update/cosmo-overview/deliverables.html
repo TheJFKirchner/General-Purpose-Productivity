@@ -35,76 +35,54 @@
     <div>
       <p class="hero-kicker">Idea 1 of 3</p>
       <h1 class="hero-title">Deliverables</h1>
-      <p class="hero-lead">Reports, decks and dashboards made from reusable parts, so each one starts from something that already works.</p>
+      <p class="hero-lead">Reports, decks and dashboards, built from parts that already work.</p>
     </div>
   </div>
 </section>
 
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The idea</p>
-      <h2>A skill that builds from parts</h2>
-      <p class="lead">A deliverable skill helps your assistant make a finished piece of work: a report, a slide deck or a dashboard. It does not draw each chart from nothing. It copies a ready-made chart, table or slide from a shared folder and fills it with your data.</p>
+<div class="wrap">
+
+<section class="qa">
+  <h2 class="qa-q">What counts as a deliverable?</h2>
+  <div class="qa-a">
+    <p>Three things, each with its own skill (a short written guide the assistant follows). You ask in plain words and the assistant picks the right one.</p>
+  </div>
+  <div class="cards three">
+    <div class="card">
+      <h3>A report</h3>
+      <p>The analysis skill explores a question, then writes it up as a web page when you say so. It doesn't build a view you open every week.</p>
     </div>
-    <div class="defines">
-      <aside class="define">
-        <p class="define-tag">In plain terms</p>
-        <p><strong>Skill</strong>: a short written guide the assistant follows for one kind of job.</p>
-      </aside>
-      <aside class="define">
-        <p class="define-tag">In plain terms</p>
-        <p><strong>Design library</strong>: a shared folder of ready-made charts, tables and slides, with a short list that describes each one.</p>
-      </aside>
-      <aside class="define">
-        <p class="define-tag">In plain terms</p>
-        <p><strong>Theme</strong>: one set of colours and fonts. Change it and the whole look changes.</p>
-      </aside>
+    <div class="card">
+      <h3>A slide deck</h3>
+      <p>The presentation skill turns work that already exists into slides. It doesn't do the analysis, and it doesn't make PowerPoint files.</p>
+    </div>
+    <div class="card">
+      <h3>A dashboard</h3>
+      <p>The dashboard skill makes a standing view with filters on live data. It isn't for a one-off story.</p>
     </div>
   </div>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Three skills</p>
-      <h2>Pick the one that fits the job</h2>
-    </div>
-    <div class="cards three">
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
-        <h3>Analysis</h3>
-        <p>It explores a question in the conversation first, then writes it up as a report. Use it for questions such as "where is the cost rising, and why?". Ask in plain words, and say "write it up" when you want the report. You get a web page with one section per point: a chart or table, and a few short lines whose figures come from the data. It does not build a standing weekly view. That is a dashboard.</p>
-      </div>
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 21h8M12 17v4"/></svg></span>
-        <h3>Presentation</h3>
-        <p>It makes a slide deck from work that already exists, such as findings, a report or a dashboard. Use it when you need to tell people about results. Name the audience and the one message you want to land. You get a deck that opens in the browser, with one file per slide. It does not make PowerPoint files, and it does not do the analysis itself.</p>
-      </div>
-      <div class="card">
-        <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="5"/><rect x="13" y="11" width="8" height="10"/><rect x="3" y="14" width="8" height="7"/></svg></span>
-        <h3>Dashboard</h3>
-        <p>It makes a standing view with tabs and filters on live data. Use it when people come back to the same numbers each week or month. Say who uses it, which questions it answers and which filters it needs. You get a small app that reads your data files and redraws when a filter changes. It does not tell a one-off story. For that, use a report or a deck.</p>
-      </div>
-    </div>
+<section class="qa">
+  <h2 class="qa-q">Why do we use a script to make them?</h2>
+  <div class="qa-a">
+    <p>Say you want a chart of cost by region. The script copies a ready-made chart from our shared design library (a folder of charts, tables and slides) into one small file. It fills that file from your data and prints the few lines to reword. Then it checks that nothing is cut off.</p>
   </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">How they all work</p>
-      <h2>The same seven steps, every time</h2>
-      <p class="lead">All three skills share one way of working. That is why a chart looks and behaves the same in each.</p>
-    </div>
+  <ul class="qa-wins">
+    <li>The same look every time.</li>
+    <li>When the numbers change, you refresh. You don't redo the deck.</li>
+    <li>Problems show up in a check, not in the meeting.</li>
+  </ul>
+  <details class="more">
+    <summary>How it works, step by step</summary>
     <ol class="steps">
-      <li><h3>Read the library's list</h3><p>The assistant reads a short index of what the library holds, not every file.</p></li>
-      <li><h3>Pick items</h3><p>It chooses one chart, table or slide for each point you want to make, and can use a show command to look at an item and the data it needs first.</p></li>
-      <li><h3>Copy each into your piece</h3><p>Each pick is copied into your report, deck or dashboard as one small file. If a part is missing, the file carries a MANUAL note saying what to fill in.</p></li>
-      <li><h3>Point it at your data</h3><p>It names which columns feed each item. The figures are filled in from the data.</p></li>
-      <li><h3>Edit the few lines you want changed</h3><p>A title, a colour, a third line on a chart. Your edits stay when the data refreshes.</p></li>
-      <li><h3>Build and look</h3><p>It builds the piece, takes a picture and checks it, so a problem is caught before you see it.</p></li>
-      <li><h3>Save a version you like back to the library</h3><p>A visual worth reusing goes back into the library for everyone.</p></li>
+      <li><h3>Read the library's list</h3><p>A short index, not every file.</p></li>
+      <li><h3>Pick items</h3><p>One chart, table or slide per point.</p></li>
+      <li><h3>Copy each in</h3><p>Each becomes one small file in your piece.</p></li>
+      <li><h3>Point it at your data</h3><p>Name the columns that feed it.</p></li>
+      <li><h3>Edit the few lines you want changed</h3><p>A title, a colour, a third line.</p></li>
+      <li><h3>Build and look</h3><p>It builds, takes a picture and checks it.</p></li>
+      <li><h3>Save one you like back</h3><p>It goes into the library for everyone.</p></li>
     </ol>
     <figure class="flow">
       <div class="flow-box">
@@ -127,83 +105,66 @@
           <path class="edge dash" d="M550 192 H576" marker-end="url(#dl-arr)"/>
         </svg>
       </div>
-      <figcaption>The library is read at the start and added to at the end.</figcaption>
     </figure>
+  </details>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">Isn't it faster to ask the AI to write the whole page?</h2>
+  <div class="qa-a">
+    <p>Not really, because most of a page is the same every time: the styling and the chart-drawing code. In one sample five-chart report, the page was about <span class="fig">23 KB</span>, and about <span class="fig">63%</span> of it was that unchanging code. The assistant's own writing was under about <span class="fig">1,000 tokens</span> (a token is a chunk of text you pay and wait for).</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="stat-num">23<small>KB</small></span><span class="stat-label">one finished five-chart page</span></div>
+    <div class="stat"><span class="stat-num">63<small>%</small></span><span class="stat-label">of it code that never changes</span></div>
+    <div class="stat"><span class="stat-num">25<small>KB</small></span><span class="stat-label">a library chart file</span></div>
+    <div class="stat"><span class="stat-num">4<small>KB</small></span><span class="stat-label">the part that gets copied</span></div>
+  </div>
+  <p class="qa-note">All of this is from one sample, so read it as an example, not a promise.</p>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">How do I know what a chart needs before I add it?</h2>
+  <div class="qa-a">
+    <p>You ask to see it first. A <code>show</code> step prints just that item's parts: which ones are required, which of your columns fit each, and a ready-made command to copy it in. Every item has its own parts, so the list is different for each one.</p>
+  </div>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">What if the chart is close but not quite right?</h2>
+  <div class="qa-a">
+    <p>It still goes in. If a part can't be filled from your data, it goes in on placeholder data with a <code>MANUAL</code> line saying exactly which line to edit by hand. A tweak to the look is usually a few lines in one file. The library covers common visuals, not every one.</p>
+    <p>Two helpers (subagents, each started for one job) take care of the rest. One suggests which items fit what you're making, and says plainly what the library doesn't have. The other saves a chart you like back into the library.</p>
+  </div>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">What happens when the data changes?</h2>
+  <div class="qa-a">
+    <p>You rebuild. The figures in a report's text are pulled from the data, so they update on their own. Charts refill and keep your edits. A theme (one set of colours and fonts) changes the whole look with one command.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>New data means a rebuild, not a rewrite.</li>
+    <li>Your hand edits stay.</li>
+    <li>A library item looks the same in a report, a deck and a dashboard.</li>
+  </ul>
+</section>
+
+</div>
+
+<section class="sec alt">
+  <div class="wrap">
     <div class="cards two">
-      <div class="card">
-        <h3>Helper: the graphic designer</h3>
-        <p>A subagent (a helper started for one job) that suggests which library items suit what you are making. It says plainly what the library does not have.</p>
-      </div>
-      <div class="card">
-        <h3>Helper: the design librarian</h3>
-        <p>A subagent that saves visuals you like back into the library and checks that each saved item works. It leaves your original untouched.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Efficiency</p>
-      <h2>Why this is more efficient</h2>
-      <p class="lead">Most of a report is the same in every report. The assistant should not write it again each time.</p>
-    </div>
-    <div class="compare">
-      <div class="before">
-        <p class="compare-label">Without the library</p>
-        <h3>Everything written fresh</h3>
-        <ul>
-          <li>The assistant writes the page styling and the chart code each time</li>
-          <li>More to write, more to wait for, more to check</li>
-          <li>Each report looks a little different</li>
-        </ul>
-      </div>
-      <div class="compare-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
-      <div class="after">
-        <p class="compare-label">With the library</p>
-        <h3>Copy, fill, edit</h3>
-        <ul>
-          <li>The shared code is copied in, not written</li>
-          <li>The assistant writes only the words and the few lines that differ</li>
-          <li>Every report shares one look</li>
-        </ul>
-      </div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-num">23<small>KB</small></span><span class="stat-label">a finished five-chart report page, in one sample</span></div>
-      <div class="stat"><span class="stat-num">63<small>%</small></span><span class="stat-label">of that page was styling and chart code, the same in every report</span></div>
-      <div class="stat"><span class="stat-num">&lt;1,000</span><span class="stat-label">tokens: the most the assistant wrote itself for that report</span></div>
-      <div class="stat"><span class="stat-num">4<small>KB</small></span><span class="stat-label">copied from a 25 KB library chart file</span></div>
-    </div>
-    <aside class="define">
-      <p class="define-tag">In plain terms</p>
-      <p><strong>Token</strong>: a chunk of text the assistant reads or writes. You pay and wait per token.</p>
-    </aside>
-    <p class="lead">These figures come from one sample report, so read them as an example, not a promise. A small change to an added chart is a few lines in one file.</p>
-  </div>
-</section>
-
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Reproducible</p>
-      <h2>Why this is reproducible</h2>
-    </div>
-    <div class="cards">
-      <div class="card"><h3>New data, a rebuild</h3><p>The numbers in a report's text are pulled from the data. When the data changes, you rebuild. You do not rewrite.</p></div>
-      <div class="card"><h3>Charts refill</h3><p>Charts take in the new figures and keep the edits you made by hand.</p></div>
-      <div class="card"><h3>One command for a theme</h3><p>A theme changes the whole look at once, in one command.</p></div>
-      <div class="card"><h3>The same everywhere</h3><p>A library item looks the same in a report, a deck and a dashboard.</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="sec alt">
-  <div class="wrap">
-    <div class="callout warn">
-      <p class="callout-title">What to expect</p>
-      <p>An added chart usually needs a few edits before it fits your data. Sample captions come with the copied item, and you must reword them. The library covers common visuals, not every one. When something is missing, the graphic designer helper says so, and you can build your own and save it back.</p>
+      <a class="card" href="brain.html">
+        <h3>On to the brain</h3>
+        <p>The shared notes the assistant reads before it answers.</p>
+        <span class="card-more">Brain <span class="arr" aria-hidden="true">&rarr;</span></span>
+      </a>
+      <a class="card" href="index.html">
+        <h3>Back to the overview</h3>
+        <p>The three-minute version.</p>
+        <span class="card-more">Home <span class="arr" aria-hidden="true">&rarr;</span></span>
+      </a>
     </div>
   </div>
 </section>
@@ -217,8 +178,10 @@
       <span class="expansion"></span>
     </div>
     <ul class="foot-links">
-      <li><a href="index.html">&larr; Back to home</a></li>
-      <li><a href="brain.html">Next: the Brain &rarr;</a></li>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="deliverables.html">Deliverables</a></li>
+      <li><a href="brain.html">Brain</a></li>
+      <li><a href="orchestration.html">Orchestration</a></li>
     </ul>
     <p class="foot-note">An overview for colleagues. Every page is a plain file and works offline.</p>
   </div>

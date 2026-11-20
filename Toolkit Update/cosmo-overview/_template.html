@@ -7,7 +7,10 @@
 <title>Page name · Cosmo</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="cosmo.css">
-<!-- No <style> or <script> needed: every look comes from cosmo.css. Components and markup: _components.html -->
+<!-- No <style> or <script> needed: every look comes from cosmo.css. Components and markup: _components.html
+     TONE: every heading is a real question in everyday words. Answer in 2 to 4 short sentences, then at most
+     three one-line wins. "We" and "you", contractions fine; no hype, no exclamation marks. Explain a term in
+     half a sentence the first time. One diagram per page at most. Detail goes in a fold (details.more). -->
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -33,58 +36,56 @@
 
 <main id="main">
 
-<!-- PAGE TITLE BAND: kicker (e.g. "Idea 1 of 3"), the page title, one plain lead sentence -->
+<!-- PAGE TITLE BAND: kicker, the page title, one plain lead sentence -->
 <section class="hero slim">
   <div class="wrap hero-in">
     <div>
       <p class="hero-kicker">Idea 1 of 3</p>
       <h1 class="hero-title">Page title</h1>
-      <p class="hero-lead">One sentence that says what this page explains, in plain words.</p>
+      <p class="hero-lead">One sentence that says what this page answers, in plain words.</p>
     </div>
   </div>
 </section>
 
-<!-- CONTENT: one <section class="sec"> per topic. Alternate "sec" and "sec alt" (pale background) down the page.
-     Inside each: a .sec-head (eyebrow, h2, lead), then any components from _components.html. -->
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Short label</p>
-      <h2>First topic heading</h2>
-      <p class="lead">One sentence that sets up this section.</p>
-    </div>
-    <!-- CONTENT GOES HERE: cards, steps, a before/after, a flow diagram, definition boxes ... -->
+<!-- CONTENT: a run of question blocks straight inside this .wrap. Copy a whole <section class="qa"> per question. -->
+<div class="wrap">
+
+<section class="qa">
+  <h2 class="qa-q">The first question someone would actually ask?</h2>
+  <div class="qa-a">
+    <p>The plain answer, first sentence. It's fine to say "we" and "you".</p>
+    <p>One concrete example, with a figure if it's established: about <span class="fig">63%</span> in one sample.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>A one-line benefit.</li>
+    <li>Another one-line benefit.</li>
+  </ul>
+  <!-- OPTIONAL: one component from _components.html here (.flow, .compare, .stats, .cards, .callout) -->
+  <details class="more">
+    <summary>Show the math</summary>
+    <p>Detail most readers can skip.</p>
+  </details>
+</section>
+
+<section class="qa">
+  <h2 class="qa-q">The next question?</h2>
+  <div class="qa-a">
+    <p>Two to four short sentences.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>A one-line benefit.</li>
+  </ul>
+</section>
+
+<!-- LAST BLOCK (suggested): where to go next -->
+<section class="qa">
+  <h2 class="qa-q">Where next?</h2>
+  <div class="qa-a">
+    <p>Back to the <a href="index.html">three-minute version</a>, or on to the next idea.</p>
   </div>
 </section>
 
-<section class="sec alt">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Short label</p>
-      <h2>Second topic heading</h2>
-      <p class="lead">One sentence that sets up this section.</p>
-    </div>
-    <!-- CONTENT GOES HERE -->
-  </div>
-</section>
-
-<!-- LAST SECTION (suggested): where to go next, as link cards to the other pages -->
-<section class="sec">
-  <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">Next</p>
-      <h2>Where to go next</h2>
-    </div>
-    <div class="cards two">
-      <a class="card" href="index.html">
-        <h3>Back to the overview</h3>
-        <p>The three ideas, who Cosmo is for, and what you need.</p>
-        <span class="card-more">Home <span class="arr" aria-hidden="true">&rarr;</span></span>
-      </a>
-      <!-- add a link card for the next idea's page here -->
-    </div>
-  </div>
-</section>
+</div>
 
 </main>
 

@@ -74,13 +74,15 @@
       <li><a href="#c-header">Header and nav</a></li>
       <li><a href="#c-hero">Hero</a></li>
       <li><a href="#c-slim">Page title band</a></li>
+      <li><a href="#c-qa">Question block</a></li>
+      <li><a href="#c-more">Fold</a></li>
+      <li><a href="#c-fig">Inline figure</a></li>
       <li><a href="#c-section">Section</a></li>
       <li><a href="#c-buttons">Buttons</a></li>
       <li><a href="#c-cards">Feature cards</a></li>
       <li><a href="#c-steps">Steps</a></li>
       <li><a href="#c-compare">Before and after</a></li>
       <li><a href="#c-stats">Figures</a></li>
-      <li><a href="#c-define">Definition box</a></li>
       <li><a href="#c-callout">Callout</a></li>
       <li><a href="#c-split">Two-column strip</a></li>
       <li><a href="#c-flow">Flow diagram</a></li>
@@ -160,11 +162,77 @@
       <pre class="demo-code"><code></code></pre>
     </section>
 
+    <!-- ===== QUESTION BLOCK ===== -->
+    <section class="demo" id="c-qa">
+      <div class="demo-head">
+        <h2>Question block: the main building block</h2>
+        <p>Every page is a run of these, one per question someone would actually ask. <code>.qa</code> holds the question in <code>h2.qa-q</code>, a 2 to 4 sentence answer in <code>.qa-a</code>, and at most three one-line wins in <code>ul.qa-wins</code>. Optional, in this order after the wins: one component (a <code>.flow</code>, <code>.compare</code>, <code>.stats</code>, <code>.cards</code> or <code>.callout</code>), a fold (<code>details.more</code>), and <code>p.qa-more</code> linking to the page with the details (or <code>p.qa-note</code> for a small grey caveat). Put the blocks straight inside <code>&lt;div class="wrap"&gt;</code> under the title band; the first one gets no top rule. On wide screens the question sits on the left and stays in view; on phones it stacks.</p>
+      </div>
+      <div class="demo-live">
+<section class="qa">
+  <h2 class="qa-q">Why do we use a script to make presentations?</h2>
+  <div class="qa-a">
+    <p>Because a script does the fiddly parts the same way every time.</p>
+    <p>It copies a slide from the library, fills its chart from your data, and checks that nothing spills off the slide. Then you edit a few lines of wording.</p>
+  </div>
+  <ul class="qa-wins">
+    <li>Every deck looks the same.</li>
+    <li>When the numbers change, you refresh the deck instead of rebuilding it.</li>
+    <li>A mistake shows up in a check, not in the meeting.</li>
+  </ul>
+  <details class="more">
+    <summary>How it works, step by step</summary>
+    <ol>
+      <li>The assistant picks a slide from the library by its id.</li>
+      <li>The script copies it into your deck and points its chart at your columns.</li>
+    </ol>
+  </details>
+  <p class="qa-more"><a href="deliverables.html">Want the details? How deliverables are built</a></p>
+</section>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== FOLD ===== -->
+    <section class="demo" id="c-more">
+      <div class="demo-head">
+        <h2>Fold: detail behind a click</h2>
+        <p><code>&lt;details class="more"&gt;&lt;summary&gt;Show the math&lt;/summary&gt; ... &lt;/details&gt;</code>. Use it for anything a curious reader wants but most can skip: the math, the steps, a table. Inside: paragraphs, lists, or a small <code>table</code> (add <code>class="num"</code> to number cells to right-align them). Add <code>open</code> to start it unfolded (shown open here). It prints unfolded where the browser allows.</p>
+      </div>
+      <div class="demo-live">
+<details class="more" open>
+  <summary>Show the math</summary>
+  <p>Made-up numbers, to show the layout:</p>
+  <table>
+    <thead><tr><th>Fruit</th><th class="num">Count</th></tr></thead>
+    <tbody>
+      <tr><td>Apples</td><td class="num">12</td></tr>
+      <tr><td>Pears</td><td class="num">7</td></tr>
+    </tbody>
+  </table>
+  <p>One line on where the numbers come from.</p>
+</details>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
+    <!-- ===== FIG ===== -->
+    <section class="demo" id="c-fig">
+      <div class="demo-head">
+        <h2>Inline figure</h2>
+        <p>A number inside a sentence, set in blue so the eye finds it: <code>&lt;span class="fig"&gt;63%&lt;/span&gt;</code>. Say in the same sentence when a figure comes from one sample or is an estimate.</p>
+      </div>
+      <div class="demo-live">
+<p>In one worked example that came to roughly <span class="fig">$1.00</span> against <span class="fig">$2.20</span>. That's an estimate, not a measured bill.</p>
+      </div>
+      <pre class="demo-code"><code></code></pre>
+    </section>
+
     <!-- ===== SECTION ===== -->
     <section class="demo" id="c-section">
       <div class="demo-head">
         <h2>Section with heading and lead</h2>
-        <p>One <code>&lt;section class="sec"&gt;</code> per topic, each with a <code>.wrap</code> inside. Alternate plain and <code>.sec.alt</code> (pale background) down the page. <code>.sec-head</code> holds a small blue <code>.eyebrow</code>, the <code>h2</code> and one <code>.lead</code> sentence. For running text use <code>.prose</code> (keeps lines readable).</p>
+        <p>Rarely needed now: pages are made of question blocks. Use only for a band that is not a question (for example the skills list). One <code>&lt;section class="sec"&gt;</code> per topic, each with a <code>.wrap</code> inside. Alternate plain and <code>.sec.alt</code> (pale background) down the page. <code>.sec-head</code> holds a small blue <code>.eyebrow</code>, the <code>h2</code> and one <code>.lead</code> sentence. For running text use <code>.prose</code> (keeps lines readable).</p>
       </div>
       <div class="demo-live bleed">
 <section class="sec alt">
@@ -321,21 +389,6 @@
       <pre class="demo-code"><code></code></pre>
     </section>
 
-    <!-- ===== DEFINE ===== -->
-    <section class="demo" id="c-define">
-      <div class="demo-head">
-        <h2>Definition box: "in plain terms"</h2>
-        <p>Use the first time a term appears that a newcomer may not know. <code>.define</code> with a <code>.define-tag</code> line, then the term in <code>&lt;strong&gt;</code> and a one-line meaning. Several at once go in a <code>.defines</code> grid (two across on wide screens).</p>
-      </div>
-      <div class="demo-live">
-<aside class="define">
-  <p class="define-tag">In plain terms</p>
-  <p><strong>Subagent</strong>: a helper the assistant starts for one focused job. It gets a short brief, does the job and reports back.</p>
-</aside>
-      </div>
-      <pre class="demo-code"><code></code></pre>
-    </section>
-
     <!-- ===== CALLOUT ===== -->
     <section class="demo" id="c-callout">
       <div class="demo-head">
@@ -359,7 +412,7 @@
     <section class="demo" id="c-split">
       <div class="demo-head">
         <h2>Two-column strip with tick lists</h2>
-        <p><code>.split</code> puts two (or three) panels side by side, stacking on phones. A <code>.split-head</code> pairs an icon with the heading. <code>.ticks</code> is a list with blue ticks; a <code>&lt;span&gt;</code> inside an item is greyed, for a side note.</p>
+        <p><code>.split</code> puts two (or three) panels side by side, stacking on phones. A <code>.split-head</code> pairs an icon with the heading. <code>.ticks</code> is a list with blue ticks, for things that are in or wanted; <code>.crosses</code> marks things that stay out. A <code>&lt;span&gt;</code> inside an item is greyed, for a side note.</p>
       </div>
       <div class="demo-live wash">
 <div class="split">
@@ -376,11 +429,11 @@
   <div>
     <div class="split-head">
       <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2 2.3-2.2M4 18l1.2 1.2 2.3-2.2"/></svg></span>
-      <h3>What you need</h3>
+      <h3>What stays out</h3>
     </div>
-    <ul class="ticks">
-      <li>A short point.</li>
-      <li>Another point.</li>
+    <ul class="crosses">
+      <li>Something that does not belong.</li>
+      <li>Another one. <span>A greyed side note.</span></li>
     </ul>
   </div>
 </div>
@@ -428,10 +481,10 @@
     <section class="demo" id="c-ph">
       <div class="demo-head">
         <h2>Placeholder card: "coming soon"</h2>
-        <p>A card for something not written yet: dashed, hatched and greyed so nobody mistakes it for finished. Add <code>.ph</code> to a <code>.card</code> and start it with a <code>.tag.soon</code>. When it is written, remove <code>ph</code> and the tag. Duplicate freely inside a <code>.cards</code> grid.</p>
+        <p>A card for something not written yet: dashed, hatched and greyed so nobody mistakes it for finished. Add <code>.ph</code> to a <code>.card</code> and start it with a <code>.tag.soon</code>. When it is written, remove <code>ph</code> and the tag. Duplicate freely inside a <code>.cards</code> grid; <code>.cards.compact</code> makes a tighter grid of small cards (used for the skills list).</p>
       </div>
       <div class="demo-live">
-<div class="cards">
+<div class="cards compact">
   <div class="card ph">
     <span class="tag soon">Coming soon</span>
     <h3>Name goes here</h3>
