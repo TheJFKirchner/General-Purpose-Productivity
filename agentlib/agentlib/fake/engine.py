@@ -2,7 +2,12 @@
 
 - script(agent_name, turns): each turn = list of steps, or fn(message) -> list of steps
 - steps: say(text), call(tool, args), ask(questions), rate_limit(status), fail(message), spend(usd), output(data),
-  plan(text)
+  plan(text), parallel(*steps)
+- model replies (events' model_turn, numbered over the opened session like Claude): a say() or call() starts a
+  new model reply unless one is already open; a reply ends with its tool call. So say("Looking") + call(A) is
+  one reply, a following call(B) is the next reply, and a final say("Done") another. parallel(say(..),
+  call(A), call(B)) is ONE reply issuing both calls (same model_turn). Reply.api_calls = replies in the turn
+  (at least 1). rate_limit / spend / output / fail neither start nor end a reply
 - call() runs the agent's real custom tool (or ask_user validation) through the shared TurnState, so
   tool errors, ends_turn and needs_input behave exactly like the real engine
 - calling a built-in name (e.g. "Bash") checks permissions like Claude (rules matched as in rules.py):
@@ -75,6 +80,11 @@ class Call:
 
 
 @dataclass
+class Parallel:
+    steps: list                       # Say / Call steps that make up ONE model reply
+
+
+@dataclass
 class RateLimitStep:
     status: str = "allowed_warning"
     utilization: float | None = 0.9
@@ -131,6 +141,17 @@ def call(tool: str, args: dict | None = None, *, suggestions: list | None = None
     return Call(tool, dict(args or {}),
                 None if suggestions is None else [s if isinstance(s, PermissionSuggestion) else PermissionSuggestion(**s)
                                                   for s in suggestions])
+
+
+def parallel(*steps) -> Parallel:
+    """One model reply that issues several tool calls at once (they share one model_turn). Takes say() and
+    call() / ask() / plan() steps: its text comes first, then every call's ToolCall event, then the calls run
+    in order and their ToolResult events follow (like parallel calls whose results come back after all were
+    issued)."""
+    for s in steps:
+        if not isinstance(s, (Say, Call)):
+            raise TypeError(f"parallel() takes say() and call() steps, not {type(s).__name__}")
+    return Parallel(list(steps))
 
 
 def plan(text: str) -> Call:
@@ -201,7 +222,7 @@ class FakeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, mcp_servers=False, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True)
+                                model_switch=True, model_turns=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "FakeSession":
         local_setup.require("fake")
@@ -243,6 +264,7 @@ class FakeSession(EngineSession):
         self._info = SessionInfo()
         self.requested_model: str | None = None      # set by set_model()
         self.permission_mode: str = agent.permission_mode
+        self._model_turns = 0                        # model replies since open (events' model_turn runs on)
 
     @property
     def total_cost(self) -> float:
@@ -382,13 +404,21 @@ class FakeSession(EngineSession):
         steps = self._steps(message)
         rec["turn"] += 1
         rec["messages"].append(message)
-        state = TurnState("fake", self.resolved.custom)
+        state = TurnState("fake", self.resolved.custom, model_turn=self._model_turns)
+        base_turn = self._model_turns
         model = self.requested_model or self.agent.model or "fake"
         cap = self.agent.max_budget_usd
         out_chars = 0
         spent = 0.0                                   # spend() steps this turn
         structured_data = None
         error = kind = None
+        open_turn: int | None = None                  # model reply in progress; None = next say/call opens one
+
+        def open_reply() -> int:
+            n = state.next_model_turn()
+            self._model_turns = n                     # kept even if the turn fails or is abandoned midway
+            return n
+
         for step in steps:
             if isinstance(step, Spend):
                 spent += step.usd
@@ -403,28 +433,33 @@ class FakeSession(EngineSession):
             if isinstance(step, Fail):
                 partial = state.reply(session_id=self.session_id, usage=self._usage(message, out_chars),
                                       cost_usd=0.0, total_cost_usd=self._cost_base, model=model,
-                                      error=step.message, api_calls=1)
+                                      error=step.message, api_calls=max(1, state.model_turn - base_turn))
                 raise AgentError(step.message, reply=partial)
-            if isinstance(step, Say):
-                for word in step.text.split(" "):
-                    yield TextDelta(word + " ")
-                state.record_text(step.text)
-                out_chars += len(step.text)
-                yield Text(step.text)
-            elif isinstance(step, RateLimitStep):
+            if isinstance(step, RateLimitStep):
                 yield RateLimit(status=step.status, utilization=step.utilization, limit_type="five_hour")
-            elif isinstance(step, Call):
-                cid = f"fake-{uuid.uuid4().hex[:8]}"
-                state.record_call(cid, step.tool, step.args)
-                yield ToolCall(cid, step.tool, dict(step.args))
-                if step.tool in state.tools:
-                    text, err = await state.run_tool(step.tool, step.args)
-                elif step.tool[:1].isupper():
-                    text, err = await self._builtin(step.tool, step.args, cid, step.suggestions)
-                else:
-                    text, err = f"error: unknown tool '{step.tool}'", True
+                continue
+            if not isinstance(step, (Say, Call, Parallel)):
+                continue
+            if open_turn is None:
+                open_turn = open_reply()
+            group = step.steps if isinstance(step, Parallel) else [step]
+            for s in group:
+                if isinstance(s, Say):
+                    for word in s.text.split(" "):
+                        yield TextDelta(word + " ")
+                    state.record_text(s.text)
+                    out_chars += len(s.text)
+                    yield Text(s.text, model_turn=open_turn)
+            calls = [(f"fake-{uuid.uuid4().hex[:8]}", s) for s in group if isinstance(s, Call)]
+            for cid, c in calls:                      # every call of the reply is issued before any runs
+                state.record_call(cid, c.tool, c.args, model_turn=open_turn)
+                yield ToolCall(cid, c.tool, dict(c.args), model_turn=open_turn)
+            for cid, c in calls:
+                text, err = await self._run_call(state, c, cid)
                 state.record_result(cid, text, err)
-                yield ToolResult(cid, step.tool, text, err)
+                yield ToolResult(cid, c.tool, text, err, model_turn=open_turn)
+            if calls:
+                open_turn = None                      # tool results go back: the next say/call is a new reply
                 if state.stop_requested:
                     break
         model = self.requested_model or self.agent.model or "fake"   # a mid-turn set_model counts
@@ -443,5 +478,14 @@ class FakeSession(EngineSession):
             if problem:
                 error, kind = problem, "output_shape"
         yield Done(state.reply(session_id=self.session_id, usage=usage, cost_usd=cost,
-                               total_cost_usd=total, model=model, stop_reason="end_turn", api_calls=1,
+                               total_cost_usd=total, model=model, stop_reason="end_turn",
+                               api_calls=max(1, state.model_turn - base_turn),
                                error=error, error_kind=kind, data=data))
+
+    async def _run_call(self, state: TurnState, c: Call, cid: str) -> tuple[str, bool]:
+        """Run one scripted call: a custom tool / ask_user through TurnState, a built-in through the rules."""
+        if c.tool in state.tools:
+            return await state.run_tool(c.tool, c.args)
+        if c.tool[:1].isupper():
+            return await self._builtin(c.tool, c.args, cid, c.suggestions)
+        return f"error: unknown tool '{c.tool}'", True

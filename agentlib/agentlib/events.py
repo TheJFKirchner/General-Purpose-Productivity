@@ -7,6 +7,11 @@
 - rate_limit  usage-limit status (status, resets_at, utilization, limit_type)
 - done        the turn is over; carries the final Reply
 Each event has `.type` (the string above) so a UI can switch on it or send it as JSON (to_dict()).
+
+model_turn (on text, tool_call, tool_result): which model reply the event belongs to, counted 1, 2, 3, ...
+from when the session was opened, across all its send() / answer() calls (a resumed or forked session starts
+again at 1). Tool calls the model issued in one reply share a number; calls in later replies get higher numbers.
+A tool_result carries the number of the call it answers. None when the engine cannot tell. Not on text_delta.
 """
 from __future__ import annotations
 
@@ -34,6 +39,7 @@ class TextDelta(_Event):
 class Text(_Event):
     type: ClassVar[str] = "text"
     text: str
+    model_turn: int | None = None     # model reply this text is part of (see module docstring)
 
 
 @dataclass
@@ -42,6 +48,7 @@ class ToolCall(_Event):
     id: str
     name: str
     input: dict = field(default_factory=dict)
+    model_turn: int | None = None     # model reply that issued the call; calls in one reply share it
 
 
 @dataclass
@@ -51,6 +58,7 @@ class ToolResult(_Event):
     name: str
     text: str
     is_error: bool = False
+    model_turn: int | None = None     # model_turn of the call this result answers
 
 
 @dataclass

@@ -43,6 +43,7 @@ class ToolCallRecord:
     input: dict = field(default_factory=dict)
     result: str | None = None
     is_error: bool = False
+    model_turn: int | None = None     # model reply that issued the call (same as ToolCall.model_turn)
 
 
 @dataclass

@@ -128,7 +128,7 @@ class IngestTest(unittest.TestCase):
         self.assertEqual(done["questions"], 0)
         self.assertEqual(done["cards"], 2)
         self.assertEqual(done["reads"], 1)
-        self.assertEqual(done["requests"], 1)
+        self.assertEqual(done["requests"], 5)                          # one per model reply: the text + read, three proposals, "Done."
         self.assertGreater(done["cost"], 0)
         self.assertIn("plainClaudeCode", done)
         self.assertEqual(set(done["tokens"]), {"input", "cacheWrite", "cacheRead", "output"})
@@ -322,7 +322,7 @@ class IngestTest(unittest.TestCase):
         self.assertTrue(done["ok"] and done["feedback"], done)
         self.assertEqual(done["cards"], ["c1"])                         # the round's card ids
         self.assertEqual(done["cardCount"], 1)                          # the run's card count
-        self.assertEqual(done["requests"], 2)                          # the run's totals, this round included
+        self.assertEqual(done["requests"], 5)                          # the run's totals, this round included: 3 replies, then 2
         self.assertGreater(done["round"]["cost"], 0)
         self.assertAlmostEqual(done["cost"], round(first_cost + done["round"]["cost"], 4), places=4)
 

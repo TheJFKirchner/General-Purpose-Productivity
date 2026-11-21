@@ -36,9 +36,14 @@ EngineSession                            # one conversation
                                          # checks check_mode_switch() first
   async close()                          # abstract (Session.__aexit__)
 
-TurnState(engine_name, tools)            # per-turn bookkeeping shared by all engines
+TurnState(engine_name, tools, model_turn=0)  # per-turn bookkeeping shared by all engines
   await run_tool(name, args) -> (text, is_error)   # runs a custom Tool or validates ask_user; sets stop_requested
-  record_text(text) / record_call(id, name, input) / record_result(id, text, is_error) -> name
+  record_text(text) / record_call(id, name, input, model_turn=None) / record_result(id, text, is_error) -> name
+  model_turn                             # number of the latest model reply in the session; pass the session's
+                                         # count in, read it back after the turn (numbers run on over the session)
+  model_turn_for(key) -> int             # the reply an engine message belongs to (key = its per-reply id;
+                                         # None: new reply only after tool results); next_model_turn() opens one
+  call_turn(call_id) -> int | None       # a recorded call's model_turn (put it on the ToolResult)
   message_ids: set[str]                  # distinct model calls (-> Reply.api_calls)
   usage_by_message: dict[str, Usage]     # latest usage per model call; usage_so_far() sums it
   stop_requested: bool                   # True after ask_user or an ends_turn tool: end the turn now
@@ -61,12 +66,14 @@ routes custom tool calls through `state.run_tool()`, records text/calls/results,
 
 `Capabilities` (frozen dataclass, same file): `available, system_prompt, custom_tools, mcp_servers, streaming,
 resume, fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
-list_models, accept_edits, plan_mode, mode_switch`. `requirements(agent, fork=, resume=)` (same
+list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns`. `requirements(agent, fork=, resume=)` (same
 file) maps capability name -> "does this agent/call need it"; `Engine.check()` enforces every name in it:
 `system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup, budget,
 never_ask, accept_edits, plan_mode, structured_output, unsaved`. `list_models` is not per agent:
 `Engine.check_list_models()` enforces it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default
-raises `CapabilityError`) does it. `mode_switch` is a session operation: `Session.set_permission_mode()` calls
+raises `CapabilityError`) does it. `model_turns` is informational like `streaming` / `usage`: the engine fills
+`model_turn` on `Text` / `ToolCall` / `ToolResult` (via `TurnState.model_turn_for()` / `call_turn()`); a new
+engine sets it only if its stream identifies each model reply. `mode_switch` is a session operation: `Session.set_permission_mode()` calls
 `check_mode_switch()` (needs `mode_switch` plus the target mode's flag) before `EngineSession.set_permission_mode()`.
 Permission requests: build `PermissionRequest` (with `kind="plan"` + `plan` for a plan proposal, `suggestions` as
 `PermissionSuggestion`s, `mode`, `call_id`) and turn the hook's answer into a `PermissionDecision` with

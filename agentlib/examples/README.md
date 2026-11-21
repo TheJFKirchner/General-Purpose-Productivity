@@ -11,7 +11,7 @@ login, or whatever sign-in your `setup/local.toml` says (LIVE: costs tokens, rou
 |---|---|---|---|
 | 01 | `01_one_shot.py` | Smallest agent: `Agent(...)`, `ask_sync`, reading `Reply` (status, text, usage, cost, session id) | yes |
 | 02 | `02_multi_turn_session.py` | `agent.session()`, `send`, resume by id with `cost_base`, `fork=True` | yes |
-| 03 | `03_streaming_events.py` | `s.stream()`: `TextDelta`, `Text`, `ToolCall`, `ToolResult`, `RateLimit`, `Done`; `to_dict()` | yes |
+| 03 | `03_streaming_events.py` | `s.stream()`: `TextDelta`, `Text`, `ToolCall`, `ToolResult`, `RateLimit`, `Done`; `to_dict()`; `model_turn` (which model reply), `fake.parallel()` | yes |
 | 04 | `04_custom_tools.py` | `@tool` (type hints -> schema), `read_only`, `ends_turn`, async tools, exceptions -> error results | yes |
 | 05 | `05_ask_user.py` | `ask_user` parks (`needs_input`), save questions, resume and `answer(..., questions=)` | yes |
 | 06 | `06_permissions.py` | `on_permission` allow/deny for tools that are not pre-approved; `Bash(echo:*)` rules | yes |

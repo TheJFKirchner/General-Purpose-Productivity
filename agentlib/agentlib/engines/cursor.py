@@ -37,6 +37,7 @@ class CursorEngine(Engine):
         accept_edits=False,     # unverified: no live permission hook; may map to its own auto-apply setting
         plan_mode=False,        # unverified: plan approval needs a live permission hook
         mode_switch=False,      # unverified
+        model_turns=False,      # unverified: needs an id per model reply (or a reliable reply boundary) in its stream
     )
 
     def open(self, agent, *, resume, fork, cost_base):

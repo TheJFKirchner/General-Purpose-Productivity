@@ -6,6 +6,10 @@ Run:  python examples/03_streaming_events.py          (fake engine, free)
 Raw SDK equivalent: include_partial_messages=True + iterating StreamEvent / AssistantMessage (TextBlock,
 ToolUseBlock) / UserMessage (ToolResultBlock) / RateLimitEvent / ResultMessage. agentlib maps them to six
 events (agentlib/events.py); every event has .type and .to_dict() (JSON-ready for a web UI).
+
+Text, ToolCall and ToolResult carry .model_turn: which model reply they belong to (1, 2, 3, ... over the
+session). Calls issued in one reply share it (cheap); the same calls spread over many replies re-send the
+conversation each time. On the fake engine, fake.parallel(...) scripts several calls in one reply.
 """
 import asyncio
 import json
@@ -27,9 +31,11 @@ if not LIVE:
     from agentlib import fake
     fake.script("calc", [[
         fake.rate_limit("allowed_warning", 0.9),       # engines report usage-limit status as an event
-        fake.say("Let me add those."),
+        fake.say("Let me add those."),                 # model reply 1: this text and the call after it
         fake.call("add_numbers", {"a": 2, "b": 3}),    # runs the REAL add_numbers above
-        fake.say("2 + 3 = 5."),
+        fake.parallel(fake.call("add_numbers", {"a": 1, "b": 1}),     # model reply 2: two calls at once
+                      fake.call("add_numbers", {"a": 4, "b": 4})),
+        fake.say("2 + 3 = 5."),                        # model reply 3
     ]])
 
 agent = Agent("calc", instructions="Use add_numbers for any arithmetic. Be brief.",
@@ -42,11 +48,11 @@ async def main() -> None:
             if isinstance(ev, TextDelta):              # live typing (top-level agent only)
                 print(ev.text, end="", flush=True)
             elif isinstance(ev, Text):                 # a finished text block (arrives after its deltas)
-                print(f"\n[text block finished, {len(ev.text)} chars]")
+                print(f"\n[text block finished, {len(ev.text)} chars, model reply {ev.model_turn}]")
             elif isinstance(ev, ToolCall):             # short tool name: "add_numbers", not "mcp__..."
-                print(f"[tool_call] {ev.name}({ev.input})")
-            elif isinstance(ev, ToolResult):
-                print(f"[tool_result] {ev.name} -> {ev.text!r} error={ev.is_error}")
+                print(f"[tool_call] {ev.name}({ev.input}) model reply {ev.model_turn}")
+            elif isinstance(ev, ToolResult):           # model_turn = the reply that issued the call
+                print(f"[tool_result] {ev.name} -> {ev.text!r} error={ev.is_error} model reply {ev.model_turn}")
             elif isinstance(ev, RateLimit):
                 print(f"[rate_limit] {ev.status} utilization={ev.utilization} type={ev.limit_type}")
             elif isinstance(ev, Done):                 # always last; carries the same Reply send() returns

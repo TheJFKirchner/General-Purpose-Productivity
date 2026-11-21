@@ -174,7 +174,7 @@ class ClaudeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True)
+                                model_switch=True, model_turns=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "ClaudeSession":
         return ClaudeSession(agent, resume=resume, fork=fork, cost_base=cost_base)
@@ -216,6 +216,7 @@ class ClaudeSession(EngineSession):
         self._resuming = resume is not None
         self._fork = fork
         self._turns_done = 0
+        self._model_turns = 0                 # model replies seen since open (events' model_turn runs on from it)
         self._cost_base = float(cost_base or 0.0)
         self._client: ClaudeSDKClient | None = None
         self._ops: asyncio.Queue | None = None
@@ -617,7 +618,7 @@ class ClaudeSession(EngineSession):
     async def _turn(self, message: str, q: asyncio.Queue) -> None:
         if self._client is None:
             await self._connect()
-        state = TurnState("claude", self.resolved.custom)
+        state = TurnState("claude", self.resolved.custom, model_turn=self._model_turns)
         self._state = state
         self._structured_input = None
         res: ResultMessage | None = None
@@ -647,6 +648,7 @@ class ClaudeSession(EngineSession):
         finally:
             self._state = None
             self._busy = False
+            self._model_turns = state.model_turn
         if res is None:
             await self._disconnect(failed=True)
             msg = "Claude stream ended without a result"
@@ -708,19 +710,21 @@ class ClaudeSession(EngineSession):
                     state.usage_by_message[m.message_id] = normalize_usage(m.usage)
             if m.model:
                 self.model = m.model
+            # One model reply can arrive as several AssistantMessages (one per content block) sharing message_id
+            turn = state.model_turn_for(m.message_id)
             out = []
             for b in m.content:
                 if isinstance(b, TextBlock) and b.text.strip():
                     state.record_text(b.text)
-                    out.append(Text(b.text))
+                    out.append(Text(b.text, model_turn=turn))
                 elif isinstance(b, ToolUseBlock):
                     if self.agent.output_schema is not None and b.name == STRUCTURED_TOOL:
                         self._hidden_calls.add(b.id)          # the CLI's own tool for output_schema: not shown
                         self._structured_input = dict(b.input or {})
                         continue
                     name = short_name(b.name, self.server)
-                    state.record_call(b.id, name, b.input)
-                    out.append(ToolCall(b.id, name, dict(b.input or {})))
+                    state.record_call(b.id, name, b.input, model_turn=turn)
+                    out.append(ToolCall(b.id, name, dict(b.input or {}), model_turn=turn))
             return out
         if isinstance(m, UserMessage):
             if m.parent_tool_use_id or not isinstance(m.content, list):
@@ -732,7 +736,8 @@ class ClaudeSession(EngineSession):
                         continue
                     text = _content_text(b.content)
                     name = state.record_result(b.tool_use_id, text, bool(b.is_error))
-                    out.append(ToolResult(b.tool_use_id, name, text, bool(b.is_error)))
+                    out.append(ToolResult(b.tool_use_id, name, text, bool(b.is_error),
+                                          model_turn=state.call_turn(b.tool_use_id)))
             return out
         if isinstance(m, RateLimitEvent):
             i = m.rate_limit_info

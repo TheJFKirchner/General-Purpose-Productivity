@@ -89,9 +89,10 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `PermissionResultAllow(updated_permissions=[PermissionUpdate(type="setMode")])` for any tool | `PermissionDecision("allow", mode="accept_edits")` (e.g. "allow all edits from now on") | `agentlib/permissions.py` |
 | `include_partial_messages=True` + iterate messages | `async for ev in s.stream(msg)` (always on) | `agentlib/session.py` |
 | `StreamEvent` (`text_delta`) | `TextDelta(text)` | `agentlib/events.py` |
-| `AssistantMessage` -> `TextBlock` | `Text(text)` | `agentlib/events.py` |
-| `AssistantMessage` -> `ToolUseBlock` | `ToolCall(id, name, input)` (custom tools: short name) | `agentlib/events.py` |
-| `UserMessage` -> `ToolResultBlock` | `ToolResult(id, name, text, is_error)` | `agentlib/events.py` |
+| `AssistantMessage` -> `TextBlock` | `Text(text, model_turn)` | `agentlib/events.py` |
+| `AssistantMessage` -> `ToolUseBlock` | `ToolCall(id, name, input, model_turn)` (custom tools: short name) | `agentlib/events.py` |
+| `UserMessage` -> `ToolResultBlock` | `ToolResult(id, name, text, is_error, model_turn)` | `agentlib/events.py` |
+| `AssistantMessage.message_id` (one model reply; shared by all its blocks) | `model_turn` on `Text` / `ToolCall` / `ToolResult` / `ToolCallRecord`: the model reply's number, 1, 2, 3, ... over the opened session (runs on across `send()` / `answer()`; a resumed or forked session starts at 1). Calls issued in one reply share it; a `ToolResult` carries its call's number; `None` if the engine cannot tell. Capability `model_turns` (informational) | `agentlib/events.py`, `agentlib/engines/base.py` (`TurnState.model_turn_for`), `agentlib/engines/claude.py` (`_map`) |
 | `RateLimitEvent` | `RateLimit(status, resets_at, utilization, limit_type)` | `agentlib/events.py` |
 | `ResultMessage` | `Done(reply)` (last event) / return value of `send()` | `agentlib/events.py`, `agentlib/reply.py` |
 | `ResultMessage.total_cost_usd` (cumulative) | `Reply.total_cost_usd`; `Reply.cost_usd` = this turn (delta) | `agentlib/reply.py` |
@@ -168,7 +169,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `list_models` / `list_models_sync` | `agentlib/models.py` | `await list_models(engine="claude", *, env=None, timeout_s=60) -> list[ModelInfo]`; no request sent. `CapabilityError` / `EngineUnavailable` / `AgentError` |
 | `ask_structured` / `ask_structured_sync` | `agentlib/structured.py` | `await ask_structured(message, schema, *, instructions="", model=None, engine="claude", name="structured", effort=None, max_budget_usd=None, timeout_s=600, env=None, cwd=None) -> Reply`: no tools, `never_ask`, not saved |
 | `Usage` | `agentlib/reply.py` | Per-turn token counts, same names on every engine; supports `+`; `.total_input_tokens` |
-| `ToolCallRecord` | `agentlib/reply.py` | One tool call in `Reply.tool_calls`: `id, name, input, result, is_error` |
+| `ToolCallRecord` | `agentlib/reply.py` | One tool call in `Reply.tool_calls`: `id, name, input, result, is_error, model_turn` |
 | `Tool` | `agentlib/tools.py` | A custom tool: `name, description, schema, handler, ends_turn, read_only`; `await t.call(args) -> (text, is_error)` |
 | `tool` | `agentlib/tools.py` | Decorator `@tool` / `@tool(name=, description=, schema=, ends_turn=, read_only=)` -> `Tool` |
 | `load_claude_agent` | `agentlib/loaders/claude.py` | `.claude/agents/<name>.md` -> `Agent` |
@@ -181,9 +182,9 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `PERMISSION_MODES` | `agentlib/permissions.py` | `("default", "never_ask", "accept_edits", "plan")` |
 | `Event` | `agentlib/events.py` | Type alias: union of the six event classes |
 | `TextDelta` | `agentlib/events.py` | `.type == "text_delta"`: live text chunk (top-level agent only) |
-| `Text` | `agentlib/events.py` | `.type == "text"`: a finished text block |
-| `ToolCall` | `agentlib/events.py` | `.type == "tool_call"`: `id, name, input` |
-| `ToolResult` | `agentlib/events.py` | `.type == "tool_result"`: `id, name, text, is_error` |
+| `Text` | `agentlib/events.py` | `.type == "text"`: a finished text block; `model_turn` |
+| `ToolCall` | `agentlib/events.py` | `.type == "tool_call"`: `id, name, input, model_turn` (model reply that issued it; calls in one reply share it) |
+| `ToolResult` | `agentlib/events.py` | `.type == "tool_result"`: `id, name, text, is_error, model_turn` (= its call's) |
 | `RateLimit` | `agentlib/events.py` | `.type == "rate_limit"`: `status, resets_at, utilization, limit_type` |
 | `Done` | `agentlib/events.py` | `.type == "done"`: last event, `.reply` |
 | `AgentError` | `agentlib/errors.py` | Base error for infrastructure failures (process died, timeout, sign-in); `.short`; `.reply` (partial `Reply` when a turn failed midway: text/tool calls so far, best-effort usage, `cost_usd` 0; else `None`) |
@@ -201,8 +202,8 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `CheckResult` | `agentlib/connection.py` | `ok, engine, status, sent, model, reply_text, cost_usd, duration_s, error, fix`; `.report()` (plain text the CLI prints), `.to_dict()` |
 | `SetupError` | `agentlib/errors.py` | `setup/local.toml` is broken or points at something missing (raised when a session / `list_models` starts; nothing sent); message says what to fix |
 
-Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, ask, plan, rate_limit, fail, spend, output,
-models, saved_rules, reset, DEFAULT_MODELS, PLAN_TOOL, FakeEngine`),
+Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, parallel, ask, plan, rate_limit, fail, spend,
+output, models, saved_rules, reset, DEFAULT_MODELS, PLAN_TOOL, FakeEngine`),
 `agentlib.engines` (`Capabilities, Engine, EngineSession, TurnState, EngineSetup, Connection, get_setup,
 register_setup`; `agentlib.engines.base.requirements`, `agentlib.engines.base.check_mode_switch`), `agentlib.local_setup` (`connection, require,
 setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses; script it on the fake engine),
@@ -219,6 +220,7 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 | Continue a conversation after a restart | save `s.session_id` (+ `reply.total_cost_usd`); `agent.session(resume=id, cost_base=total)` | `examples/02_multi_turn_session.py` |
 | Branch a conversation | `agent.session(resume=id, fork=True)` | `examples/02_multi_turn_session.py` |
 | Show live output in a UI | `async for ev in s.stream(msg)`; `ev.to_dict()` for JSON | `examples/03_streaming_events.py` |
+| Tell calls made in one model reply from calls spread over many replies | `ev.model_turn` on `ToolCall` / `ToolResult` / `Text` (or `reply.tool_calls[i].model_turn`); fake: `fake.parallel(call(...), call(...))` = one reply | `examples/03_streaming_events.py` |
 | Stop a running turn | `await s.interrupt()` | - |
 | Give the agent a Python function | `@tool` + `Agent(tools=[fn])` | `examples/04_custom_tools.py` |
 | End the turn right after a tool succeeds | `@tool(ends_turn=True)` | `examples/04_custom_tools.py` |
@@ -346,7 +348,7 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   tools + `ask_user` identically for every engine and builds the `Reply`
 - `Capabilities` (frozen dataclass): `available, system_prompt, custom_tools, mcp_servers, streaming, resume,
   fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
-  list_models, accept_edits, plan_mode, mode_switch`. `Engine.check()` runs in `agent.session()` before
+  list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns`. `Engine.check()` runs in `agent.session()` before
   anything starts: `available` False -> `EngineUnavailable` (message lists what else it would lack); else
   `CapabilityError` naming every needed capability the engine lacks. Needs (`requirements()` in `base.py`):
   `system_prompt` (instructions set, or skills in lean setup), `custom_tools` (any `@tool` or `ask_user`),
@@ -356,7 +358,8 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`).
   `list_models` is checked by `list_models()` (`Engine.check_list_models()`); `mode_switch` (plus the target
   mode's flag) by `Session.set_permission_mode()` (`check_mode_switch()` in `base.py`; the default
-  `EngineSession.set_permission_mode` raises `CapabilityError`). `streaming` and `usage` are informational only
+  `EngineSession.set_permission_mode` raises `CapabilityError`). `streaming`, `usage` and `model_turns` (events
+  carry `model_turn`) are informational only
 - Sign-in side (`EngineSetup` in `agentlib/engines/base.py`, registry `register_setup` / `get_setup`): one per
   engine, SDK-free so status works without the engine's package. `resolve(section)` turns the engine's
   `[section]` of `setup/local.toml` into a `Connection(method, summary, env, engine_settings, problems,
@@ -367,16 +370,19 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 
 | Engine | File | State | Capabilities that differ from defaults |
 |---|---|---|---|
-| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models`, `accept_edits`, `plan_mode`, `mode_switch` all True |
+| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models`, `accept_edits`, `plan_mode`, `mode_switch`, `engine_prompt`, `model_switch`, `model_turns` all True |
 | `cursor` | `agentlib/engines/cursor.py` | stub: `agent.session()` raises `EngineUnavailable` | `available=False`, `system_prompt=False`, `ends_turn=False` (new flags False, unverified) |
 | `fake` | `agentlib/fake/engine.py` | working, tests only, zero tokens | same as claude, plus `mcp_servers=False` |
 
 - Cursor plan (stub header): Cursor Python SDK (`cursor-sdk`, beta); no app-set system prompt (AGENTS.md +
   message prefix), no live permission hook, no fork, sync API (wrap in `asyncio.to_thread`), own model names.
   Until then `load_cursor_agent` defaults to the claude engine (`DEFAULT_ENGINE` in `agentlib/loaders/cursor.py`)
-- Fake engine: `fake.script(agent_name, turns)`; steps `say, call, ask, plan, rate_limit, fail`; a turn may be
+- Fake engine: `fake.script(agent_name, turns)`; steps `say, call, parallel, ask, plan, rate_limit, fail`; a turn may be
   `fn(message) -> steps`. `call()` runs your real tool through `TurnState`; built-in names go through
-  Claude-style rules. No script -> `"(fake) <message>"`. Resume works within one Python process.
+  Claude-style rules. Model replies (`model_turn`): a `say()` or `call()` starts a new reply unless one is open,
+  and a reply ends with its call, so `say("Looking"), call(A), call(B), say("Done")` = replies 1 (text + A), 2 (B),
+  3 (text); `parallel(say(...), call(A), call(B))` = ONE reply: its text, both `ToolCall`s, then both results.
+  `Reply.api_calls` = replies in the turn (at least 1). No script -> `"(fake) <message>"`. Resume works within one Python process.
   `total_cost_usd` is cumulative per conversation and `cost_usd` honours `cost_base` like the Claude engine.
   `fail()` raises `AgentError` with `.reply`. `s.info` mirrors Claude's. `fake.reset()` between tests
 - Fake run controls: `fake.spend(usd)` step adds cost; `max_budget_usd` is checked after every step against the

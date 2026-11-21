@@ -52,6 +52,7 @@ class Capabilities:
     mode_switch: bool = False     # Session.set_permission_mode(): change the permission mode on a live session
     engine_prompt: bool = False   # Agent.engine_prompt: the engine's own agent prompt + instructions, in lean setup
     model_switch: bool = False    # Session.set_model(): change the model on a live session (between turns or mid-turn)
+    model_turns: bool = False     # informational: Text / ToolCall / ToolResult carry model_turn (else None; not enforced)
 
 
 def requirements(agent, *, fork: bool = False, resume: bool = False) -> dict[str, bool]:
@@ -202,7 +203,7 @@ class EngineSetup:
 class TurnState:
     """One turn's bookkeeping. Engines call run_tool() for custom tools, record_* for what they observe."""
 
-    def __init__(self, engine: str, tools: list[Tool]):
+    def __init__(self, engine: str, tools: list[Tool], model_turn: int = 0):
         self.engine = engine
         self.tools = {t.name: t for t in tools}
         self.t0 = time.monotonic()
@@ -212,6 +213,35 @@ class TurnState:
         self.stop_requested = False
         self.message_ids: set[str] = set()
         self.usage_by_message: dict[str, Usage] = {}   # latest usage seen per model call (for failure replies)
+        # model_turn: number of the latest model reply in the session (0 = none yet). The engine session passes
+        # the count it reached last turn and reads state.model_turn back afterwards, so numbers run on.
+        self.model_turn = model_turn
+        self._turn_base = model_turn
+        self._turn_by_key: dict[str, int] = {}
+        self._results_since_reply = False
+
+    def next_model_turn(self) -> int:
+        """A new model reply starts: returns its number (1, 2, 3, ... over the session)."""
+        self.model_turn += 1
+        self._results_since_reply = False
+        return self.model_turn
+
+    def model_turn_for(self, key: str | None) -> int:
+        """The model reply an engine message belongs to. key = the engine's id for one model reply (Claude:
+        AssistantMessage.message_id, shared by every block of that reply): same key -> same number, a new key ->
+        the next number. No key: a new reply only if tool results arrived since the last one (best effort)."""
+        if key is not None:
+            if key not in self._turn_by_key:
+                self._turn_by_key[key] = self.next_model_turn()
+            return self._turn_by_key[key]
+        if self.model_turn == self._turn_base or self._results_since_reply:
+            return self.next_model_turn()
+        return self.model_turn
+
+    def call_turn(self, call_id: str) -> int | None:
+        """model_turn of a recorded call (for its ToolResult), None if unknown."""
+        rec = self.calls.get(call_id)
+        return rec.model_turn if rec else None
 
     def usage_so_far(self) -> Usage:
         """Best-effort usage of the model calls seen this turn (used when a turn fails before its result)."""
@@ -238,10 +268,11 @@ class TurnState:
         if text.strip():
             self.texts.append(text.strip())
 
-    def record_call(self, call_id: str, name: str, inp: dict) -> None:
-        self.calls[call_id] = ToolCallRecord(id=call_id, name=name, input=dict(inp or {}))
+    def record_call(self, call_id: str, name: str, inp: dict, model_turn: int | None = None) -> None:
+        self.calls[call_id] = ToolCallRecord(id=call_id, name=name, input=dict(inp or {}), model_turn=model_turn)
 
     def record_result(self, call_id: str, text: str, is_error: bool) -> str:
+        self._results_since_reply = True
         rec = self.calls.get(call_id)
         if rec is None:
             return "?"
