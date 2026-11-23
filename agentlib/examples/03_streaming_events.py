@@ -10,6 +10,10 @@ events (agentlib/events.py); every event has .type and .to_dict() (JSON-ready fo
 Text, ToolCall and ToolResult carry .model_turn: which model reply they belong to (1, 2, 3, ... over the
 session). Calls issued in one reply share it (cheap); the same calls spread over many replies re-send the
 conversation each time. On the fake engine, fake.parallel(...) scripts several calls in one reply.
+
+Reply.turn_usage lists the tokens of each model reply ([TurnUsage(model_turn, usage, model)], same numbers as
+the events), so you can see which reply was expensive; the replies add up to Reply.usage. On the fake engine
+say / call / parallel take usage= to script them (else the turn's estimate is split over its replies).
 """
 import asyncio
 import json
@@ -34,7 +38,8 @@ if not LIVE:
         fake.say("Let me add those."),                 # model reply 1: this text and the call after it
         fake.call("add_numbers", {"a": 2, "b": 3}),    # runs the REAL add_numbers above
         fake.parallel(fake.call("add_numbers", {"a": 1, "b": 1}),     # model reply 2: two calls at once
-                      fake.call("add_numbers", {"a": 4, "b": 4})),
+                      fake.call("add_numbers", {"a": 4, "b": 4}),
+                      usage={"input_tokens": 900, "output_tokens": 60}),   # this reply's tokens (optional)
         fake.say("2 + 3 = 5."),                        # model reply 3
     ]])
 
@@ -58,6 +63,9 @@ async def main() -> None:
             elif isinstance(ev, Done):                 # always last; carries the same Reply send() returns
                 r = ev.reply
                 print(f"[done] status={r.status} tools={[c.name for c in r.tool_calls]} cost=${r.cost_usd:.6f}")
+                for t in r.turn_usage:                 # tokens per model reply (capability turn_usage)
+                    print(f"  model reply {t.model_turn}: in={t.usage.input_tokens} out={t.usage.output_tokens} "
+                          f"cache_read={t.usage.cache_read_tokens} cache_write={t.usage.cache_write_tokens}")
                 print("as JSON for a UI:", json.dumps(ev.to_dict())[:120], "...")
         # After streaming, s.last_reply holds the Reply and s.pending_questions any ask_user questions.
         # To stream the answer to ask_user questions use s.answer_stream(answers) (see 05).

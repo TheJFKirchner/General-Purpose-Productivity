@@ -82,7 +82,7 @@ def test_lean_skills_need_system_prompt():
 
 
 def test_informational_flags_are_not_enforced():
-    eng = _engine(streaming=False, usage=False)
+    eng = _engine(streaming=False, usage=False, model_turns=False, turn_usage=False)
     eng.check(Agent("a", instructions="x", tools=[plain, "ask_user"], **BARE))
 
 

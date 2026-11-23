@@ -38,6 +38,8 @@ class CursorEngine(Engine):
         plan_mode=False,        # unverified: plan approval needs a live permission hook
         mode_switch=False,      # unverified
         model_turns=False,      # unverified: needs an id per model reply (or a reliable reply boundary) in its stream
+        turn_usage=False,       # unverified: needs usage reported per model reply, not only per turn
+        process_control=False,  # unverified: needs the pid of whatever process the SDK runs the agent in (if any)
     )
 
     def open(self, agent, *, resume, fork, cost_base):

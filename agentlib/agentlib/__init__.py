@@ -21,14 +21,16 @@ from .events import Done, Event, RateLimit, Text, TextDelta, ToolCall, ToolResul
 from .loaders import load_claude_agent, load_cursor_agent
 from .models import ModelInfo, list_models, list_models_sync
 from .permissions import PERMISSION_MODES, PermissionDecision, PermissionRequest, PermissionSuggestion
+from .processes import (KillResult, ProcessInfo, describe_process, end_process_tree, list_descendants,
+                        process_started_at)
 from .questions import Answer, Question
-from .reply import Reply, ToolCallRecord, Usage
+from .reply import Reply, ToolCallRecord, TurnUsage, Usage
 from .session import Session, SessionInfo
 from .structured import ask_structured, ask_structured_sync
 from .tools import Tool, tool
 
 __all__ = [
-    "Agent", "Session", "SessionInfo", "Reply", "Usage", "ToolCallRecord", "Tool", "tool",
+    "Agent", "Session", "SessionInfo", "Reply", "Usage", "TurnUsage", "ToolCallRecord", "Tool", "tool",
     "load_claude_agent", "load_cursor_agent", "Question", "Answer", "PermissionRequest",
     "PermissionDecision", "PermissionSuggestion", "PERMISSION_MODES",
     "Event", "TextDelta", "Text", "ToolCall", "ToolResult", "RateLimit", "Done",
@@ -36,4 +38,5 @@ __all__ = [
     "QuestionShapeError", "get_engine", "register_engine", "use_login_only",
     "ModelInfo", "list_models", "list_models_sync", "ask_structured", "ask_structured_sync",
     "SetupError", "ConnectionStatus", "CheckResult", "connection_status", "check_connection", "check_connection_sync",
+    "ProcessInfo", "KillResult", "end_process_tree", "list_descendants", "describe_process", "process_started_at",
 ]

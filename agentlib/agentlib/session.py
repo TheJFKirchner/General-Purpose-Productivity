@@ -9,6 +9,8 @@
 - s.permission_mode / await s.set_permission_mode("accept_edits"): read / change the permission mode live
 - s.info: SessionInfo (tools offered, MCP server status, model) as the engine reported it at startup;
   empty until the first turn has started (the Claude CLI reports it at the start of the first turn)
+- s.pid / await s.kill(): the OS process the conversation runs in, and ending it with everything it started
+  (capability process_control; helpers for leftovers in processes.py)
 """
 from __future__ import annotations
 
@@ -92,6 +94,33 @@ class Session:
 
     async def interrupt(self) -> None:
         await self._es.interrupt()
+
+    @property
+    def pid(self) -> int | None:
+        """The OS process this conversation runs in (shell commands the agent runs are its descendants), from
+        connect until it ends; None before connect, after close, or when the engine has no process / cannot
+        tell. It can change: after a failed turn the next turn starts a new process. Keep it together with
+        process_started_at when keeping it for later (guards against pid reuse)."""
+        return self._es.pid
+
+    @property
+    def process_started_at(self) -> float | None:
+        """When the process in `pid` started (seconds since the epoch), as the engine recorded it when that
+        process started; None whenever pid is None. Pass it as started_at= to end_process_tree /
+        list_descendants instead of reading it again later (a later read could see a reused pid)."""
+        return self._es.process_started_at
+
+    async def kill(self, *, timeout_s: float = 3.0):
+        """End this conversation's process and everything it started (descendants are found first), then close
+        the session. Works mid-turn (the running turn raises AgentError) and on a half-closed session; a second
+        call is harmless. Afterwards send() raises AgentError. -> processes.KillResult (what was ended).
+        CapabilityError if the engine lacks process_control."""
+        from .engines import get_engine
+        from .errors import CapabilityError
+        eng = get_engine(self.agent.engine)
+        if not eng.capabilities.process_control:
+            raise CapabilityError(f"engine '{eng.name}' cannot do: process_control")
+        return await self._es.kill(timeout_s=timeout_s)
 
     async def stream(self, message: str) -> AsyncIterator[Event]:
         async for ev in self._es.turn(message):

@@ -8,6 +8,13 @@
   one reply, a following call(B) is the next reply, and a final say("Done") another. parallel(say(..),
   call(A), call(B)) is ONE reply issuing both calls (same model_turn). Reply.api_calls = replies in the turn
   (at least 1). rate_limit / spend / output / fail neither start nor end a reply
+- tokens per model reply (Reply.turn_usage, one TurnUsage per reply): say / call / ask / plan / parallel take
+  usage= (a Usage or a dict of Usage fields) = tokens of the model reply that step belongs to (several on one
+  reply are added together). Default (no usage= in the turn): the turn's estimated usage is split over its
+  replies (all input on the first, each reply's text chars // 4 as output, the rest of the output on the last),
+  so the replies add up to Reply.usage, which is unchanged. Once any reply in a turn has usage=, unscripted
+  replies keep their default share and Reply.usage becomes the sum of the replies (so scripted figures add up).
+  TurnUsage.model = the model when the reply opened (set_model counts from the next reply)
 - call() runs the agent's real custom tool (or ask_user validation) through the shared TurnState, so
   tool errors, ends_turn and needs_input behave exactly like the real engine
 - calling a built-in name (e.g. "Bash") checks permissions like Claude (rules matched as in rules.py):
@@ -43,14 +50,21 @@
 - sign-in (FakeSetup): no sign-in needed. Like Claude it reads its own [fake] section of the local setup file
   (only auth = "none" is valid) and opening a session / list_models raises SetupError if the setup has problems,
   so apps can test their "not set up" path for free. check_connection("fake") uses model "fake-small"
+- process control (capability process_control, like Claude): Session.pid = the pid scripted with
+  process(agent_name, pid) (None if unscripted), from start / first turn until close or kill. Session.kill()
+  records the call (kills()), closes the session (later turns raise AgentError), makes a running turn raise
+  AgentError at its next step, and returns a KillResult; with process(..., real=True) it really ends that
+  process tree (for tests with stand-in processes)
 """
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 import os
 import uuid
 from dataclasses import dataclass, field
+from functools import reduce
 from pathlib import Path
 from typing import Any, Callable
 
@@ -60,7 +74,8 @@ from ..errors import AgentError, ConversationMissing
 from ..events import Done, RateLimit, Text, TextDelta, ToolCall, ToolResult
 from ..models import ModelInfo
 from ..permissions import PLAN_APPROVED_MODE, PermissionRequest, PermissionSuggestion, check_mode, resolve
-from ..reply import Usage
+from ..processes import KillResult, end_process_tree, process_started_at
+from ..reply import TurnUsage, Usage
 from ..session import SessionInfo
 from . import rules
 
@@ -70,6 +85,7 @@ PLAN_TOOL = "ExitPlanMode"            # same name as Claude's plan-proposal tool
 @dataclass
 class Say:
     text: str
+    usage: Usage | None = None        # tokens of the model reply this step is part of (added to its other steps')
 
 
 @dataclass
@@ -77,11 +93,22 @@ class Call:
     tool: str
     args: dict = field(default_factory=dict)
     suggestions: list | None = None   # PermissionSuggestion / dict overrides for this call's permission request
+    usage: Usage | None = None        # tokens of the model reply this step is part of (added to its other steps')
 
 
 @dataclass
 class Parallel:
     steps: list                       # Say / Call steps that make up ONE model reply
+    usage: Usage | None = None        # tokens of this reply (added to usage= given on its steps)
+
+
+def _tokens(usage) -> Usage | None:
+    """usage= on a step: a Usage, a dict of Usage field names, or None."""
+    if usage is None or isinstance(usage, Usage):
+        return usage
+    if isinstance(usage, dict):
+        return Usage(**usage)
+    raise TypeError(f"usage= takes a Usage or a dict of Usage fields, not {type(usage).__name__}")
 
 
 @dataclass
@@ -132,35 +159,38 @@ def models(items: list | None = None, *, fail: str | None = None) -> None:
         _MODELS["fail"] = fail
 
 
-def say(text: str) -> Say:
-    return Say(text)
+def say(text: str, *, usage: Usage | dict | None = None) -> Say:
+    """Model text. usage= = tokens of the model reply it is part of (see the module docstring)."""
+    return Say(text, _tokens(usage))
 
 
-def call(tool: str, args: dict | None = None, *, suggestions: list | None = None) -> Call:
-    """A tool call. suggestions= replaces the fake's default "always allow" suggestions if it asks."""
+def call(tool: str, args: dict | None = None, *, suggestions: list | None = None,
+         usage: Usage | dict | None = None) -> Call:
+    """A tool call. suggestions= replaces the fake's default "always allow" suggestions if it asks. usage= =
+    tokens of the model reply that issues it."""
     return Call(tool, dict(args or {}),
                 None if suggestions is None else [s if isinstance(s, PermissionSuggestion) else PermissionSuggestion(**s)
-                                                  for s in suggestions])
+                                                  for s in suggestions], _tokens(usage))
 
 
-def parallel(*steps) -> Parallel:
+def parallel(*steps, usage: Usage | dict | None = None) -> Parallel:
     """One model reply that issues several tool calls at once (they share one model_turn). Takes say() and
     call() / ask() / plan() steps: its text comes first, then every call's ToolCall event, then the calls run
     in order and their ToolResult events follow (like parallel calls whose results come back after all were
-    issued)."""
+    issued). usage= = tokens of this one reply."""
     for s in steps:
         if not isinstance(s, (Say, Call)):
             raise TypeError(f"parallel() takes say() and call() steps, not {type(s).__name__}")
-    return Parallel(list(steps))
+    return Parallel(list(steps), _tokens(usage))
 
 
-def plan(text: str) -> Call:
+def plan(text: str, *, usage: Usage | dict | None = None) -> Call:
     """The model proposes a plan and asks to proceed (Claude: ExitPlanMode). Only works in plan mode."""
-    return Call(PLAN_TOOL, {"plan": text})
+    return Call(PLAN_TOOL, {"plan": text}, usage=_tokens(usage))
 
 
-def ask(questions: list[dict]) -> Call:
-    return Call("ask_user", {"questions": questions})
+def ask(questions: list[dict], *, usage: Usage | dict | None = None) -> Call:
+    return Call("ask_user", {"questions": questions}, usage=_tokens(usage))
 
 
 def rate_limit(status: str = "allowed_warning", utilization: float | None = 0.9) -> RateLimitStep:
@@ -190,11 +220,34 @@ def saved_rules(cwd=None) -> list[str]:
     return list(_LOCAL_RULES.get(_cwd_key(cwd), []))
 
 
+_PROCESSES: dict[str, tuple[Any, bool]] = {}   # agent name -> (pid or fn() -> pid, real)
+_KILLS: list[dict] = []
+KILLED = "the session was ended (kill)"       # same words as the Claude engine
+# Session.process_started_at for a scripted (not real) pid: a fixed time long past, so passing it to the real
+# end_process_tree with that pid is refused (start time differs) instead of ending an unrelated process
+FAKE_STARTED_AT = 1_000_000_000.0
+
+
+def process(agent_name: str, pid: int | Callable[[], int | None] | None, *, real: bool = False) -> None:
+    """Script the OS process this agent's fake sessions report as Session.pid (an int, None = cannot tell, or a
+    function called once per session). real=True: Session.kill() really ends that process tree with
+    processes.end_process_tree (give the pid of a stand-in process your test started); default: kill() only
+    records the call (kills()). Unscripted agents report pid None (a made-up number could be a real process)."""
+    _PROCESSES[agent_name] = (pid, real)
+
+
+def kills() -> list[dict]:
+    """Every Session.kill() on the fake engine, in order: {agent, session_id, pid, mid_turn, real}."""
+    return [dict(k) for k in _KILLS]
+
+
 def reset() -> None:
     _SCRIPTS.clear()
     _SESSIONS.clear()
     _MODELS.clear()
     _LOCAL_RULES.clear()
+    _PROCESSES.clear()
+    _KILLS.clear()
 
 
 class FakeSetup(EngineSetup):
@@ -222,7 +275,7 @@ class FakeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, mcp_servers=False, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True, model_turns=True)
+                                model_switch=True, model_turns=True, turn_usage=True, process_control=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "FakeSession":
         local_setup.require("fake")
@@ -265,6 +318,10 @@ class FakeSession(EngineSession):
         self.requested_model: str | None = None      # set by set_model()
         self.permission_mode: str = agent.permission_mode
         self._model_turns = 0                        # model replies since open (events' model_turn runs on)
+        self._proc: tuple[int, float | None] | None = None   # scripted process (pid, start time if real)
+        self._connected = False
+        self._killed = False
+        self._busy = False
 
     @property
     def total_cost(self) -> float:
@@ -274,11 +331,50 @@ class FakeSession(EngineSession):
     def info(self) -> SessionInfo:
         return self._info
 
+    def _connect(self) -> None:
+        """Like the Claude engine starting its process: pick up the scripted pid (process())."""
+        if self._connected:
+            return
+        self._connected = True
+        spec, real = _PROCESSES.get(self.agent.name, (None, False))
+        pid = spec() if callable(spec) else spec
+        if pid is None:
+            self._proc = None
+            return
+        started = process_started_at(int(pid)) if real else None
+        # like Claude: a real process whose start time cannot be read is not recorded (never kill by pid alone)
+        self._proc = None if real and started is None else (int(pid), started)
+
+    @property
+    def pid(self) -> int | None:
+        return self._proc[0] if self._connected and self._proc else None
+
+    @property
+    def process_started_at(self) -> float | None:
+        """real=True: the stand-in's start time read at connect; else a fixed made-up time (never used to kill)."""
+        if not (self._connected and self._proc):
+            return None
+        return self._proc[1] if self._proc[1] is not None else FAKE_STARTED_AT
+
     async def start(self) -> None:
-        return None
+        if self._killed:
+            raise AgentError(f"{KILLED}; open a new session")
+        self._connect()
 
     async def close(self) -> None:
-        return None
+        self._connected = False                      # pid reads None until a later turn "reconnects"
+
+    async def kill(self, *, timeout_s: float = 3.0) -> KillResult:
+        _, real = _PROCESSES.get(self.agent.name, (None, False))
+        proc = self._proc if self._connected else None
+        _KILLS.append({"agent": self.agent.name, "session_id": self.session_id,
+                       "pid": proc[0] if proc else None, "mid_turn": self._busy, "real": bool(real and proc)})
+        self._killed, self._connected, self._proc = True, False, None
+        if proc is None:
+            return KillResult(pid=None, ok=True, already_gone=True)
+        if real:
+            return await asyncio.to_thread(end_process_tree, proc[0], started_at=proc[1], timeout_s=timeout_s)
+        return KillResult(pid=proc[0], ok=True)
 
     async def set_permission_mode(self, mode: str) -> None:
         self.permission_mode = check_mode(mode)
@@ -398,6 +494,17 @@ class FakeSession(EngineSession):
         return Usage(input_tokens=max(1, len(message) // 4), output_tokens=out_chars // 4)
 
     async def turn(self, message: str):
+        if self._killed:
+            raise AgentError(f"{KILLED}; open a new session")
+        self._connect()
+        self._busy = True
+        try:
+            async for ev in self._turn(message):
+                yield ev
+        finally:
+            self._busy = False
+
+    async def _turn(self, message: str):
         rec = self._rec
         if self._info == SessionInfo():
             self._info = self._startup_info()         # Claude reports init at the start of the first turn
@@ -413,13 +520,42 @@ class FakeSession(EngineSession):
         structured_data = None
         error = kind = None
         open_turn: int | None = None                  # model reply in progress; None = next say/call opens one
+        replies: list[dict] = []                      # per model reply: n, model, chars, scripted usage
 
         def open_reply() -> int:
             n = state.next_model_turn()
             self._model_turns = n                     # kept even if the turn fails or is abandoned midway
+            replies.append({"n": n, "model": self.requested_model or self.agent.model or "fake", "chars": 0,
+                            "usage": None})
             return n
 
+        def add_tokens(u: Usage | None) -> None:
+            if u is not None:
+                r = replies[-1]
+                r["usage"] = u if r["usage"] is None else r["usage"] + u
+
+        def split() -> tuple[Usage, list[TurnUsage]]:
+            """(Reply.usage, Reply.turn_usage). Default: the turn's estimate split over its replies (input on the
+            first, each reply's text chars // 4 as output, the rest of the output on the last), so they add up.
+            Once any reply has scripted usage=, those replies use it and Reply.usage is the sum of all replies."""
+            total = self._usage(message, out_chars)
+            per = []
+            for i, r in enumerate(replies):
+                per.append(Usage(input_tokens=total.input_tokens if i == 0 else 0, output_tokens=r["chars"] // 4))
+            if per:
+                per[-1].output_tokens += total.output_tokens - sum(u.output_tokens for u in per)
+            if any(r["usage"] is not None for r in replies):
+                per = [r["usage"] if r["usage"] is not None else u for r, u in zip(replies, per)]
+                total = reduce(lambda a, b: a + b, per, Usage())
+            return total, [TurnUsage(r["n"], Usage(**vars(u)), r["model"]) for r, u in zip(replies, per)]
+
         for step in steps:
+            if self._killed:                          # kill() between steps: the turn fails like Claude's
+                so_far, per_turn = split()
+                raise AgentError(KILLED, reply=state.reply(
+                    session_id=self.session_id, usage=so_far, turn_usage=per_turn, cost_usd=0.0,
+                    total_cost_usd=self._cost_base, model=model, error=KILLED,
+                    api_calls=max(1, state.model_turn - base_turn)))
             if isinstance(step, Spend):
                 spent += step.usd
                 if cap is not None and self._spent + spent > cap:
@@ -431,7 +567,8 @@ class FakeSession(EngineSession):
                 out_chars += len(json.dumps(step.data, default=str))
                 continue
             if isinstance(step, Fail):
-                partial = state.reply(session_id=self.session_id, usage=self._usage(message, out_chars),
+                so_far, per_turn = split()
+                partial = state.reply(session_id=self.session_id, usage=so_far, turn_usage=per_turn,
                                       cost_usd=0.0, total_cost_usd=self._cost_base, model=model,
                                       error=step.message, api_calls=max(1, state.model_turn - base_turn))
                 raise AgentError(step.message, reply=partial)
@@ -443,12 +580,16 @@ class FakeSession(EngineSession):
             if open_turn is None:
                 open_turn = open_reply()
             group = step.steps if isinstance(step, Parallel) else [step]
+            if isinstance(step, Parallel):
+                add_tokens(step.usage)
             for s in group:
+                add_tokens(s.usage)
                 if isinstance(s, Say):
                     for word in s.text.split(" "):
                         yield TextDelta(word + " ")
                     state.record_text(s.text)
                     out_chars += len(s.text)
+                    replies[-1]["chars"] += len(s.text)
                     yield Text(s.text, model_turn=open_turn)
             calls = [(f"fake-{uuid.uuid4().hex[:8]}", s) for s in group if isinstance(s, Call)]
             for cid, c in calls:                      # every call of the reply is issued before any runs
@@ -463,7 +604,12 @@ class FakeSession(EngineSession):
                 if state.stop_requested:
                     break
         model = self.requested_model or self.agent.model or "fake"   # a mid-turn set_model counts
-        usage = self._usage(message, out_chars)
+        usage, per_turn = split()
+        if self._killed:
+            raise AgentError(KILLED, reply=state.reply(
+                session_id=self.session_id, usage=usage, turn_usage=per_turn, cost_usd=0.0,
+                total_cost_usd=self._cost_base, model=model, error=KILLED,
+                api_calls=max(1, state.model_turn - base_turn)))
         # Like Claude's ResultMessage.total_cost_usd: cumulative for the conversation; per-turn cost is the
         # delta from cost_base (the caller's last known total), the same formula as ClaudeSession._turn()
         turn_cost = (usage.input_tokens + usage.output_tokens) * 1e-6 + spent
@@ -477,7 +623,7 @@ class FakeSession(EngineSession):
             data, problem = structured.check_output(schema, data=structured_data, text="\n\n".join(state.texts))
             if problem:
                 error, kind = problem, "output_shape"
-        yield Done(state.reply(session_id=self.session_id, usage=usage, cost_usd=cost,
+        yield Done(state.reply(session_id=self.session_id, usage=usage, turn_usage=per_turn, cost_usd=cost,
                                total_cost_usd=total, model=model, stop_reason="end_turn",
                                api_calls=max(1, state.model_turn - base_turn),
                                error=error, error_kind=kind, data=data))

@@ -8,6 +8,8 @@
   CapabilityError (agent needs something the engine lacks) before a run
 - TurnState: runs custom tools + ask_user the same way on every engine and builds the Reply
 - Engine.list_models(env=, timeout_s=) -> list[ModelInfo] (no request sent); default raises CapabilityError
+- EngineSession.pid (OS process, default None) and kill(timeout_s=) -> KillResult (end the process tree, then
+  closed; default raises CapabilityError): capability process_control, checked by Session.kill()
 - EngineSetup: how a user connects an engine (sign-in), read from that engine's section of the local setup file
   (local_setup.py). SDK-free, so status works even when the engine's package is missing. -> Connection
 """
@@ -24,7 +26,7 @@ from .. import prompt_files
 from ..errors import CapabilityError, EngineUnavailable, QuestionShapeError
 from ..events import Event
 from ..questions import Question, parse_questions
-from ..reply import Reply, Status, ToolCallRecord, Usage
+from ..reply import Reply, Status, ToolCallRecord, TurnUsage, Usage
 from ..session import SessionInfo
 from ..tools import Tool
 
@@ -53,6 +55,9 @@ class Capabilities:
     engine_prompt: bool = False   # Agent.engine_prompt: the engine's own agent prompt + instructions, in lean setup
     model_switch: bool = False    # Session.set_model(): change the model on a live session (between turns or mid-turn)
     model_turns: bool = False     # informational: Text / ToolCall / ToolResult carry model_turn (else None; not enforced)
+    turn_usage: bool = False      # informational: Reply.turn_usage has tokens per model reply (else empty; not enforced)
+    process_control: bool = False # Session.pid (the OS process the session runs in) + Session.kill() (end it and
+                                  # everything it started); checked by Session.kill(), not per agent
 
 
 def requirements(agent, *, fork: bool = False, resume: bool = False) -> dict[str, bool]:
@@ -117,6 +122,23 @@ class EngineSession(ABC):
     async def set_model(self, model: str) -> None:
         """Change the model for the rest of this conversation (capability model_switch)."""
         raise CapabilityError(f"engine session {type(self).__name__} cannot do: model_switch")
+
+    @property
+    def pid(self) -> int | None:
+        """The OS process this session runs in, while it runs (capability process_control); None = no process
+        (not connected yet, closed) or the engine cannot tell."""
+        return None
+
+    @property
+    def process_started_at(self) -> float | None:
+        """Start time of `pid` as recorded when the process started (seconds since the epoch); None whenever
+        pid is None. Engines with process_control record it together with the pid."""
+        return None
+
+    async def kill(self, *, timeout_s: float = 3.0):
+        """End this session's process and everything it started, then close the session (capability
+        process_control). Must work mid-turn and half-closed, and be safe to call twice. -> processes.KillResult"""
+        raise CapabilityError(f"engine session {type(self).__name__} cannot do: process_control")
 
     @abstractmethod
     async def close(self) -> None: ...
@@ -212,7 +234,9 @@ class TurnState:
         self.questions: list[Question] = []
         self.stop_requested = False
         self.message_ids: set[str] = set()
-        self.usage_by_message: dict[str, Usage] = {}   # latest usage seen per model call (for failure replies)
+        self.usage_by_message: dict[str, Usage] = {}   # usage per model call, largest seen (record_usage())
+        self._model_by_message: dict[str, str] = {}
+        self._turn_usage: dict[int, TurnUsage] = {}    # set_turn_usage(): engines without per-reply keys
         # model_turn: number of the latest model reply in the session (0 = none yet). The engine session passes
         # the count it reached last turn and reads state.model_turn back afterwards, so numbers run on.
         self.model_turn = model_turn
@@ -246,6 +270,33 @@ class TurnState:
     def usage_so_far(self) -> Usage:
         """Best-effort usage of the model calls seen this turn (used when a turn fails before its result)."""
         return reduce(lambda a, b: a + b, self.usage_by_message.values(), Usage())
+
+    def record_usage(self, key: str, usage: Usage, model: str | None = None) -> None:
+        """Usage reported for one model call (key = the same per-reply id given to model_turn_for()). The same
+        call may be reported several times (once per content block, or while it streams): counts only grow, so
+        each field keeps the largest figure seen and repeats are never added together."""
+        old = self.usage_by_message.get(key)
+        self.usage_by_message[key] = usage if old is None else \
+            Usage(**{f: max(getattr(old, f), getattr(usage, f)) for f in vars(usage)})
+        if model:
+            self._model_by_message[key] = model
+
+    def set_turn_usage(self, model_turn: int, usage: Usage, model: str | None = None) -> None:
+        """Usage of one model reply by its number (engines that number replies themselves, e.g. the fake)."""
+        self._turn_usage[model_turn] = TurnUsage(model_turn, usage, model)
+
+    def turn_usage(self) -> list[TurnUsage]:
+        """Tokens per model reply this turn, in model_turn order: set_turn_usage() entries, plus record_usage()
+        calls whose key was numbered by model_turn_for(). Calls never numbered (no event seen) are left out."""
+        out = dict(self._turn_usage)
+        for key, u in self.usage_by_message.items():
+            n = self._turn_by_key.get(key)
+            if n is None:
+                continue
+            prev = out.get(n)
+            out[n] = TurnUsage(n, u if prev is None else prev.usage + u,
+                               self._model_by_message.get(key) or (prev.model if prev else None))
+        return [out[n] for n in sorted(out)]
 
     async def run_tool(self, name: str, args: dict) -> tuple[str, bool]:
         t = self.tools.get(name)
@@ -282,7 +333,8 @@ class TurnState:
     def reply(self, *, session_id: str | None, usage: Usage, cost_usd: float = 0.0, total_cost_usd: float = 0.0,
               model: str | None = None, stop_reason: str | None = None, error: str | None = None,
               api_calls: int | None = None, error_kind: str | None = None, data=None,
-              usage_by_model: dict | None = None) -> Reply:
+              usage_by_model: dict | None = None, turn_usage: list[TurnUsage] | None = None) -> Reply:
+        """turn_usage None -> self.turn_usage() (what record_usage / set_turn_usage collected); [] = cannot tell."""
         status: Status = "error" if error else ("needs_input" if self.questions else "done")
         kind = (error_kind or "other") if error else None
         return Reply(status=status, text="\n\n".join(self.texts), questions=list(self.questions),
@@ -292,4 +344,5 @@ class TurnState:
                      duration_s=round(time.monotonic() - self.t0, 2), engine=self.engine, model=model,
                      stop_reason=stop_reason, error=error, error_kind=kind, data=None if error else data,
                      usage_by_model=dict(usage_by_model or ({model: {"usage": usage, "cost_usd": round(cost_usd, 6)}}
-                                                            if model else {})))
+                                                            if model else {})),
+                     turn_usage=list(self.turn_usage() if turn_usage is None else turn_usage))

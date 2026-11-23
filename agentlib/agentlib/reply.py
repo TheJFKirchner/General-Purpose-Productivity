@@ -7,6 +7,9 @@
   "budget" (Agent.max_budget_usd reached), "max_turns" (Agent.max_turns reached), "output_shape" (the reply did
   not match Agent.output_schema), "other" (anything else: model/API error, a failed turn in AgentError.reply)
 - data: the parsed, schema-checked JSON reply when the agent has output_schema (None otherwise or on error)
+- turn_usage: tokens per model reply ("model turn") inside this turn, [TurnUsage(model_turn, usage, model)] in
+  model_turn order, keyed by the same numbers as the events' model_turn. Filled when the turn ends (figures are
+  final then). Empty when the engine cannot tell (Capabilities.turn_usage False)
 """
 from __future__ import annotations
 
@@ -47,6 +50,15 @@ class ToolCallRecord:
 
 
 @dataclass
+class TurnUsage:
+    """Tokens of ONE model reply inside a turn (Reply.turn_usage). model_turn is the same number the events and
+    ToolCallRecord carry, so a caller can tell which reply was expensive."""
+    model_turn: int
+    usage: Usage = field(default_factory=Usage)
+    model: str | None = None          # model id that wrote this reply (None if the engine did not say)
+
+
+@dataclass
 class Reply:
     status: Status = "done"
     text: str = ""
@@ -66,6 +78,8 @@ class Reply:
     data: Any = None                         # parsed JSON reply when Agent.output_schema is set
     usage_by_model: dict = field(default_factory=dict)   # this turn per model id: {"usage": Usage, "cost_usd": float}
                                                          # (more than one entry after Session.set_model mid-turn)
+    turn_usage: list[TurnUsage] = field(default_factory=list)  # one entry per model reply in this turn, in order
+                                                               # (empty when the engine cannot tell; capability turn_usage)
 
     def to_dict(self) -> dict:
         return asdict(self)

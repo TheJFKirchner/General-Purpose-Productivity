@@ -34,6 +34,13 @@ EngineSession                            # one conversation
   permission_mode: str | None            # current permission mode (engines that track it set it)
   async set_permission_mode(mode)        # default raises CapabilityError (capability mode_switch); Session
                                          # checks check_mode_switch() first
+  pid -> int | None                      # property; default None. The OS process the session runs in while
+                                         # connected (capability process_control)
+  process_started_at -> float | None     # property; default None. pid's start time recorded with it; record
+                                         # neither when the start time cannot be read (never act on a pid alone)
+  async kill(timeout_s=3.0) -> KillResult   # default raises CapabilityError; end the session's process and all
+                                         # descendants (processes.end_process_tree), then closed; mid-turn,
+                                         # half-closed and twice must all work. Session.kill() checks the flag
   async close()                          # abstract (Session.__aexit__)
 
 TurnState(engine_name, tools, model_turn=0)  # per-turn bookkeeping shared by all engines
@@ -45,10 +52,17 @@ TurnState(engine_name, tools, model_turn=0)  # per-turn bookkeeping shared by al
                                          # None: new reply only after tool results); next_model_turn() opens one
   call_turn(call_id) -> int | None       # a recorded call's model_turn (put it on the ToolResult)
   message_ids: set[str]                  # distinct model calls (-> Reply.api_calls)
-  usage_by_message: dict[str, Usage]     # latest usage per model call; usage_so_far() sums it
+  record_usage(key, usage, model=None)   # usage reported for one model call (key = same id as model_turn_for);
+                                         # repeats keep the largest figure per field, never added twice
+  usage_by_message: dict[str, Usage]     # usage per model call (record_usage); usage_so_far() sums it
+  set_turn_usage(model_turn, usage, model=None)   # engines that number replies themselves (or pass turn_usage=
+                                         # to reply(), as the fake does)
+  turn_usage() -> list[TurnUsage]        # per model reply, in model_turn order (-> Reply.turn_usage by default)
   stop_requested: bool                   # True after ask_user or an ends_turn tool: end the turn now
   reply(session_id=, usage=, cost_usd=, total_cost_usd=, model=, stop_reason=, error=, api_calls=,
-        error_kind=, data=) -> Reply      # error_kind defaults to "other" when error is set; data dropped on error
+        error_kind=, data=, usage_by_model=, turn_usage=) -> Reply
+                                         # error_kind defaults to "other" when error is set; data dropped on error;
+                                         # turn_usage None -> turn_usage() (pass [] if the engine cannot tell)
 ```
 
 Bad endings must be classified the same way on every engine: `error_kind="budget"` (spending cap),
@@ -66,15 +80,29 @@ routes custom tool calls through `state.run_tool()`, records text/calls/results,
 
 `Capabilities` (frozen dataclass, same file): `available, system_prompt, custom_tools, mcp_servers, streaming,
 resume, fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
-list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns`. `requirements(agent, fork=, resume=)` (same
+list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns, turn_usage,
+process_control`. `requirements(agent, fork=, resume=)` (same
 file) maps capability name -> "does this agent/call need it"; `Engine.check()` enforces every name in it:
 `system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup, budget,
 never_ask, accept_edits, plan_mode, structured_output, unsaved`. `list_models` is not per agent:
 `Engine.check_list_models()` enforces it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default
 raises `CapabilityError`) does it. `model_turns` is informational like `streaming` / `usage`: the engine fills
 `model_turn` on `Text` / `ToolCall` / `ToolResult` (via `TurnState.model_turn_for()` / `call_turn()`); a new
-engine sets it only if its stream identifies each model reply. `mode_switch` is a session operation: `Session.set_permission_mode()` calls
+engine sets it only if its stream identifies each model reply. `turn_usage` is informational too: the engine
+fills `Reply.turn_usage` (one `TurnUsage(model_turn, usage, model)` per model reply) by calling
+`TurnState.record_usage(key, usage, model)` with the same key it gives `model_turn_for()`; set it True only if a
+live check shows the replies add up to the turn's total (Claude: `agentlib/tests/smoke_turn_usage.py`; the
+per-block messages carry a partial output count, so the Claude engine also reads the raw stream's
+`message_delta`, see `ClaudeSession._stream_usage`). `mode_switch` is a session operation: `Session.set_permission_mode()` calls
 `check_mode_switch()` (needs `mode_switch` plus the target mode's flag) before `EngineSession.set_permission_mode()`.
+`process_control` is a session operation too: `Session.kill()` checks it before `EngineSession.kill()`. An engine
+claims it only if it can name the OS process its session runs in (`pid`) and end that process tree. All process
+work goes through `agentlib/processes.py` (psutil; never in an engine directly): record `(pid,
+process_started_at(pid))` when the process starts so a reused pid is never reported or ended, call
+`end_process_tree` in a thread (`asyncio.to_thread`: it blocks while it waits), and after it close the session
+the engine's usual way. If the SDK hides the process, `processes.child_pids()` before start +
+`processes.new_child(before, name_hints)` after is the fallback (returns `None` when it cannot be sure). An engine
+with no local process (a cloud agent) leaves the flag False. Claude: `ClaudeSession._record_process` / `kill`.
 Permission requests: build `PermissionRequest` (with `kind="plan"` + `plan` for a plan proposal, `suggestions` as
 `PermissionSuggestion`s, `mode`, `call_id`) and turn the hook's answer into a `PermissionDecision` with
 `permissions.resolve()`; honour `remember`, `rules`, `mode`, `message` (see `ClaudeSession._can_use_tool`).
@@ -168,6 +196,7 @@ Recipe for a new engine (e.g. Cursor):
 |---|---|
 | A new live event (e.g. thinking text) | `agentlib/events.py` (dataclass with `type: ClassVar[str]`, add to `Event` union, export in `__init__.py`); emit in `ClaudeSession._map()`; fake step; `Capabilities` flag if not every engine can produce it; README events rows; `examples/03_streaming_events.py` |
 | A new `Reply` / `Usage` field | `agentlib/reply.py` (with a default); fill it via `TurnState.reply(...)` (add a keyword) from each engine; fake gives a plausible value; README `Reply` row |
+| Anything that touches OS processes | `agentlib/processes.py` only (engine-neutral, psutil); engines call it. Tests with real stand-in processes must end every process they start (see `agentlib/tests/test_processes.py`) |
 | A new session operation (e.g. change model mid-session) | `EngineSession` in `base.py`: a method with a safe default (raise `CapabilityError` naming the engine); implement in `ClaudeSession` (must run on the worker task that owns the client: send it through `self._ops`; a control request that must also work mid-turn may be sent directly like `interrupt()`, see `set_permission_mode`); fake version; `Session` wrapper in `agentlib/session.py`; capability flag. Worked example: `set_permission_mode` |
 | A new tool flag | `Tool` + `tool()` in `agentlib/tools.py`; engine mapping in `ClaudeSession._build_server()`; shared behaviour in `TurnState.run_tool()` so every engine gets it |
 | Model-facing wording | `agentlib/prompts/<name>.md`; `prompt_files.fill()`; never inline strings |
@@ -187,7 +216,9 @@ From the header of `agentlib/engines/cursor.py`:
   model names (map aliases)
 - `ends_turn` is unverified: `ask_user` parking may need a tool result telling the agent to stop
 - Steps: implement `CursorSession(EngineSession)` using `TurnState` for custom tools and `ask_user`; map its
-  stream to the six events; build `Usage` with the same field names; set `available=True` and correct the
+  stream to the six events; set `process_control` (and implement `pid` / `kill()`) only if the Cursor SDK runs
+  the agent in a local process it can name; build `Usage` with the same field names (and `Reply.turn_usage` via
+  `TurnState.record_usage` if it reports usage per model reply; else leave `turn_usage=False`); set `available=True` and correct the
   other flags in `CursorEngine.capabilities` (`system_prompt` / `ends_turn` are enforced: if the engine
   emulates them via AGENTS.md or a "stop now" tool result, set them True, otherwise every agent with
   instructions / `ask_user` raises `CapabilityError`); add `requirements()` entries for any new capability

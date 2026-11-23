@@ -15,6 +15,11 @@
   AgentError carries .reply: the partial turn (text/tool calls so far, usage summed from the assistant
   messages seen, cost_usd 0 because cost only arrives with the final ResultMessage)
 - Session.info comes from the CLI's init SystemMessage (tools offered, MCP servers, model)
+- Reply.turn_usage (tokens per model reply): AssistantMessage.usage per message_id (one message per content
+  block, all with the same usage; their output count is partial) plus the raw stream's message_start (input /
+  cache counts) and message_delta (final output count); TurnState.record_usage keeps the largest figure per
+  field, so repeats never add up twice. Live check 2026-11-21 (Haiku, tests/smoke_turn_usage.py): the replies
+  add up exactly to ResultMessage.usage on all four counts; without message_delta the output was under-counted
 - max_budget_usd -> --max-budget-usd (the CLI checks its running total per process, i.e. per opened session);
   result subtype error_max_budget_usd -> Reply.error_kind "budget" (error_max_turns -> "max_turns")
 - permission_mode: "default" -> "default", "never_ask" -> "dontAsk" (no can_use_tool callback), "accept_edits" ->
@@ -35,6 +40,17 @@
 - Sign-in: local_setup.require("claude") (setup/local.toml, read by claude_setup.py) each time a process starts:
   Connection.env -> process env (under the lean defaults and the caller's Agent(env=), which win);
   Connection.engine_settings (apiKeyHelper, ...) -> settings= (CLI --settings; applies even in lean setup)
+- pid / kill() (capability process_control): the `claude` process's pid is read at connect from the SDK client's
+  transport (client._transport._process.pid: SubprocessCLITransport holds the anyio Process; checked against
+  claude-agent-sdk 0.2.175, pinned in pyproject.toml). If that attribute is not reachable (an SDK change), the
+  fallback diffs this program's direct children around connect (processes.new_child: exactly one new live
+  child, or one named claude / node; two sessions connecting at the same moment -> None). The pid is kept with
+  its start time (process_started_at), so a reused pid is never reported or killed; if the start time cannot be
+  read nothing is recorded (pid None, kill() ends nothing). kill(): processes.end_process_tree on it (all
+  descendants listed first), also any earlier process of this session that outlived its disconnect; then the
+  worker is told to close (the dead process makes a running turn fail at once: AgentError "session was
+  ended"), cancelled after 5 s. A connect still in flight when kill() runs ends its new process at once.
+  close() is unchanged: it only disconnects (the SDK's stdin EOF, wait, terminate, kill of the CLI itself)
 """
 from __future__ import annotations
 
@@ -56,7 +72,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import PermissionRuleValue
 
-from .. import local_setup, prompt_files
+from .. import local_setup, processes, prompt_files
 from .. import skills as skills_mod
 from .. import structured
 from ..errors import AgentError, ConversationMissing
@@ -84,6 +100,7 @@ LEAN_ENV = {
     "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
 }
 _END = object()
+KILLED = "the session was ended (kill)"
 # Pre-approved tools skipping can_use_tool is the design (only unlisted tools reach on_permission)
 warnings.filterwarnings("ignore", category=sdk.CanUseToolShadowedWarning)
 
@@ -174,7 +191,7 @@ class ClaudeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True, model_turns=True)
+                                model_switch=True, model_turns=True, turn_usage=True, process_control=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "ClaudeSession":
         return ClaudeSession(agent, resume=resume, fork=fork, cost_base=cost_base)
@@ -231,6 +248,11 @@ class ClaudeSession(EngineSession):
         self._structured_input = None         # this turn's StructuredOutput input (fallback for structured_output)
         self.permission_mode: str = agent.permission_mode   # current mode; options() starts a process in it
         self._busy = False                    # a turn is running on the worker
+        self._stream_message: str | None = None   # id of the model reply the raw stream is in (message_start)
+        self._proc: tuple[int, float] | None = None   # (pid, start time) of the live `claude` process
+        self._stale: list[tuple[int, float]] = []     # earlier processes that outlived their disconnect
+        self.pid_source: str | None = None    # "transport" | "children" | None: how the pid was found (diagnostics)
+        self._killed = False
 
     @property
     def info(self) -> SessionInfo:
@@ -462,12 +484,16 @@ class ClaudeSession(EngineSession):
             self._worker = asyncio.get_running_loop().create_task(self._run(), name=f"agentlib-{self.agent.name}")
 
     async def start(self) -> None:
+        if self._killed:
+            raise AgentError(f"{KILLED}; open a new session")
         self._ensure_worker()
         fut = asyncio.get_running_loop().create_future()
         await self._ops.put(("connect", None, fut))
         await fut
 
     async def turn(self, message: str):
+        if self._killed:
+            raise AgentError(f"{KILLED}; open a new session")
         self._ensure_worker()
         q: asyncio.Queue = asyncio.Queue()
         await self._ops.put(("turn", message, q))
@@ -538,12 +564,69 @@ class ClaudeSession(EngineSession):
                 out[mid] = {"usage": u, "cost_usd": round(cost, 6)}
         return out
 
-    async def close(self) -> None:
+    # ------------------------------------------------------------------ the `claude` process
+    @staticmethod
+    def _transport_pid(client) -> int | None:
+        """The CLI's pid from the SDK client (ClaudeSDKClient._transport = SubprocessCLITransport, whose _process
+        is the anyio Process). None if the SDK no longer has these attributes."""
+        proc = getattr(getattr(client, "_transport", None), "_process", None)
+        pid = getattr(proc, "pid", None)
+        return pid if isinstance(pid, int) and pid > 0 else None
+
+    def _record_process(self, client, before: set[int] | None) -> None:
+        pid = self._transport_pid(client)
+        self.pid_source = "transport" if pid else None
+        if pid is None and before is not None:
+            pid = processes.new_child(before, ("claude", "node"))
+            self.pid_source = "children" if pid else None
+        started = processes.process_started_at(pid) if pid else None
+        # no start time -> nothing recorded: pid / kill() never act on a pid alone (it could be reused)
+        self._proc = (pid, started) if pid and started is not None else None
+        if self._proc is None:
+            self.pid_source = None
+
+    @staticmethod
+    def _running(proc: tuple[int, float] | None) -> bool:
+        return proc is not None and proc[1] is not None and processes.is_running(proc[0], started_at=proc[1])
+
+    @property
+    def pid(self) -> int | None:
+        """The connected `claude` process while it runs; None before connect and after a disconnect (a process
+        that outlived its disconnect is not reported here, but kill() still ends it)."""
+        if self._running(self._proc):
+            return self._proc[0]
+        return None
+
+    @property
+    def process_started_at(self) -> float | None:
+        """Start time recorded with pid at connect (seconds since the epoch); None whenever pid is None."""
+        if self._running(self._proc):
+            return self._proc[1]
+        return None
+
+    async def kill(self, *, timeout_s: float = 3.0) -> processes.KillResult:
+        self._killed = True
+        procs = [p for p in [self._proc, *self._stale] if p is not None and p[1] is not None]   # never by pid alone
+        self._proc, self._stale = None, []
+        results = [await asyncio.to_thread(processes.end_process_tree, pid, started_at=started, timeout_s=timeout_s)
+                   for pid, started in procs]
+        await self._wind_down(5)
+        if not results:
+            return processes.KillResult(pid=None, ok=True, already_gone=True)
+        first = results[0]
+        for r in results[1:]:                  # an earlier process that outlived its disconnect: merged in
+            first.ended += r.ended
+            first.survivors += r.survivors
+            first.ok = first.ok and r.ok
+        return first
+
+    async def _wind_down(self, wait_s: float) -> None:
+        """Ask the worker to close (disconnect) and wait up to wait_s; then cancel it. Remove the prompt file."""
         if self._worker is not None and not self._worker.done():
             fut = asyncio.get_running_loop().create_future()
             await self._ops.put(("close", None, fut))
             try:
-                await asyncio.wait_for(asyncio.shield(fut), 15)
+                await asyncio.wait_for(asyncio.shield(fut), wait_s)
             except Exception:  # noqa: BLE001
                 self._worker.cancel()
         if self._prompt_file:
@@ -552,6 +635,9 @@ class ClaudeSession(EngineSession):
             except OSError:
                 pass
             self._prompt_file = None
+
+    async def close(self) -> None:
+        await self._wind_down(15)            # disconnect only; the process tree is not ended (see kill())
 
     # ------------------------------------------------------------------ worker task (owns the client)
     async def _run(self) -> None:
@@ -588,6 +674,9 @@ class ClaudeSession(EngineSession):
             try:
                 await self._turn(arg, out)
             except asyncio.CancelledError:
+                # the worker was cancelled mid-turn: end the caller's stream instead of leaving it waiting
+                out.put_nowait(AgentError(KILLED if self._killed else "the session was closed during the turn"))
+                out.put_nowait(_END)
                 await self._disconnect()
                 raise
             except BaseException as e:  # noqa: BLE001
@@ -597,6 +686,7 @@ class ClaudeSession(EngineSession):
     async def _connect(self) -> None:
         resume = self.session_id if (self._resuming or self._turns_done) else None
         client = ClaudeSDKClient(self.options(resume=resume))
+        before = processes.child_pids()            # for the pid fallback (see the module docstring)
         try:
             await client.connect()
         except Exception as e:  # noqa: BLE001
@@ -604,6 +694,13 @@ class ClaudeSession(EngineSession):
                 raise ConversationMissing(f"no saved conversation {self.session_id} (same cwd?)") from e
             raise AgentError(f"could not start Claude: {error_text(e)}", repr(e)) from e
         self._client = client
+        self._record_process(client, before)
+        if self._killed:                           # kill() ran while this process was starting: end it too
+            proc, self._proc = self._proc, None
+            if proc is not None and proc[1] is not None:
+                await asyncio.to_thread(processes.end_process_tree, proc[0], started_at=proc[1])
+            await self._disconnect()
+            raise AgentError(KILLED)
 
     async def _disconnect(self, failed: bool = False) -> None:
         c, self._client = self._client, None
@@ -612,6 +709,9 @@ class ClaudeSession(EngineSession):
                 await c.disconnect()
             except Exception:  # noqa: BLE001
                 pass
+        proc, self._proc = self._proc, None
+        if self._running(proc):                    # outlived its disconnect: kill() still ends it
+            self._stale.append(proc)
         if failed and not self._resuming and self._turns_done == 0:
             self.session_id = str(uuid.uuid4())     # a failed first turn may have claimed the id
 
@@ -621,6 +721,7 @@ class ClaudeSession(EngineSession):
         state = TurnState("claude", self.resolved.custom, model_turn=self._model_turns)
         self._state = state
         self._structured_input = None
+        self._stream_message = None
         res: ResultMessage | None = None
         self._busy = True
         try:
@@ -643,7 +744,7 @@ class ClaudeSession(EngineSession):
             raise
         except Exception as e:  # noqa: BLE001 -- process died; next turn reconnects with resume
             await self._disconnect(failed=True)
-            msg = f"Claude call failed: {error_text(e)}"
+            msg = KILLED if self._killed else f"Claude call failed: {error_text(e)}"
             raise AgentError(msg, repr(e), reply=self._failed_reply(state, msg)) from e
         finally:
             self._state = None
@@ -651,7 +752,7 @@ class ClaudeSession(EngineSession):
             self._model_turns = state.model_turn
         if res is None:
             await self._disconnect(failed=True)
-            msg = "Claude stream ended without a result"
+            msg = KILLED if self._killed else "Claude stream ended without a result"
             raise AgentError(msg, reply=self._failed_reply(state, msg))
 
         total = float(res.total_cost_usd or 0.0)
@@ -694,20 +795,40 @@ class ClaudeSession(EngineSession):
         return state.reply(session_id=self.session_id, usage=state.usage_so_far(), cost_usd=0.0,
                            total_cost_usd=self._cost_base, model=self.model, error=error)
 
+    def _stream_usage(self, e: dict, state: TurnState) -> None:
+        """Per-reply usage from the raw API stream (include_partial_messages): message_start names the reply
+        (message id, same as AssistantMessage.message_id) with its input / cache counts; message_delta carries the
+        final cumulative output count. The AssistantMessages for a reply's blocks can come before message_delta,
+        so their output count may be partial; record_usage keeps the largest figure per field."""
+        kind = e.get("type")
+        if kind == "message_start":
+            msg = e.get("message") or {}
+            self._stream_message = msg.get("id") or None
+            if self._stream_message and isinstance(msg.get("usage"), dict):
+                state.record_usage(self._stream_message, normalize_usage(msg["usage"]), msg.get("model") or None)
+        elif kind == "message_delta" and self._stream_message and isinstance(e.get("usage"), dict):
+            state.record_usage(self._stream_message, normalize_usage(e["usage"]))
+        elif kind == "message_stop":
+            self._stream_message = None
+
     def _map(self, m, state: TurnState) -> list:
         if isinstance(m, StreamEvent):
             e = m.event or {}
+            if m.parent_tool_use_id:
+                return []
+            kind = e.get("type")
             d = e.get("delta") or {}
-            if not m.parent_tool_use_id and e.get("type") == "content_block_delta" and d.get("type") == "text_delta":
+            if kind == "content_block_delta" and d.get("type") == "text_delta":
                 return [TextDelta(d.get("text", ""))]
+            self._stream_usage(e, state)
             return []
         if isinstance(m, AssistantMessage):
             if m.parent_tool_use_id:
                 return []
             if m.message_id:
                 state.message_ids.add(m.message_id)
-                if isinstance(m.usage, dict):    # one message may arrive per content block: keep the latest
-                    state.usage_by_message[m.message_id] = normalize_usage(m.usage)
+                if isinstance(m.usage, dict):    # one message may arrive per content block: largest figures kept
+                    state.record_usage(m.message_id, normalize_usage(m.usage), m.model or None)
             if m.model:
                 self.model = m.model
             # One model reply can arrive as several AssistantMessages (one per content block) sharing message_id

@@ -11,7 +11,7 @@ login, or whatever sign-in your `setup/local.toml` says (LIVE: costs tokens, rou
 |---|---|---|---|
 | 01 | `01_one_shot.py` | Smallest agent: `Agent(...)`, `ask_sync`, reading `Reply` (status, text, usage, cost, session id) | yes |
 | 02 | `02_multi_turn_session.py` | `agent.session()`, `send`, resume by id with `cost_base`, `fork=True` | yes |
-| 03 | `03_streaming_events.py` | `s.stream()`: `TextDelta`, `Text`, `ToolCall`, `ToolResult`, `RateLimit`, `Done`; `to_dict()`; `model_turn` (which model reply), `fake.parallel()` | yes |
+| 03 | `03_streaming_events.py` | `s.stream()`: `TextDelta`, `Text`, `ToolCall`, `ToolResult`, `RateLimit`, `Done`; `to_dict()`; `model_turn` (which model reply), `fake.parallel()`; `Reply.turn_usage` (tokens per model reply, fake `usage=`) | yes |
 | 04 | `04_custom_tools.py` | `@tool` (type hints -> schema), `read_only`, `ends_turn`, async tools, exceptions -> error results | yes |
 | 05 | `05_ask_user.py` | `ask_user` parks (`needs_input`), save questions, resume and `answer(..., questions=)` | yes |
 | 06 | `06_permissions.py` | `on_permission` allow/deny for tools that are not pre-approved; `Bash(echo:*)` rules | yes |
@@ -24,6 +24,7 @@ login, or whatever sign-in your `setup/local.toml` says (LIVE: costs tokens, rou
 | 13 | `13_structured_output.py` | `ask_structured_sync(msg, schema)` -> `reply.data`; malformed -> `error_kind == "output_shape"`; `fake.output()` | yes |
 | 14 | `14_connection_check.py` | `connection_status(engine)` for a settings screen; `check_connection_sync(engine)` for a "Test connection" button (`.ok`, `.error`, `.fix`, `.report()`); `--fail` scripts a failure | yes (`--live` sends one tiny Haiku message) |
 | 15 | `15_permission_modes.py` | `permission_mode="plan"`: plan proposal reaches `on_permission` (`req.kind == "plan"`, `req.plan`), approve with `PermissionDecision("allow", mode="accept_edits")`; `s.set_permission_mode()` mid-session; `req.suggestions`; `fake.plan()` | yes (`--live`: project setup in a temp folder, haiku) |
+| 16 | `16_process_control.py` | `s.pid`, `list_descendants(pid)`, `await s.kill()` (ends the process and everything it started), `end_process_tree(pid, started_at=)` for leftovers; `fake.process(..., real=True)` with a stand-in process | yes (starts a short-lived stand-in Python process; `--live` starts Claude Code but sends nothing: zero tokens) |
 
 ```
 python examples/01_one_shot.py          # fake, free
