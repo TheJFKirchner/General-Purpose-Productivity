@@ -14,6 +14,8 @@ How the fake engine works (agentlib/fake/engine.py):
   rules ("Bash(ls:*)" approves `ls -la`, not `rm`), then on_permission, and return "(fake) ran <name>".
 - No script for an agent -> it replies "(fake) <message>". fake.reset() clears scripts and sessions.
 - fake.fail() raises AgentError; its .reply holds the partial turn (text, tool calls, usage so far).
+- fake.opened() lists every session opened ({agent, session_id, setup, project_rules}): check which agents
+  were given the project's rules text (Agent(project_rules=...), None when not given).
 - Limits: no external MCP servers (mcp_servers= raises CapabilityError), no real built-in tools,
   cost/usage are made-up small numbers.
 """
@@ -119,3 +121,13 @@ def test_capability_checks():
         make_agent("fake", mcp_servers={"db": "db_server.py"}).session()
     with pytest.raises(EngineUnavailable):            # the cursor engine is a stub (available=False)
         make_agent("cursor").session()
+
+
+def test_project_rules_reach_the_agent():
+    # Your code reads the project's rules files (CLAUDE.md / AGENTS.md) and passes the text; the agent stays lean.
+    rules = "- Run the tests before you finish."
+    agent = make_agent("fake")
+    agent.project_rules = rules                       # settable after loading; applies to sessions opened later
+    agent.ask_sync("hi")
+    make_agent("fake").ask_sync("hi")                 # an agent without rules
+    assert [r["project_rules"] for r in fake.opened()] == [rules, None]

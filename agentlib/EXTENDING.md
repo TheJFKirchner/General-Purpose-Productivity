@@ -81,10 +81,10 @@ routes custom tool calls through `state.run_tool()`, records text/calls/results,
 `Capabilities` (frozen dataclass, same file): `available, system_prompt, custom_tools, mcp_servers, streaming,
 resume, fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
 list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns, turn_usage,
-process_control`. `requirements(agent, fork=, resume=)` (same
+process_control, project_rules`. `requirements(agent, fork=, resume=)` (same
 file) maps capability name -> "does this agent/call need it"; `Engine.check()` enforces every name in it:
 `system_prompt, custom_tools, ends_turn, mcp_servers, resume, fork, permission_hook, project_setup, budget,
-never_ask, accept_edits, plan_mode, structured_output, unsaved`. `list_models` is not per agent:
+never_ask, accept_edits, plan_mode, structured_output, unsaved, engine_prompt, project_rules`. `list_models` is not per agent:
 `Engine.check_list_models()` enforces it and `Engine.list_models(env=, timeout_s=) -> list[ModelInfo]` (default
 raises `CapabilityError`) does it. `model_turns` is informational like `streaming` / `usage`: the engine fills
 `model_turn` on `Text` / `ToolCall` / `ToolResult` (via `TurnState.model_turn_for()` / `call_turn()`); a new

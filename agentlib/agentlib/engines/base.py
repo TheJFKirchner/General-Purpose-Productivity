@@ -53,6 +53,7 @@ class Capabilities:
     plan_mode: bool = False       # permission mode "plan": explore + propose a plan (on_permission kind "plan")
     mode_switch: bool = False     # Session.set_permission_mode(): change the permission mode on a live session
     engine_prompt: bool = False   # Agent.engine_prompt: the engine's own agent prompt + instructions, in lean setup
+    project_rules: bool = False   # Agent.project_rules: caller-supplied project rules text given to a lean agent
     model_switch: bool = False    # Session.set_model(): change the model on a live session (between turns or mid-turn)
     model_turns: bool = False     # informational: Text / ToolCall / ToolResult carry model_turn (else None; not enforced)
     turn_usage: bool = False      # informational: Reply.turn_usage has tokens per model reply (else empty; not enforced)
@@ -79,6 +80,7 @@ def requirements(agent, *, fork: bool = False, resume: bool = False) -> dict[str
         "structured_output": agent.output_schema is not None,
         "unsaved": not agent.save_conversation,
         "engine_prompt": bool(getattr(agent, "engine_prompt", False)) and agent.setup == "lean",
+        "project_rules": agent.rules_text() is not None,         # lean + non-blank text (project setup ignores it)
     }
 
 

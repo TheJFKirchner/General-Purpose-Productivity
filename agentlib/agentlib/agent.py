@@ -9,7 +9,9 @@
 - Calls: await agent.ask(msg) / agent.ask_sync(msg) -> Reply;  async with agent.session() as s: ...
 - Run limits / modes (each needs the engine capability of the same idea, checked in session()):
   max_budget_usd (budget), permission_mode="never_ask" (never_ask) / "accept_edits" (accept_edits) / "plan"
-  (plan_mode), output_schema (structured_output), save_conversation=False (unsaved)
+  (plan_mode), output_schema (structured_output), save_conversation=False (unsaved), project_rules (project_rules)
+- project_rules: plain text set by the caller (may be set after loading; read when a session opens).
+  rules_text() -> the text an engine should add, or None (blank, or setup="project")
 """
 from __future__ import annotations
 
@@ -75,6 +77,10 @@ class Agent:
     engine_prompt: bool = False              # lean only: start from the engine's own agent prompt (Claude: the
                                              # claude_code preset) with `instructions` appended; still no folder
                                              # settings, CLAUDE.md, skills or connectors. project setup always has it
+    project_rules: str | None = None         # lean only: a project's standing rules as text (the caller finds and
+                                             # reads files such as CLAUDE.md / AGENTS.md); added after the agent's
+                                             # own instructions under a heading. None / blank = nothing added.
+                                             # project setup ignores it (the engine loads those files itself)
     cwd: str | Path | None = None
     add_dirs: list[str | Path] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
@@ -122,6 +128,12 @@ class Agent:
             self.cwd = Path(self.cwd)
         if self.skill_dirs is not None:
             self.skill_dirs = [Path(d) for d in self.skill_dirs]
+
+    def rules_text(self) -> str | None:
+        """The project_rules text an engine adds to this agent, or None: unset or blank, or setup="project"
+        (the engine loads the folder's rules files itself there, so adding them again would repeat them)."""
+        text = (self.project_rules or "").strip()
+        return text if text and self.setup == "lean" else None
 
     def resolved_tools(self) -> ResolvedTools:
         return resolve_tools(self.tools, self.available_tools, server=self.tool_server, setup=self.setup,

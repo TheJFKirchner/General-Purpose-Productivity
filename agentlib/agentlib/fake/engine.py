@@ -55,6 +55,10 @@
   records the call (kills()), closes the session (later turns raise AgentError), makes a running turn raise
   AgentError at its next step, and returns a KillResult; with process(..., real=True) it really ends that
   process tree (for tests with stand-in processes)
+- project_rules (capability project_rules, like Claude): opened() lists every session opened ({agent, session_id,
+  setup, project_rules}); project_rules is the text the agent was given (None when unset / blank / setup
+  "project"), also on the session as .project_rules. Project setup or engine_prompt=True: instructions + the rules
+  block over 30,000 chars raises AgentError at start / first turn, naming the rules (Claude's preset limit)
 """
 from __future__ import annotations
 
@@ -220,6 +224,17 @@ def saved_rules(cwd=None) -> list[str]:
     return list(_LOCAL_RULES.get(_cwd_key(cwd), []))
 
 
+_OPENED: list[dict] = []              # one record per session opened (opened())
+PRESET_APPEND_LIMIT = 30_000          # chars; the Claude engine's ARGV_PROMPT_LIMIT for text appended to its preset
+
+
+def opened() -> list[dict]:
+    """Every session opened on the fake engine, in order: {agent, session_id, setup, project_rules}.
+    project_rules = the rules text the agent was given (Agent.rules_text(): None when unset, blank or
+    setup="project"), read when the session was opened, as the Claude engine adds it to the prompt."""
+    return [dict(r) for r in _OPENED]
+
+
 _PROCESSES: dict[str, tuple[Any, bool]] = {}   # agent name -> (pid or fn() -> pid, real)
 _KILLS: list[dict] = []
 KILLED = "the session was ended (kill)"       # same words as the Claude engine
@@ -248,6 +263,7 @@ def reset() -> None:
     _LOCAL_RULES.clear()
     _PROCESSES.clear()
     _KILLS.clear()
+    _OPENED.clear()
 
 
 class FakeSetup(EngineSetup):
@@ -275,7 +291,8 @@ class FakeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, mcp_servers=False, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True, model_turns=True, turn_usage=True, process_control=True)
+                                model_switch=True, model_turns=True, turn_usage=True, process_control=True,
+                                project_rules=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "FakeSession":
         local_setup.require("fake")
@@ -322,6 +339,9 @@ class FakeSession(EngineSession):
         self._connected = False
         self._killed = False
         self._busy = False
+        self.project_rules: str | None = agent.rules_text()   # what this session's agent was given (opened())
+        _OPENED.append({"agent": agent.name, "session_id": self.session_id, "setup": agent.setup,
+                        "project_rules": self.project_rules})
 
     @property
     def total_cost(self) -> float:
@@ -335,6 +355,7 @@ class FakeSession(EngineSession):
         """Like the Claude engine starting its process: pick up the scripted pid (process())."""
         if self._connected:
             return
+        self._check_prompt_size()
         self._connected = True
         spec, real = _PROCESSES.get(self.agent.name, (None, False))
         pid = spec() if callable(spec) else spec
@@ -344,6 +365,20 @@ class FakeSession(EngineSession):
         started = process_started_at(int(pid)) if real else None
         # like Claude: a real process whose start time cannot be read is not recorded (never kill by pid alone)
         self._proc = None if real and started is None else (int(pid), started)
+
+    def _check_prompt_size(self) -> None:
+        """Like Claude: text appended to the engine's own prompt (project setup, engine_prompt=True) has a size
+        limit. Counts instructions + the project rules block (not a lean skills index, which the fake never builds)."""
+        a = self.agent
+        if not (a.setup == "project" or a.engine_prompt):
+            return
+        text, rules = a.instructions.strip(), self.project_rules
+        if rules:
+            text = (text + "\n\n" + prompt_files.fill("project_rules", rules=rules)).strip()
+        if len(text) > PRESET_APPEND_LIMIT:
+            cause = f"; project rules are {len(rules):,} of them, so shortening those may be enough" if rules else ""
+            raise AgentError(f"instructions too long to append to the engine's prompt ({len(text):,} chars, "
+                             f"limit {PRESET_APPEND_LIMIT:,}){cause}")
 
     @property
     def pid(self) -> int | None:

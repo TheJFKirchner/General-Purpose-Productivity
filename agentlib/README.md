@@ -113,6 +113,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | Skills from other folders (e.g. `.agents/skills`, extra project folders); no SDK equivalent | `Agent(skills=[...], skill_dirs=[folder, ...])` (lean: searched in order instead of the default; first match wins); `agentlib.skills.list_skills(folder)` lists one folder's skills | `agentlib/skills.py`, `agentlib/agent.py` |
 | `setting_sources`, `strict_mcp_config`, `system_prompt` preset, `tools` preset | `Agent(setup="lean" \| "project")` | `agentlib/engines/claude.py` |
 | `system_prompt={"type": "preset", "preset": "claude_code", "append": ...}` without `setting_sources` | `Agent(engine_prompt=True)` (lean setup: the engine's own agent prompt + `instructions` appended; no folder settings, CLAUDE.md, skills or connectors) | `agentlib/agent.py`, `agentlib/engines/claude.py` (`_system_prompt`) |
+| `setting_sources=["project"]` / CLAUDE.md loading, but only the rules text and still lean | `Agent(project_rules=text)`: the caller reads the rules files (CLAUDE.md, AGENTS.md, ...) and passes their text; added after `instructions` (and the lean skills list) under a "## Project rules" heading (`agentlib/prompts/project_rules.md`), also with `engine_prompt=True`. No setting sources, CLAUDE.md loading stays off. Project setup ignores it | `agentlib/agent.py`, `agentlib/engines/claude.py` (`_system_prompt`) |
 | `hooks=` | internal only (ends_turn, lean skill guard); not user-facing | `agentlib/engines/claude.py` |
 | `CLINotFoundError`, `ProcessError`, `CLIConnectionError`, ... | `AgentError` (`.short` one-line message; `.reply` = partial turn if it failed midway) | `agentlib/errors.py` |
 | "No conversation found" on resume | `ConversationMissing` | `agentlib/errors.py` |
@@ -134,6 +135,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 |---|---|---|
 | `system_prompt` | `instructions` | lean: the whole prompt (>30K chars goes via temp file); project, or lean with `engine_prompt=True`: appended to the `claude_code` preset |
 | - | `engine_prompt` | lean only: start from the engine's own agent prompt (Claude Code's) and append `instructions`; still lean (no settings, CLAUDE.md, skills, connectors). Capability `engine_prompt` (claude, fake) |
+| - | `project_rules` | lean only: a project's standing rules as text (`str \| None`, default `None` = nothing added, prompt unchanged; blank counts as unset). The caller finds and reads the files. Added after `instructions` under a heading, in the plain lean prompt and in the preset with `engine_prompt=True` (there the combined text over 30,000 chars raises `AgentError` naming the rules: keep it well below). Settable after loading (`agent.project_rules = text`) or as a loader override; read when a session opens. `setup="project"` ignores it (the engine loads those files itself). `agent.rules_text()` = the text actually given, or `None`. Capability `project_rules` (claude, fake) |
 | `model` | `model` | alias (`opus`/`sonnet`/`haiku`) or full id; `None` = engine default |
 | `tools`, `allowed_tools` | `tools` | one mixed list: `Tool` objects, built-in names/rules (`"Read"`, `"Bash(npm run build:*)"`), custom names (need `available_tools`), `"ask_user"`, `"mcp__x__y"`. Listed = offered and pre-approved |
 | (implementations) | `available_tools` | `Tool`s for custom names in `tools` (what loaders fill from `tools=`) |
@@ -164,7 +166,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 
 | Export | Lives in | What it is |
 |---|---|---|
-| `Agent` | `agentlib/agent.py` | Dataclass defining an agent; `.ask()`, `.ask_sync()`, `.session(resume=, fork=, cost_base=)`, `.describe()` (definition as a JSON-safe dict; `external MCP tool names` listed in `builtin_tools`) |
+| `Agent` | `agentlib/agent.py` | Dataclass defining an agent; `.ask()`, `.ask_sync()`, `.session(resume=, fork=, cost_base=)`, `.describe()`, `.rules_text()` (the `project_rules` text an engine adds, or `None`) (definition as a JSON-safe dict; `external MCP tool names` listed in `builtin_tools`) |
 | `Session` | `agentlib/session.py` | One conversation: `send`, `stream`, `answer`, `answer_stream`, `interrupt`, `close`, `pid`, `process_started_at`, `kill(timeout_s=)` (capability `process_control`), `session_id`, `pending_questions`, `last_reply`, `info`, `permission_mode`, `set_permission_mode(mode)`, `model`, `set_model(model)` (capability `model_switch`) (`ValueError` bad mode; `CapabilityError` if the engine lacks `mode_switch` or that mode; `AgentError` if the engine refused) |
 | `SessionInfo` | `agentlib/session.py` | `s.info`: `tools` (offered; custom by short name), `mcp_servers` (name -> status), `model`; `.to_dict()`. Empty until the first turn starts |
 | `Reply` | `agentlib/reply.py` | Finished turn: `status, text, questions, session_id, usage, cost_usd, total_cost_usd, tool_calls, api_calls, duration_s, engine, model, stop_reason, error, error_kind, data, usage_by_model, turn_usage`; `.to_dict()`. `error_kind` (only when `status == "error"`): `"budget" \| "max_turns" \| "output_shape" \| "other"`; `data`: parsed JSON when `output_schema` is set |
@@ -211,7 +213,7 @@ Zero-cost version: add `from agentlib import fake` and `engine="fake"` (see `exa
 | `SetupError` | `agentlib/errors.py` | `setup/local.toml` is broken or points at something missing (raised when a session / `list_models` starts; nothing sent); message says what to fix |
 
 Useful non-root imports: `agentlib.fake` (fake engine: `script, say, call, parallel, ask, plan, rate_limit, fail, spend,
-output, models, saved_rules, process, kills, reset, DEFAULT_MODELS, PLAN_TOOL, FakeEngine`),
+output, models, saved_rules, process, kills, opened, reset, DEFAULT_MODELS, PLAN_TOOL, FakeEngine`),
 `agentlib.processes` (also `is_running(pid, started_at=)`, `bad_start_time(value)` (why a stored start time is unusable, else `None`), `child_pids()`, `new_child(before, name_hints)`),
 `agentlib.engines` (`Capabilities, Engine, EngineSession, TurnState, EngineSetup, Connection, get_setup,
 register_setup`; `agentlib.engines.base.requirements`, `agentlib.engines.base.check_mode_switch`), `agentlib.local_setup` (`connection, require,
@@ -248,6 +250,7 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 | Show an agent's definition in an app (prompt, tools, MCP servers) without a session | `agent.describe()` (JSON-safe dict, free) | `examples/08_agent_file.py` |
 | Test an agent without spending tokens | `from agentlib import fake`; `fake.script(...)`; `engine="fake"` | `examples/09_test_with_fake_engine.py` |
 | Behave like Claude Code in a folder (CLAUDE.md, settings, all built-ins) | `Agent(setup="project", cwd=...)` | - |
+| Give a lean agent the project's rules (CLAUDE.md / AGENTS.md text) without project setup | read the files yourself, then `Agent(project_rules=text)` or `agent.project_rules = text` before opening a session; test it with `fake.opened()[-1]["project_rules"]` | `examples/09_test_with_fake_engine.py` |
 | Give the agent skills | `Agent(skills=["name"])` (folder `<cwd or ~>/.claude/skills/<name>/SKILL.md` or `.cursor/skills`) | - |
 | Take skills from folders I choose (`.agents/skills`, several project folders) | `Agent(skills=[...], skill_dirs=[...])`; list a folder with `agentlib.skills.list_skills(folder)` | `agentlib/tests/test_loaders.py` |
 | Track spend | `reply.cost_usd`, `reply.total_cost_usd`, `reply.usage` (per model reply: `reply.turn_usage`) | `examples/01_one_shot.py` |
@@ -373,14 +376,15 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 - `Capabilities` (frozen dataclass): `available, system_prompt, custom_tools, mcp_servers, streaming, resume,
   fork, usage, ends_turn, permission_hook, project_setup, budget, never_ask, structured_output, unsaved,
   list_models, accept_edits, plan_mode, mode_switch, engine_prompt, model_switch, model_turns, turn_usage,
-  process_control`. `Engine.check()` runs in `agent.session()` before
+  process_control, project_rules`. `Engine.check()` runs in `agent.session()` before
   anything starts: `available` False -> `EngineUnavailable` (message lists what else it would lack); else
   `CapabilityError` naming every needed capability the engine lacks. Needs (`requirements()` in `base.py`):
   `system_prompt` (instructions set, or skills in lean setup), `custom_tools` (any `@tool` or `ask_user`),
   `ends_turn` (`ask_user` or `@tool(ends_turn=True)`), `mcp_servers`, `resume` (`resume=`), `fork`,
   `permission_hook` (`on_permission`), `project_setup`, `budget` (`max_budget_usd`), `never_ask`
   (`permission_mode="never_ask"`), `accept_edits` / `plan_mode` (`permission_mode="accept_edits"` / `"plan"`),
-  `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`).
+  `structured_output` (`output_schema`), `unsaved` (`save_conversation=False`), `engine_prompt`,
+  `project_rules` (non-blank `project_rules` in lean setup).
   `list_models` is checked by `list_models()` (`Engine.check_list_models()`); `mode_switch` (plus the target
   mode's flag) by `Session.set_permission_mode()` (`check_mode_switch()` in `base.py`; the default
   `EngineSession.set_permission_mode` raises `CapabilityError`); `process_control` by `Session.kill()` (the
@@ -396,7 +400,7 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
 
 | Engine | File | State | Capabilities that differ from defaults |
 |---|---|---|---|
-| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models`, `accept_edits`, `plan_mode`, `mode_switch`, `engine_prompt`, `model_switch`, `model_turns`, `turn_usage`, `process_control` all True |
+| `claude` | `agentlib/engines/claude.py` | working; the only `claude_agent_sdk` importer | `fork`, `permission_hook`, `budget`, `never_ask`, `structured_output`, `unsaved`, `list_models`, `accept_edits`, `plan_mode`, `mode_switch`, `engine_prompt`, `model_switch`, `model_turns`, `turn_usage`, `process_control`, `project_rules` all True |
 | `cursor` | `agentlib/engines/cursor.py` | stub: `agent.session()` raises `EngineUnavailable` | `available=False`, `system_prompt=False`, `ends_turn=False` (new flags False, unverified) |
 | `fake` | `agentlib/fake/engine.py` | working, tests only, zero tokens | same as claude, plus `mcp_servers=False` |
 
@@ -436,6 +440,11 @@ setup_file, read`), `agentlib.connection.CHECK_AGENT` (agent name the check uses
   `s.kill()` is recorded in `fake.kills()` (`{agent, session_id, pid, mid_turn, real}`), closes the session (later
   turns raise `AgentError`), makes a running turn raise `AgentError` (with `.reply`) at its next step, returns a
   `KillResult`; `real=True` really ends that process tree (give it a stand-in process your test started)
+- Fake project rules: `fake.opened()` lists every session opened, in order (`{agent, session_id, setup,
+  project_rules}`); `project_rules` is the text that session's agent was given (`agent.rules_text()`: `None` when
+  unset, blank or `setup="project"`), so a test can check which agents got the rules. Also on the engine session
+  as `.project_rules`. Like Claude, project setup or `engine_prompt=True` with instructions + the rules block over
+  30,000 chars raises `AgentError` naming the rules (at start / first turn). `fake.reset()` clears it
 
 ## Not yet supported
 Do not reach for the raw SDK for these; add them via [EXTENDING.md](EXTENDING.md) (or tell the user if they

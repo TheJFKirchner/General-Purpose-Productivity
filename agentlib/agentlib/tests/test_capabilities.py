@@ -58,6 +58,7 @@ CASES = [
     ("plan_mode", {"permission_mode": "plan"}, {}),
     ("structured_output", {"output_schema": {"type": "object"}}, {}),
     ("unsaved", {"save_conversation": False}, {}),
+    ("project_rules", {"project_rules": "Run the tests before you finish."}, {}),
 ]
 
 

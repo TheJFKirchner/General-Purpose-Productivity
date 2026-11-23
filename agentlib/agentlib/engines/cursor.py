@@ -40,6 +40,8 @@ class CursorEngine(Engine):
         model_turns=False,      # unverified: needs an id per model reply (or a reliable reply boundary) in its stream
         turn_usage=False,       # unverified: needs usage reported per model reply, not only per turn
         process_control=False,  # unverified: needs the pid of whatever process the SDK runs the agent in (if any)
+        project_rules=False,    # unverified: Cursor reads rules files from the folder itself; passing caller text
+                                # needs the same route as instructions (AGENTS.md / message prefix)
     )
 
     def open(self, agent, *, resume, fork, cost_base):

@@ -6,6 +6,10 @@
   custom system prompt (long prompts go through a temp file: Windows ~32K argv limit)
 - project setup: claude_code system prompt preset (+ instructions appended), user/project/local settings,
   native skills, all built-ins unless tools narrows them
+- project_rules (lean only): instructions, skills index, then prompts/project_rules.md (a heading + the text), in
+  the custom prompt or appended to the preset (engine_prompt=True: over ARGV_PROMPT_LIMIT -> AgentError naming
+  the rules). Read from the Agent in options(), so a value set after loading applies to later sessions /
+  reconnects. Project setup ignores it: the CLI loads CLAUDE.md there itself. Lean still sets no setting sources
 - Permissions: listed tools are pre-approved; anything else -> agent.on_permission, or denied if none
 - ask_user / ends_turn: a PostToolUse hook returns continue=False after a successful call (no further API call)
 - Lean skills: Read is added if missing, and a PreToolUse hook limits it to the listed skill folders; skills are
@@ -191,7 +195,8 @@ class ClaudeEngine(Engine):
     capabilities = Capabilities(fork=True, permission_hook=True, budget=True, never_ask=True,
                                 structured_output=True, unsaved=True, list_models=True,
                                 accept_edits=True, plan_mode=True, mode_switch=True, engine_prompt=True,
-                                model_switch=True, model_turns=True, turn_usage=True, process_control=True)
+                                model_switch=True, model_turns=True, turn_usage=True, process_control=True,
+                                project_rules=True)
 
     def open(self, agent, *, resume, fork, cost_base) -> "ClaudeSession":
         return ClaudeSession(agent, resume=resume, fork=fork, cost_base=cost_base)
@@ -269,9 +274,15 @@ class ClaudeSession(EngineSession):
         text = self.agent.instructions.strip()
         if self.skills:
             text = (text + "\n\n" + skills_mod.index_text(self.skills)).strip()
+        rules = self.agent.rules_text()          # lean only; None when unset (prompt unchanged)
+        if rules:
+            text = (text + "\n\n" + prompt_files.fill("project_rules", rules=rules)).strip()
         if self.agent.setup == "project" or self.agent.engine_prompt:     # Claude Code's own prompt + ours appended
             if len(text) > ARGV_PROMPT_LIMIT:
-                raise AgentError("instructions too long to append to the claude_code preset (Windows ~32K command-line limit)")
+                cause = (f"; project rules are {len(rules):,} of them, so shortening those may be enough"
+                         if rules else "")
+                raise AgentError(f"instructions too long to append to the claude_code preset ({len(text):,} chars, "
+                                 f"limit {ARGV_PROMPT_LIMIT:,}: Windows ~32K command-line limit){cause}")
             sp = {"type": "preset", "preset": "claude_code"}
             return {**sp, "append": text} if text else sp
         if len(text) <= ARGV_PROMPT_LIMIT:

@@ -4,11 +4,12 @@
 - Usage:  from agentlib import fake;  fake.script("helper", [[fake.say("hi")]]);  Agent("helper", engine="fake")
 """
 from ..engines import register_engine, register_setup
-from .engine import (DEFAULT_MODELS, PLAN_TOOL, FakeEngine, FakeSetup, ask, call, fail, kills, models, output,
-                     parallel, plan, process, rate_limit, reset, saved_rules, say, script, spend)
+from .engine import (DEFAULT_MODELS, PLAN_TOOL, FakeEngine, FakeSetup, ask, call, fail, kills, models, opened,
+                     output, parallel, plan, process, rate_limit, reset, saved_rules, say, script, spend)
 
 register_engine("fake", FakeEngine)
 register_setup("fake", FakeSetup)
 
 __all__ = ["DEFAULT_MODELS", "PLAN_TOOL", "FakeEngine", "FakeSetup", "ask", "call", "fail", "kills", "models",
-           "output", "parallel", "plan", "process", "rate_limit", "reset", "saved_rules", "say", "script", "spend"]
+           "opened", "output", "parallel", "plan", "process", "rate_limit", "reset", "saved_rules", "say", "script",
+           "spend"]
