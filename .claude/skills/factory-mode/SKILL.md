@@ -96,15 +96,28 @@ Start with the final assumptions list from the interview, so the user sees once 
 - **Goal**: what this slice delivers, in a sentence or two.
 - **Builder and model**: for example "factory-builder, Sonnet, UI".
 - **Files or area owned**: what this builder may touch.
-- **Relevant files and links**: existing code to read, library docs, anything settled in the interview.
+- **Relevant files and links**: existing code to read, library docs, anything settled in the interview. In a project with a map, this is the "Start from" list (see "Projects with a map").
 - **Done criteria**: specific, checkable statements of what must be true.
 - **Runs with**: in parallel with which tasks, or after which.
+
+One feature per request. If the interview turns up several features (several things a user could ask for separately), say so and plan them as separate requests, each with its own spec file, build, review and commit, done one after another. A bundle of three takes far longer than three small ones, and every stage fails bigger.
 
 How to split the work:
 
 - Separate UI from code where they live in different files. Batch them into one builder when they are closely tied; UI and agent-design work can go together.
-- Builders run in parallel only when their file sets do not overlap. If two tasks would touch the same file, merge them into one builder or run them in sequence.
-- Where two builders meet (a function signature, a data shape, a route), state that shared interface in the plan so both build to it.
+- Run builders in parallel by default. Builders may run in parallel when their file sets do not overlap; if two tasks would touch the same file, merge them into one builder or run them in sequence.
+- Where two builders meet (a function signature, a data shape, a route, a message format), write that shared interface into the plan and the spec file in full, with names and shapes, so both build to it at the same time. Do not run a screens builder after a back-end builder just so that the back end can decide the interface: decide it in the plan. A mismatch is caught by the UI review and the fix round.
+
+### Projects with a map
+
+Some projects keep a `MAP.md` beside their README or CLAUDE.md: one line per folder or file that carries methodology, with a link and a short description, and under each folder heading its test batch and its contract file (the written list of messages or interfaces for that area). No project is required to have one. Where the project has one, read it before planning, and make every task block and brief stricter:
+
+- **Start from**: the three to six files this builder should read first, taken from the map. Name files, not folders.
+- **Test batch**: the batch from the map to run while working.
+- **Contract file**: the file the slice builds to, where it sends or receives messages or crosses an interface the project documents.
+- **Done criteria** always include: the map is updated when a methodology file was added, removed or renamed, and the contract files are updated when a message or interface changed.
+
+The builder reads the map and its "Start from" files first and reads further only when they do not answer its question, so a thin or wrong list costs the time it was meant to save. If you cannot name the files from the map, send a `factory-reader` to find them before writing the plan.
 
 Dispatch nothing until the user explicitly approves the plan.
 
@@ -119,7 +132,7 @@ The spec is the record of what was agreed. If the scope changes during the build
 
 ## 3. Build
 
-Launch the builders, parallel ones in a single message. Each brief is that task's block from the plan plus the project folder path and any shared interface. Keep briefs high level: goal, pointers, done criteria. Do not write the implementation into the brief.
+Launch the builders, parallel ones in a single message. Each brief is that task's block from the plan plus the project folder path and any shared interface. Keep briefs high level: goal, pointers, done criteria. Do not write the implementation into the brief. In a project with a map, the pointers are exact: the "Start from" files, the test batch and the contract file (see "Projects with a map").
 
 Builders return only what they built, issues, and recommendations. If a builder returns code or long text, do not ask for more; work from the summary.
 
@@ -129,7 +142,16 @@ Check the build without reading it:
 
 - The builders' reports, against the done criteria.
 - The list of changed files (for example `git status` or `git diff --stat`), to confirm each builder stayed in its slice.
-- The project's tests, build, or the app itself, where it has them.
+- The project's tests, build, or the app itself, where it has them (see "Who runs the tests").
+
+### Who runs the tests
+
+The full suite is run as few times as it takes to trust the result. The tests themselves are never cut to save time.
+
+- **Builders**: targeted tests while working, then one full run before reporting. Their report gives the result, the number of full runs and how long each took. This is in the `factory-builder` definition; do not ask for more in the brief.
+- **After the build**: take a builder's clean full run as the check and do not repeat it. Run a suite yourself only when a builder did not report a clean full run, or when more than one builder changed the same project in parallel, so no single run covered the combination.
+- **After the fix round**: run every suite yourself once. This is the final gate before the security review. If there was no fix round, the builders' runs stand.
+- Note the builders' run counts and times in the summary when they look high, so the user can see where the time went.
 
 Never read through the code that was written; that defeats the purpose of delegating it. If something needs a closer look, send a `factory-reader` to check that slice against its done criteria and return pass or fail.
 
